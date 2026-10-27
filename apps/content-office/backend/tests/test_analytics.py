@@ -55,3 +55,17 @@ def test_lessons_wait_for_approval(store):
     assert store.lessons("approved") == []
     store.review_lesson(lesson["id"], "approved", "local-operator")
     assert store.lessons("approved")[0]["reviewed_by"] == "local-operator"
+
+
+def test_duplicate_snapshot_lesson_is_not_added_twice(store):
+    lesson = {"kind": "packaging", "evidence": {"snapshot_id": "snap-1"}, "weight_change": {"factor": "outlier", "delta": 5}}
+    first = store.add_lesson(lesson)
+    second = store.add_lesson(dict(lesson))
+    assert second["id"] == first["id"]
+    assert len(store.lessons()) == 1
+
+
+def test_non_finite_analytics_number_is_none():
+    from office.analytics import _number
+    assert _number("nan") is None
+    assert _number("inf") is None

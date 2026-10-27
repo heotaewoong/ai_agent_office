@@ -33,3 +33,9 @@ def test_ymyl_persona_and_banned_claim_block():
     assert run_gates(p, assets=[{"kind": "ai_persona_real_person"}])["status"] == "block"
     brand = {"banned": ["수익 보장"], "voice": "", "terms": {}, "pronunciation": {}}
     assert run_gates(packet(body="이 방법은 수익 보장"), brand=brand)["status"] == "block"
+
+
+def test_thousands_separator_matches_plain_number():
+    p = packet(title="사용자 1,200개 사례")
+    p["evidence"].append({"claim": "집계", "numbers": ["1200"]})
+    assert run_gates(p)["status"] == "pass"

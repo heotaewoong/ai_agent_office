@@ -15,7 +15,7 @@ YMYL_TOPICS = {"finance", "law", "health"}
 
 
 def _numbers(text):
-    return set(NUMBER.findall(text or ""))
+    return {re.sub(r"(?<=\d),(?=\d)", "", n) for n in NUMBER.findall(text or "")}
 
 
 def narration(packet):

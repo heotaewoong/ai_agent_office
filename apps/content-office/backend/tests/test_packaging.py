@@ -41,3 +41,9 @@ def test_rss_job_keeps_existing_flow(tmp_path):
     store = Store(tmp_path)
     job = store.create_job({"id": "rss-1", "title": "뉴스", "url": "https://example.com"})
     require_packaging(store.job(job["id"]))
+
+
+def test_korean_particles_do_not_break_hook_promise():
+    report = validate_packaging(brief(chosen_title="AI 팀이 블로그를 쓰는 법", hook="블로그 글을 팀에게 맡긴 결과부터 봅니다"))
+    assert "훅이 제목의 약속을 이어받지 않습니다" not in report["issues"]
+    assert validate_packaging(brief(chosen_title="AI 팀이 블로그를 쓰는 법", hook="오늘은 날씨 이야기를 합니다"))["issues"] == ["훅이 제목의 약속을 이어받지 않습니다"]

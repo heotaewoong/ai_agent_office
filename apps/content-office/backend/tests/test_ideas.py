@@ -67,3 +67,22 @@ def test_null_or_garbage_fields_score_as_zero():
     assert result["parts"]["demand"] == 0.0 and result["parts"]["fit"] == 0.0
     lesson = {"state": "approved", "weight_change": {"factor": "demand", "delta": None}}
     assert score_idea({"title": "N", "primary_sources": 1}, lessons=[lesson])["score"] >= 0
+
+
+def test_non_finite_strings_score_as_zero():
+    card = score_idea({"title": "X", "primary_sources": "inf", "demand": "nan", "fit": "nan"})
+    assert 0 <= card["score"] <= 100
+    assert card["parts"]["demand"] == 0 and card["parts"]["fit"] == 0 and card["parts"]["evidence"] == 0
+
+
+def test_none_policy_flags_and_demand_do_not_raise():
+    card = score_idea({"title": "X", "primary_sources": 1, "policy_flags": None, "demand": None})
+    assert any("수요 0" in r for r in card["reasons"])
+
+
+def test_duplicate_idea_refreshes_stored_card(store):
+    first = store.save_idea(score_idea({"title": "T", "source_url": "u", "primary_sources": 0}))
+    assert first["blocked"]
+    second = store.save_idea(score_idea({"title": "T", "source_url": "u", "primary_sources": 2}))
+    assert second["id"] == first["id"] and second["blocked"] == []
+    assert len(store.ideas()) == 1 and store.ideas()[0]["blocked"] == []

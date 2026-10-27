@@ -4,6 +4,8 @@ demand는 요청마다 최대값을 100으로 맞춘 상대값(네이버 데이�
 """
 from __future__ import annotations
 
+import math
+
 WEIGHTS = {"outlier": 30, "demand": 20, "evidence": 20, "fit": 20, "novelty": 10}
 BAND_POINTS = {"10x+": 1.0, "5-10x": 0.8, "2-5x": 0.55, "under-2x": 0.2, "unknown": 0.0}
 BLOCKING_FLAGS = {
@@ -33,9 +35,10 @@ def outlier_band(ratio):
 
 def _number(value, default=0.0):
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return default
+    return number if math.isfinite(number) else default
 
 
 def effective_weights(weights=None, lessons=()):
@@ -59,9 +62,11 @@ def score_idea(card, weights=None, lessons=()):
         "novelty": 0.0 if card.get("covered_before") else 1.0,
     }
     score = round(100 * sum(w[k] * parts[k] for k in parts) / (sum(w.values()) or 1), 1)
-    flags = [f for f in card.get("policy_flags", []) if f in BLOCKING_FLAGS] + ([] if sources else ["no_primary_source"])
+    raw_flags = card.get("policy_flags")
+    raw_flags = raw_flags if isinstance(raw_flags, (list, tuple, set)) else []
+    flags = [f for f in raw_flags if f in BLOCKING_FLAGS] + ([] if sources else ["no_primary_source"])
     blocked = [BLOCKING_FLAGS[f] for f in dict.fromkeys(flags)]
-    reasons = [f"이상치 {band}", f"수요 {card.get('demand', 0)}(상대값)", f"1차 출처 {sources}개"]
+    reasons = [f"이상치 {band}", f"수요 {_number(card.get('demand')):g}(상대값)", f"1차 출처 {sources}개"]
     return {**card, "score": 0.0 if blocked else score, "outlier_band": band, "parts": parts, "reasons": reasons, "blocked": blocked}
 
 

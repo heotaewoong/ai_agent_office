@@ -364,7 +364,13 @@ class Store:
         with self.connection(transaction=True) as db:
             row = db.execute("SELECT data FROM ideas WHERE dedup_key=?", (key,)).fetchone()
             if row:
-                return json.loads(row[0])
+                stored = json.loads(row[0])
+                merged = {**stored, **card, "id": stored["id"], "state": stored.get("state", "candidate")}
+                for field in ("selected_by", "selected_at"):
+                    if field in stored:
+                        merged[field] = stored[field]
+                db.execute("UPDATE ideas SET data=?, updated_at=? WHERE id=?", (canonical(merged), now(), merged["id"]))
+                return merged
             idea = {**card, "id": identifier("idea"), "state": "candidate"}
             db.execute("INSERT INTO ideas VALUES(?,?,?,?,?,?)", (idea["id"], key, "candidate", canonical(idea), now(), now()))
             self._event(db, "idea_saved", {"idea_id": idea["id"], "title": idea["title"]})
@@ -410,7 +416,13 @@ class Store:
 
     def add_lesson(self, lesson):
         record = {**lesson, "id": identifier("lesson"), "state": "proposed"}
+        snapshot_id = (record.get("evidence") or {}).get("snapshot_id")
         with self.connection(transaction=True) as db:
+            if snapshot_id:
+                for (data,) in db.execute("SELECT data FROM lessons ORDER BY created_at").fetchall():
+                    old = json.loads(data)
+                    if old.get("kind") == record.get("kind") and (old.get("evidence") or {}).get("snapshot_id") == snapshot_id:
+                        return old
             db.execute("INSERT INTO lessons VALUES(?,?,?,?,?)", (record["id"], "proposed", canonical(record), now(), now()))
             self._event(db, "lesson_proposed", {"lesson_id": record["id"], "kind": record.get("kind")})
         return record

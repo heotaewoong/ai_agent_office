@@ -6,6 +6,7 @@ CTR·노출수는 YouTube Analytics API에 없고 Reporting API 대량 보고서
 from __future__ import annotations
 
 import csv
+import math
 import statistics
 from pathlib import Path
 
@@ -28,9 +29,10 @@ def _number(value):
             for part in value.split(":"):
                 seconds = seconds * 60 + int(part)
             return float(seconds)
-        return float(value) if value else None
-    except ValueError:
+        number = float(value) if value else None
+    except (ValueError, OverflowError):
         return None
+    return number if number is None or math.isfinite(number) else None
 
 
 def parse_studio_csv(path):

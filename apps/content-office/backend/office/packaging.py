@@ -30,6 +30,14 @@ def _tokens(text):
     return set(re.findall(r"[0-9a-z가-힣]{2,}", text.lower()))
 
 
+def _carries_promise(title, hook):
+    title_tokens, hook_tokens = _tokens(title), _tokens(hook)
+    if title_tokens & hook_tokens:
+        return True
+    # 조사가 붙은 한국어 어절("블로그를"/"블로그")은 앞 2글자 일치로 같은 말로 본다
+    return any(t[:2] == h[:2] for t in title_tokens for h in hook_tokens)
+
+
 def validate_packaging(brief):
     issues = []
     titles, thumbs = brief.get("titles", []), brief.get("thumbnails", [])
@@ -47,7 +55,7 @@ def validate_packaging(brief):
     if not 2 <= len(brief.get("reasons", [])) <= 3:
         issues.append("통할 이유는 2~3개입니다")
     chosen = brief.get("chosen_title") or (titles[0] if titles else "")
-    if chosen and hook and not _tokens(chosen) & _tokens(hook):
+    if chosen and hook and not _carries_promise(chosen, hook):
         issues.append("훅이 제목의 약속을 이어받지 않습니다")
     return {"passed": not issues, "issues": issues}
 
