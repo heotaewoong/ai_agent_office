@@ -29,6 +29,8 @@ import {
   toggleArticle,
 } from "../lib/workflow";
 import { Icon } from "./icons";
+import { PackagingPanel } from "./packaging-panel";
+import { packagingRequired } from "../lib/packaging";
 import {
   EvidenceIntake,
   IdeaBank,
@@ -844,7 +846,7 @@ function BudgetStrip({ budget }: { budget: Dashboard["budget"] }) {
   );
 }
 
-type Action = (
+export type Action = (
   label: string,
   execute: () => Promise<unknown>,
   success: string,
@@ -973,6 +975,9 @@ function Studio({
           <span>{job.error}</span>
         </div>
       )}
+      {job.article?.origin === "idea" && (
+        <PackagingPanel job={job} busy={locked} action={action} onSaved={onSaved} />
+      )}
       <EvidenceIntake
         job={job}
         model={model}
@@ -1022,7 +1027,7 @@ function Studio({
               오기 전에는 승인할 수 없어요.
               <button
                 className="button primary"
-                disabled={locked}
+                disabled={locked || packagingRequired(job)}
                 onClick={() =>
                   void action(
                     "원고 생성",
@@ -1034,6 +1039,9 @@ function Studio({
                 원고 생성 시작
                 <Icon name="arrow" size={17} />
               </button>
+              {packagingRequired(job) && (
+                <p className="muted">패키지(제목·썸네일·훅)를 먼저 확정하세요.</p>
+              )}
             </Empty>
           ) : (
             <div className="editor-fields">
