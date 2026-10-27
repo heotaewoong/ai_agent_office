@@ -4,6 +4,9 @@ import copy
 import json
 import re
 
+from .brand import brand_system_prompt, load_brand
+from .gates import run_gates
+from .packaging import require_packaging
 from .providers import Provider
 from .store import Store, WorkflowError, canonical, digest
 
@@ -91,6 +94,8 @@ def deterministic_checks(packet):
 
 def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
     job = store.job(job_id)
+    require_packaging(job)
+    brand = load_brand()
     store.update_job(job_id, state="drafting", error=None)
     article = job["article"]
     provider = provider or Provider(store)
@@ -108,13 +113,19 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
         if not packet:
             raise WorkflowError("검수할 원고가 없습니다")
     else:
-        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": AUDIENCE, "rubric": RUBRIC, "instructions": "한국어 Markdown 원고 2,000~3,200자. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
-        packet = provider.generate("gen", [{"role": "system", "content": BASE}, {"role": "user", "content": canonical(context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.6})
+        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": AUDIENCE, "packaging": job.get("packaging"), "rubric": RUBRIC, "instructions": "한국어 Markdown 원고 2,000~3,200자. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
+        packet = provider.generate("gen", [{"role": "system", "content": brand_system_prompt(BASE, brand)}, {"role": "user", "content": canonical(context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.6})
         packet.update(evidence=evidence, audience=AUDIENCE, source_article_url=article["url"], limitations=article.get("limitations", []))
+        if job.get("packaging"):
+            packet["packaging_hash"] = job["packaging"]["packaging_hash"]
     packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks)
     checks = deterministic_checks(packet)
     packet["quality"]["deterministic_checks"] = checks
     if not checks["passed"]:
+        packet["quality"].update(status="blocked", critical=True)
+    previous = [j["source_packet"] for j in store.jobs() if j["id"] != job_id and j.get("source_packet")]
+    packet["quality"]["gates"] = run_gates(packet, previous, packet.get("assets", []), brand)
+    if packet["quality"]["gates"]["status"] == "block":
         packet["quality"].update(status="blocked", critical=True)
     result = store.save_source(job_id, packet, expected_hash=job["source_hash"])
     store.event("source_review_requested", {"role": "편집", "source_hash": result["source_hash"], "next_action": "현재 원고와 검수 결과를 확인하고 승인① 또는 수정"}, job_id)
