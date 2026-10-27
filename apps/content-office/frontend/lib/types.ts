@@ -43,6 +43,7 @@ export type SourcePacket = {
     reviews?: Review[];
     refine_count?: number;
     note?: string;
+    gates?: GateReport;
     deterministic_checks?: {
       passed?: boolean;
       issues?: string[];

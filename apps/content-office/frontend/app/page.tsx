@@ -470,7 +470,13 @@ export default function Office() {
                       </div>
                     </div>
                   </section>
-                  <IdeaBank />
+                  <IdeaBank
+                    onSelected={(j) => {
+                      setActiveId(j.id);
+                      setView("studio");
+                      void loadDashboard();
+                    }}
+                  />
                   <section
                     className="news-section"
                     aria-labelledby="news-heading"
@@ -1444,26 +1450,44 @@ function WorkflowSteps({ state }: { state: string }) {
 
 function QualityPanel({ job }: { job: Job }) {
   const quality = job.source_packet?.quality;
+  const gateItems = quality?.gates?.items ?? [];
+  const gateWarnings = gateItems.filter((item) => item.level === "warn");
   const criticalIssues = [
     ...new Set([
       ...(quality?.deterministic_checks?.issues ?? []),
       ...(quality?.reviews?.flatMap((review) => review.critical_issues ?? []) ??
         []),
+      ...gateItems
+        .filter((item) => item.level === "block")
+        .map((item) => item.message),
     ]),
   ];
   return (
     <section className="quality-panel">
       <div className="section-heading">
         <h3>독립 검수 결과</h3>
-        <span
-          className={`badge ${quality?.status === "passed" && !quality.critical ? "green" : "orange"}`}
-        >
-          {quality?.status === "passed" && !quality.critical
-            ? "검수 통과"
-            : quality?.status === "blocked"
-              ? "수정 필요"
-              : "검수 미완료"}
-        </span>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {quality?.gates && (
+            <span
+              className={`badge ${quality.gates.status === "pass" ? "green" : quality.gates.status === "warn" ? "orange" : "red"}`}
+            >
+              {quality.gates.status === "pass"
+                ? "게이트 통과"
+                : quality.gates.status === "warn"
+                  ? "게이트 경고"
+                  : "게이트 차단"}
+            </span>
+          )}
+          <span
+            className={`badge ${quality?.status === "passed" && !quality.critical ? "green" : "orange"}`}
+          >
+            {quality?.status === "passed" && !quality.critical
+              ? "검수 통과"
+              : quality?.status === "blocked"
+                ? "수정 필요"
+                : "검수 미완료"}
+          </span>
+        </div>
       </div>
       {criticalIssues.length > 0 && (
         <div className="quality-issues" role="alert">
@@ -1477,6 +1501,16 @@ function QualityPanel({ job }: { job: Job }) {
             ))}
           </ul>
         </div>
+      )}
+      {gateWarnings.length > 0 && (
+        <details>
+          <summary>게이트 경고 {gateWarnings.length}개</summary>
+          <ul>
+            {gateWarnings.map((item, index) => (
+              <li key={index}>{item.message}</li>
+            ))}
+          </ul>
+        </details>
       )}
       {quality?.reviews?.length ? (
         <div className="review-grid">

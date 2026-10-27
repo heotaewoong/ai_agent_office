@@ -27,7 +27,7 @@ def content_context(packet):
     return {key: value for key, value in packet.items() if key not in ("quality", "call_log", "approval")}
 
 
-def review_until_ready(packet, provider, event=None, checks_fn=None):
+def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None):
     packet = copy.deepcopy(packet)
     history = []
     for round_no in range(3):
@@ -49,7 +49,10 @@ def review_until_ready(packet, provider, event=None, checks_fn=None):
             return packet
         if event:
             event("editorial_role", {"role": "refine", "round": round_no + 1})
-        refined = provider.generate("refine", [{"role": "system", "content": BASE + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. body는 1,200자 이상의 완성된 전체 원고이며 수정 요약이 아니다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical({"packet": content_context(packet), "feedback": reviews, "deterministic_feedback": checks, "audience": AUDIENCE, "rubric": RUBRIC})}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
+        refine_context = {"packet": content_context(packet), "feedback": reviews, "deterministic_feedback": checks, "audience": AUDIENCE, "rubric": RUBRIC}
+        if packaging is not None:
+            refine_context["packaging"] = packaging
+        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. body는 1,200자 이상의 완성된 전체 원고이며 수정 요약이 아니다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
         for key in ("title", "body", "video"):
             packet[key] = refined[key]
     raise AssertionError("unreachable")
@@ -118,7 +121,7 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
         packet.update(evidence=evidence, audience=AUDIENCE, source_article_url=article["url"], limitations=article.get("limitations", []))
         if job.get("packaging"):
             packet["packaging_hash"] = job["packaging"]["packaging_hash"]
-    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks)
+    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks, system=brand_system_prompt(BASE, brand), packaging=job.get("packaging"))
     checks = deterministic_checks(packet)
     packet["quality"]["deterministic_checks"] = checks
     if not checks["passed"]:
