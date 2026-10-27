@@ -3,6 +3,14 @@
   "document_version": "v7.1 검토 보강판",
   "kind": "design_blueprint_not_a_connected_runner",
   "execution_verdict": "not_executed",
+  "parent_guide": {
+    "version": "7.2",
+    "url": "https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html",
+    "source": "content-system/source.json",
+    "role": "전체 설계와 도구 선정의 정본; 이 구성요소는 원가 실습·자료 감사·세부 근거 보강",
+    "source_sha256": "de078057cbdbdf65e2b689c6b6b53a7e65a378f644153e63d84f21b3cf8b6a10",
+    "snapshot_included": true
+  },
   "defaults": {
     "execute_external": false,
     "paid_generation_enabled": false,
@@ -311,6 +319,34 @@
       "settings",
       "approval_scope"
     ],
+    "AudioAssetRecord": [
+      "asset_id",
+      "origin_url",
+      "creator",
+      "license_name",
+      "license_version",
+      "license_url",
+      "evidence_hash",
+      "downloaded_at",
+      "allowed_channels",
+      "commercial_use_status",
+      "sync_adaptation_status",
+      "attribution",
+      "performer_consent_ref",
+      "content_id_status",
+      "raw_hash",
+      "mix_hash"
+    ],
+    "SpeechTiming": [
+      "audio_sha256",
+      "display_script_hash",
+      "pronunciation_text_hash",
+      "actual_duration",
+      "subtitle_sha256",
+      "alignment_model",
+      "qa_evidence",
+      "status"
+    ],
     "OfferSnapshot": [
       "product_id",
       "product_revision",
@@ -405,7 +441,8 @@
     "nullable_fields": "Use explicit null for conditions that do not apply; never invent a value to satisfy a schema.",
     "offer_time_semantics": "fetched_at is verification time; valid_until is permitted reuse deadline; starts_at/ends_at are campaign validity. Expired or unverifiable terms suppress commerce CTA.",
     "issue_binding": "An issue binds the exact approved source, release manifests, account, channel, schedule, timezone, consent and optional offer snapshot. Changes require affected approvals to be rechecked.",
-    "cost_semantics": "Use all period costs divided by accepted outputs; retain abandoned jobs and discarded takes once. Separate estimated usage value, actual cash charges and human time. Do not double-count subscription credits or common-source costs. Hypothetical examples are not invoices or authorized budgets."
+    "cost_semantics": "Use all period costs divided by accepted outputs; retain abandoned jobs and discarded takes once. Separate estimated usage value, actual cash charges and human time. Do not double-count subscription credits or common-source costs. Hypothetical examples are not invoices or authorized budgets.",
+    "audio_rights": "License, synchronization/adaptation rights, attribution, performer consent and Content ID state are separate checks. A generated or licensed track is not automatically cleared for every channel. Bind subtitles and alignment evidence to the actual audio hash."
   },
   "delivery_states": [
     "created",

@@ -38,7 +38,7 @@
 | Adobe Firefly API | 이미지 / 브랜드·제품 합성 후보 | 공식 API | 상업 콘텐츠에 필요한 참조·제품 합성 흐름을 비교한다. 정식/베타별 조건·입력 권리를 검토한다. 계정·계약 가격 미확인. | 계약·기능별 확인 | API·베타 예외·입력 권리 확인 [공식 근거](https://developer.adobe.com/firefly-services/docs/firefly-api/) |
 | Recraft Vector | 이미지 / 편집 가능한 벡터 후보 | 공식 API | SVG 도해·아이콘이 필요한 장면에서 비교한다. 웹 Free·MCP·API 자산 조건을 혼동하지 않는다. 정확한 텍스트는 직접 레이어로 작성한다. | V4.1 일반 벡터 $0.08/장 | 개발자 약관·표식·학습 이용 제한 확인 [공식 근거](https://www.recraft.ai/legal/developer-terms) |
 | Resend | 뉴스레터 / 기존 설계의 전송 후보 | 공식 API | 회차·동의·수신거부·빈도·승인 장부는 오피스가 소유하고 전송 기반만 빌린다. 현행 한 수신자 SMTP 접수와 뉴스레터 운영은 다르다. 실제 연결 안 함. | 계정·발송량별 확인 | 전송·개인정보·동의 조건 [공식 근거](https://resend.com/docs) |
-| Buffer | 발행 / 다중 채널 초안 대안 | 공식 API | 공식 GraphQL API의 saveToDraft 등을 연결 후보로 검토한다. 연결 채널별 기능·토큰·계정 권한을 확인한다. 중복 작업 장부는 만들지 않는다. | Free API키1개·3,000요청/30일 표시; 조건 재확인 | 공식 API·채널별 정책 [공식 근거](https://developers.buffer.com/) |
+| Buffer | 발행 / 다중 채널 초안 대안 | 공식 API | 공식 GraphQL API의 saveToDraft 등을 연결 후보로 검토한다. 연결 채널별 기능·토큰·계정 권한을 확인한다. 중복 작업 장부는 만들지 않는다. 공식 문서의 채널별·기간별 상한과 실제 응답 RateLimit을 재확인한다. | 무료 API 키·한도는 계정/채널/15분·일·30일 구간별로 확인. 합계 표시를 단일 채널 보장량으로 쓰지 않음. | 공식 API·채널별 정책 [공식 근거](https://developers.buffer.com/) |
 
 ## 사용자 요청 이름의 누락 검사
 

@@ -133,7 +133,7 @@ Instant Voice Cloning은 필요한 권리·동의를 확인한다. Professional 
 
 Buttondown의 현재 초안 API 예제는 `draft`, 발송 전환은 `about_to_send`, 예약은 `scheduled`와 `publish_date`를 설명한다. 공급사 기본값이 바뀔 수 있어 안전한 초안 상태를 명시한다. 메일이 `sent`인지, 일부만 전달됐는지와 반송 여부를 구분한다. 초안 저장 성공을 발송 성공으로 보고하지 않는다. [공식 상태 설명](https://docs.buttondown.com/api-emails-introduction)
 
-Buffer는 Free 포함 API를 제공하며, 공식 도움말은 Free에 API 키 1개·30일간 3,000요청을 설명한다. 신규 계정 생성·키 발급·권한 연결·예약/발행은 실제 운영 승인 후 별도 단계로 둔다. [Buffer 공식 API 도움말](https://support.buffer.com/en-us/articles/what-is-buffers-api-GtIYIQilz5)
+Buffer는 Free 포함 API를 제공하며, 공식 도움말의 API 키 1개·30일간 3,000요청 기재와 다른 공식 안내의 채널별·15분/일별 상한을 함께 확인한다. 합계 표시를 단일 채널의 보장량으로 쓰지 않고 실제 응답의 RateLimit을 재확인한다. 신규 계정 생성·키 발급·권한 연결·예약/발행은 실제 운영 승인 후 별도 단계로 둔다. [Buffer 공식 API 도움말](https://support.buffer.com/en-us/articles/what-is-buffers-api-GtIYIQilz5)
 
 ## 9. HeoBrain 멀티채널 → 상품 연결 아이디어
 

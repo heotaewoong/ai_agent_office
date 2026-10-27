@@ -1,0 +1,482 @@
+{
+  "schema_version": 1,
+  "document_version": "v7.1 검토 보강판",
+  "kind": "design_blueprint_not_a_connected_runner",
+  "execution_verdict": "not_executed",
+  "parent_guide": {
+    "version": "7.2",
+    "url": "https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html",
+    "source": "content-system/source.json",
+    "role": "전체 설계와 도구 선정의 정본; 이 구성요소는 원가 실습·자료 감사·세부 근거 보강",
+    "source_sha256": "de078057cbdbdf65e2b689c6b6b53a7e65a378f644153e63d84f21b3cf8b6a10",
+    "snapshot_included": true
+  },
+  "defaults": {
+    "execute_external": false,
+    "paid_generation_enabled": false,
+    "external_publication_enabled": false,
+    "newsletter_send_enabled": false,
+    "coupon_write_enabled": false,
+    "budget_usd": 0,
+    "default_visibility": "private",
+    "max_refine_iterations": 2,
+    "heavy_local_concurrency": 1
+  },
+  "approval_gates": [
+    {
+      "id": "G0",
+      "name": "⓪ 기획 선택",
+      "scope": "현재 기획 선택 경로가 있다. 독자·목표·모든 제작 조건을 함께 고정하는 범위는 설계 계약으로 확인한다.",
+      "current_checks": "기획 선택 코드·API 경로 존재",
+      "proposed_extensions": "AudienceBrief와 제작 범위의 연결",
+      "implementation": "implemented_static_audit",
+      "invalidation": "문제·대상·목표가 달라지면 재선택하는 운영 원칙"
+    },
+    {
+      "id": "G1",
+      "name": "① 원고 승인",
+      "scope": "현재 source_hash·품질·선택 출력을 확인한다. 자산·화자·예산까지 결속하는 것은 확장 계약이다.",
+      "current_checks": "source_hash·quality·selections",
+      "proposed_extensions": "자산 권리·화자·견적·예산 결속",
+      "implementation": "partial_static_audit",
+      "invalidation": "현재 원고 판본 검사를 보존하고, 추가 연결 시 화자·자산·비용 변경의 영향을 재검토"
+    },
+    {
+      "id": "G2",
+      "name": "② 출력별 출고",
+      "scope": "현재 로컬 소스·manifest·완료 출력·영상 검수와 수동 인계다. 계정·공개 범위·일정·오퍼 결속은 추가 연결이다.",
+      "current_checks": "source·manifest·완료 출력·영상 검수·manual-handoff",
+      "proposed_extensions": "대상 계정·공개 범위·일정·상품 조건·외부 결과 대사",
+      "implementation": "partial_static_audit",
+      "invalidation": "현재 파일·manifest 검사를 보존하고, 추가 연결 시 계정·일정·오퍼 변경을 재검토"
+    },
+    {
+      "id": "G3",
+      "name": "③ 회차 승인",
+      "scope": "현재 회차 라벨·설계와 실제 발송은 다르다. 회차·동의·철회·빈도·예산 강제와 발송은 미연결이다.",
+      "current_checks": "회차 라벨·설계만 확인",
+      "proposed_extensions": "동의·철회·빈도·예산·대상 확인 및 실제 전송",
+      "implementation": "not_connected",
+      "invalidation": "추가 구현 시 회차·대상·동의·빈도·내용·예산 변경을 재검토"
+    }
+  ],
+  "current_implementation": {
+    "planning_selection_0": "implemented_static_audit",
+    "source_approval_1": "implemented_static_audit",
+    "per_output_release_2": "implemented_static_audit",
+    "issue_approval_and_send_3": "not_connected",
+    "external_publishing": "not_connected",
+    "marketplace_offer_and_coupon": "not_connected",
+    "new_model_quality_winner": null,
+    "source_model_default": {
+      "model": "gemini-3.8-flash",
+      "scope": "static_code_only_not_database_or_live_call"
+    },
+    "voice_profiles": {
+      "ids": [
+        "windows-heami",
+        "gemini-kore"
+      ],
+      "scope": "static_code_only_not_database_or_live_call"
+    }
+  },
+  "stages": [
+    {
+      "id": "S01",
+      "name": "독자와 목적",
+      "description": "질문·수준·행동·주제·출력·예산을 분리한다.",
+      "input": "브랜드·독자·문제",
+      "output": "AudienceBrief",
+      "tools": [],
+      "gate": "⓪",
+      "status": "기획 기능 일부 정적 확인",
+      "acceptance": "누구의 어떤 질문을 해결하는지 한 문장으로 말한다."
+    },
+    {
+      "id": "S02",
+      "name": "신호 수집",
+      "description": "공식 발표·문서 변경·허용한 영상·선택 뉴스레터·독자 질문을 모은다.",
+      "input": "선택한 소스와 권리",
+      "output": "SourceRecord[]",
+      "tools": [
+        "youtube-api"
+      ],
+      "gate": "수집 범위",
+      "status": "새 연결은 제안",
+      "acceptance": "출처·시각·언어·판본·권리·본문 확보 수준을 기록한다."
+    },
+    {
+      "id": "S03",
+      "name": "근거와 기획",
+      "description": "원출처 주장과 독립 확인·해석을 구분하고 형식 가설을 고른다.",
+      "input": "SourceRecord[]",
+      "output": "EvidenceLedger + Idea",
+      "tools": [],
+      "gate": "⓪",
+      "status": "기획 선택 구현 정적 확인",
+      "acceptance": "설명만 읽은 영상을 전체 학습으로 세지 않는다."
+    },
+    {
+      "id": "S04",
+      "name": "패키지 설계",
+      "description": "제목·첫 장면·약속·썸네일 콘셉트·CTA를 계획한다.",
+      "input": "선택 기획",
+      "output": "PackagePlan",
+      "tools": [
+        "claude",
+        "autokliq"
+      ],
+      "gate": "① 이전은 텍스트 기획",
+      "status": "현재 제목·썸네일 기획 각 3안 검증 코드 확인 / Claude·AutoKliq·5안은 확장 제안",
+      "acceptance": "제목과 첫 30초가 실제 내용과 약속을 공유한다."
+    },
+    {
+      "id": "S05",
+      "name": "공통 원고",
+      "description": "Gen·Critique·Eval·Refine을 나누고 중요 사실 오류는 점수보다 우선한다.",
+      "input": "기획·근거",
+      "output": "Article + Script + ClaimMap",
+      "tools": [
+        "claude"
+      ],
+      "gate": "①",
+      "status": "역할 흐름 구현·Claude는 확장 제안",
+      "acceptance": "모든 핵심 주장에 근거 또는 미확인 표시가 있다."
+    },
+    {
+      "id": "S06",
+      "name": "제작 범위 고정",
+      "description": "원고·예산·자산·화자와 만들 출력만 승인한다.",
+      "input": "현재 원고·예상 비용",
+      "output": "ApprovalSource",
+      "tools": [],
+      "gate": "①",
+      "status": "현재 원고 검사 정적 확인 / 예산·자산·화자 결속은 확장 제안",
+      "acceptance": "미승인 상태에서 유료 미디어 호출 0회."
+    },
+    {
+      "id": "S07",
+      "name": "독립 제작",
+      "description": "글·영상·카드·PDF를 각각 선택하고 실제 음성 길이로 장면을 맞춘다.",
+      "input": "승인 원고·장면 계약",
+      "output": "Assets + Timeline",
+      "tools": [
+        "nano-banana",
+        "runway",
+        "eleven-v2",
+        "hyperframes",
+        "remotion",
+        "ffmpeg"
+      ],
+      "gate": "① 범위 안",
+      "status": "기존 제작 경로 일부·새 모델은 제안",
+      "acceptance": "영상 실패가 완성된 글의 출고를 막지 않는다."
+    },
+    {
+      "id": "S08",
+      "name": "실물 검수",
+      "description": "끝까지 읽고 보고 들으며 한글·발음·상품·권리를 확인한다.",
+      "input": "실제 산출물",
+      "output": "QAEvidence + ApprovedAssets",
+      "tools": [
+        "ffmpeg"
+      ],
+      "gate": "②",
+      "status": "출고 검사·ZIP 구현 정적 확인",
+      "acceptance": "샘플·mock·메타데이터 통과를 시청/청취 통과로 바꾸지 않는다."
+    },
+    {
+      "id": "S09",
+      "name": "전달과 대사",
+      "description": "초안·접수·처리·게시를 나누고 불명 응답은 조회 후 판단한다.",
+      "input": "출고 승인·대상",
+      "output": "DeliveryLedger",
+      "tools": [
+        "youtube-api",
+        "buffer"
+      ],
+      "gate": "②",
+      "status": "외부 게시 미연결",
+      "acceptance": "공개 범위를 명시하고 외부 ID 없이 성공 처리하지 않는다."
+    },
+    {
+      "id": "S10",
+      "name": "허브·상품 연결",
+      "description": "공개 가능한 자체 자료와 실제 상품 조건만 연결한다.",
+      "input": "검증된 상품 정보",
+      "output": "OfferSnapshot + CampaignDraft",
+      "tools": [],
+      "gate": "② + 서버 거래 권한",
+      "status": "상품/쿠폰 미연결",
+      "acceptance": "상품·가격·기간·상태 미확인 시 구매/할인 CTA를 막는다."
+    },
+    {
+      "id": "S11",
+      "name": "뉴스레터 회차",
+      "description": "여러 승인 원고를 독자별 묶음으로 편집하고 동의·빈도를 확인한다.",
+      "input": "승인 자료·동의 장부",
+      "output": "IssueDraft + SendPlan",
+      "tools": [
+        "resend"
+      ],
+      "gate": "③",
+      "status": "회차 발송 미연결",
+      "acceptance": "수신거부·중복 대상·승인 만료를 발송 전에 검사한다."
+    },
+    {
+      "id": "S12",
+      "name": "측정·정정·지식",
+      "description": "플랫폼 지표와 자체 유입·구매·환불·편집 비용을 분리해 환류한다.",
+      "input": "성과·원가·지원 질문",
+      "output": "ApprovedLearning",
+      "tools": [],
+      "gate": "교훈 반영 승인",
+      "status": "성과 CSV·교훈 일부 정적 확인",
+      "acceptance": "무료 다운로드·접수를 매출이나 전달 완료로 보고하지 않는다."
+    }
+  ],
+  "requested_tool_coverage": {
+    "Midjourney": "midjourney",
+    "Nano Banana": "nano-banana",
+    "Runway": "runway",
+    "Kling": "kling",
+    "Veo": "veo",
+    "Luma": "luma",
+    "AutoKliq": "autokliq",
+    "Chatterbox": "chatterbox",
+    "Qwen": "qwen-family",
+    "Eleven v4": "eleven-v4",
+    "Multilingual v2": "eleven-v2",
+    "Qwen3-TTS": "qwen3-tts",
+    "VoxCPM2": "voxcpm2",
+    "Confucius4-TTS": "confucius4",
+    "OpenVoice": "openvoice",
+    "Claude": "claude",
+    "Blender": "blender",
+    "Hyperframe": "hyperframes",
+    "FFmpeg": "ffmpeg",
+    "Remotion": "remotion",
+    "Upside": "upside",
+    "vidIQ": "vidiq",
+    "TubeBuddy": "tubebuddy",
+    "ViewStats": "viewstats",
+    "vling": "vling",
+    "BLACKKIWI": "blackkiwi",
+    "usearch": "usearch",
+    "RapidTags": "rapidtags",
+    "KeywordTool.io": "keywordtool"
+  },
+  "required_records": {
+    "AudienceBrief": [
+      "topic",
+      "audience",
+      "problem",
+      "prior_knowledge",
+      "intent",
+      "selected_outputs",
+      "budget"
+    ],
+    "SourceRecord": [
+      "source_id",
+      "url",
+      "publisher",
+      "collected_at",
+      "version",
+      "content_hash",
+      "rights",
+      "read_scope"
+    ],
+    "ClaimRecord": [
+      "claim_id",
+      "claim",
+      "source_ids",
+      "evidence_status",
+      "limitations"
+    ],
+    "ShotSpec": [
+      "shot_id",
+      "purpose",
+      "claim_ids",
+      "source_or_reenactment",
+      "dialogue",
+      "screen_text",
+      "action",
+      "camera",
+      "start_state",
+      "end_state",
+      "rights",
+      "audio_duration",
+      "version"
+    ],
+    "AssetRecord": [
+      "asset_id",
+      "sha256",
+      "uri",
+      "rights_status",
+      "source_version",
+      "provider",
+      "model",
+      "settings",
+      "approval_scope"
+    ],
+    "AudioAssetRecord": [
+      "asset_id",
+      "origin_url",
+      "creator",
+      "license_name",
+      "license_version",
+      "license_url",
+      "evidence_hash",
+      "downloaded_at",
+      "allowed_channels",
+      "commercial_use_status",
+      "sync_adaptation_status",
+      "attribution",
+      "performer_consent_ref",
+      "content_id_status",
+      "raw_hash",
+      "mix_hash"
+    ],
+    "SpeechTiming": [
+      "audio_sha256",
+      "display_script_hash",
+      "pronunciation_text_hash",
+      "actual_duration",
+      "subtitle_sha256",
+      "alignment_model",
+      "qa_evidence",
+      "status"
+    ],
+    "OfferSnapshot": [
+      "product_id",
+      "product_revision",
+      "product_hash",
+      "canonical_url",
+      "title",
+      "currency",
+      "price",
+      "availability",
+      "campaign_terms",
+      "starts_at",
+      "ends_at",
+      "valid_until",
+      "usage_limit",
+      "issuance_limit",
+      "fetched_at",
+      "terms_hash",
+      "snapshot_hash"
+    ],
+    "IssueDraft": [
+      "issue_id",
+      "channel",
+      "account_ref",
+      "scheduled_at",
+      "timezone",
+      "source_versions",
+      "source_approval_id",
+      "release_approval_ids",
+      "manifest_hash",
+      "offer_snapshot_hash",
+      "audience_segment",
+      "consent_snapshot",
+      "suppression_snapshot",
+      "frequency_check",
+      "budget",
+      "approval_3"
+    ],
+    "DeliveryRecord": [
+      "content_id",
+      "asset_hash",
+      "account_ref",
+      "channel",
+      "visibility",
+      "schedule",
+      "approval_id",
+      "idempotency_key",
+      "external_id",
+      "state",
+      "reconciled_at"
+    ],
+    "ModelEvaluation": [
+      "fixture_id",
+      "model_version",
+      "raw_output_hash",
+      "postprocessed_hash",
+      "critical_failures",
+      "blind_scores",
+      "retries",
+      "elapsed",
+      "resource_usage",
+      "total_cost",
+      "accepted",
+      "human_review"
+    ],
+    "CostRecord": [
+      "job_id",
+      "route",
+      "period",
+      "started_count",
+      "accepted_count",
+      "model_settings",
+      "rate_version",
+      "actual_token_usage",
+      "image_attempts",
+      "discarded_takes",
+      "billed_native_seconds",
+      "accepted_seconds",
+      "tts_billable_characters",
+      "human_revision_minutes",
+      "blocked_wait_minutes",
+      "usage_value",
+      "cash_charge",
+      "subscription_allocation",
+      "setup_cost_allocation",
+      "currency",
+      "refund",
+      "evidence_status"
+    ]
+  },
+  "record_rules": {
+    "required_records_status": "proposed_contracts_not_current_database_schemas",
+    "nullable_fields": "Use explicit null for conditions that do not apply; never invent a value to satisfy a schema.",
+    "offer_time_semantics": "fetched_at is verification time; valid_until is permitted reuse deadline; starts_at/ends_at are campaign validity. Expired or unverifiable terms suppress commerce CTA.",
+    "issue_binding": "An issue binds the exact approved source, release manifests, account, channel, schedule, timezone, consent and optional offer snapshot. Changes require affected approvals to be rechecked.",
+    "cost_semantics": "Use all period costs divided by accepted outputs; retain abandoned jobs and discarded takes once. Separate estimated usage value, actual cash charges and human time. Do not double-count subscription credits or common-source costs. Hypothetical examples are not invoices or authorized budgets.",
+    "audio_rights": "License, synchronization/adaptation rights, attribution, performer consent and Content ID state are separate checks. A generated or licensed track is not automatically cleared for every channel. Bind subtitles and alignment evidence to the actual audio hash."
+  },
+  "delivery_states": [
+    "created",
+    "accepted",
+    "processing",
+    "draft",
+    "private",
+    "scheduled",
+    "published",
+    "failed",
+    "unknown"
+  ],
+  "failure_rules": [
+    "No approval is fabricated by an agent.",
+    "A failed video does not invalidate an accepted independent article.",
+    "A source change invalidates only dependent claims/assets and affected approvals.",
+    "Unknown provider result is reconciled before a retry.",
+    "Missing verified offer suppresses commerce CTA and coupon issuance.",
+    "YouTube engagement/subscription is not rewarded with coupons.",
+    "Private learning material and credentials are excluded from public exports."
+  ],
+  "fixture_only_job": {
+    "job_id": "example-neutral-001",
+    "is_fixture": true,
+    "selected_outputs": [
+      "article",
+      "short_video",
+      "checklist"
+    ],
+    "source_approval_id": null,
+    "release_approvals": [],
+    "issue_approval_id": null,
+    "provider_jobs_submitted": 0,
+    "deliveries_submitted": 0,
+    "coupon_operations": 0
+  }
+}

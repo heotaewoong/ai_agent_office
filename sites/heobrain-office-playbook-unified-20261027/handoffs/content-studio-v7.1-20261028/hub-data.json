@@ -4,7 +4,13 @@
     "version": "v7.1 검토 보강판",
     "date": "2026-10-28",
     "scope": "AI 소식과 내 지식을 글·영상·뉴스레터로 만들고 필요한 자료·상품으로 연결합니다. 제공 설계·지정 도구·공식 소스·PDF 목록을 함께 확인한 안내서입니다.",
-    "verification": "공식 문서 조사·PDF 파일 감사·현행 소스 정적 감사. 새 모델 생성/계정 연결/게시/결제는 실행하지 않음."
+    "verification": "공식 문서 조사·PDF 파일 감사·현행 소스 정적 감사. 새 모델 생성/계정 연결/게시/결제는 실행하지 않음.",
+    "canonical_guide": {
+      "version": "7.2",
+      "url": "https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html",
+      "source": "content-system/source.json",
+      "role": "전체 설계와 도구 선정의 정본; 이 구성요소는 원가 실습·자료 감사·세부 근거 보강"
+    }
   },
   "recommendations": [
     {
@@ -840,8 +846,8 @@
       "status": "공식 자료 확인·실사용 미검증",
       "choice": "다중 채널 초안 대안",
       "reason": "공식 GraphQL API의 saveToDraft 등을 연결 후보로 검토한다.",
-      "limitations": "연결 채널별 기능·토큰·계정 권한을 확인한다. 중복 작업 장부는 만들지 않는다.",
-      "cost": "Free API키1개·3,000요청/30일 표시; 조건 재확인",
+      "limitations": "연결 채널별 기능·토큰·계정 권한을 확인한다. 중복 작업 장부는 만들지 않는다. 공식 문서의 채널별·기간별 상한과 실제 응답 RateLimit을 재확인한다.",
+      "cost": "무료 API 키·한도는 계정/채널/15분·일·30일 구간별로 확인. 합계 표시를 단일 채널 보장량으로 쓰지 않음.",
       "license": "공식 API·채널별 정책",
       "urls": [
         {
@@ -2646,6 +2652,147 @@
       "기존 18부서·144 OF·37 EX·29 전문 분야를 보존하고 역할이 필요할 때 호출한다.",
       "① 원고·② 출력별 출고·③ 회차의 의미를 바꾸지 않는다. 에이전트는 승인을 만들지 않는다.",
       "유료 강의·PRIVATE 원문·계정·개인 경로는 이 웹과 공개 인계 ZIP에 포함하지 않는다."
+    ]
+  },
+  "cost_model": {
+    "schema_version": "1.0",
+    "currency": "USD",
+    "checked_at": "2026-10-28",
+    "verification": {
+      "kind": "official_rates_hypothetical_usage",
+      "actual_generation_tests": 0,
+      "paid_api_calls": 0
+    },
+    "reference": {
+      "duration_seconds": 60,
+      "target_output": "검수 통과 영상 1편 + 썸네일 1개 + 제목·설명. 1080p는 편집 출력이며 생성 원본 해상도를 보장하지 않음"
+    },
+    "rates": {
+      "llm": {
+        "name": "Claude Sonnet 5.5 Standard",
+        "input_per_million": 2,
+        "output_per_million": 10,
+        "urls": [
+          {
+            "label": "Anthropic 공식 가격",
+            "url": "https://platform.claude.com/docs/en/about-claude/pricing"
+          }
+        ]
+      },
+      "image": {
+        "name": "Nano Banana 2.1 Standard·1K",
+        "output_per_image": 0.0336,
+        "input_per_million": 1.5,
+        "text_output_per_million": 7.5,
+        "urls": [
+          {
+            "label": "Google 공식 가격",
+            "url": "https://ai.google.dev/gemini-api/docs/pricing"
+          }
+        ]
+      },
+      "tts": {
+        "name": "Eleven v4 / v2 Multilingual 공개 API 요율",
+        "per_thousand_characters": 0.08,
+        "urls": [
+          {
+            "label": "ElevenAPI 공식 가격",
+            "url": "https://elevenlabs.io/pricing/api"
+          }
+        ]
+      }
+    },
+    "video_models": [
+      {
+        "id": "gen45",
+        "name": "Runway Gen-4.5",
+        "per_native_second": 0.12,
+        "urls": [
+          {
+            "label": "Runway API 가격",
+            "url": "https://docs.dev.runwayml.com/guides/pricing/"
+          }
+        ]
+      },
+      {
+        "id": "turbo",
+        "name": "Runway Gen-4 Turbo",
+        "per_native_second": 0.05,
+        "urls": [
+          {
+            "label": "Runway API 가격",
+            "url": "https://docs.dev.runwayml.com/guides/pricing/"
+          }
+        ]
+      }
+    ],
+    "limits": {
+      "max_started": 1000,
+      "max_takes_per_started": 200,
+      "max_human_minutes_per_started": 1440,
+      "max_hourly_value": 10000
+    },
+    "defaults": {
+      "started": 1,
+      "accepted": 1,
+      "hourly_value": 20,
+      "video_model": "gen45"
+    },
+    "scenarios": [
+      {
+        "id": "education",
+        "name": "설명교육",
+        "description": "자체 도식·실습 화면 중심. 생성 영상은 기본 0개. 현재 Gemini·Heami/Kore도 비교 기준선으로 유지.",
+        "llm_input_tokens": 18000,
+        "llm_output_tokens": 4000,
+        "image_attempts": 4,
+        "image_input_tokens": 1200,
+        "image_text_output_tokens": 600,
+        "tts_billable_characters": 500,
+        "video_takes": 0,
+        "native_seconds_per_take": 5,
+        "human_minutes": 25,
+        "resource_allowance_usd": 0.2
+      },
+      {
+        "id": "brand",
+        "name": "브랜드형",
+        "description": "핵심 생성 장면 3개를 수용하려고 5초 테이크 6개를 만든다는 가정. 나머지 화면은 자체 자산.",
+        "llm_input_tokens": 24000,
+        "llm_output_tokens": 5500,
+        "image_attempts": 8,
+        "image_input_tokens": 2400,
+        "image_text_output_tokens": 1200,
+        "tts_billable_characters": 700,
+        "video_takes": 6,
+        "native_seconds_per_take": 5,
+        "human_minutes": 45,
+        "resource_allowance_usd": 0.2
+      },
+      {
+        "id": "story",
+        "name": "생성이야기형",
+        "description": "5초 테이크 24개에서 12개를 수용하는 60초 이야기의 가정. 연속성·화자 품질 우승자는 아직 없음.",
+        "llm_input_tokens": 36000,
+        "llm_output_tokens": 8000,
+        "image_attempts": 10,
+        "image_input_tokens": 3600,
+        "image_text_output_tokens": 1800,
+        "tts_billable_characters": 1000,
+        "video_takes": 24,
+        "native_seconds_per_take": 5,
+        "human_minutes": 75,
+        "resource_allowance_usd": 0.2
+      }
+    ],
+    "notes": [
+      "모든 수량·폐기율·사람 시간·자원 예산은 가정이며 실제 청구액·예산 승인·품질 승자 판정이 아닙니다. 실제 생성시험·유료 호출은 0회입니다.",
+      "입력은 시작한 1편당 사용량입니다. 전체 시작편수의 비용을 수용편수로 나누므로 중단·폐기 작업도 포함합니다.",
+      "영상 테이크는 과금 원본 5초 가정입니다. 모델별 지원 길이·해상도·입력·추가 과금은 실제 호출 전 확인해야 합니다.",
+      "Runway 모델 비교는 같은 테이크 수와 시간에 단가만 대입한 결과입니다. 동일 품질·수용률·재작업 시간을 가정하지 않습니다.",
+      "표시액은 사용량 환산액과 사람 시간 평가액입니다. 구독 고정비·포함 크레딧·이관비·검색·외부 자산·세금·환율·추가 업스케일 비용은 제외합니다.",
+      "구독 포함 크레딧은 월 고정비와 같은 사용량을 두 번 더하지 않습니다. 블로그·영상·뉴스레터의 공통 조사·원고 비용은 한 번만 기록합니다.",
+      "사람 시간 기본 $20/시간은 설명용 가정이며 사용자의 임금이 아닙니다. 350자 원고가 반드시 60초 음성이 되는 것은 아닙니다."
     ]
   }
 }

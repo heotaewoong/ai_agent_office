@@ -1,0 +1,2657 @@
+{
+  "meta": {
+    "title": "HeoBrain 콘텐츠 자동화 스튜디오",
+    "version": "v7.1 검토 보강판",
+    "date": "2026-10-28",
+    "scope": "AI 소식과 내 지식을 글·영상·뉴스레터로 만들고 필요한 자료·상품으로 연결합니다. 제공 설계·지정 도구·공식 소스·PDF 목록을 함께 확인한 안내서입니다.",
+    "verification": "공식 문서 조사·PDF 파일 감사·현행 소스 정적 감사. 새 모델 생성/계정 연결/게시/결제는 실행하지 않음.",
+    "canonical_guide": {
+      "version": "7.2",
+      "url": "https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html",
+      "source": "content-system/source.json",
+      "role": "전체 설계와 도구 선정의 정본; 이 구성요소는 원가 실습·자료 감사·세부 근거 보강"
+    }
+  },
+  "recommendations": [
+    {
+      "id": "lean",
+      "title": "설명·학습 콘텐츠부터",
+      "role": "추가 생성비를 통제하는 첫 경로",
+      "tools": [
+        "현행 원고 엔진",
+        "직접 만든 HTML/SVG·화면",
+        "FFmpeg"
+      ],
+      "rationale": "읽기 쉬운 글과 실제 실습 화면이 중심이면 생성형 실사 컷이 필수는 아니다.",
+      "readiness": "현행 경로를 먼저 검증",
+      "condition": "한 묶음의 수정 시간·권리·가독성을 확인한 뒤 모델을 추가"
+    },
+    {
+      "id": "balanced",
+      "title": "브랜드형 콘텐츠로 확장",
+      "role": "Claude + 선택한 이미지·TTS + 장면 렌더",
+      "tools": [
+        "Claude Sonnet",
+        "Nano Banana",
+        "Eleven v2/v4",
+        "Remotion 또는 HyperFrames",
+        "FFmpeg"
+      ],
+      "rationale": "기획·원고·이미지·목소리·렌더를 슬롯으로 나눠 품질과 비용을 비교한다.",
+      "readiness": "새 API 연결·품질 시험 필요",
+      "condition": "① 원고·예산 승인 후 중립 입력으로 비교; 추가 결제 승인 없음"
+    },
+    {
+      "id": "cinema",
+      "title": "핵심 장면만 생성 영상",
+      "role": "스토리·데모·광고의 선택 제작",
+      "tools": [
+        "Runway",
+        "Kling 또는 Luma 비교",
+        "Blender 선택",
+        "FFmpeg"
+      ],
+      "rationale": "움직임이 메시지를 설명하는 장면에만 생성 비용을 사용하고 나머지는 실제 자료·도해로 구성한다.",
+      "readiness": "통제된 샷 시험부터",
+      "condition": "실제 재생·청취·권리·상품 사실을 확인한 뒤 출력별 출고"
+    }
+  ],
+  "tools": [
+    {
+      "id": "midjourney",
+      "name": "Midjourney",
+      "requestedNames": [
+        "Midjourney",
+        "미드저니"
+      ],
+      "stage": "이미지·영상",
+      "automation": "수동",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "선택형 아트디렉션",
+      "reason": "브랜드 분위기와 대표 장면을 사람이 탐색할 때 선택한다.",
+      "limitations": "공식 약관은 자동화 도구에 의한 접근·생성을 금지한다. 비공식 API·브라우저 봇을 기본 엔진으로 넣지 않는다.",
+      "cost": "구독·모드별 요금 확인 필요",
+      "license": "입력 권리·구독 등급별 자산 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://docs.midjourney.com/hc/en-us/articles/32083055291277-Terms-of-Service"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "nano-banana",
+      "name": "Nano Banana",
+      "requestedNames": [
+        "Nano Banana",
+        "나노바나나"
+      ],
+      "stage": "이미지",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "이미지 API 우선 후보",
+      "reason": "현재 문서상 Nano Banana 2.1을 범용 생성·편집 후보로 둔다. 정확한 한글·가격·수치는 별도 HTML/SVG로 합성한다.",
+      "limitations": "gemini-nano-banana-2.1과 Lite/Pro를 구분. 한국어 품질·계정 접근은 미실측.",
+      "cost": "1K 표준 출력 $0.0336/장 + 입력 등",
+      "license": "API 약관·입력 권리·데이터 처리 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://ai.google.dev/gemini-api/docs/image-generation"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "runway",
+      "name": "Runway",
+      "requestedNames": [
+        "Runway"
+      ],
+      "stage": "영상",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "생성 영상 기본 비교 후보",
+      "reason": "Gen-4.5와 Gen-4 Turbo를 같은 제공자에서 품질·비용 후보로 비교한다. 설명 영상 전체를 생성 영상으로 채우지 않는다.",
+      "limitations": "모델별 요청 규격·실패 과금·입력 권리는 제출 전 확인. 실제 생성 0회.",
+      "cost": "4.5 $0.12/초, Turbo $0.05/초",
+      "license": "모델별 추가 조건과 상업 이용 범위 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://docs.dev.runwayml.com/guides/models/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "kling",
+      "name": "Kling",
+      "requestedNames": [
+        "Kling"
+      ],
+      "stage": "영상",
+      "automation": "공식 API·파트너 경로",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "동작 장면 비교 후보",
+      "reason": "Kling 4.0의 동작·참조 장면을 통제된 샷 시험에서 비교한다.",
+      "limitations": "원 공급자 직접 API와 Runway 경유의 계정·요금·권리를 분리한다. 한국어 품질 우위 미확인.",
+      "cost": "경로·해상도·입력 영상·프로모션별 다름",
+      "license": "원 공급자·경유 제공자 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://ir.kuaishou.com/news-releases/news-release-details/kling-ai-officially-launches-next-generation-kling-40-raising"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "veo",
+      "name": "Veo",
+      "requestedNames": [
+        "Veo"
+      ],
+      "stage": "영상",
+      "automation": "공급 경로별 확인",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "기존 경로 수명 확인 후 선택",
+      "reason": "Cloud의 Veo 3.1 GA 경로와 Gemini API의 Preview 종료를 구분한다.",
+      "limitations": "Cloud 문서의 지원 수명은 2026-11-17 또는 이후. 신규 Gemini 개발은 Omni 경로도 검토한다.",
+      "cost": "공급 경로·오디오 포함 여부별 확인",
+      "license": "공급자·모델별 상업 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate?hl=en"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "luma",
+      "name": "Luma",
+      "requestedNames": [
+        "Luma"
+      ],
+      "stage": "영상",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "키프레임·리프레이밍 후보",
+      "reason": "Ray 3.2의 생성·편집·화면비 변환이 필요한 장면에서 비교한다.",
+      "limitations": "산출물 URL 만료와 원본 다운로드를 관리한다. 자체 실험 결과는 없다.",
+      "cost": "크레딧·길이별 산식 확인",
+      "license": "API 계약과 입력 자산 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://docs.agents.lumalabs.ai/guides/model/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "autokliq",
+      "name": "AutoKliq",
+      "requestedNames": [
+        "AutoKliq"
+      ],
+      "stage": "썸네일",
+      "automation": "공식 MCP·API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "콘셉트 검토 후 선택 제작",
+      "reason": "제목·약속·가독성이 다른 내부 5안에서 사람이 고른 후보만 제작한다.",
+      "limitations": "크레딧 지출은 승인된 연결별 예산 안에서만. CTR·매출 보장 아님. 실제 연결 안 함.",
+      "cost": "무료 월 300크레딧·기본 10렌더 표시; 유료 별도",
+      "license": "MCP/API 약관·입력 권리·지출 승인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://autokliq.com/terms"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "chatterbox",
+      "name": "Chatterbox",
+      "requestedNames": [
+        "Chatterbox"
+      ],
+      "stage": "음성",
+      "automation": "로컬 모델",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "한국어 비교 실험",
+      "reason": "Multilingual V3를 비교하고 영어 전용 Turbo와 구분한다.",
+      "limitations": "지원 언어와 실제 한국어 발음·연기 품질은 다르다. 현 PC 상주 모델로 기본 배치하지 않는다.",
+      "cost": "오픈 모델 + 실행 자원·운영비",
+      "license": "MIT; 화자·입력 권리 별도",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://github.com/resemble-ai/chatterbox"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "qwen-family",
+      "name": "Qwen",
+      "requestedNames": [
+        "Qwen"
+      ],
+      "stage": "음성",
+      "automation": "정확한 모델 지정 필요",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "Qwen3-TTS 계열로 정규화",
+      "reason": "일반 Qwen LLM과 TTS 체크포인트를 분리한다.",
+      "limitations": "Qwen이라는 이름만으로 음성 모델 설정을 확정하지 않는다.",
+      "cost": "선택 체크포인트·실행 환경별 다름",
+      "license": "각 모델 카드 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://github.com/QwenLM/Qwen3-TTS"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "eleven-v4",
+      "name": "Eleven v4",
+      "requestedNames": [
+        "Eleven v4"
+      ],
+      "stage": "음성",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "감정·대화 후보",
+      "reason": "eleven_v4의 Text to Dialogue 경로를 숏폼·표현 장면에서 비교한다.",
+      "limitations": "장문 안정성·오독·화자 권리를 직접 검증한다. 무료 출력의 상업 권리를 가정하지 않는다.",
+      "cost": "공개 API 표시 $0.08/1,000자; 계정 조건 별도",
+      "license": "유료 상업 조건·복제 동의·서비스 조건",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://elevenlabs.io/docs/overview/models"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "eleven-v2",
+      "name": "Multilingual v2",
+      "requestedNames": [
+        "Multilingual v2"
+      ],
+      "stage": "음성",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "설명·교육 내레이션 기준선",
+      "reason": "eleven_multilingual_v2를 긴 한국어 설명의 우선 비교 기준으로 둔다.",
+      "limitations": "실제 청취·발음 사전·상품명·숫자 검수 전에는 출고 음질 합격으로 세지 않는다.",
+      "cost": "공개 API 표시 $0.08/1,000자; 계정 조건 별도",
+      "license": "유료 상업 조건·화자·입력 권리",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://elevenlabs.io/docs/overview/models"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "qwen3-tts",
+      "name": "Qwen3-TTS",
+      "requestedNames": [
+        "Qwen3-TTS"
+      ],
+      "stage": "음성",
+      "automation": "로컬·공식 서비스 경로",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "저비용 실험 우선 후보",
+      "reason": "0.6B CustomVoice/Sohee부터 중립 한국어 20문장으로 비교한다.",
+      "limitations": "Base·CustomVoice·VoiceDesign을 구분한다. 16GB PC에서 동시 AI 작업과 함께 상주시킬 수 있다고 보장하지 않는다.",
+      "cost": "모델 실행 자원·API 경로별 비용",
+      "license": "확인한 0.6B 모델 카드 Apache-2.0; 화자 권리 별도",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "voxcpm2",
+      "name": "VoxCPM2",
+      "requestedNames": [
+        "VoxCPM2"
+      ],
+      "stage": "음성",
+      "automation": "로컬·서빙",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "별도 GPU 작업자 비교 후보",
+      "reason": "최신 2B·48kHz·다국어 모델을 통제된 환경에서 비교한다.",
+      "limitations": "공식 비교표 VRAM 약 8GB. 이 PC의 공유 RAM을 전용 VRAM 8GB로 해석하지 않는다.",
+      "cost": "오픈 모델 + GPU·운영비",
+      "license": "코드·가중치 Apache-2.0 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://github.com/OpenBMB/VoxCPM"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "confucius4",
+      "name": "Confucius4-TTS",
+      "requestedNames": [
+        "Confucius4-TTS"
+      ],
+      "stage": "음성",
+      "automation": "로컬·서빙",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "다국어 비교 후보",
+      "reason": "공식 Youdao 저장소의 다국어·음색 변환 후보를 검토한다.",
+      "limitations": "공식 모델 존재와 계정 실행·한국어 품질·처리량은 별도 상태다.",
+      "cost": "오픈 모델 + 실행 자원",
+      "license": "코드·공식 가중치 Apache-2.0 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://github.com/netease-youdao/Confucius4-TTS"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "openvoice",
+      "name": "OpenVoice",
+      "requestedNames": [
+        "OpenVoice"
+      ],
+      "stage": "음성",
+      "automation": "로컬 모델",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "권한 있는 화자 확장",
+      "reason": "OpenVoice V2의 음색 변환·교차 언어 파이프라인을 비교한다.",
+      "limitations": "음성 복제는 원음·동의·매체·기간·철회 범위를 기록한 화자만. 관리형 TTS와 동일시하지 않는다.",
+      "cost": "오픈 모델 + 실행 자원",
+      "license": "MIT·상업 사용 안내; 화자 권리 별도",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://github.com/myshell-ai/OpenVoice"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "claude",
+      "name": "Claude",
+      "requestedNames": [
+        "Claude",
+        "claude"
+      ],
+      "stage": "글쓰기",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "Sonnet 초안·별도 검토",
+      "reason": "Sonnet 5.5를 초안 우선 후보, Haiku를 구조화·태그, Opus를 어려운 검토의 선택 후보로 둔다.",
+      "limitations": "현재 오피스 기본 제공자와 다르다. Claude 연결·한국어 품질·실제 원가·승자 검증은 아직 없다.",
+      "cost": "Sonnet5.5 입력/출력 $2/$10 per MTok; 고급 모델 별도",
+      "license": "Anthropic 약관·입력 범위·API 비용 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://platform.claude.com/docs/en/about-claude/models/overview"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "blender",
+      "name": "Blender",
+      "requestedNames": [
+        "Blender",
+        "블렌더"
+      ],
+      "stage": "모션·렌더",
+      "automation": "로컬 CLI",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "필요한 3D 장면만",
+      "reason": "카메라·공간·독자 3D 도해를 장면 자산으로 만든다.",
+      "limitations": "뉴스 영상마다 무거운 3D 렌더를 돌리지 않는다. 외부 모델·텍스처·음원 권리는 따로 확인한다.",
+      "cost": "소프트웨어 무료 + 렌더 자원",
+      "license": "프로그램 GPL; 직접 만든 산출물과 별도",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://www.blender.org/about/license/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "hyperframes",
+      "name": "HyperFrames",
+      "requestedNames": [
+        "Hyperframe",
+        "HyperFrames",
+        "하이퍼프레임"
+      ],
+      "stage": "모션·렌더",
+      "automation": "로컬 CLI",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "HTML 장면 선택 렌더",
+      "reason": "시킹 가능한 HTML/CSS 장면을 헤드리스 Chrome·FFmpeg로 렌더한다.",
+      "limitations": "사용자 입력 Hyperframe의 공식 프로젝트를 HyperFrames로 정규화. Remotion과 강제 직렬 연결하지 않는다.",
+      "cost": "프레임워크 요금 없음 + 실행 자원",
+      "license": "Apache-2.0; 자산·폰트 권리 별도",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://github.com/heygen-com/hyperframes"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "ffmpeg",
+      "name": "FFmpeg",
+      "requestedNames": [
+        "FFmpeg"
+      ],
+      "stage": "모션·렌더",
+      "automation": "로컬 CLI",
+      "status": "현행 경로 정적 확인",
+      "choice": "공통 조립·납품",
+      "reason": "인코딩·화면비·자막·음량·썸네일·최종 파일 검사 경로를 재사용한다.",
+      "limitations": "QSV 목록 존재와 실제 가속·화질 검증은 다르다. 렌더러가 이미 만든 장면은 다시 생성하지 않는다.",
+      "cost": "실행 자원·저장 비용",
+      "license": "LGPL 기본; GPL 옵션·nonfree 빌드의 재배포 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://ffmpeg.org/legal.html"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": true
+    },
+    {
+      "id": "remotion",
+      "name": "Remotion",
+      "requestedNames": [
+        "Remotion"
+      ],
+      "stage": "모션·렌더",
+      "automation": "로컬·서버 렌더",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "React 템플릿 선택 렌더",
+      "reason": "React 기반 데이터 영상과 기존 템플릿이 있을 때 재사용한다.",
+      "limitations": "현재 오피스에 연결됐다고 확인한 것은 아니다. 무료 자격과 조직별 상업 라이선스를 확인한다.",
+      "cost": "무료 자격/회사 라이선스·렌더 자원별 다름",
+      "license": "Remotion License; 소규모 무료 자격·회사 조건",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://www.remotion.dev/docs/license/pricing"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "upside",
+      "name": "Upside",
+      "requestedNames": [
+        "Upside"
+      ],
+      "stage": "발행",
+      "automation": "제품 식별 보류",
+      "status": "제품 식별 보류",
+      "choice": "공식 URL 확인 후 결정",
+      "reason": "사용자가 의도한 자동 업로드 제품의 정확한 주소를 받아 식별한다.",
+      "limitations": "동명 서비스로 대신 연결하지 않는다. 현재 API·가격·상태를 확인하지 못했다.",
+      "cost": "미확인",
+      "license": "미확인",
+      "urls": [],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "vidiq",
+      "name": "vidIQ",
+      "requestedNames": [
+        "vidIQ"
+      ],
+      "stage": "벤치마킹",
+      "automation": "사용자 주도 도구",
+      "status": "사용자 제시 비교 기준·API/요금 미확정",
+      "choice": "비교 기준",
+      "reason": "기존 불편을 기능별로 분해하고 대체 도구를 필요한 부분에만 선택한다.",
+      "limitations": "비공식 API나 자체 성과 점수를 우리 서비스의 검증된 확률로 복사하지 않는다.",
+      "cost": "이번 요금 확정 안 함",
+      "license": "기능·계정·재사용 조건 별도",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://vidiq.com/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "tubebuddy",
+      "name": "TubeBuddy",
+      "requestedNames": [
+        "TubeBuddy",
+        "튜브버디"
+      ],
+      "stage": "벤치마킹",
+      "automation": "확장·수동",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "Studio SEO 보조",
+      "reason": "키워드·태그·제목을 사용자가 점검하는 확장 도구 후보다.",
+      "limitations": "외부 제품에 연결할 공개 API는 이번 확인 범위에 없다. 일부 무료·유료 티어를 구분한다.",
+      "cost": "제한 무료·유료 티어",
+      "license": "확장·서비스 약관 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://www.tubebuddy.com/tools/keyword-explorer/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "viewstats",
+      "name": "ViewStats",
+      "requestedNames": [
+        "ViewStats",
+        "뷰스탯츠"
+      ],
+      "stage": "벤치마킹",
+      "automation": "수동·Business API 확인",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "형식·제목·썸네일 관찰",
+      "reason": "Outliers·Alerts·Collections로 편집 가설을 만든다.",
+      "limitations": "Business API 소개와 공개 셀프서비스 계약 확인을 구분한다. 실제 계정·API 사용 안 함.",
+      "cost": "Business 소개 $249/월부터; 기타 동적 가격 미확정",
+      "license": "재사용·계정·계약 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://www.viewstats.com/info"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "vling",
+      "name": "vling",
+      "requestedNames": [
+        "vling",
+        "블링"
+      ],
+      "stage": "벤치마킹",
+      "automation": "공식 OAS·기업 경로",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "국내 특화 데이터 선택",
+      "reason": "공개 OAS와 Custom API/MCP를 확인한 국내 분석 후보다.",
+      "limitations": "키·기업 계약·재배포·품질은 미검증. 추정치는 YouTube 공식 수치와 분리한다.",
+      "cost": "계약·사용량 확인",
+      "license": "API 계약·재배포 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://open.apix.vling.net/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "blackkiwi",
+      "name": "BLACKKIWI",
+      "requestedNames": [
+        "BLACKKIWI",
+        "블랙키위"
+      ],
+      "stage": "벤치마킹",
+      "automation": "수동·API 미확인",
+      "status": "도움말 일부 확인·공식 연결 미확인",
+      "choice": "한국어 검색 글감 조사",
+      "reason": "네이버 검색 의도·키워드 가설을 수동 조사하는 후보로 둔다.",
+      "limitations": "메인 조회 403; 도움말 확인 범위와 실제 서비스·API 계약을 구분한다.",
+      "cost": "현재 요금 미확정",
+      "license": "서비스·데이터 재사용 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://blackkiwi.net/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "usearch",
+      "name": "uSearch",
+      "requestedNames": [
+        "usearch",
+        "uSearch",
+        "유서치"
+      ],
+      "stage": "벤치마킹",
+      "automation": "공개 API 미확인",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "한국어 기획 UI 참고",
+      "reason": "영상 조건 검색·대본·썸네일의 기획 흐름을 참고한다.",
+      "limitations": "공개 HTML의 점검·연결 오류와 실제 작동은 별도. 자체 떡상 확률을 검증된 확률로 채택하지 않는다.",
+      "cost": "미확정",
+      "license": "API·사용 범위 미확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://usearch.kr/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "rapidtags",
+      "name": "RapidTags",
+      "requestedNames": [
+        "RapidTags",
+        "래피드태그"
+      ],
+      "stage": "벤치마킹",
+      "automation": "수동·API 미확인",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "보조 태그 후보",
+      "reason": "콘텐츠와 실제로 관련된 태그 후보만 사람이 검토한다.",
+      "limitations": "태그 생성이 주제 수요·시청 지속·매출 검증을 대신하지 않는다.",
+      "cost": "계정·플랜 확인",
+      "license": "공개 도구·재사용 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://rapidtags.io/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "keywordtool",
+      "name": "KeywordTool.io",
+      "requestedNames": [
+        "KeywordTool.io"
+      ],
+      "stage": "벤치마킹",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "검색어 후보 확장",
+      "reason": "검색 플랫폼별 키워드 후보를 확장하고 독자의 질문으로 좁힌다.",
+      "limitations": "검색량·경쟁 추정치는 출처·시각·제공자를 표시하고 다른 지표와 혼동하지 않는다.",
+      "cost": "API·플랜별 확인",
+      "license": "API·재사용·계정 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://keywordtool.io/api"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "youtube-api",
+      "name": "YouTube Data API",
+      "requestedNames": [],
+      "stage": "발행",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "우선 검증할 업로드 어댑터",
+      "reason": "명시적 private 업로드 후 처리 완료·메타데이터·출고 승인과 예약을 확인한다.",
+      "limitations": "privacyStatus 생략을 비공개 안전장치로 쓰지 않는다. OAuth·쿼터·소유 채널·재시도 대사가 필요하다.",
+      "cost": "현행 기본 검색/업로드 각 100회 전용 버킷 + 기타 10,000단위/일",
+      "license": "API 정책·사용자 제어·데이터 보존",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://developers.google.com/youtube/data/reference/rest/v3/videos/insert"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "omni",
+      "name": "Gemini Omni 1.1 Flash",
+      "requestedNames": [],
+      "stage": "영상",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "새 Gemini 영상 경로 후보",
+      "reason": "Veo Preview 종료 뒤 신규 경로를 검토할 때 선택한다.",
+      "limitations": "공식 문서는 영어만 평가 완료. 한국어 음성은 별도 TTS로 비교하며 1080p/4K 업스케일을 구분한다.",
+      "cost": "720p 출력 약 $0.10/초 + 입력 등",
+      "license": "모델·입력·서비스 조건 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://ai.google.dev/gemini-api/docs/omni"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "firefly",
+      "name": "Adobe Firefly API",
+      "requestedNames": [],
+      "stage": "이미지",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "브랜드·제품 합성 후보",
+      "reason": "상업 콘텐츠에 필요한 참조·제품 합성 흐름을 비교한다.",
+      "limitations": "정식/베타별 조건·입력 권리를 검토한다. 계정·계약 가격 미확인.",
+      "cost": "계약·기능별 확인",
+      "license": "API·베타 예외·입력 권리 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://developer.adobe.com/firefly-services/docs/firefly-api/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "recraft",
+      "name": "Recraft Vector",
+      "requestedNames": [],
+      "stage": "이미지",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "편집 가능한 벡터 후보",
+      "reason": "SVG 도해·아이콘이 필요한 장면에서 비교한다.",
+      "limitations": "웹 Free·MCP·API 자산 조건을 혼동하지 않는다. 정확한 텍스트는 직접 레이어로 작성한다.",
+      "cost": "V4.1 일반 벡터 $0.08/장",
+      "license": "개발자 약관·표식·학습 이용 제한 확인",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://www.recraft.ai/legal/developer-terms"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "resend",
+      "name": "Resend",
+      "requestedNames": [],
+      "stage": "뉴스레터",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "기존 설계의 전송 후보",
+      "reason": "회차·동의·수신거부·빈도·승인 장부는 오피스가 소유하고 전송 기반만 빌린다.",
+      "limitations": "현행 한 수신자 SMTP 접수와 뉴스레터 운영은 다르다. 실제 연결 안 함.",
+      "cost": "계정·발송량별 확인",
+      "license": "전송·개인정보·동의 조건",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://resend.com/docs"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    },
+    {
+      "id": "buffer",
+      "name": "Buffer",
+      "requestedNames": [],
+      "stage": "발행",
+      "automation": "공식 API",
+      "status": "공식 자료 확인·실사용 미검증",
+      "choice": "다중 채널 초안 대안",
+      "reason": "공식 GraphQL API의 saveToDraft 등을 연결 후보로 검토한다.",
+      "limitations": "연결 채널별 기능·토큰·계정 권한을 확인한다. 중복 작업 장부는 만들지 않는다. 공식 문서의 채널별·기간별 상한과 실제 응답 RateLimit을 재확인한다.",
+      "cost": "무료 API 키·한도는 계정/채널/15분·일·30일 구간별로 확인. 합계 표시를 단일 채널 보장량으로 쓰지 않음.",
+      "license": "공식 API·채널별 정책",
+      "urls": [
+        {
+          "label": "공식 근거",
+          "url": "https://developers.buffer.com/"
+        }
+      ],
+      "verifiedAt": "2026-10-28",
+      "implemented": false
+    }
+  ],
+  "pipeline": [
+    {
+      "id": "S01",
+      "name": "독자와 목적",
+      "description": "질문·수준·행동·주제·출력·예산을 분리한다.",
+      "input": "브랜드·독자·문제",
+      "output": "AudienceBrief",
+      "tools": [],
+      "gate": "⓪",
+      "status": "기획 기능 일부 정적 확인",
+      "acceptance": "누구의 어떤 질문을 해결하는지 한 문장으로 말한다."
+    },
+    {
+      "id": "S02",
+      "name": "신호 수집",
+      "description": "공식 발표·문서 변경·허용한 영상·선택 뉴스레터·독자 질문을 모은다.",
+      "input": "선택한 소스와 권리",
+      "output": "SourceRecord[]",
+      "tools": [
+        "youtube-api"
+      ],
+      "gate": "수집 범위",
+      "status": "새 연결은 제안",
+      "acceptance": "출처·시각·언어·판본·권리·본문 확보 수준을 기록한다."
+    },
+    {
+      "id": "S03",
+      "name": "근거와 기획",
+      "description": "원출처 주장과 독립 확인·해석을 구분하고 형식 가설을 고른다.",
+      "input": "SourceRecord[]",
+      "output": "EvidenceLedger + Idea",
+      "tools": [],
+      "gate": "⓪",
+      "status": "기획 선택 구현 정적 확인",
+      "acceptance": "설명만 읽은 영상을 전체 학습으로 세지 않는다."
+    },
+    {
+      "id": "S04",
+      "name": "패키지 설계",
+      "description": "제목·첫 장면·약속·썸네일 콘셉트·CTA를 계획한다.",
+      "input": "선택 기획",
+      "output": "PackagePlan",
+      "tools": [
+        "claude",
+        "autokliq"
+      ],
+      "gate": "① 이전은 텍스트 기획",
+      "status": "현재 제목·썸네일 기획 각 3안 검증 코드 확인 / Claude·AutoKliq·5안은 확장 제안",
+      "acceptance": "제목과 첫 30초가 실제 내용과 약속을 공유한다."
+    },
+    {
+      "id": "S05",
+      "name": "공통 원고",
+      "description": "Gen·Critique·Eval·Refine을 나누고 중요 사실 오류는 점수보다 우선한다.",
+      "input": "기획·근거",
+      "output": "Article + Script + ClaimMap",
+      "tools": [
+        "claude"
+      ],
+      "gate": "①",
+      "status": "역할 흐름 구현·Claude는 확장 제안",
+      "acceptance": "모든 핵심 주장에 근거 또는 미확인 표시가 있다."
+    },
+    {
+      "id": "S06",
+      "name": "제작 범위 고정",
+      "description": "원고·예산·자산·화자와 만들 출력만 승인한다.",
+      "input": "현재 원고·예상 비용",
+      "output": "ApprovalSource",
+      "tools": [],
+      "gate": "①",
+      "status": "현재 원고 검사 정적 확인 / 예산·자산·화자 결속은 확장 제안",
+      "acceptance": "미승인 상태에서 유료 미디어 호출 0회."
+    },
+    {
+      "id": "S07",
+      "name": "독립 제작",
+      "description": "글·영상·카드·PDF를 각각 선택하고 실제 음성 길이로 장면을 맞춘다.",
+      "input": "승인 원고·장면 계약",
+      "output": "Assets + Timeline",
+      "tools": [
+        "nano-banana",
+        "runway",
+        "eleven-v2",
+        "hyperframes",
+        "remotion",
+        "ffmpeg"
+      ],
+      "gate": "① 범위 안",
+      "status": "기존 제작 경로 일부·새 모델은 제안",
+      "acceptance": "영상 실패가 완성된 글의 출고를 막지 않는다."
+    },
+    {
+      "id": "S08",
+      "name": "실물 검수",
+      "description": "끝까지 읽고 보고 들으며 한글·발음·상품·권리를 확인한다.",
+      "input": "실제 산출물",
+      "output": "QAEvidence + ApprovedAssets",
+      "tools": [
+        "ffmpeg"
+      ],
+      "gate": "②",
+      "status": "출고 검사·ZIP 구현 정적 확인",
+      "acceptance": "샘플·mock·메타데이터 통과를 시청/청취 통과로 바꾸지 않는다."
+    },
+    {
+      "id": "S09",
+      "name": "전달과 대사",
+      "description": "초안·접수·처리·게시를 나누고 불명 응답은 조회 후 판단한다.",
+      "input": "출고 승인·대상",
+      "output": "DeliveryLedger",
+      "tools": [
+        "youtube-api",
+        "buffer"
+      ],
+      "gate": "②",
+      "status": "외부 게시 미연결",
+      "acceptance": "공개 범위를 명시하고 외부 ID 없이 성공 처리하지 않는다."
+    },
+    {
+      "id": "S10",
+      "name": "허브·상품 연결",
+      "description": "공개 가능한 자체 자료와 실제 상품 조건만 연결한다.",
+      "input": "검증된 상품 정보",
+      "output": "OfferSnapshot + CampaignDraft",
+      "tools": [],
+      "gate": "② + 서버 거래 권한",
+      "status": "상품/쿠폰 미연결",
+      "acceptance": "상품·가격·기간·상태 미확인 시 구매/할인 CTA를 막는다."
+    },
+    {
+      "id": "S11",
+      "name": "뉴스레터 회차",
+      "description": "여러 승인 원고를 독자별 묶음으로 편집하고 동의·빈도를 확인한다.",
+      "input": "승인 자료·동의 장부",
+      "output": "IssueDraft + SendPlan",
+      "tools": [
+        "resend"
+      ],
+      "gate": "③",
+      "status": "회차 발송 미연결",
+      "acceptance": "수신거부·중복 대상·승인 만료를 발송 전에 검사한다."
+    },
+    {
+      "id": "S12",
+      "name": "측정·정정·지식",
+      "description": "플랫폼 지표와 자체 유입·구매·환불·편집 비용을 분리해 환류한다.",
+      "input": "성과·원가·지원 질문",
+      "output": "ApprovedLearning",
+      "tools": [],
+      "gate": "교훈 반영 승인",
+      "status": "성과 CSV·교훈 일부 정적 확인",
+      "acceptance": "무료 다운로드·접수를 매출이나 전달 완료로 보고하지 않는다."
+    }
+  ],
+  "gates": [
+    {
+      "id": "G0",
+      "name": "⓪ 기획 선택",
+      "scope": "현재 기획 선택 경로가 있다. 독자·목표·모든 제작 조건을 함께 고정하는 범위는 설계 계약으로 확인한다.",
+      "current_checks": "기획 선택 코드·API 경로 존재",
+      "proposed_extensions": "AudienceBrief와 제작 범위의 연결",
+      "implementation": "implemented_static_audit",
+      "invalidation": "문제·대상·목표가 달라지면 재선택하는 운영 원칙"
+    },
+    {
+      "id": "G1",
+      "name": "① 원고 승인",
+      "scope": "현재 source_hash·품질·선택 출력을 확인한다. 자산·화자·예산까지 결속하는 것은 확장 계약이다.",
+      "current_checks": "source_hash·quality·selections",
+      "proposed_extensions": "자산 권리·화자·견적·예산 결속",
+      "implementation": "partial_static_audit",
+      "invalidation": "현재 원고 판본 검사를 보존하고, 추가 연결 시 화자·자산·비용 변경의 영향을 재검토"
+    },
+    {
+      "id": "G2",
+      "name": "② 출력별 출고",
+      "scope": "현재 로컬 소스·manifest·완료 출력·영상 검수와 수동 인계다. 계정·공개 범위·일정·오퍼 결속은 추가 연결이다.",
+      "current_checks": "source·manifest·완료 출력·영상 검수·manual-handoff",
+      "proposed_extensions": "대상 계정·공개 범위·일정·상품 조건·외부 결과 대사",
+      "implementation": "partial_static_audit",
+      "invalidation": "현재 파일·manifest 검사를 보존하고, 추가 연결 시 계정·일정·오퍼 변경을 재검토"
+    },
+    {
+      "id": "G3",
+      "name": "③ 회차 승인",
+      "scope": "현재 회차 라벨·설계와 실제 발송은 다르다. 회차·동의·철회·빈도·예산 강제와 발송은 미연결이다.",
+      "current_checks": "회차 라벨·설계만 확인",
+      "proposed_extensions": "동의·철회·빈도·예산·대상 확인 및 실제 전송",
+      "implementation": "not_connected",
+      "invalidation": "추가 구현 시 회차·대상·동의·빈도·내용·예산 변경을 재검토"
+    }
+  ],
+  "channels": [
+    {
+      "id": "youtube",
+      "name": "YouTube·Shorts",
+      "mode": "공식 API 후보",
+      "readiness": "연결·업로드 E2E 미검증",
+      "approval": "②",
+      "limitations": "명시적 private→처리 확인→승인된 일정/공개. Shorts 설명 URL의 클릭을 유일한 구매 동선으로 삼지 않는다.",
+      "url": "https://developers.google.com/youtube/data/reference/rest/v3/videos/insert"
+    },
+    {
+      "id": "tistory",
+      "name": "티스토리",
+      "mode": "HTML·이미지 수동 인계 우선",
+      "readiness": "공식 글쓰기 Open API 종료; 편집기 보조는 별도 검증",
+      "approval": "②",
+      "limitations": "draft가 public으로 바뀌는 우회 동작 금지. 비공식 편집기 자동화는 계정·현재 UI·약관·복구를 다시 확인.",
+      "url": "https://notice.tistory.com/2664"
+    },
+    {
+      "id": "naver",
+      "name": "네이버 블로그",
+      "mode": "수동 인계·검증된 편집기 보조 후보",
+      "readiness": "종료된 로그인 기반 글쓰기 API를 전제하지 않음",
+      "approval": "②",
+      "limitations": "자동 공개와 임시저장·사용자 붙여넣기를 구분. 인증·보안 경고를 우회하지 않는다.",
+      "url": "https://developers.naver.com/notice/article/7527"
+    },
+    {
+      "id": "wordpress",
+      "name": "WordPress",
+      "mode": "공식 REST 초안 후보",
+      "readiness": "실제 사이트·권한 미확인",
+      "approval": "②",
+      "limitations": "서버 인증과 draft/private/public을 명시. 계정 연결을 별도 검증.",
+      "url": "https://developer.wordpress.org/rest-api/reference/posts/"
+    },
+    {
+      "id": "newsletter",
+      "name": "뉴스레터",
+      "mode": "Resend 전송 후보·회차 장부 직접 관리",
+      "readiness": "③ 회차·동의·발송 미연결",
+      "approval": "③",
+      "limitations": "접수/배달/열람/클릭을 분리. 회차·동의·철회·빈도·중복을 확인. Buttondown/beehiiv는 요구가 생기면 비교.",
+      "url": "https://resend.com/docs"
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram·Threads",
+      "mode": "공식 게시 API 연결 후보",
+      "readiness": "계정·권한·형식별 검증 필요",
+      "approval": "②",
+      "limitations": "한 원고에서 별도 카드·세로 영상·짧은 글을 만든다. 채널마다 중복 장부를 따로 운영하지 않는다.",
+      "url": "https://developers.facebook.com/docs/instagram-platform/content-publishing/"
+    },
+    {
+      "id": "communities",
+      "name": "Slack·Discord·카카오",
+      "mode": "운영 알림과 독자 홍보 분리",
+      "readiness": "기존 gateway와 신규 홍보 발송을 분리",
+      "approval": "내부 알림 정책 / 홍보③",
+      "limitations": "새 글마다 모든 사람에게 보내지 않는다. 채널 동의·비용·빈도와 거래 안내를 분리.",
+      "url": "https://api.slack.com/messaging"
+    },
+    {
+      "id": "other-social",
+      "name": "TikTok·LinkedIn 등",
+      "mode": "단계적 확장·수동 패키지",
+      "readiness": "API·계정·심사·정책 현재 검증 필요",
+      "approval": "②",
+      "limitations": "화면비·메타데이터·사용자 제어·예약을 채널별로 검증한 뒤 켠다.",
+      "url": "https://developers.tiktok.com/doc/content-posting-api-get-started"
+    }
+  ],
+  "requested_tool_coverage": {
+    "Midjourney": "midjourney",
+    "Nano Banana": "nano-banana",
+    "Runway": "runway",
+    "Kling": "kling",
+    "Veo": "veo",
+    "Luma": "luma",
+    "AutoKliq": "autokliq",
+    "Chatterbox": "chatterbox",
+    "Qwen": "qwen-family",
+    "Eleven v4": "eleven-v4",
+    "Multilingual v2": "eleven-v2",
+    "Qwen3-TTS": "qwen3-tts",
+    "VoxCPM2": "voxcpm2",
+    "Confucius4-TTS": "confucius4",
+    "OpenVoice": "openvoice",
+    "Claude": "claude",
+    "Blender": "blender",
+    "Hyperframe": "hyperframes",
+    "FFmpeg": "ffmpeg",
+    "Remotion": "remotion",
+    "Upside": "upside",
+    "vidIQ": "vidiq",
+    "TubeBuddy": "tubebuddy",
+    "ViewStats": "viewstats",
+    "vling": "vling",
+    "BLACKKIWI": "blackkiwi",
+    "usearch": "usearch",
+    "RapidTags": "rapidtags",
+    "KeywordTool.io": "keywordtool"
+  },
+  "requested_tool_count": 29,
+  "sources": [
+    {
+      "id": "openai-news",
+      "name": "OpenAI News",
+      "type": "공식 발표",
+      "url": "https://openai.com/news/",
+      "collection": "확인한 RSS/Atom · https://openai.com/news/rss.xml · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "공급자 발표·독립 검증 별도",
+      "why": "모델·이미지·음성·콘텐츠 제작 기능 변경의 원발표. 공급자 발표를 독립 실험 결과로 취급하지 않음.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:06.187876+09:00",
+      "verification": "HTML HTTP 403 · 피드 HTTP 200 / rss · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://openai.com/news/rss.xml",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://openai.com/news/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:05.278035+09:00",
+          "httpStatus": 403,
+          "outcome": "http_error",
+          "error": "HTTPError: HTTP Error 403: Forbidden"
+        },
+        "feed": {
+          "requestedUrl": "https://openai.com/news/rss.xml",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:06.076456+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://openai.com/news/rss.xml",
+          "contentType": "text/xml; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 524288,
+          "truncated": true,
+          "sampleSha256": "fc200ee892488561aced504f52f4e9fb5a4260e994b51c5bc9e3c12d047b0d33",
+          "xmlRoot": "rss",
+          "entriesObservedInSample": 855,
+          "feedTitle": "OpenAI News",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_news",
+      "confidence_code": "official_provider_claim",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "openai-engineering",
+      "name": "OpenAI Engineering",
+      "type": "공식 엔지니어링",
+      "url": "https://openai.com/news/engineering/",
+      "collection": "확인한 RSS/Atom · https://openai.com/news/rss.xml · 공용 News 피드와 중복 수집하지 않고 Engineering 카테고리·원문을 선별 · 운영 수집 비활성",
+      "confidence": "공급자 기술 설명",
+      "why": "운영·도구·평가·지연시간·비용 설계의 엔지니어링 근거. 공용 News 피드의 Engineering 범위를 선별.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:06.322397+09:00",
+      "verification": "HTML HTTP 403 · 피드 HTTP 200 / rss · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://openai.com/news/rss.xml",
+        "enabled": false,
+        "scope": "공용 News 피드와 중복 수집하지 않고 Engineering 카테고리·원문을 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://openai.com/news/engineering/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:06.189930+09:00",
+          "httpStatus": 403,
+          "outcome": "http_error",
+          "error": "HTTPError: HTTP Error 403: Forbidden"
+        },
+        "feed": {
+          "requestedUrl": "https://openai.com/news/rss.xml",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:06.076456+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://openai.com/news/rss.xml",
+          "contentType": "text/xml; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 524288,
+          "truncated": true,
+          "sampleSha256": "fc200ee892488561aced504f52f4e9fb5a4260e994b51c5bc9e3c12d047b0d33",
+          "xmlRoot": "rss",
+          "entriesObservedInSample": 855,
+          "feedTitle": "OpenAI News",
+          "outcome": "xml_feed_confirmed",
+          "reusedSameProbe": true
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_engineering",
+      "confidence_code": "official_provider_engineering",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "anthropic-news",
+      "name": "Anthropic News",
+      "type": "공식 발표",
+      "url": "https://www.anthropic.com/news",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "공급자 발표·독립 검증 별도",
+      "why": "Claude·도구·제품 변경의 원발표. 뉴스룸 기사와 실제 사용 조건을 연결.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:06.675351+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://www.anthropic.com/news",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:06.322397+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.anthropic.com/news",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "f48e555b9a8d52f1fb3a5fabb8040f90b78e30fb33891abca2929c4e3fa55589",
+          "pageTitle": "Newsroom \\ Anthropic",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "official_news",
+      "confidence_code": "official_provider_claim",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "anthropic-engineering",
+      "name": "Anthropic Engineering",
+      "type": "공식 엔지니어링",
+      "url": "https://www.anthropic.com/engineering",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "공급자 기술 설명",
+      "why": "프롬프트·도구·하네스·에이전트 실패·평가 패턴의 구현 참고.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:07.033838+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://www.anthropic.com/engineering",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:06.676350+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.anthropic.com/engineering",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "5fbde741b1d2ef237bbb285db475b21fcfa5ad10db7ff9231d0ec71ac364bb66",
+          "pageTitle": "Engineering \\ Anthropic",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "official_engineering",
+      "confidence_code": "official_provider_engineering",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "google-ai-blog",
+      "name": "Google AI Blog",
+      "type": "공식 발표",
+      "url": "https://blog.google/technology/ai/",
+      "collection": "확인한 RSS/Atom · https://blog.google/rss/ · 전체 Google 블로그 RSS 중 AI·Gemini·콘텐츠 제작 관련 원문만 선별 · 운영 수집 비활성",
+      "confidence": "공급자 발표·독립 검증 별도",
+      "why": "이미지·영상·음성·Gemini 콘텐츠 기능의 원발표. 공식 페이지의 RSS 링크는 전체 Google 블로그 피드이므로 주제 선별 필요.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:08.473576+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / rss · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://blog.google/rss/",
+        "enabled": false,
+        "scope": "전체 Google 블로그 RSS 중 AI·Gemini·콘텐츠 제작 관련 원문만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://blog.google/technology/ai/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:07.034837+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://blog.google/innovation-and-ai/technology/ai/",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "f8f4bd272fd8121b3a0c50456ed07936d0222b6a7f454f720d07124f9c7a9dd0",
+          "pageTitle": "Official Google AI news and updates | Google Blog",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://blog.google/rss/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:08.016124+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://blog.google/rss/",
+          "contentType": "application/xml; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 30406,
+          "truncated": false,
+          "sampleSha256": "c4222d3d97e105510da27b331f0ea55c99920cc1d6cbdc70357b09457c26ed06",
+          "xmlRoot": "rss",
+          "entriesObservedInSample": 20,
+          "feedTitle": "News from Google",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_news",
+      "confidence_code": "official_provider_claim",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "gemini-changelog",
+      "name": "Gemini API Release Notes",
+      "type": "공식 제품 문서",
+      "url": "https://ai.google.dev/gemini-api/docs/changelog",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "제품 문서·우리 계정 미검증",
+      "why": "생성 모델·API 지원·중단·버전 변경을 원문 날짜와 대조. 발표와 실제 API 호출 검증을 구분.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:09.131506+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://ai.google.dev/gemini-api/docs/changelog",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:08.474090+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://ai.google.dev/gemini-api/docs/changelog",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "93d403930e67865a440e4d9ff635a8d275eb1a08df4750e060f1597525780e00",
+          "pageTitle": "Release notes  |  Gemini API  |  Google AI for Developers",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "official_docs",
+      "confidence_code": "official_product_documentation",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "microsoft-research",
+      "name": "Microsoft Research Blog",
+      "type": "공식 연구 소식",
+      "url": "https://www.microsoft.com/en-us/research/blog/",
+      "collection": "확인한 RSS/Atom · https://www.microsoft.com/en-us/research/feed/ · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "연구 발표·실험 조건 확인",
+      "why": "멀티모달·에이전트·평가 연구를 원 논문과 연결. 블로그 요약은 독립 재현이 아님.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:12.168313+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / rss · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://www.microsoft.com/en-us/research/feed/",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://www.microsoft.com/en-us/research/blog/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:09.131506+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.microsoft.com/en-us/research/blog/",
+          "contentType": "text/html; charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "0a622a5c1babb67425f162e57f9f8405f7ed96c55b8cec61d93736f902b36982",
+          "pageTitle": "Microsoft Research Blog - Microsoft Research",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://www.microsoft.com/en-us/research/feed/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:10.765537+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.microsoft.com/en-us/research/feed/",
+          "contentType": "application/rss+xml; charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 306109,
+          "truncated": false,
+          "sampleSha256": "2b923f62147dd3945fdf327600aebc4e03a56ec1ae263f73878e60818db9ba0b",
+          "xmlRoot": "rss",
+          "entriesObservedInSample": 10,
+          "feedTitle": "Microsoft Research",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_research_blog",
+      "confidence_code": "official_research_claim",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "aws-ml",
+      "name": "AWS Machine Learning Blog",
+      "type": "공식 기술 블로그",
+      "url": "https://aws.amazon.com/blogs/machine-learning/",
+      "collection": "확인한 RSS/Atom · https://aws.amazon.com/blogs/machine-learning/feed/ · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "공급자 기술 설명",
+      "why": "생성형 AI·에이전트·미디어 워크플로 구축 예시와 운영 제약. 클라우드 비용·버전은 별도 확인.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:12.567829+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / rss · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://aws.amazon.com/blogs/machine-learning/feed/",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://aws.amazon.com/blogs/machine-learning/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:12.168313+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://aws.amazon.com/blogs/machine-learning/",
+          "contentType": "text/html;charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "04270382cdd62b298daf1a07f7c660117fa00db69ed2c6cd42885e9b2666e6f0",
+          "pageTitle": "Artificial Intelligence",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://aws.amazon.com/blogs/machine-learning/feed/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:12.380627+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://aws.amazon.com/blogs/machine-learning/feed/",
+          "contentType": "application/rss+xml;charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 524288,
+          "truncated": true,
+          "sampleSha256": "e359c412beb01699e8fcf65ab0bdb923b03b3c9a1ab29aea0e4f1e5b35433dd7",
+          "xmlRoot": "rss",
+          "entriesObservedInSample": 17,
+          "feedTitle": "Artificial Intelligence",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_technical_blog",
+      "confidence_code": "official_provider_engineering",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "nvidia-developer",
+      "name": "NVIDIA Technical Blog",
+      "type": "공식 기술 블로그",
+      "url": "https://developer.nvidia.com/blog/",
+      "collection": "확인한 RSS/Atom · https://developer.nvidia.com/blog/feed/ · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "공급자 기술 설명",
+      "why": "영상·음성·추론·로컬 GPU 제작 워크플로의 구현 자료. 업체 성능 수치는 조건·코드·측정 근거를 확인.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:13.264638+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / feed · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://developer.nvidia.com/blog/feed/",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://developer.nvidia.com/blog/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:12.567829+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://developer.nvidia.com/blog/",
+          "contentType": "text/html; charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "57242cfb4a4487fde7850c2be4150f26a9adb60b6247fa7d2fbc68e5a09bf2f3",
+          "pageTitle": "NVIDIA Technical Blog",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://developer.nvidia.com/blog/feed/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:12.966316+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://developer.nvidia.com/blog/feed/",
+          "contentType": "application/atom+xml; charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 524288,
+          "truncated": true,
+          "sampleSha256": "2a4b75004e6d36324c812fdb5c11b864ab1c64ee15ac55b972b235bab2e57c65",
+          "xmlRoot": "feed",
+          "entriesObservedInSample": 68,
+          "feedTitle": "NVIDIA Technical Blog",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_technical_blog",
+      "confidence_code": "official_provider_engineering",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "huggingface-blog",
+      "name": "Hugging Face Blog",
+      "type": "공식 호스트·저자별 확인",
+      "url": "https://huggingface.co/blog",
+      "collection": "확인한 RSS/Atom · https://huggingface.co/blog/feed.xml · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "글쓴이·소속 별도 확인",
+      "why": "콘텐츠 생성 모델·도구 사례의 탐색. 공식 호스트의 커뮤니티 글도 섞여 있으므로 저자·조직·원 저장소를 재확인.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 링크·제목·허용 범위의 발췌만. 전체 원문·이미지·첨부의 재배포·상업 이용은 자료별 권리 확인 필요.",
+      "verifiedAt": "2026-10-28T05:17:13.836934+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / rss · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://huggingface.co/blog/feed.xml",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://huggingface.co/blog",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:13.265639+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://huggingface.co/blog",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "15d09ea0b1ecf50799f39931747019ad825ae301648aa3bbb71d2d566c153515",
+          "pageTitle": "Hugging Face – Blog",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://huggingface.co/blog/feed.xml",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:13.556029+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://huggingface.co/blog/feed.xml",
+          "contentType": "application/rss+xml; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 263234,
+          "truncated": false,
+          "sampleSha256": "f03b5a3b3fa6ec7f146b571c2c886eef04481f14a5860985abbe4ae6f3eb3914",
+          "xmlRoot": "rss",
+          "entriesObservedInSample": 891,
+          "feedTitle": "Hugging Face - Blog",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_host_mixed_authors",
+      "confidence_code": "official_host_mixed_authorship",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "huggingface-modelcards",
+      "name": "Hugging Face Model Cards",
+      "type": "모델 카드·권리 문서",
+      "url": "https://huggingface.co/docs/hub/model-cards",
+      "collection": "선택 링크·변경 확인 ·  · 선택한 모델 저장소의 카드·라이선스·revision 변경만 감시; 현재 선택 저장소 없음 · 운영 수집 비활성",
+      "confidence": "모델별 주장·한계 확인",
+      "why": "모델 카드의 용도·제약·평가·라이선스를 읽는 기준. 실제 감시 모델 저장소는 사용자가 별도로 선택.",
+      "frequency": "주간·선택 변경 확인 후보",
+      "rights": "문서와 개별 모델 가중치·데이터의 라이선스를 구분. 카드·commit·revision·license evidence를 모델별 확인.",
+      "verifiedAt": "2026-10-28T05:17:14.125591+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "선택한 모델 저장소의 카드·라이선스·revision 변경만 감시; 현재 선택 저장소 없음"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://huggingface.co/docs/hub/model-cards",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:13.836934+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://huggingface.co/docs/hub/model-cards",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "d9d4a8ac2b72dc314b9c075dab080e6cd64ae7efb1f89b6be1061b1890015121",
+          "pageTitle": "Model Cards · Hugging Face",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "official_modelcard_documentation",
+      "confidence_code": "official_documentation_per_model_claim",
+      "frequency_code": "weekly_or_selected_model_change_proposed"
+    },
+    {
+      "id": "github-n8n-releases",
+      "name": "n8n GitHub Releases",
+      "type": "공식 저장소 릴리스",
+      "url": "https://github.com/n8n-io/n8n/releases",
+      "collection": "확인한 RSS/Atom · https://github.com/n8n-io/n8n/releases.atom · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "유지보수자 릴리스",
+      "why": "콘텐츠 자동화 노드·호환성·수정·중요 변경 추적. 릴리스 발표는 우리 설치 환경 검증을 대신하지 않음.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 릴리스 메타데이터 참고. 코드·워크플로·상업 제공은 저장소와 의존성의 라이선스를 별도 확인.",
+      "verifiedAt": "2026-10-28T05:17:16.517869+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / feed · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://github.com/n8n-io/n8n/releases.atom",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://github.com/n8n-io/n8n/releases",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:14.125591+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://github.com/n8n-io/n8n/releases",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "8ed9dba3075506a84332958d2e8f69451b172ff833bbdd0401763267f6a6f1fe",
+          "pageTitle": "Releases · n8n-io/n8n · GitHub",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://github.com/n8n-io/n8n/releases.atom",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:15.193588+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://github.com/n8n-io/n8n/releases.atom",
+          "contentType": "application/atom+xml; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 290888,
+          "truncated": false,
+          "sampleSha256": "c2295bdc00f2ecbd8687f6bc1cd5fb67cabb858363c84fae9afa706ee356e63f",
+          "xmlRoot": "feed",
+          "entriesObservedInSample": 10,
+          "feedTitle": "Release notes from n8n",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "official_repository_releases",
+      "confidence_code": "official_maintainer_release",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "arxiv-ai",
+      "name": "arXiv cs.AI Recent / RSS",
+      "type": "프리프린트 논문",
+      "url": "https://arxiv.org/list/cs.AI/recent",
+      "collection": "확인한 RSS/Atom · https://rss.arxiv.org/rss/cs.AI · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "저자 발표·심사 상태 별도",
+      "why": "에이전트·평가·생성 연구 후보를 탐색. arXiv ID와 v1/v2, DOI·저널 참조·심사 상태를 각각 확인.",
+      "frequency": "매일 확인 후보",
+      "rights": "초록·원문 링크 중심. 논문별 라이선스 확인; arXiv 게시 사실만으로 심사 통과·상업 재사용 허용을 추정하지 않음.",
+      "verifiedAt": "2026-10-28T05:17:16.709986+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / rss · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://rss.arxiv.org/rss/cs.AI",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://arxiv.org/list/cs.AI/recent",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:16.517869+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://arxiv.org/list/cs.AI/recent",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 89753,
+          "truncated": false,
+          "sampleSha256": "bb01ed2f5d30957910e93157e46dad13d24b5bd34d4d863af24e1a3c97fccbb6",
+          "pageTitle": "Artificial Intelligence",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://rss.arxiv.org/rss/cs.AI",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:16.582781+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://rss.arxiv.org/rss/cs.AI",
+          "contentType": "application/rss+xml",
+          "contentEncoding": "",
+          "sampleBytes": 524288,
+          "truncated": true,
+          "sampleSha256": "e9a5b07777113c2ef665b377c9b863f3ca9a2ae9b6257972403ec72d95ab1c63",
+          "xmlRoot": "rss",
+          "entriesObservedInSample": 243,
+          "feedTitle": "cs.AI updates on arXiv.org",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "preprint_repository",
+      "confidence_code": "author_preprint_not_automatically_peer_reviewed",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "nia-policy",
+      "name": "NIA Policy Research",
+      "type": "기관 조사·보고서",
+      "url": "https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=66361",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "기관 조사·표본 확인",
+      "why": "한국어 AI 정책·활용·데이터·윤리 근거. 발간일·개별 보고서 원문·조사 조건을 확인.",
+      "frequency": "주간·선택 변경 확인 후보",
+      "rights": "개별 보고서의 공공누리·저작권 조건 및 첨부 파일 권리를 확인.",
+      "verifiedAt": "2026-10-28T05:17:16.937842+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=66361",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:16.709986+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.nia.or.kr/site/nia_kor/ex/bbs/List.do?cbIdx=66361",
+          "contentType": "text/html;charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "a3787a77eff2962409554dfb9889a1d3fbd5b31f1688c1a34985ad1a3484b477",
+          "pageTitle": "HOME > 지식정보 > 연구보고서 > 정책연구 | 한국지능정보사회진흥원",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "institutional_reports",
+      "confidence_code": "official_institution_report",
+      "frequency_code": "weekly_proposed"
+    },
+    {
+      "id": "aihub",
+      "name": "AI Hub",
+      "type": "공식 데이터 포털",
+      "url": "https://www.aihub.or.kr/",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "데이터별 권리·조건 확인",
+      "why": "한국어 음성·영상·텍스트 등 제작·평가 데이터 후보와 이용 조건 확인. 수집은 공개 메타데이터·원문 링크부터.",
+      "frequency": "주간·선택 변경 확인 후보",
+      "rights": "데이터별 이용 조건·개인정보·신청·승인·재배포 제한을 확인. 가입·승인 전 일괄 다운로드하지 않음.",
+      "verifiedAt": "2026-10-28T05:17:17.050606+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://www.aihub.or.kr/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:16.937842+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.aihub.or.kr/",
+          "contentType": "text/html;charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "11aeef9279ead65d73dc989e52817ecec88fee55678883260ab0ff831386d402",
+          "pageTitle": "AI-Hub",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "official_dataset_portal",
+      "confidence_code": "official_dataset_metadata_per_dataset_license",
+      "frequency_code": "weekly_proposed"
+    },
+    {
+      "id": "etri-trends",
+      "name": "ETRI Electronics and Telecommunications Trends",
+      "type": "기관 기술 동향",
+      "url": "https://ettrends.etri.re.kr/ettrends/",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "기관 기술 검토",
+      "why": "한국어 생성 콘텐츠·영상·음성·안전성 기술 동향. DOI·발간호·참고문헌과 실험 근거를 원문에서 확인.",
+      "frequency": "주간·선택 변경 확인 후보",
+      "rights": "논문별 공공누리 유형과 이미지·인용 자산 권리를 확인. 원본 유지 및 링크 중심.",
+      "verifiedAt": "2026-10-28T05:17:35.076788+09:00",
+      "verification": "HTML HTTP fetch_or_parse_error · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://ettrends.etri.re.kr/ettrends/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:17.050606+09:00",
+          "outcome": "fetch_or_parse_error",
+          "error": "URLError: <urlopen error timed out>"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "institutional_technical_journal",
+      "confidence_code": "institutional_technical_review",
+      "frequency_code": "weekly_proposed"
+    },
+    {
+      "id": "kocca-welcon",
+      "name": "KOCCA WelCon Focus",
+      "type": "기관 조사·보고서",
+      "url": "https://welcon.kocca.kr/ko/insight-focus",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "기관 조사·표본 확인",
+      "why": "콘텐츠 산업·마케팅·영상·창작 직무의 한국어 산업 자료. 연구 요약과 원 데이터 출처를 분리.",
+      "frequency": "주간·선택 변경 확인 후보",
+      "rights": "개별 자료·첨부의 저작권·공공누리·원 데이터 이용 조건 확인. 공식 공개 PDF와 상업 재사용 허락을 구분.",
+      "verifiedAt": "2026-10-28T05:17:35.435594+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://welcon.kocca.kr/ko/insight-focus",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:35.076788+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://welcon.kocca.kr/ko/insight-focus",
+          "contentType": "text/html;charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 111940,
+          "truncated": false,
+          "sampleSha256": "342fc18e3d81d98c9f909d9fda8fa04ce8ae189681abcfa6b4e34c82d9e0611e",
+          "pageTitle": "WelCon 포커스 | 콘텐츠수출마케팅플랫폼",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "institutional_reports",
+      "confidence_code": "official_institution_report",
+      "frequency_code": "weekly_proposed"
+    },
+    {
+      "id": "kobaco-reports",
+      "name": "KOBACO Advertising Research",
+      "type": "기관 조사·보고서",
+      "url": "https://www.kobaco.co.kr/site/adstat/board/report_etc_report/list?baCommSelec=false&baNotice=false&baOpenDay=true&baUse=true&bcId=report_etc_report&cp=1&sortDirection=DESC&sortOrder=BA_REGDATE",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "기관 조사·표본 확인",
+      "why": "광고 제작 AI 활용·매체·노동환경·소비자 조사. 표본·조사시기·해석 범위를 보존.",
+      "frequency": "주간·선택 변경 확인 후보",
+      "rights": "개별 게시물의 공공누리 유형 확인. 변경금지 자료는 원본으로 보존하고 재편집 배포를 자동 허용하지 않음.",
+      "verifiedAt": "2026-10-28T05:17:35.536208+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://www.kobaco.co.kr/site/adstat/board/report_etc_report/list?baCommSelec=false&baNotice=false&baOpenDay=true&baUse=true&bcId=report_etc_report&cp=1&sortDirection=DESC&sortOrder=BA_REGDATE",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:35.435594+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.kobaco.co.kr/site/adstat/board/report_etc_report/list?baCommSelec=false&baNotice=false&baOpenDay=true&baUse=true&bcId=report_etc_report&cp=1&sortDirection=DESC&sortOrder=BA_REGDATE",
+          "contentType": "text/html; charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 38270,
+          "truncated": false,
+          "sampleSha256": "460da46fcd414b74501fbdd8900b6e8b41c794fa82e6db44adaec356c8dea05f",
+          "pageTitle": "연구보고서 및 기타>연구보고서 | 방송통신광고통계시스템",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "institutional_reports",
+      "confidence_code": "official_institution_report",
+      "frequency_code": "weekly_proposed"
+    },
+    {
+      "id": "the-batch",
+      "name": "The Batch / DeepLearning.AI",
+      "type": "뉴스레터·2차 해설",
+      "url": "https://www.deeplearning.ai/the-batch/",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "2차 해설·원출처 확인",
+      "why": "주간 AI 뉴스의 주제 발견과 해설. 주장·수치·모델 버전은 연결된 공식 발표·논문으로 회귀.",
+      "frequency": "주간·선택 변경 확인 후보",
+      "rights": "공개 아카이브의 링크·허용 발췌만. 메일 구독·전체 원문 재배포·개인 메일함 수집은 별도 동의.",
+      "verifiedAt": "2026-10-28T05:17:35.925120+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://www.deeplearning.ai/the-batch/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:35.536208+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://www.deeplearning.ai/the-batch",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 131072,
+          "truncated": true,
+          "sampleSha256": "fcdf83250ac174ed64e035b82e1302e24f162f4cdb5aeb88aca7d86f038dfb6e",
+          "pageTitle": "The Batch | DeepLearning.AI | AI News & Insights",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "secondary_newsletter_archive",
+      "confidence_code": "secondary_editorial",
+      "frequency_code": "weekly_proposed"
+    },
+    {
+      "id": "tldr-ai",
+      "name": "TLDR AI Archive",
+      "type": "뉴스레터·2차 해설",
+      "url": "https://tldr.tech/ai/archives",
+      "collection": "선택 링크·변경 확인 ·  · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "2차 해설·원출처 확인",
+      "why": "짧은 동향 큐레이션에서 콘텐츠 소재 발견. 광고·소개 문구·요약과 원 출처를 구분.",
+      "frequency": "매일 확인 후보",
+      "rights": "공개 아카이브 링크 중심. 이메일 가입·수신 동의·전체 본문 재배포를 이번에 실행하지 않음.",
+      "verifiedAt": "2026-10-28T05:17:36.247307+09:00",
+      "verification": "HTML HTTP 200 · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "approved_link_or_change_review",
+        "feedUrl": null,
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://tldr.tech/ai/archives",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:35.925120+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://tldr.tech/ai/archives",
+          "contentType": "text/html; charset=utf-8",
+          "contentEncoding": "",
+          "sampleBytes": 50875,
+          "truncated": false,
+          "sampleSha256": "668fa207a7c14452671de6a37a6abb69ab1c800b64cd4c6777ff1b29a1d28328",
+          "pageTitle": "Latest AI News | TLDR AI Archive",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": null,
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false,
+        "feedStatus": "No official feed confirmed in this audit; do not invent a feed or use a community proxy as official"
+      },
+      "type_code": "secondary_newsletter_archive",
+      "confidence_code": "secondary_editorial",
+      "frequency_code": "daily_proposed"
+    },
+    {
+      "id": "geeknews",
+      "name": "GeekNews",
+      "type": "커뮤니티 큐레이션",
+      "url": "https://news.hada.io/",
+      "collection": "확인한 RSS/Atom · https://news.hada.io/rss/news · AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별 · 운영 수집 비활성",
+      "confidence": "발견용 요약·원출처 확인",
+      "why": "한국어 개발·AI 큐레이션에서 주제 발견. 추천 수·요약은 사실 검증 점수가 아니며 링크된 원 출처를 읽음.",
+      "frequency": "매일 확인 후보",
+      "rights": "커뮤니티 글·외부 원문 권리를 각각 확인. 링크·허용 발췌 중심; 요약의 무단 대량 재배포는 별도 검토.",
+      "verifiedAt": "2026-10-28T05:17:36.305941+09:00",
+      "verification": "HTML HTTP 200 · 피드 HTTP 200 / feed · 접근·형식 확인, 운영 E2E 아님",
+      "collection_details": {
+        "mode": "rss_or_atom_verified",
+        "feedUrl": "https://news.hada.io/rss/news",
+        "enabled": false,
+        "scope": "AI 콘텐츠 생성·에이전트·자동화에 관련된 항목만 선별"
+      },
+      "verification_details": {
+        "page": {
+          "requestedUrl": "https://news.hada.io/",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:36.247307+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://news.hada.io/",
+          "contentType": "text/html; charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 50038,
+          "truncated": false,
+          "sampleSha256": "69d16bcba078a875b45eab2fe4727753dd48d60b80b19b3021515d837416778c",
+          "pageTitle": "GeekNews - 개발/기술/스타트업 뉴스 서비스",
+          "outcome": "html_response_confirmed"
+        },
+        "feed": {
+          "requestedUrl": "https://news.hada.io/rss/news",
+          "method": "anonymous_bounded_http_get",
+          "checkedAt": "2026-10-28T05:17:36.281900+09:00",
+          "httpStatus": 200,
+          "finalUrl": "https://news.hada.io/rss/news",
+          "contentType": "application/atom+xml; charset=UTF-8",
+          "contentEncoding": "",
+          "sampleBytes": 45086,
+          "truncated": false,
+          "sampleSha256": "0a847b770a017bbf34dcbc476b464f56711ea488f102a80202be93605adc94c8",
+          "xmlRoot": "feed",
+          "entriesObservedInSample": 50,
+          "feedTitle": "GeekNews - 개발/기술/스타트업 뉴스 서비스",
+          "outcome": "xml_feed_confirmed"
+        },
+        "scope": "Reachability/content-type/XML-root inspection only; not a product feature or scheduled collection E2E test",
+        "credentialsUsed": false,
+        "mailOrCronActivated": false
+      },
+      "type_code": "secondary_community_curation",
+      "confidence_code": "community_link_and_summary",
+      "frequency_code": "daily_proposed"
+    }
+  ],
+  "ideas": [
+    {
+      "id": "A01",
+      "title": "새 모델 발표를 ‘내 작업의 변화’로 바꾸는 브리핑",
+      "theme": "공식 AI 뉴스·모델 변경",
+      "input": "공급사 공식 발표·API 문서·확인한 이전 버전 기록. 발표문은 사실과 회사 주장을 구분해 요약한다.",
+      "output": "근거 표·뉴스레터 한 꼭지·독립 도해 설명 영상. 수집 장부→Claude 초안→Remotion/FFmpeg 템플릿을 검토한다.",
+      "tools": [
+        "Claude",
+        "Remotion",
+        "FFmpeg"
+      ],
+      "gate": "⓪ 영향 질문 선택 → ① 변경점/날짜 확인 → ② 파일·출처 링크 검사 → 메일이면 ③.",
+      "firstCheck": "하나의 공식 발표에서 변경점 3개를 원문 위치와 연결하고, 미실험 항목이 사용 후기처럼 쓰이지 않는지 확인한다.",
+      "phase": "미실행. 콘텐츠 효용·실제 전환 성공은 미확인이다."
+    },
+    {
+      "id": "A02",
+      "title": "모델 가격·사용량 단위 변경 알림",
+      "theme": "공식 AI 뉴스·모델 변경",
+      "input": "공식 가격표·약관·확인일·공개 과금 예시. 계정 청구서와 비밀 키는 입력하지 않는다.",
+      "output": "가격 변화 표·계산 시트·짧은 화면 설명. 단위 검증 스크립트와 Claude 설명 초안.",
+      "tools": [
+        "Claude",
+        "단위 계산 시트"
+      ],
+      "gate": "⓪ 대상 작업 선택 → ① 숫자/단위/조건 확인 → ② 계산 재검사 → 홍보 회차는 ③.",
+      "firstCheck": "한 계산의 입력 단가·사용량·재시도 횟수를 독자가 다시 계산해 같은 값을 얻도록 만든다.",
+      "phase": "미실행. 실제 지출 절감이나 매출 효과는 미확인이다."
+    },
+    {
+      "id": "A03",
+      "title": "종료 예정 API·모델의 이전 준비 카드",
+      "theme": "공식 AI 뉴스·모델 변경",
+      "input": "공식 deprecation 공지·마이그레이션 문서·공개된 테스트용 계약. 운영 비밀이나 실제 계정 설정은 공개하지 않는다.",
+      "output": "이전 체크리스트·개념 캘린더·전후 요청 구조 설명. 읽기 전용 버전 점검기와 문서 생성기.",
+      "tools": [
+        "읽기 전용 버전 점검기",
+        "Markdown"
+      ],
+      "gate": "⓪ 영향 범위 → ① 날짜/호환 조건 → ② 예시·링크 검사 → 공지 발송은 ③. 운영 변경은 별도 승인.",
+      "firstCheck": "공지 하나를 골라 종료일과 계정별 적용 조건을 분리하고, 확인되지 않은 계정 영향을 단정하지 않는다.",
+      "phase": "미실행. 실제 운영 이전 성공은 미확인이다."
+    },
+    {
+      "id": "A04",
+      "title": "논문 한 주장·한 조건 재현 노트",
+      "theme": "공식 AI 뉴스·모델 변경",
+      "input": "공개 논문·저자 코드·라이선스가 확인된 데이터나 자체 제작 샘플.",
+      "output": "재현 계획·노트북/작은 스크립트·실험 표·설명 영상. 실행은 승인한 자원에서만 한다.",
+      "tools": [
+        "Jupyter Notebook",
+        "Python",
+        "FFmpeg"
+      ],
+      "gate": "⓪ 재현 질문/비용 → ① 주장·실험 범위 → ② 원본 결과/실패 로그 확인 → 발송은 ③.",
+      "firstCheck": "주장 하나의 데이터·지표·조건을 명시하고, 미실행이면 결과 표 대신 실행 계획을 제공한다.",
+      "phase": "미실행. 재현 결과·성능 우위는 미확인이다."
+    },
+    {
+      "id": "B01",
+      "title": "공식 소스에서 근거 장부까지 만드는 실습",
+      "theme": "Agent·업무 자동화 실습",
+      "input": "공식 공개 피드·문서·릴리스 노트와 인용 가능한 짧은 근거. 전체 원문 재배포는 별도 권리가 필요하다.",
+      "output": "작은 소스 장부·근거 카드·실패 인계 예시. 기존 파일 기반 harness와 표준 HTTP 파서를 재사용한다.",
+      "tools": [
+        "HTTP 파서",
+        "근거 장부"
+      ],
+      "gate": "⓪ 소스 1개/질문 1개 → ① 근거 검토 → ② 재현 파일 확인 → 메일은 ③.",
+      "firstCheck": "같은 발표를 두 번 수집해도 같은 사건으로 묶이고, 주장마다 원문 링크와 확인 범위가 남는지 본다.",
+      "phase": "미실행. 운영 수집 안정성·시간 절감은 미확인이다."
+    },
+    {
+      "id": "B02",
+      "title": "권한 있는 PDF에서 ‘실행할 일’ 뽑기",
+      "theme": "Agent·업무 자동화 실습",
+      "input": "본인이 작성했거나 공개 이용·변형 권리가 확인된 PDF. 구독 전자책·강의 자료는 공개 출력에 전용하지 않는다.",
+      "output": "개념·해야 할 일·완료 검사 카드, 페이지 참조표. PDF 텍스트 추출→Claude 구조화→사람 대조.",
+      "tools": [
+        "PDF 텍스트 추출기",
+        "Claude"
+      ],
+      "gate": "⓪ 문서 권리 → ① 추출 정확도/맥락 → ② 카드·참조 확인 → 공유 메일은 ③.",
+      "firstCheck": "두 페이지에서 카드 3개를 만들고 수치·예외·권고와 의무를 원문과 대조한다.",
+      "phase": "미실행. 학습 개선 효과는 미확인이다."
+    },
+    {
+      "id": "B03",
+      "title": "복사본 폴더를 정리하는 안전한 Agent 데모",
+      "theme": "Agent·업무 자동화 실습",
+      "input": "직접 만든 가상 파일 묶음과 테스트 폴더. 실제 고객·개인 문서·계정 자료는 쓰지 않는다.",
+      "output": "파일 계획서·가상 데이터·되돌리기 표·시연 영상. 표준 라이브러리와 읽기 전용 사전 점검.",
+      "tools": [
+        "Python 표준 라이브러리",
+        "파일 해시"
+      ],
+      "gate": "⓪ 테스트 경계 → ① 작업 계획 → ② 원본 보존·되돌리기 검수 → 홍보는 ③. 실제 삭제는 별도 허용.",
+      "firstCheck": "원본 파일 해시가 유지되고, 허용 폴더 밖 경로가 차단되는지 확인한다.",
+      "phase": "미실행. 실제 사용자 PC 정리 성과는 미확인이다."
+    },
+    {
+      "id": "B04",
+      "title": "실패·결과 불명·재시도를 배우는 자동화 실습",
+      "theme": "Agent·업무 자동화 실습",
+      "input": "자체 mock 서버·가상 작업·비식별 로그. 실제 결제·메일·게시 계정은 연결하지 않는다.",
+      "output": "상태도·실패 주입 예제·재개 체크리스트. 기존 작업 장부·mock HTTP·파일 해시.",
+      "tools": [
+        "Mock HTTP",
+        "작업 장부",
+        "파일 해시"
+      ],
+      "gate": "⓪ 실패 시나리오 → ① 상태 계약 → ② 중복 방지 검수 → 안내 발송은 ③.",
+      "firstCheck": "응답을 잃은 요청이 무조건 재호출되지 않고, 원격 결과 확인이 필요하다고 표시되는지 본다.",
+      "phase": "미실행. 실제 외부 제공자 장애 복구 성과는 미확인이다."
+    },
+    {
+      "id": "C01",
+      "title": "한국어 TTS의 숫자·고유명사 비교",
+      "theme": "공정한 도구 실험",
+      "input": "직접 작성한 동일 대본과 사용 권한이 확인된 화자. 화자 복제에는 별도 동의가 필요하다.",
+      "output": "블라인드 청취표·음성 샘플·ASR 오류 후보. Eleven v2/v4 또는 승인한 Qwen3-TTS 등을 비교한다.",
+      "tools": [
+        "Eleven Multilingual v2",
+        "Eleven v4",
+        "Qwen3-TTS",
+        "ASR"
+      ],
+      "gate": "⓪ 후보/예산/화자 → ① 대본 → ② 실제 청취/권리/파일 → 공개 회차는 ③.",
+      "firstCheck": "두 후보가 같은 대본을 읽고, 모델/옵션/과금 분모와 실제 청취 결과를 빠짐없이 기록한다.",
+      "phase": "미실행. 한국어 최고 모델이나 사용자 선호는 미확인이다."
+    },
+    {
+      "id": "C02",
+      "title": "같은 이미지 브리프로 정보 전달력 비교",
+      "theme": "공정한 도구 실험",
+      "input": "직접 작성한 비교 항목·독립 도해 브리프·권리 확인된 참조 자산.",
+      "output": "동일 브리프 결과표·수정 횟수·비용·최종 편집본. Midjourney·Nano Banana와 자체 SVG를 비교 후보로 둔다.",
+      "tools": [
+        "Midjourney",
+        "Nano Banana",
+        "SVG"
+      ],
+      "gate": "⓪ 브리프/비용 → ① 정보 정확도 → ② 자산 권리·가독성 → 캠페인은 ③.",
+      "firstCheck": "세 조건의 차이를 한 화면에 표시하고, 틀린 글자나 누락된 핵심 정보가 감춰지지 않는지 본다.",
+      "phase": "미실행. 품질 우위·조회수 향상은 미확인이다."
+    },
+    {
+      "id": "C03",
+      "title": "같은 장면의 이미지→영상 제어력 비교",
+      "theme": "공정한 도구 실험",
+      "input": "자체 이미지·동일한 장면 목적·허용된 움직임 설명. 실존인의 무단 재연은 사용하지 않는다.",
+      "output": "장면별 비교 영상·조건표. Runway·Kling·Veo·Luma·Midjourney 중 실제 조건이 맞는 후보를 고른다.",
+      "tools": [
+        "Runway",
+        "Kling",
+        "Veo",
+        "Luma",
+        "Midjourney"
+      ],
+      "gate": "⓪ 후보/조건/예산 → ① 장면 의도 → ② 전체 프레임·음원·합성 표시 → 공개 회차는 ③.",
+      "firstCheck": "길이·해상도가 다른 결과를 공정 비교로 묶지 않고, 지원하지 않는 조건은 미지원으로 기록한다.",
+      "phase": "미실행. 모델별 승자·현재 계정 사용 가능성은 미확인이다."
+    },
+    {
+      "id": "C04",
+      "title": "코드 기반 설명 영상의 수정·재렌더 비용 비교",
+      "theme": "공정한 도구 실험",
+      "input": "자체 SVG·문장·합성 데이터·권리 확인된 폰트와 음성.",
+      "output": "동일 설명의 렌더 결과·수정 로그·측정표. FFmpeg·Remotion·Hyperframe은 확인한 지원 방식 안에서 비교한다.",
+      "tools": [
+        "FFmpeg",
+        "Remotion",
+        "Hyperframe"
+      ],
+      "gate": "⓪ 동일 장면/환경 → ① 설명 → ② 오디오·레이아웃·렌더 검수 → 안내 발송은 ③.",
+      "firstCheck": "같은 입력으로 다시 렌더했을 때 장면·자막·음성 결속이 유지되고, 측정 환경이 공개되는지 본다.",
+      "phase": "미실행. 시간 절감·성능 우위는 미확인이다."
+    },
+    {
+      "id": "D01",
+      "title": "공식 자격 일정 변경을 학습 행동으로 연결",
+      "theme": "인증 학습·독자 질문",
+      "input": "주관기관의 공개 일정·공고·정정 공지. 개인 접수·성적·응시 자격 정보는 넣지 않는다.",
+      "output": "일정 변화 카드·체크리스트·뉴스레터 알림 초안. 날짜 정규화와 원문 대조.",
+      "tools": [
+        "날짜 정규화",
+        "Markdown"
+      ],
+      "gate": "⓪ 대상 공고 → ① 날짜·시간대·변경 조건 → ② 링크/달력 검수 → 알림은 ③.",
+      "firstCheck": "공고 한 건의 접수·시험·발표 날짜를 원문과 다시 맞추고, ‘합격 보장’ 표현을 넣지 않는다.",
+      "phase": "미실행. 응시·학습·합격 성과는 미확인이다."
+    },
+    {
+      "id": "D02",
+      "title": "개념 하나→직접 만든 회상 카드→짧은 퀴즈",
+      "theme": "인증 학습·독자 질문",
+      "input": "자체 설명·이용 가능한 공개 사양·직접 작성한 문항. 실제 시험 문제나 비공개 교재를 복제하지 않는다.",
+      "output": "개념 카드·회상 질문·해설·짧은 영상. Claude 초안과 사람이 확인한 정답 계약.",
+      "tools": [
+        "Claude",
+        "Markdown"
+      ],
+      "gate": "⓪ 개념 → ① 정의/정답/독립 문항 → ② 카드·접근성 → 배포 회차는 ③.",
+      "firstCheck": "한 개념에서 문항 3개를 만들어 모호한 정답·외부 실문항 유사성을 검토한다.",
+      "phase": "미실행. 기억 유지·점수 향상은 미확인이다."
+    },
+    {
+      "id": "D03",
+      "title": "독자 질문 하나를 재현 가능한 해결 노트로",
+      "theme": "인증 학습·독자 질문",
+      "input": "공개 사용에 동의한 비식별 질문 또는 명시한 가상 질문. 개인 건강·성적·계정 정보는 제외한다.",
+      "output": "질문 해결 글·데모·메일 코너. 공개 근거와 자체 테스트 샘플을 사용한다.",
+      "tools": [
+        "근거 장부",
+        "테스트 샘플"
+      ],
+      "gate": "⓪ 질문/동의 → ① 답변 근거 → ② 재현·비식별 검수 → 메일은 ③.",
+      "firstCheck": "질문자의 사생활 없이도 다른 사람이 같은 샘플로 해결 절차를 따라갈 수 있는지 본다.",
+      "phase": "미실행. 실제 독자 문제 해결 성공은 미확인이다."
+    },
+    {
+      "id": "D04",
+      "title": "자주 틀리는 판단을 고치는 오개념 사전",
+      "theme": "인증 학습·독자 질문",
+      "input": "자체 제작 오류 사례·공개 사용에 동의한 익명 사례. 개인 학습 기록은 동의 없이 공개하지 않는다.",
+      "output": "오개념 카드·분기 도해·짧은 해설 영상. 자체 문항과 출처 대조.",
+      "tools": [
+        "Markdown",
+        "SVG"
+      ],
+      "gate": "⓪ 오개념 → ① 설명/반례 → ② 오해 유발 표현·정답 검수 → 발송은 ③.",
+      "firstCheck": "수정 전후 판단 기준을 한 문장씩 쓰고, 새 반례에서도 기준이 유지되는지 검토한다.",
+      "phase": "미실행. 오류 감소 효과는 미확인이다."
+    },
+    {
+      "id": "E01",
+      "title": "실제 구매자가 받는 것만 보여주는 상품 데모",
+      "theme": "본인 상품 데모",
+      "input": "판매자가 공개할 권리가 있는 실제 상품 파일·현재 공개 페이지·서버가 확인한 상품 정보.",
+      "output": "실제 제공물 목록·공개 가능한 화면 데모·FAQ. FFmpeg 편집과 자체 도해.",
+      "tools": [
+        "FFmpeg",
+        "SVG"
+      ],
+      "gate": "⓪ 대상 상품 → ① 기능/조건 원문 → ② 실제 제공물·권리·오퍼 대조 → 홍보 회차는 ③.",
+      "firstCheck": "영상에서 약속한 제공물과 실제 승인된 패키지 목록이 하나씩 대응하는지 확인한다.",
+      "phase": "미실행. 상품 기능·구매·매출 성공은 이 문서에서 확인하지 않았다."
+    },
+    {
+      "id": "E02",
+      "title": "템플릿을 실제 샘플에 적용하는 사용 흐름",
+      "theme": "본인 상품 데모",
+      "input": "실제 소유 템플릿과 직접 만든 가상 샘플. 사용자·고객 자료나 꾸며낸 전후 성과는 쓰지 않는다.",
+      "output": "재현 가능한 샘플·사용 영상·문제 해결 표. 화면 녹화/자체 렌더와 편집.",
+      "tools": [
+        "화면 녹화",
+        "FFmpeg"
+      ],
+      "gate": "⓪ 샘플/권리 → ① 절차 → ② 실제 파일·실패 조건 확인 → 홍보는 ③.",
+      "firstCheck": "샘플 입력부터 최종 파일까지 수작업으로 따라가 누락된 설정·단계를 찾는다.",
+      "phase": "미실행. 실제 사용 편의·시간 절감·전환은 미확인이다."
+    },
+    {
+      "id": "E03",
+      "title": "‘누구에게 맞고 언제 맞지 않는가’ 선택 안내",
+      "theme": "본인 상품 데모",
+      "input": "확인한 제공 범위·선행 조건·지원 환경·공개 정책. 개인 적합성이나 성과를 추정하지 않는다.",
+      "output": "적합성 체크리스트·비교 글·짧은 안내 영상. 분기 규칙을 사람이 검토한다.",
+      "tools": [
+        "Markdown",
+        "분기 규칙"
+      ],
+      "gate": "⓪ 비교 질문 → ① 상품 사실/조건 → ② 오퍼·링크·광고 표현 → 홍보 회차는 ③.",
+      "firstCheck": "선행 조건을 만족하지 않는 가상 독자에게 구매 대신 보류/무료 학습 경로가 나오는지 확인한다.",
+      "phase": "미실행. 추천 적합성·환불 감소·매출 효과는 미확인이다."
+    },
+    {
+      "id": "F01",
+      "title": "매주 ‘유지·시험·보류’ 세 결정을 보내는 편집본",
+      "theme": "주간 뉴스레터",
+      "input": "승인한 공식 소스 카드·직접 실행한 실험 기록·근거가 있는 변경 안내.",
+      "output": "한 회차 HTML/텍스트·아카이브·연관 읽기. Claude 편집과 검증된 뉴스레터 제공자.",
+      "tools": [
+        "Claude",
+        "뉴스레터 제공자"
+      ],
+      "gate": "⓪ 회차 주제 → ① 근거/표현 → ② 메일·링크·권리 → ③ 동의 대상/시각/오퍼.",
+      "firstCheck": "로컬 미리보기에서 결론 3개·근거·수신거부·광고 구분과 모바일 읽기 순서를 확인한다.",
+      "phase": "미실행. 발송·열람·클릭·구매 효과는 미확인이다."
+    },
+    {
+      "id": "F02",
+      "title": "성공뿐 아니라 실패를 보존하는 실험실 회고",
+      "theme": "주간 뉴스레터",
+      "input": "실제 승인해 실행한 시험 로그·출력·비용 기록. 없으면 실험 계획으로 표기한다.",
+      "output": "회고 메일·전후 조건표·짧은 실패 장면. 작업 장부와 편집 도구.",
+      "tools": [
+        "작업 장부",
+        "편집 도구"
+      ],
+      "gate": "⓪ 회고 범위 → ① 사실/수치/실패 원인 → ② 로그 비식별·자산 검수 → ③ 발송 회차.",
+      "firstCheck": "관찰한 사실과 원인 추정을 나누고, 공급사 데모를 직접 실행한 결과처럼 인용하지 않는다.",
+      "phase": "미실행. 실제 실험·독자 반응·전환은 미확인이다."
+    },
+    {
+      "id": "F03",
+      "title": "자발적으로 신청한 독자를 위한 3회 입문 코스",
+      "theme": "주간 뉴스레터",
+      "input": "직접 만든 공개 기초 자료·실습·신청자가 선택한 관심 주제. 유튜브 참여 확인을 조건으로 받지 않는다.",
+      "output": "3회 메일 초안·실습 파일·진행 체크리스트. 검증된 수신동의/발송 시스템.",
+      "tools": [
+        "수신동의 관리",
+        "뉴스레터 제공자"
+      ],
+      "gate": "⓪ 학습 약속 → ① 각 원고 → ② 자료·링크 → ③ 회차별 대상·시각·중단/수신거부.",
+      "firstCheck": "로컬 테스트 상태에서 신청하지 않은 대상에게 보내는 흐름과 수신거부 후 다음 회차가 차단되는지 점검한다.",
+      "phase": "미실행. 온보딩 완료·유료 전환은 미확인이다."
+    },
+    {
+      "id": "G01",
+      "title": "자산 권리·출처·AI 사용 표시 체크리스트",
+      "theme": "독자 체크리스트·템플릿",
+      "input": "공식 라이선스·자체 제작 자산·확인한 동의 범위. 타사 이미지를 체크리스트 예시로 무단 복제하지 않는다.",
+      "output": "자체 작성 권리 장부 양식·검토 예제·설명 글. 표준 Markdown/CSV와 파일 해시.",
+      "tools": [
+        "Markdown",
+        "CSV",
+        "파일 해시"
+      ],
+      "gate": "⓪ 사용 범위 → ① 설명/공식 근거 → ② 독립 예제·배포 권리 → 안내 메일은 ③.",
+      "firstCheck": "권리 상태가 미확인인 가상 자산이 상업 공개용 묶음에 들어가지 않는지 확인한다.",
+      "phase": "미실행. 권리 분쟁 예방 효과나 법적 적합성은 미확인이다."
+    },
+    {
+      "id": "G02",
+      "title": "한 질문을 제작 가능한 브리프로 바꾸는 키트",
+      "theme": "독자 체크리스트·템플릿",
+      "input": "승인한 질문·사실 묶음·자체 도해 소재·확인된 채널 제약.",
+      "output": "브리프 양식·완성 예제·선택 비교표. Claude 구조화와 기존 파일 기반 검토.",
+      "tools": [
+        "Claude",
+        "Markdown"
+      ],
+      "gate": "⓪ 질문 선택 → ① 사실/브리프 → ② 예제·재사용 권리 → 홍보 회차는 ③.",
+      "firstCheck": "다른 작업자가 추가 구두 설명 없이 한 장면을 만들 수 있도록 입력·출력·검사 기준이 정해졌는지 본다.",
+      "phase": "미실행. 제작 시간·의사소통 절감 효과는 미확인이다."
+    },
+    {
+      "id": "G03",
+      "title": "재시도까지 포함하는 콘텐츠 원가·중단표",
+      "theme": "독자 체크리스트·템플릿",
+      "input": "공식 단가·확인일·실측 사용량 또는 명시한 가정. 개인 계정 청구서를 공개하지 않는다.",
+      "output": "단위별 계산 시트·한 회차 예산표·검수 설명. 검증 가능한 공식과 단위 검사.",
+      "tools": [
+        "단위 계산 시트"
+      ],
+      "gate": "⓪ 제작 범위/한도 → ① 계산/가정 → ② 재계산·링크 검수 → 배포 회차는 ③.",
+      "firstCheck": "가상 재시도 한 건을 넣었을 때 총액이 바뀌고, 결과 불명 예약을 자동 성공/환급으로 처리하지 않는지 본다.",
+      "phase": "미실행. 실제 원가 절감·손익 개선은 미확인이다."
+    },
+    {
+      "id": "H01",
+      "title": "잘못된 주장 하나를 모든 채널에서 정정하는 카드",
+      "theme": "오류 정정·자료 갱신",
+      "input": "확인된 오류·원래 공개물 ID·새로운 공식 근거·수정 이력. 개인 제보자를 동의 없이 공개하지 않는다.",
+      "output": "정정문·채널별 수정 큐·공개 이력. 문서 diff와 원격 결과 확인 장부.",
+      "tools": [
+        "문서 diff",
+        "결과 확인 장부"
+      ],
+      "gate": "⓪ 영향 범위 → ① 정정 근거 → ② 수정 파일/표현 → 정정 메일·홍보는 ③.",
+      "firstCheck": "블로그·영상 설명·메일 초안의 가상 오류를 한 건 등록해 모든 파생물과 미완료 조치를 찾아내는지 본다.",
+      "phase": "미실행. 실제 정정 전달·원격 수정 성공은 미확인이다."
+    },
+    {
+      "id": "H02",
+      "title": "PDF·템플릿의 버전·링크·파일 무결성 점검",
+      "theme": "오류 정정·자료 갱신",
+      "input": "본인이 배포할 권리가 있는 자료 manifest·공개 링크·원본 파일 해시. 구독 자료를 공개 저장소에 복사하지 않는다.",
+      "output": "버전별 점검표·변경 기록·자료 업데이트 초안. PDF 파서·해시·링크 상태 검사.",
+      "tools": [
+        "PDF 파서",
+        "파일 해시",
+        "링크 상태 검사"
+      ],
+      "gate": "⓪ 자료 목록 → ① 변경 내용 → ② 파일·권리·참조 검사 → 업데이트 알림은 ③. 실제 상품 교체는 별도 승인.",
+      "firstCheck": "가상으로 다른 판본을 연결했을 때 파일 열림만으로 통과하지 않고 불일치를 표시하는지 본다.",
+      "phase": "미실행. 실제 자료 전수 무결성·고객 전달 성공은 미확인이다."
+    },
+    {
+      "id": "H03",
+      "title": "오래된 콘텐츠의 조건만 갱신하는 리프레시",
+      "theme": "오류 정정·자료 갱신",
+      "input": "본인 공개 콘텐츠·당시 근거·현재 공식 변경 문서. 원문 시점과 현재 시점을 함께 보존한다.",
+      "output": "변경점 부록·새 비교표·설명란 갱신안·필요할 때 새 영상. 콘텐츠/근거 버전 장부.",
+      "tools": [
+        "콘텐츠 버전 장부",
+        "근거 장부"
+      ],
+      "gate": "⓪ 갱신 필요성 → ① 새 조건/표현 → ② 링크·파일·차이 검수 → 안내 회차는 ③.",
+      "firstCheck": "바뀐 조건과 그대로인 설명을 나누고, 과거 시험을 새 모델의 실제 시험 결과로 재표기하지 않는다.",
+      "phase": "미실행. 검색·시청·유료 전환 개선은 미확인이다."
+    }
+  ],
+  "resources": {
+    "scope": "2026-10-21 확보 목록의 51개와 이번 공식 공개 PDF 5개를 대상으로 검증. 책·보고서·논문·강의 자료를 구분한다.",
+    "existing_count": 51,
+    "verified_count": 56,
+    "new_count": 5,
+    "pages": 3205,
+    "subscription_new_count": 0,
+    "pdfs": [
+      {
+        "title": "Put Google AI to work for your business - A Marketer’s Guide",
+        "language": "en",
+        "pages": 32,
+        "url": "https://storage.googleapis.com/twg-content/documents/Google_CMO_Guide_Deck_073024.pdf",
+        "source_url": "https://business.google.com/us/think/ai-excellence/how-to-use-ai-for-marketing/",
+        "license": "공식 공개 원문. 개인학습 보관·추가 재사용 조건 확인 필요.",
+        "license_original": "Official public download; original private-study copy; no commercial reuse clearance"
+      },
+      {
+        "title": "Unlocking the Value of GenAI in Content Creation and Document Management",
+        "language": "en",
+        "pages": 20,
+        "url": "https://business.adobe.com/au/assets/pdfs/resources/reports/adobe-london-research-unlocking-the-value-of-genai.pdf",
+        "source_url": "https://business.adobe.com/au/resources/reports/unlocking-the-value-of-genai-in-content-creation-and-document-management.html",
+        "license": "공식 공개 원문. 개인학습 보관·추가 재사용 조건 확인 필요.",
+        "license_original": "Official public download; original private-study copy; copyright retained"
+      },
+      {
+        "title": "2025년 광고제작현장 AI 활용 실태 및 분석",
+        "language": "ko",
+        "pages": 26,
+        "url": "https://www.kobaco.co.kr/site/adstat/file/download/uu/253631d548be452aa4a2eedfdbe87991",
+        "source_url": "https://www.kobaco.co.kr/site/adstat/board/report_etc_report/1298?baCommSelec=false&baNotice=false&baOpenDay=true&baUse=true&bcId=report_etc_report&cp=1&sortDirection=DESC&sortOrder=BA_REGDATE",
+        "license": "공공누리 3유형: 출처표시·변경금지. 원본 유지.",
+        "license_original": "공공누리 3유형: 출처표시+변경금지; preserve unchanged original"
+      },
+      {
+        "title": "온라인 콘텐츠 제작의 패러다임 전환: 생성형 AI의 부상",
+        "language": "ko",
+        "pages": 4,
+        "url": "https://welcon.kocca.kr/cmm/fms/FileDown.do?atchFileId=FILE_09ce4858-6710-4d85-880d-3004c2bac4e4&fileSn=1&preview=Y",
+        "source_url": "https://welcon.kocca.kr/ko/insight-focus",
+        "license": "공식 공개 원문. 개인학습 보관·추가 재사용 조건 확인 필요.",
+        "license_original": "Official public-host PDF; original private-study copy; additional reuse license not verified"
+      },
+      {
+        "title": "생성형 AI가 재편하는 글로벌 엔터테인먼트 산업의 일자리 구조",
+        "language": "ko",
+        "pages": 5,
+        "url": "https://welcon.kocca.kr/cmm/fms/FileDown.do?atchFileId=FILE_a5c58d39-bea0-489b-ae8b-b8da45e30599&fileSn=1&preview=Y",
+        "source_url": "https://welcon.kocca.kr/ko/insight-focus?pageIndex=5",
+        "license": "공식 공개 원문. 개인학습 보관·추가 재사용 조건 확인 필요.",
+        "license_original": "Official public-host PDF; original private-study copy; additional reuse license not verified"
+      }
+    ]
+  },
+  "handoff": {
+    "notes": [
+      "이 사이트는 설계·비교 화면이며 실제 작업 실행 버튼이 아니다.",
+      "추가 결제·새 API 생성·계정 연결·외부 발행·상품/쿠폰 변경을 실행하지 않았다.",
+      "기존 18부서·144 OF·37 EX·29 전문 분야를 보존하고 역할이 필요할 때 호출한다.",
+      "① 원고·② 출력별 출고·③ 회차의 의미를 바꾸지 않는다. 에이전트는 승인을 만들지 않는다.",
+      "유료 강의·PRIVATE 원문·계정·개인 경로는 이 웹과 공개 인계 ZIP에 포함하지 않는다."
+    ]
+  }
+}

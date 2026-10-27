@@ -1,0 +1,276 @@
+{
+  "version": "v7.1 검토 보강판",
+  "scope": "Editable content-studio source; legacy routes link to existing HTTPS site",
+  "files": [
+    {
+      "name": "README.md",
+      "bytes": 1427,
+      "sha256": "c0d8da045553870884e60d51e56ff96385645866862bc9250828b2034fa025a3"
+    },
+    {
+      "name": "content-studio/README.md",
+      "bytes": 7007,
+      "sha256": "a350a2ce17d4a196b67a321f50b5800855e50fd9a95bcf9a56ee597bffd9a933"
+    },
+    {
+      "name": "content-studio/content.json",
+      "bytes": 130405,
+      "sha256": "0ec60f3d56a64e44b54678015c5d05a412ad255dd588aadc38fc90ddb32f03c6"
+    },
+    {
+      "name": "content-studio/cost-scenarios.json",
+      "bytes": 5065,
+      "sha256": "cf30e735ba60072caccf332b4010183f9b13b463925edce29311bfdf33da7393"
+    },
+    {
+      "name": "content-studio/master-guide.md",
+      "bytes": 28246,
+      "sha256": "00f71b0480302dc3956f1c09b057d33cbba192102a539887d089dd743d65f27a"
+    },
+    {
+      "name": "content-studio/research/brand-fit.md",
+      "bytes": 6998,
+      "sha256": "c2a2f0ec092853c0a3e70e1bf268433ed1a7beddd0e6afec40e4e22acae00af0"
+    },
+    {
+      "name": "content-studio/research/execution-ideas.md",
+      "bytes": 39583,
+      "sha256": "5e87a524a97a3a2821729e2539e72fa71ff65c789925d0071b2e7d0f53644d91"
+    },
+    {
+      "name": "content-studio/research/finishing-audio-rights.md",
+      "bytes": 26398,
+      "sha256": "7cdd47b2f5b13d5d3d58dafea1be347a818b723fecc1321c5624e02d50932e42"
+    },
+    {
+      "name": "content-studio/research/input-sources-detail.md",
+      "bytes": 13082,
+      "sha256": "2934a104bff0f7ae48106a48dc15974cc846e6bc916e6ba798b291b552418f5e"
+    },
+    {
+      "name": "content-studio/research/latest-signal-decisions.md",
+      "bytes": 8890,
+      "sha256": "7ba4d4487701cce8084931d1d771209fc8b0fcc67eff3be5c5e2ec472d4ab166"
+    },
+    {
+      "name": "content-studio/research/models-research.md",
+      "bytes": 22167,
+      "sha256": "9795e7be8774c7b08018ebd9f9128b90fe978676f02f34071ca8172544b16174"
+    },
+    {
+      "name": "content-studio/research/pdf-design-evidence.md",
+      "bytes": 11439,
+      "sha256": "c5edde8d3e29d9c66dd9c394887da4e9ea0ef85e3445d314196ab1cd550b71e9"
+    },
+    {
+      "name": "content-studio/research/production-economics.md",
+      "bytes": 29734,
+      "sha256": "dc73db9bf48c734655e285206efaa9f6584dc00f05636b0218c02d393be912c2"
+    },
+    {
+      "name": "content-studio/research/public-signals.json",
+      "bytes": 17506,
+      "sha256": "1153f6ee033b8d0be2012099fc453100fc4b6a1a3a15ef2fa79df25bad2bfa04"
+    },
+    {
+      "name": "content-studio/research/public-signals.md",
+      "bytes": 10551,
+      "sha256": "548ed8ea080bce255e696e601d91a456d430c8336715d88dbc8d8f633ef46766"
+    },
+    {
+      "name": "content-studio/research/quality-evaluation.md",
+      "bytes": 21044,
+      "sha256": "a0ead92e6d5fa9f4743250c0fe5a746305e0333b26665dce509b755207678505"
+    },
+    {
+      "name": "content-studio/research/source-benchmarking.md",
+      "bytes": 21200,
+      "sha256": "3df71b469c36f0e9b80b042de3eddc427d48c93917c1cddca7eab5d8b65ac63a"
+    },
+    {
+      "name": "content-studio/research/voice-distribution.md",
+      "bytes": 27674,
+      "sha256": "1607adcc5b66b78791bb3ad58ea2e6c6a0ea303ea48ee31cb852f4fb769b18b8"
+    },
+    {
+      "name": "content-studio/research/youtube-benchmark-sample.md",
+      "bytes": 15968,
+      "sha256": "b77b13bf956e40acf8c387366699ecae6b398e94127234a2446027dc687ddb8f"
+    },
+    {
+      "name": "dist/content-studio/app.js",
+      "bytes": 32935,
+      "sha256": "82924e988a4ed521343e77d3631a18062d412f39458e5b8459a03fb53ad96f4c"
+    },
+    {
+      "name": "dist/content-studio/costs.js",
+      "bytes": 7039,
+      "sha256": "d4cdac8e03893874ddb9aa4f1f1260a3b94f652a4a894eb8d5cb7dd35619f0a1"
+    },
+    {
+      "name": "dist/content-studio/downloads/README.md",
+      "bytes": 7074,
+      "sha256": "de35c756e808f7ad2dca8a09af359eb4b8e1c1e65d2107dca7cfd77128a3dcfb"
+    },
+    {
+      "name": "dist/content-studio/downloads/brand-fit.md",
+      "bytes": 6998,
+      "sha256": "c2a2f0ec092853c0a3e70e1bf268433ed1a7beddd0e6afec40e4e22acae00af0"
+    },
+    {
+      "name": "dist/content-studio/downloads/cost-model.json",
+      "bytes": 5207,
+      "sha256": "3249ca2579552b566c20006d434eb8488be8c750837c57493efff2494a687f00"
+    },
+    {
+      "name": "dist/content-studio/downloads/current-implementation.md",
+      "bytes": 1088,
+      "sha256": "41c5d7e964cbe30886ab83bca6df6ceb2c1d21f9ac1a395dbe7245b631c94010"
+    },
+    {
+      "name": "dist/content-studio/downloads/execution-ideas.md",
+      "bytes": 39583,
+      "sha256": "5e87a524a97a3a2821729e2539e72fa71ff65c789925d0071b2e7d0f53644d91"
+    },
+    {
+      "name": "dist/content-studio/downloads/finishing-audio-rights.md",
+      "bytes": 26398,
+      "sha256": "7cdd47b2f5b13d5d3d58dafea1be347a818b723fecc1321c5624e02d50932e42"
+    },
+    {
+      "name": "dist/content-studio/downloads/hub-data.json",
+      "bytes": 135909,
+      "sha256": "96f6c98daf10bff753bdd73cd6638902c4a3fb33f44e1d623999b999bf445a4b"
+    },
+    {
+      "name": "dist/content-studio/downloads/input-sources-detail.md",
+      "bytes": 13082,
+      "sha256": "2934a104bff0f7ae48106a48dc15974cc846e6bc916e6ba798b291b552418f5e"
+    },
+    {
+      "name": "dist/content-studio/downloads/input-sources.md",
+      "bytes": 12832,
+      "sha256": "54e46e4333a1c549013992944945799bb54bdc2f683563fb5e42ac31d0bbfe08"
+    },
+    {
+      "name": "dist/content-studio/downloads/integrated-guide.json",
+      "bytes": 461639,
+      "sha256": "9193e0ab009875c7c20cbc42080a8c4b869990fea19bd526ebb9ca9de8853328"
+    },
+    {
+      "name": "dist/content-studio/downloads/integrated-guide.md",
+      "bytes": 412508,
+      "sha256": "d126c118f24f1c807f6d5b1024e049daf2cff60364923337058474c1d97c4fee"
+    },
+    {
+      "name": "dist/content-studio/downloads/latest-signal-decisions.md",
+      "bytes": 8890,
+      "sha256": "7ba4d4487701cce8084931d1d771209fc8b0fcc67eff3be5c5e2ec472d4ab166"
+    },
+    {
+      "name": "dist/content-studio/downloads/manifest.json",
+      "bytes": 4689,
+      "sha256": "0126e932092726f1b452f347f7c6eba309af9748ceaa8b9322a0762d1b4fb58f"
+    },
+    {
+      "name": "dist/content-studio/downloads/master-guide.md",
+      "bytes": 28473,
+      "sha256": "6e328ea9d95a9f3168602cddbb2f4222940bac015db96be4e183647ce750c76b"
+    },
+    {
+      "name": "dist/content-studio/downloads/models-and-rights.md",
+      "bytes": 16057,
+      "sha256": "ff0f601725709a644704bf58b6f7fd499023960ea61b14e5a309ffea33514351"
+    },
+    {
+      "name": "dist/content-studio/downloads/models-research.md",
+      "bytes": 22167,
+      "sha256": "9795e7be8774c7b08018ebd9f9128b90fe978676f02f34071ca8172544b16174"
+    },
+    {
+      "name": "dist/content-studio/downloads/pdf-design-evidence.md",
+      "bytes": 11439,
+      "sha256": "c5edde8d3e29d9c66dd9c394887da4e9ea0ef85e3445d314196ab1cd550b71e9"
+    },
+    {
+      "name": "dist/content-studio/downloads/pipeline-blueprint.json",
+      "bytes": 16740,
+      "sha256": "969d1cc16d2d7d99300740bb2065ff5eb86f57a7d69cb910be41e55dad08979b"
+    },
+    {
+      "name": "dist/content-studio/downloads/production-economics.md",
+      "bytes": 29734,
+      "sha256": "dc73db9bf48c734655e285206efaa9f6584dc00f05636b0218c02d393be912c2"
+    },
+    {
+      "name": "dist/content-studio/downloads/public-signals.json",
+      "bytes": 17506,
+      "sha256": "1153f6ee033b8d0be2012099fc453100fc4b6a1a3a15ef2fa79df25bad2bfa04"
+    },
+    {
+      "name": "dist/content-studio/downloads/public-signals.md",
+      "bytes": 10551,
+      "sha256": "548ed8ea080bce255e696e601d91a456d430c8336715d88dbc8d8f633ef46766"
+    },
+    {
+      "name": "dist/content-studio/downloads/quality-evaluation.md",
+      "bytes": 21044,
+      "sha256": "a0ead92e6d5fa9f4743250c0fe5a746305e0333b26665dce509b755207678505"
+    },
+    {
+      "name": "dist/content-studio/downloads/source-benchmarking.md",
+      "bytes": 21200,
+      "sha256": "3df71b469c36f0e9b80b042de3eddc427d48c93917c1cddca7eab5d8b65ac63a"
+    },
+    {
+      "name": "dist/content-studio/downloads/update-checklist.md",
+      "bytes": 836,
+      "sha256": "5429e3ea8caffc3702769e587998259edf0d18264f46528899e2f6dc5b4d515f"
+    },
+    {
+      "name": "dist/content-studio/downloads/voice-distribution.md",
+      "bytes": 27674,
+      "sha256": "1607adcc5b66b78791bb3ad58ea2e6c6a0ea303ea48ee31cb852f4fb769b18b8"
+    },
+    {
+      "name": "dist/content-studio/downloads/youtube-benchmark-sample.md",
+      "bytes": 15968,
+      "sha256": "b77b13bf956e40acf8c387366699ecae6b398e94127234a2446027dc687ddb8f"
+    },
+    {
+      "name": "dist/content-studio/hub-data.json",
+      "bytes": 135909,
+      "sha256": "96f6c98daf10bff753bdd73cd6638902c4a3fb33f44e1d623999b999bf445a4b"
+    },
+    {
+      "name": "dist/content-studio/index.html",
+      "bytes": 20481,
+      "sha256": "3a957134923133a1f63922f2061ad5cbc9cc8d3c8cc476cd75fb0c44a451606d"
+    },
+    {
+      "name": "dist/content-studio/styles.css",
+      "bytes": 18999,
+      "sha256": "8bc745d3e208e028c728049030d0d2c00e5d3f10a8b7a000a096020b321d6733"
+    },
+    {
+      "name": "scripts/build-content-studio.py",
+      "bytes": 19492,
+      "sha256": "e28b8c705c4199bf657912c732d25f3c334de65e98ca249309a8b8fd211bb6f4"
+    },
+    {
+      "name": "scripts/check-content-costs.cjs",
+      "bytes": 10151,
+      "sha256": "9db3efa7946834b14cf390857d7f23fd3e42f96495a4befb21de4f21a488275d"
+    },
+    {
+      "name": "scripts/validate-content-studio.py",
+      "bytes": 8746,
+      "sha256": "7ee313705c1028c78c4a2dee3fe0abb0ee9bc880151313b0568be895c744a76d"
+    },
+    {
+      "name": "site-target.json",
+      "bytes": 254,
+      "sha256": "8acbe8dc4640ad5b403fa65355a0fa125ffc14142b7dcb1f7ad38105848ddf4e"
+    }
+  ]
+}

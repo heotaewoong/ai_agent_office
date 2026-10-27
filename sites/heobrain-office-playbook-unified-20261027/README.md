@@ -1,5 +1,7 @@
 # HeoBrain AI 오피스 통합 플레이북 (정적 사이트)
 
+최신 통합 설계의 정본은 기존 Sites 연결 저장소의 `content-system/source.json`입니다. 이 폴더의 이전 `dist/`를 최신 원격에 덮어쓰지 마세요. 아래 인계 자료와 실제 최신 소스를 먼저 대조합니다.
+
 세 사이트(complete/#learning-expansion · source-kits/#top3 · ai-office-benchmarks-20261020), `database/` 마크다운 33개, 외부 오픈소스 129개를 합친 플레이북입니다. 빌드 과정 없이 `dist/` 폴더를 그대로 게시하면 됩니다.
 
 ## 파일 구조
@@ -26,8 +28,8 @@
 
 조사·설계 문서입니다. 외부 키트 설치·실행, 유료 API 호출, 계정 연결은 하지 않았습니다. 개인 학습 PDF·강의 원본·개인 드라이브 링크는 넣지 않았습니다.
 
-## 콘텐츠 스튜디오 v7.1 인계
+## 최신 제작 작업실 인계
 
-[기존 Sites의 콘텐츠 가이드](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-studio/) · [문서 README](handoffs/content-studio-v7.1-20261028/README.md) · [정본과 갱신](handoffs/content-studio-v7.1-20261028/SOURCE.md)
+[통합 설계](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#content-system) · [보조 원가·자료 작업실](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-studio/) · [문서와 정본](handoffs/content-studio-v7.1-20261028/SOURCE.md) · [편집 소스 README](handoffs/content-studio-v7.1-20261028/editable-source/README.md)
 
-이 인계 스냅샷은 모델·소스·제작·승인 계약을 보강합니다. 이 폴더의 기존 dist와 Sites 연결 저장소는 별도 소스이므로 기존 파일을 통째로 덮어쓰지 않습니다. Sites 최신 소스에서 추가된 content-studio 경로와 문서를 갱신합니다.
+Sites version10 / source8c6bfca18b48f3a5868431104e4ec878069d8f7e의26문서와55항목 편집 소스를 검토한 스냅샷입니다. source ZIP의 manifest와 실제 재빌드 검사를 보존합니다. 계정·키·운영DB·회원 원문은 없습니다. 실제 앱을 연결하거나 게시·발송·거래를 실행한 결과가 아닙니다.

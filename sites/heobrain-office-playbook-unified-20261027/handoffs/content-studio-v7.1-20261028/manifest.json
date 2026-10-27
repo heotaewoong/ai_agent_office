@@ -1,12 +1,25 @@
 {
   "version": "v7.1 검토 보강판",
   "date": "2026-10-28",
+  "canonical_reference": {
+    "version": "7.2",
+    "url": "https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html",
+    "source": "content-system/source.json",
+    "role": "전체 설계와 도구 선정의 정본; 이 구성요소는 원가 실습·자료 감사·세부 근거 보강",
+    "source_sha256": "de078057cbdbdf65e2b689c6b6b53a7e65a378f644153e63d84f21b3cf8b6a10",
+    "snapshot_included": true
+  },
   "scope": "Planning documents and public-safe metadata; no original third-party PDFs, private studies, credentials or runtime state",
   "files": [
     {
       "name": "brand-fit.md",
-      "bytes": 6942,
-      "sha256": "9bd24a08b860c78156a67e046815dd9a8b0c6c12dc24a5d07a74949b25cedb65"
+      "bytes": 6998,
+      "sha256": "c2a2f0ec092853c0a3e70e1bf268433ed1a7beddd0e6afec40e4e22acae00af0"
+    },
+    {
+      "name": "cost-model.json",
+      "bytes": 5207,
+      "sha256": "3249ca2579552b566c20006d434eb8488be8c750837c57493efff2494a687f00"
     },
     {
       "name": "current-implementation.md",
@@ -19,9 +32,14 @@
       "sha256": "5e87a524a97a3a2821729e2539e72fa71ff65c789925d0071b2e7d0f53644d91"
     },
     {
+      "name": "finishing-audio-rights.md",
+      "bytes": 26398,
+      "sha256": "7cdd47b2f5b13d5d3d58dafea1be347a818b723fecc1321c5624e02d50932e42"
+    },
+    {
       "name": "hub-data.json",
-      "bytes": 129891,
-      "sha256": "194e6ed0df78b4b414524604b87a6d25a3c6f6d06f1942776273d089941a71ba"
+      "bytes": 135909,
+      "sha256": "96f6c98daf10bff753bdd73cd6638902c4a3fb33f44e1d623999b999bf445a4b"
     },
     {
       "name": "input-sources-detail.md",
@@ -34,14 +52,29 @@
       "sha256": "54e46e4333a1c549013992944945799bb54bdc2f683563fb5e42ac31d0bbfe08"
     },
     {
+      "name": "integrated-guide.json",
+      "bytes": 461639,
+      "sha256": "9193e0ab009875c7c20cbc42080a8c4b869990fea19bd526ebb9ca9de8853328"
+    },
+    {
+      "name": "integrated-guide.md",
+      "bytes": 412508,
+      "sha256": "d126c118f24f1c807f6d5b1024e049daf2cff60364923337058474c1d97c4fee"
+    },
+    {
+      "name": "latest-signal-decisions.md",
+      "bytes": 8890,
+      "sha256": "7ba4d4487701cce8084931d1d771209fc8b0fcc67eff3be5c5e2ec472d4ab166"
+    },
+    {
       "name": "master-guide.md",
-      "bytes": 26401,
-      "sha256": "acbdd021186c508532fc4172ee5f0ee492c032299819a72a6fbffef2fd8907db"
+      "bytes": 28473,
+      "sha256": "6e328ea9d95a9f3168602cddbb2f4222940bac015db96be4e183647ce750c76b"
     },
     {
       "name": "models-and-rights.md",
-      "bytes": 15884,
-      "sha256": "6ac012f079d5384ccd7972394d50ab0bf6321c15e4992dd6ca103dbccc412a7e"
+      "bytes": 16057,
+      "sha256": "ff0f601725709a644704bf58b6f7fd499023960ea61b14e5a309ffea33514351"
     },
     {
       "name": "models-research.md",
@@ -55,13 +88,23 @@
     },
     {
       "name": "pipeline-blueprint.json",
-      "bytes": 15352,
-      "sha256": "4ddf7c464fcc295194227ea4c3480258f724ac94b6ba3b9f0b42fda032f6822f"
+      "bytes": 16740,
+      "sha256": "969d1cc16d2d7d99300740bb2065ff5eb86f57a7d69cb910be41e55dad08979b"
     },
     {
       "name": "production-economics.md",
       "bytes": 29734,
       "sha256": "dc73db9bf48c734655e285206efaa9f6584dc00f05636b0218c02d393be912c2"
+    },
+    {
+      "name": "public-signals.json",
+      "bytes": 17506,
+      "sha256": "1153f6ee033b8d0be2012099fc453100fc4b6a1a3a15ef2fa79df25bad2bfa04"
+    },
+    {
+      "name": "public-signals.md",
+      "bytes": 10551,
+      "sha256": "548ed8ea080bce255e696e601d91a456d430c8336715d88dbc8d8f633ef46766"
     },
     {
       "name": "quality-evaluation.md",
@@ -70,8 +113,8 @@
     },
     {
       "name": "README.md",
-      "bytes": 5118,
-      "sha256": "00a72d40e01aa85bd7b03529fdb894fa7b7e1553f3e48c4994ce496287637ab9"
+      "bytes": 7074,
+      "sha256": "de35c756e808f7ad2dca8a09af359eb4b8e1c1e65d2107dca7cfd77128a3dcfb"
     },
     {
       "name": "source-benchmarking.md",
@@ -85,8 +128,8 @@
     },
     {
       "name": "voice-distribution.md",
-      "bytes": 27499,
-      "sha256": "53f3b8697a46f0cf489afbd899db5e5776f17583b505aefceafbc63077557ecb"
+      "bytes": 27674,
+      "sha256": "1607adcc5b66b78791bb3ad58ea2e6c6a0ea303ea48ee31cb852f4fb769b18b8"
     },
     {
       "name": "youtube-benchmark-sample.md",
