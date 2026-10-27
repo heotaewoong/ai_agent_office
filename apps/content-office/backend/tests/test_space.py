@@ -31,9 +31,12 @@ def test_jobs_and_ideas_land_in_their_rooms(tmp_path):
 
 def test_projection_has_no_private_data_or_forbidden_words(tmp_path):
     store = Store(tmp_path)
-    store.create_job({"id": "b1", "title": "제목만", "url": "https://ex.com", "evidence": [], "body": "본문 database/learning-private/secret.md"})
+    store.create_job({"id": "b1", "title": "제목만", "url": "https://ex.com", "body": "본문 database/learning-private/secret.md",
+                      "operator_source_text": "SECRETTEXT",
+                      "evidence": [{"id": "e1", "excerpt": "EVIDENCETEXT", "url": "https://ex.com/private"}]})
     dumped = json.dumps(project_space(store), ensure_ascii=False)
     assert "learning-private" not in dumped and "본문" not in dumped
+    assert not any(w in dumped for w in ("SECRETTEXT", "EVIDENCETEXT", "ex.com/private"))
     assert not any(w in dumped for w in FORBIDDEN)
 
 
@@ -42,3 +45,27 @@ def test_space_endpoint_is_public_read(tmp_path):
     r = client.get("/api/space")
     assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "*"
     assert r.json()["office"]["url"].startswith("http")
+
+
+def test_running_draft_task_marks_editor_running(tmp_path):
+    store = Store(tmp_path)
+    store.enqueue("draft", {}, key="k1")
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE tasks SET state='running'")
+    editor = next(a for a in project_space(store)["agents"] if a["id"] == "editor")
+    assert editor["status"] == "running"
+
+
+def test_event_time_is_kst(tmp_path):
+    store = Store(tmp_path)
+    store.event("lesson_proposed", {})
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE events SET created_at='2026-10-28T00:05:00+00:00'")
+    assert project_space(store)["events"][0]["time"] == "09:05"
+
+
+def test_unscored_idea_is_pending(tmp_path):
+    store = Store(tmp_path)
+    store.save_idea({"title": "미채점"})
+    item = project_space(store)["stages"][0]["items"][0]
+    assert item["state"] == "pending" and item["needsHuman"] is False

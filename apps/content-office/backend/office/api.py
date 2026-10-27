@@ -28,6 +28,7 @@ from .brand import load_brand
 from .gates import run_gates
 from .ideas import rank_ideas, score_idea
 from .packaging import attach_packaging, require_packaging
+from .space import project_space
 
 ALLOWED_ORIGINS = {"http://localhost:3110", "http://127.0.0.1:3110", "http://localhost:8510", "http://127.0.0.1:8510"}
 AGENTS = [
@@ -185,7 +186,6 @@ def create_app(store: Store | None = None):
 
     @app.get("/api/space")
     def space():
-        from .space import project_space
         return JSONResponse(project_space(store, office_url=os.environ.get("OFFICE_URL", "http://localhost:3110"), agents=AGENTS), headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
 
     @app.post("/api/refresh", status_code=202)

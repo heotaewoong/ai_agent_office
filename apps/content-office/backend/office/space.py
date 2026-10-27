@@ -59,7 +59,7 @@ def _clock(created_at):
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(KST).strftime("%H:%M")
-    except ValueError:
+    except (ValueError, TypeError):
         return ""
 
 
@@ -76,18 +76,25 @@ def project_space(store, office_url: str = "http://localhost:3110", agents=None)
                 "agentId": ROOM_AGENTS[room][0], "view": VIEW[room], "actions": list(actions)}
 
     for idea in store.ideas("candidate"):
-        blocked = idea.get("blocked") or []
+        iid, ititle = str(idea.get("id", "")), str(idea.get("title", ""))
+        if "blocked" not in idea:
+            items["inbox"].append(item("inbox", iid, ititle, "pending", "점수 대기", False))
+            continue
+        blocked = idea.get("blocked")
+        blocked = blocked if isinstance(blocked, list) else []
         if blocked:
-            items["inbox"].append(item("inbox", idea["id"], idea["title"], "blocked", "차단 · " + ", ".join(blocked), False))
+            items["inbox"].append(item("inbox", iid, ititle, "blocked", "차단 · " + ", ".join(map(str, blocked)), False))
         else:
-            items["inbox"].append(item("inbox", idea["id"], idea["title"], "candidate", f"후보 · 점수 {idea.get('score', 0)}", True))
+            score = idea.get("score")
+            items["inbox"].append(item("inbox", iid, ititle, "candidate", f"후보 · 점수 {'—' if score is None else score}", True))
     for job in jobs:
-        room = JOB_ROOM.get(job["state"])
+        state = job.get("state", "")
+        room = JOB_ROOM.get(state)
         if room:
-            items[room].append(item(room, job["id"], job["title"], job["state"], STATE_LABELS.get(job["state"], job["state"]),
-                                    job["state"] in NEEDS_HUMAN, _actions(job["state"])))
+            items[room].append(item(room, job.get("id", ""), job.get("title", ""), state, STATE_LABELS.get(state, state),
+                                    state in NEEDS_HUMAN, _actions(state)))
     for lesson in store.lessons("proposed"):
-        items["ops"].append(item("ops", lesson["id"], lesson.get("hypothesis", ""), "proposed", "사람 승인 대기", True))
+        items["ops"].append(item("ops", str(lesson.get("id", "")), lesson.get("hypothesis", ""), "proposed", "사람 승인 대기", True))
     budget = store.budget()
     used = budget["reserved_krw"] + budget["spent_krw"]
     items["ops"].append(item("ops", "budget", f"외부 API 예산 {budget['cap_krw']:,}원 중 {used:,}원 사용·예약", "info", "추정 원가 · 청구 대사 전", False))
@@ -120,12 +127,14 @@ def project_space(store, office_url: str = "http://localhost:3110", agents=None)
     events, flows = [], []
     for ev in store.events(limit=20):
         job = by_job.get(ev.get("job_id"))
-        stage = JOB_ROOM.get(job["state"], "ops") if job else "ops"
-        events.append({"time": _clock(ev["created_at"]), "stageId": stage,
-                       "text": f"{EVENT_TEXT.get(ev['kind'], ev['kind'])} · {job['title'] if job else ''}"})
-        if ev["kind"] in FLOW:
-            src, dst = FLOW[ev["kind"]]
-            flows.append({"from": src, "to": dst, "itemId": ev.get("job_id")})
+        stage = JOB_ROOM.get(job.get("state", ""), "ops") if job else "ops"
+        kind = ev.get("kind", "")
+        text = EVENT_TEXT.get(kind, kind)
+        title = job.get("title", "") if job else ""
+        events.append({"time": _clock(ev.get("created_at", "")), "stageId": stage, "text": f"{text} · {title}" if title else text})
+        if kind in FLOW and ev.get("job_id"):
+            src, dst = FLOW[kind]
+            flows.append({"from": src, "to": dst, "itemId": ev["job_id"]})
 
     summary = store.setting("knowledge_summary", {}) or {}
     # office/knowledge.py 요약 키: documents, unique_documents, sections
