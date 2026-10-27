@@ -1,0 +1,44 @@
+import json
+from fastapi.testclient import TestClient
+from office.api import create_app
+from office.space import project_space
+from office.store import Store
+
+FORBIDDEN = ("게시됨", "자동")
+
+
+def test_empty_store_still_has_five_stages(tmp_path):
+    space = project_space(Store(tmp_path))
+    assert [s["id"] for s in space["stages"]] == ["inbox", "scripts", "creative", "outbox", "ops"]
+    assert all(s["items"] == [] for s in space["stages"][:4])
+    assert space["stages"][4]["items"][0]["id"] == "budget"
+    assert space["version"] == 1 and len(space["agents"]) == 9
+
+
+def test_jobs_and_ideas_land_in_their_rooms(tmp_path):
+    store = Store(tmp_path)
+    store.save_idea({"id": "idea-1", "title": "후보 기획", "score": 82, "blocked": [], "state": "candidate", "reasons": []})
+    store.save_idea({"id": "idea-2", "title": "막힌 기획", "score": 10, "blocked": ["1차 출처 없음"], "state": "candidate", "reasons": []})
+    job = store.create_job({"id": "a1", "title": "원고 작업", "url": "https://ex.com", "evidence": []})
+    store.update_job(job["id"], state="source_approved")
+    space = project_space(store)
+    inbox = {i["title"]: i for i in space["stages"][0]["items"]}
+    assert inbox["후보 기획"]["needsHuman"] is True and "82" in inbox["후보 기획"]["stateLabel"]
+    assert inbox["막힌 기획"]["state"] == "blocked"
+    creative = space["stages"][2]["items"]
+    assert creative[0]["id"] == job["id"] and creative[0]["actions"] == [{"id": "produce", "label": "제작 시작"}] and creative[0]["view"] == "delivery"
+
+
+def test_projection_has_no_private_data_or_forbidden_words(tmp_path):
+    store = Store(tmp_path)
+    store.create_job({"id": "b1", "title": "제목만", "url": "https://ex.com", "evidence": [], "body": "본문 database/learning-private/secret.md"})
+    dumped = json.dumps(project_space(store), ensure_ascii=False)
+    assert "learning-private" not in dumped and "본문" not in dumped
+    assert not any(w in dumped for w in FORBIDDEN)
+
+
+def test_space_endpoint_is_public_read(tmp_path):
+    client = TestClient(create_app(Store(tmp_path)), base_url="http://localhost:8510")
+    r = client.get("/api/space")
+    assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "*"
+    assert r.json()["office"]["url"].startswith("http")

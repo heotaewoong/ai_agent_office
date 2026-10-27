@@ -183,6 +183,11 @@ def create_app(store: Store | None = None):
         articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
         return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store)}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff"}
 
+    @app.get("/api/space")
+    def space():
+        from .space import project_space
+        return JSONResponse(project_space(store, office_url=os.environ.get("OFFICE_URL", "http://localhost:3110"), agents=AGENTS), headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+
     @app.post("/api/refresh", status_code=202)
     def refresh_feed():
         require_open_window()
