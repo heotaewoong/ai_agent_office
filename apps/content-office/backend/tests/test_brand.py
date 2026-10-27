@@ -25,3 +25,27 @@ def test_banned_claims_and_pronunciation(tmp_path):
     brand = write_brand(tmp_path / "c")
     assert banned_claim_hits("이 방법은 수익 보장!", brand) == ["수익 보장"]
     assert tts_text("API와 APIs", brand) == "에이피아이와 APIs"
+
+def test_malformed_brand_config_raises_readable_error(tmp_path):
+    import pytest
+    from office.store import WorkflowError
+    (tmp_path / "glossary.json").write_text("{", encoding="utf-8")
+    with pytest.raises(WorkflowError, match="glossary.json"):
+        load_brand(tmp_path)
+    (tmp_path / "glossary.json").write_text("[]", encoding="utf-8")
+    with pytest.raises(WorkflowError, match="glossary.json"):
+        load_brand(tmp_path)
+    (tmp_path / "glossary.json").write_text(json.dumps({"terms": []}), encoding="utf-8")
+    with pytest.raises(WorkflowError, match="terms"):
+        load_brand(tmp_path)
+    (tmp_path / "glossary.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "banned_claims.json").write_text(json.dumps({"a": 1}), encoding="utf-8")
+    with pytest.raises(WorkflowError, match="banned_claims.json"):
+        load_brand(tmp_path)
+    (tmp_path / "banned_claims.json").write_text(json.dumps(["수익 보장", 3]), encoding="utf-8")
+    with pytest.raises(WorkflowError, match="banned_claims.json"):
+        load_brand(tmp_path)
+
+
+def test_valid_brand_still_loads(tmp_path):
+    assert write_brand(tmp_path / "b")["banned"] == ["수익 보장"]

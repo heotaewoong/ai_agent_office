@@ -26,3 +26,10 @@ def test_shorts_length_and_hook():
 def test_retention_beats():
     assert retention_beats(400) == [60, 180, 360]
     assert retention_beats(150) == [60]
+
+def test_plan_formats_does_not_share_checks_list():
+    from office.formats import FORMATS
+    plans = plan_formats("v1", "v1", ["blog_naver"])
+    plans[0]["checks"].append("x")
+    assert "x" not in FORMATS["blog_naver"]["checks"]
+    assert "x" not in plan_formats("v1", "v1", ["blog_naver"])[0]["checks"]

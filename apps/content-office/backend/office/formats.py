@@ -21,7 +21,7 @@ def plan_formats(source_hash, approved_hash, selected):
     unknown = [name for name in selected if name not in FORMATS]
     if unknown:
         raise WorkflowError("알 수 없는 포맷: " + ", ".join(unknown))
-    return [{"format": name, "parent_hash": source_hash, **FORMATS[name]} for name in selected]
+    return [{"format": name, "parent_hash": source_hash, **FORMATS[name], "checks": list(FORMATS[name]["checks"])} for name in selected]
 
 
 def check_shorts(durations):

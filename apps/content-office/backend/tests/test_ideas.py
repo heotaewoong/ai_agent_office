@@ -86,3 +86,8 @@ def test_duplicate_idea_refreshes_stored_card(store):
     second = store.save_idea(score_idea({"title": "T", "source_url": "u", "primary_sources": 2}))
     assert second["id"] == first["id"] and second["blocked"] == []
     assert len(store.ideas()) == 1 and store.ideas()[0]["blocked"] == []
+
+def test_huge_int_source_count_does_not_overflow():
+    result = score_idea({"title": "X", "primary_sources": 10**400})
+    assert result["score"] == 0.0
+    assert any("1차 출처 없음" in b for b in result["blocked"])

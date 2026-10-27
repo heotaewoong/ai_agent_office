@@ -9,7 +9,7 @@ import re
 
 from .brand import banned_claim_hits
 
-NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
+NUMBER = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)?")
 REALISTIC_KINDS = {"realistic_person", "realistic_event", "realistic_place", "voice_clone_other"}
 YMYL_TOPICS = {"finance", "law", "health"}
 
@@ -67,7 +67,11 @@ def ymyl_persona(packet, assets):
 def run_gates(packet, previous_packets=(), assets=(), brand=None):
     items = metadata_fact_check(packet) + inauthentic_risk(packet, previous_packets) + ymyl_persona(packet, assets)
     if brand:
-        text = " ".join([packet.get("title", ""), packet.get("body", ""), narration(packet)])
+        video = packet.get("video") or {}
+        thumbs = [t for t in (video.get("thumbnails") or []) if isinstance(t, dict)]
+        parts = [packet.get("title"), packet.get("body"), narration(packet), video.get("title"), video.get("description"), " ".join(video.get("tags") or [])]
+        parts += [t.get(key) for t in thumbs for key in ("title", "subtitle")]
+        text = " ".join(part or "" for part in parts)
         items += [{"level": "block", "rule": "banned_claim", "message": f"금지 주장: {hit}"} for hit in banned_claim_hits(text, brand)]
     status = "block" if any(i["level"] == "block" for i in items) else "warn" if items else "pass"
     return {"status": status, "items": items, "disclosure": disclosure_decision(assets)}

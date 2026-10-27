@@ -39,3 +39,25 @@ def test_thousands_separator_matches_plain_number():
     p = packet(title="사용자 1,200개 사례")
     p["evidence"].append({"claim": "집계", "numbers": ["1200"]})
     assert run_gates(p)["status"] == "pass"
+
+def test_multi_group_thousands_separator_matches_evidence():
+    p = packet(title="매출 1,200,000원")
+    p["evidence"].append({"claim": "매출 공시", "numbers": ["1200000"]})
+    assert run_gates(p)["status"] == "pass"
+    q = packet(title="매출 1,200,000원")
+    q["evidence"].append({"claim": "매출 공시", "numbers": ["1200"]})
+    assert run_gates(q)["status"] == "block"
+
+
+def test_banned_claim_in_video_description_blocks():
+    p = packet()
+    p["video"]["description"] = "수익 보장 방법"
+    report = run_gates(p, brand={"banned": ["수익 보장"]})
+    assert report["status"] == "block"
+    assert "banned_claim" in [i["rule"] for i in report["items"]]
+
+
+def test_banned_claim_in_thumbnail_and_none_values_safe():
+    p = packet()
+    p["video"].update({"thumbnails": ["x", {"title": None, "subtitle": "수익 보장"}]})
+    assert "banned_claim" in [i["rule"] for i in run_gates(p, brand={"banned": ["수익 보장"]})["items"]]

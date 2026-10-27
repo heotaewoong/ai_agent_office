@@ -5,24 +5,37 @@ import json
 import re
 from pathlib import Path
 
-from .store import digest
+from .store import WorkflowError, digest
 
 DEFAULT_DIR = Path(__file__).resolve().parents[1] / "config" / "brand"
 
 
 def _json(path, default):
-    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else default
+    if not path.is_file():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        raise WorkflowError(f"브랜드 설정 파일을 읽을 수 없습니다: {path.name}") from None
 
 
 def load_brand(directory=DEFAULT_DIR):
     directory = Path(directory)
     voice_path = directory / "voice.md"
     glossary = _json(directory / "glossary.json", {})
+    if not isinstance(glossary, dict):
+        raise WorkflowError("glossary.json은 {\"terms\": {...}, \"pronunciation\": {...}} 형태의 객체여야 합니다")
+    for key in ("terms", "pronunciation"):
+        if not isinstance(glossary.get(key, {}), dict):
+            raise WorkflowError(f"glossary.json의 {key}는 {{\"표기\": \"값\"}} 형태의 객체여야 합니다")
+    banned = _json(directory / "banned_claims.json", [])
+    if not isinstance(banned, list) or not all(isinstance(claim, str) for claim in banned):
+        raise WorkflowError("banned_claims.json은 문자열 목록([\"금지 주장\", ...])이어야 합니다")
     brand = {
         "voice": voice_path.read_text(encoding="utf-8").strip() if voice_path.is_file() else "",
         "terms": glossary.get("terms", {}),
         "pronunciation": glossary.get("pronunciation", {}),
-        "banned": _json(directory / "banned_claims.json", []),
+        "banned": banned,
     }
     return {**brand, "hash": digest(brand)}
 
