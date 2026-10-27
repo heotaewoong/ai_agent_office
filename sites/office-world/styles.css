@@ -434,3 +434,4 @@ a { color: var(--accent); }
 .item-action:disabled { opacity: 0.5; cursor: default; }
 .panel-result { display: block; margin-top: 6px; font-size: 12px; color: #ff8f8f; }
 .panel-result.ok { color: #6fe0b0; }
+.panel-result:empty { display: none; }

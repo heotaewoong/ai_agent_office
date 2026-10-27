@@ -30,6 +30,9 @@
     agents: [],            // 아바타가 붙은 동료 목록
     view: 'overview',      // 'overview' | 'walk'
     selectedStage: null,
+    embedFocus: null,
+    embedResult: null,
+    pendingActions: new Set(),
   };
 
   const PALETTE = ['#f2a444', '#4f8df7', '#8b6cf0', '#e65fb8', '#2ec4a6', '#ff7a59', '#59c3ff'];
@@ -1082,7 +1085,20 @@
       $('panel-body').addEventListener('click', (e) => {
         if (!embed.enabled) return;
         const act = e.target.closest('[data-action]');
-        if (act) { embed.post({ type: 'action', action: act.dataset.action, itemId: act.dataset.item }); act.disabled = true; return; }
+        if (act) {
+          const key = `${act.dataset.item}:${act.dataset.action}`;
+          if (space.pendingActions.has(key)) return;
+          embed.post({ type: 'action', action: act.dataset.action, itemId: act.dataset.item });
+          space.pendingActions.add(key);
+          space.embedResult = null;
+          act.disabled = true;
+          setTimeout(() => {
+            if (!space.pendingActions.delete(key)) return;
+            space.embedResult = { ok: false, message: '응답이 없습니다' };
+            if (space.selectedStage) hud.openStage(space.selectedStage, true);
+          }, 15000);
+          return;
+        }
         const op = e.target.closest('[data-open]');
         if (op) embed.post({ type: 'open', view: op.dataset.open, itemId: op.dataset.item });
       });
@@ -1192,10 +1208,10 @@
       const agentName = (aid) => { const a = space.agents.find((x) => x.id === aid); return a ? `${a.name} (${a.engine})` : ''; };
       $('panel-body').innerHTML = st.items.length ? st.items.map((it) => {
         const cls = it.needsHuman ? 'human' : /fail|error/.test(it.state) ? 'failed' : /writing|producing|research|measuring/.test(it.state) ? 'running' : '';
-        const acts = embed.enabled ? `<div class="item-actions">${it.actions.map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}">${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}">오피스에서 열기</button>` : ''}</div>` : '';
-        return `<div class="item" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div><div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
+        const acts = embed.enabled ? `<div class="item-actions">${(data.source === 'live' ? it.actions : []).map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}"${space.pendingActions.has(it.id + ':' + a.id) ? ' disabled' : ''}>${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}">오피스에서 열기</button>` : ''}</div>` : '';
+        return `<div class="item${space.embedFocus === it.id ? ' active' : ''}" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div><div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
       }).join('') : '<p class="panel-note">이 단계에 등록된 작업이 없습니다.</p>';
-      $('panel-foot').innerHTML = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener">오피스에서 열기</a>` : ''}<span class="panel-note">${embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.'}</span><span class="panel-result" role="status"></span>`;
+      $('panel-foot').innerHTML = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener">오피스에서 열기</a>` : ''}<span class="panel-note">${embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.'}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
       panel.hidden = false;
       if (!silent) {
         this.cards.forEach((el, sid) => el.classList.toggle('active', sid === id));
@@ -1344,7 +1360,7 @@
     init() {
       if (!this.enabled) return;
       window.addEventListener('message', (event) => {
-        if (event.origin !== location.origin) return;
+        if (event.origin !== location.origin || event.source !== window.parent) return;
         const m = event.data;
         if (!m || m.source !== 'content-office') return;
         if (this.handler) this.handler(m);
@@ -1353,14 +1369,14 @@
         if (m.type === 'focus') {
           const st = space.stages.find((s) => s.items.some((it) => it.id === m.itemId));
           if (!st) return;
+          space.embedFocus = m.itemId;
           hud.openStage(st.id);
-          document.querySelectorAll('#panel-body .item[data-item-id]').forEach((el) => el.classList.toggle('active', el.dataset.itemId === m.itemId));
         } else if (m.type === 'refresh') {
           data.load(false);
         } else if (m.type === 'result') {
-          const out = document.querySelector('#panel-foot .panel-result');
-          if (out) { out.textContent = String(m.message || ''); out.className = m.ok ? 'panel-result ok' : 'panel-result'; }
-          document.querySelectorAll('#panel-body .item-action[disabled]').forEach((b) => { b.disabled = false; });
+          space.embedResult = { ok: !!m.ok, message: String(m.message || '') };
+          space.pendingActions.clear();
+          if (space.selectedStage) hud.openStage(space.selectedStage, true);
         }
       });
     },
