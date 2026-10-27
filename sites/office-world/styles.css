@@ -426,3 +426,11 @@ a { color: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   .card, .ticker { transition: none; }
 }
+
+/* embed 모드 */
+.item.active { box-shadow: inset 3px 0 0 var(--stage, #4f8df7); background: rgba(255, 255, 255, 0.06); }
+.item-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.item-action { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--stage, #4f8df7); background: transparent; color: inherit; cursor: pointer; }
+.item-action:disabled { opacity: 0.5; cursor: default; }
+.panel-result { display: block; margin-top: 6px; font-size: 12px; color: #ff8f8f; }
+.panel-result.ok { color: #6fe0b0; }
