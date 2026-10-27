@@ -69,3 +69,11 @@ def test_non_finite_analytics_number_is_none():
     from office.analytics import _number
     assert _number("nan") is None
     assert _number("inf") is None
+
+
+def test_parse_studio_text_skips_total_and_blank_rows():
+    from office.analytics import parse_studio_text
+    text = "\ufeffContent,Views,Impressions click-through rate (%),Average percentage viewed (%)\nabc123,1200,4.5%,38.2%\nTotal,9999,,\n,,,\n"
+    rows = parse_studio_text(text)
+    assert [r["external_id"] for r in rows] == ["abc123"]
+    assert rows[0]["views"] == 1200 and rows[0]["ctr"] == 4.5

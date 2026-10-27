@@ -6,6 +6,7 @@ CTR·노출수는 YouTube Analytics API에 없고 Reporting API 대량 보고서
 from __future__ import annotations
 
 import csv
+import io
 import math
 import statistics
 from pathlib import Path
@@ -35,17 +36,25 @@ def _number(value):
     return number if number is None or math.isfinite(number) else None
 
 
-def parse_studio_csv(path):
+def _parse_rows(reader):
     rows = []
-    with Path(path).open(encoding="utf-8-sig", newline="") as handle:
-        for raw in csv.DictReader(handle):
-            row = {}
-            for key, names in COLUMNS.items():
-                cell = next((raw[n] for n in names if n in raw), None)
-                row[key] = cell.strip() if key == "external_id" and cell else _number(cell) if cell is not None else None
-            if row["external_id"] and row["external_id"].lower() not in ("total", "합계"):
-                rows.append(row)
+    for raw in reader:
+        row = {}
+        for key, names in COLUMNS.items():
+            cell = next((raw[n] for n in names if n in raw), None)
+            row[key] = cell.strip() if key == "external_id" and cell else _number(cell) if cell is not None else None
+        if row["external_id"] and row["external_id"].lower() not in ("total", "합계"):
+            rows.append(row)
     return rows
+
+
+def parse_studio_csv(path):
+    with Path(path).open(encoding="utf-8-sig", newline="") as handle:
+        return _parse_rows(csv.DictReader(handle))
+
+
+def parse_studio_text(text):
+    return _parse_rows(csv.DictReader(io.StringIO(text.lstrip("\ufeff"))))
 
 
 def baseline(snapshots):

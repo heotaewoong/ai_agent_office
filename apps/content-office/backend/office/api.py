@@ -23,7 +23,7 @@ from .bootstrap import default_store
 from .feeds import rank_articles
 from .store import Store, WorkflowError, canonical, digest, identifier, now
 from .runtime import window_open
-from .analytics import baseline, propose_lessons
+from .analytics import baseline, parse_studio_text, propose_lessons
 from .brand import load_brand
 from .gates import run_gates
 from .ideas import rank_ideas, score_idea
@@ -108,6 +108,13 @@ class SnapshotInput(BaseModel):
         if any(isinstance(v, float) and not math.isfinite(v) for v in value.values()):
             raise ValueError("지표 값은 유한한 숫자여야 합니다")
         return value
+
+
+class StudioCsvInput(BaseModel):
+    channel: Literal["youtube_long", "shorts", "blog_tistory", "blog_naver", "newsletter"]
+    period: Literal["24h", "7d", "28d"]
+    csv: str = Field(min_length=1, max_length=2_000_000)
+    job_id: str | None = None
 
 
 class LessonReview(BaseModel):
@@ -433,6 +440,23 @@ def create_app(store: Store | None = None):
         saved = store.save_snapshot(snapshot.channel, snapshot.external_id, snapshot.period, snapshot.metrics, snapshot.job_id)
         base = baseline([s for s in store.snapshots(snapshot.channel) if s["period"] == snapshot.period and s["id"] != saved["id"]])
         return {"snapshot": saved, "lessons": [store.add_lesson(lesson) for lesson in propose_lessons(saved, base)]}
+
+    @app.post("/api/analytics/studio-csv")
+    def upload_studio_csv(body: StudioCsvInput):
+        rows = parse_studio_text(body.csv)
+        if not rows:
+            raise WorkflowError("CSV에서 저장할 행을 찾지 못했습니다. Studio '콘텐츠' 표를 그대로 내보낸 파일인지 확인하세요")
+        saved = [
+            store.save_snapshot(body.channel, row["external_id"], body.period, {k: v for k, v in row.items() if k != "external_id"}, body.job_id)
+            for row in rows
+        ]
+        lessons = {}
+        for snap in saved:
+            base = baseline([s for s in store.snapshots(body.channel) if s["period"] == body.period and s["id"] != snap["id"]])
+            for lesson in propose_lessons(snap, base):
+                added = store.add_lesson(lesson)
+                lessons[added["id"]] = added
+        return {"snapshots": saved, "lessons": list(lessons.values())}
 
     @app.get("/api/lessons")
     def list_lessons():
