@@ -247,3 +247,34 @@ export type KnowledgeSearch = {
   summary: KnowledgeSummary;
   results: KnowledgeResult[];
 };
+
+export type Idea = {
+  id: string;
+  title: string;
+  source_url?: string;
+  state: "candidate" | "selected";
+  score: number;
+  outlier_band: string;
+  reasons: string[];
+  blocked: string[];
+};
+export type Lesson = {
+  id: string;
+  kind: string;
+  hypothesis: string;
+  state: "proposed" | "approved" | "rejected";
+  weight_change?: { factor: string; delta: number } | null;
+};
+export type PackagingBrief = {
+  titles: string[];
+  thumbnails: { text: string; visual: string }[];
+  hook: string;
+  logline: string;
+  reasons: string[];
+  chosen_title?: string;
+};
+export type GateReport = {
+  status: "pass" | "warn" | "block";
+  items: { level: "warn" | "block"; rule: string; message: string }[];
+  disclosure: { youtube_altered_content: boolean; reasons: string[] };
+};
