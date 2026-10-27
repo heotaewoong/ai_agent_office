@@ -15,7 +15,7 @@ type Action = (
   label: string,
   execute: () => Promise<unknown>,
   success: string,
-) => Promise<void>;
+) => Promise<void | boolean>;
 export type IntakeDraft = {
   text: string;
   version: string | null;

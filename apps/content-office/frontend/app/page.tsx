@@ -29,6 +29,7 @@ import {
   toggleArticle,
 } from "../lib/workflow";
 import { Icon } from "./icons";
+import { WorldView } from "./world-view";
 import {
   EvidenceIntake,
   IdeaBank,
@@ -39,7 +40,7 @@ import {
   type IntakeDraft,
 } from "./support-panels";
 
-type View = "news" | "studio" | "delivery" | "activity";
+type View = "news" | "studio" | "delivery" | "world" | "activity";
 type LocalDraft = { title: string; body: string; baseHash?: string };
 const views: { id: View; title: string; icon: string; en: string }[] = [
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
@@ -50,6 +51,7 @@ const views: { id: View; title: string; icon: string; en: string }[] = [
     icon: "package",
     en: "PRODUCTION & DELIVERY",
   },
+  { id: "world", title: "오피스 월드", icon: "map", en: "OFFICE WORLD" },
   { id: "activity", title: "운영 기록", icon: "activity", en: "OFFICE LOG" },
 ];
 const defaultSelections: Selections = {
@@ -195,8 +197,8 @@ export default function Office() {
     label: string,
     execute: () => Promise<unknown>,
     success: string,
-  ) {
-    if (busy || !connected) return;
+  ): Promise<boolean> {
+    if (busy || !connected) return false;
     setBusy(label);
     setError("");
     setNotice("");
@@ -204,6 +206,7 @@ export default function Office() {
       await execute();
       await Promise.all([loadDashboard(), loadJob()]);
       setNotice(success);
+      return true;
     } catch (cause) {
       const message =
         cause instanceof Error ? cause.message : "요청을 처리하지 못했습니다.";
@@ -219,6 +222,7 @@ export default function Office() {
           );
         }
       } else setError(message);
+      return false;
     } finally {
       setBusy("");
     }
@@ -353,7 +357,9 @@ export default function Office() {
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
                     : view === "delivery"
                       ? "완성된 결과를 확인하고, 내가 승인한 버전으로 출고하세요."
-                      : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
+                      : view === "world"
+                        ? "지금 진행 중인 모든 작업을 한 공간에서 보고, 바로 이동하거나 요청하세요."
+                        : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
               </p>
             </div>
             <div className="heading-actions">
@@ -670,6 +676,28 @@ export default function Office() {
                 </div>
               )}
 
+              {view === "world" && (
+                <WorldView
+                  activeId={activeId}
+                  busy={!!busy || !connected}
+                  onOpen={(v, id) => {
+                    if (id && dashboard?.jobs.some((j) => j.id === id))
+                      setActiveId(id);
+                    setView(v);
+                  }}
+                  onAction={async (a, id) => {
+                    const ok = await action(
+                      a === "draft" ? "원고 생성" : "제작 시작",
+                      () => (a === "draft" ? api.draft(id) : api.produce(id)),
+                      a === "draft"
+                        ? "원고 생성 작업을 요청했습니다."
+                        : "제작을 요청했습니다.",
+                    );
+                    if (!ok) throw new Error("요청을 처리하지 못했습니다.");
+                  }}
+                />
+              )}
+
               {view === "activity" && (
                 <Activity
                   dashboard={dashboard}
@@ -848,7 +876,7 @@ type Action = (
   label: string,
   execute: () => Promise<unknown>,
   success: string,
-) => Promise<void>;
+) => Promise<void | boolean>;
 
 function Studio({
   job,
