@@ -52,6 +52,9 @@ class Store:
                 CREATE TABLE IF NOT EXISTS costs(id TEXT PRIMARY KEY, kind TEXT NOT NULL, state TEXT NOT NULL, reserved_krw INTEGER NOT NULL, actual_krw INTEGER, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS cache(key TEXT PRIMARY KEY, data TEXT NOT NULL, created_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS drafts(id TEXT PRIMARY KEY, job_id TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS ideas(id TEXT PRIMARY KEY, dedup_key TEXT UNIQUE NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY, channel TEXT NOT NULL, external_id TEXT NOT NULL, period TEXT NOT NULL, job_id TEXT, data TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(channel, external_id, period));
+                CREATE TABLE IF NOT EXISTS lessons(id TEXT PRIMARY KEY, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
             """)
             db.execute("INSERT OR IGNORE INTO settings VALUES('budget_cap',?)", (str(budget_krw),))
 
@@ -347,6 +350,85 @@ class Store:
             else:
                 rows = db.execute("SELECT * FROM events ORDER BY id DESC LIMIT ?", (limit,))
             return [{**dict(r), "data": json.loads(r["data"])} for r in rows]
+
+    # --- 기획 선택⓪ · 성과 스냅샷 · 교훈 (AI 콘텐츠 에이전트 v6)
+    @staticmethod
+    def _idea_key(card):
+        title = " ".join(str(card.get("title", "")).lower().split())
+        return digest({"title": title, "source_url": card.get("source_url", "")})
+
+    def save_idea(self, card):
+        if not str(card.get("title", "")).strip():
+            raise WorkflowError("기획 제목이 필요합니다")
+        key = self._idea_key(card)
+        with self.connection(transaction=True) as db:
+            row = db.execute("SELECT data FROM ideas WHERE dedup_key=?", (key,)).fetchone()
+            if row:
+                return json.loads(row[0])
+            idea = {**card, "id": identifier("idea"), "state": "candidate"}
+            db.execute("INSERT INTO ideas VALUES(?,?,?,?,?,?)", (idea["id"], key, "candidate", canonical(idea), now(), now()))
+            self._event(db, "idea_saved", {"idea_id": idea["id"], "title": idea["title"]})
+            return idea
+
+    def ideas(self, state=None):
+        with self.connection() as db:
+            rows = db.execute("SELECT data FROM ideas WHERE (? IS NULL OR state=?) ORDER BY created_at", (state, state)).fetchall()
+        return [json.loads(r[0]) for r in rows]
+
+    def select_idea(self, idea_id, actor):
+        with self.connection(transaction=True) as db:
+            row = db.execute("SELECT data FROM ideas WHERE id=?", (idea_id,)).fetchone()
+            if not row:
+                raise WorkflowError("기획을 찾을 수 없습니다")
+            idea = json.loads(row[0])
+            if idea.get("blocked"):
+                raise WorkflowError("정책·근거 검사에서 막힌 기획은 선택할 수 없습니다")
+            idea.update(state="selected", selected_by=actor, selected_at=now())
+            db.execute("UPDATE ideas SET state='selected', data=?, updated_at=? WHERE id=?", (canonical(idea), now(), idea_id))
+            self._event(db, "idea_selected", {"idea_id": idea_id, "actor": actor})
+            return idea
+
+    @staticmethod
+    def _snapshot(row):
+        return {"id": row["id"], "channel": row["channel"], "external_id": row["external_id"], "period": row["period"], "job_id": row["job_id"], "metrics": json.loads(row["data"])}
+
+    def save_snapshot(self, channel, external_id, period, metrics, job_id=None):
+        if period not in ("24h", "7d", "28d"):
+            raise WorkflowError("성과 측정 구간은 24h·7d·28d 중 하나입니다")
+        with self.connection(transaction=True) as db:
+            db.execute("INSERT INTO snapshots VALUES(?,?,?,?,?,?,?) ON CONFLICT(channel, external_id, period) DO UPDATE SET data=excluded.data, job_id=excluded.job_id, created_at=excluded.created_at",
+                       (identifier("snap"), channel, external_id, period, job_id, canonical(metrics), now()))
+            row = db.execute("SELECT * FROM snapshots WHERE channel=? AND external_id=? AND period=?", (channel, external_id, period)).fetchone()
+            return self._snapshot(row)
+
+    def snapshots(self, channel=None):
+        with self.connection() as db:
+            rows = db.execute("SELECT * FROM snapshots WHERE (? IS NULL OR channel=?) ORDER BY created_at", (channel, channel)).fetchall()
+        return [self._snapshot(r) for r in rows]
+
+    def add_lesson(self, lesson):
+        record = {**lesson, "id": identifier("lesson"), "state": "proposed"}
+        with self.connection(transaction=True) as db:
+            db.execute("INSERT INTO lessons VALUES(?,?,?,?,?)", (record["id"], "proposed", canonical(record), now(), now()))
+            self._event(db, "lesson_proposed", {"lesson_id": record["id"], "kind": record.get("kind")})
+        return record
+
+    def review_lesson(self, lesson_id, decision, actor):
+        if decision not in ("approved", "rejected"):
+            raise WorkflowError("교훈 검토는 approved 또는 rejected입니다")
+        with self.connection(transaction=True) as db:
+            row = db.execute("SELECT data FROM lessons WHERE id=?", (lesson_id,)).fetchone()
+            if not row:
+                raise WorkflowError("교훈을 찾을 수 없습니다")
+            record = {**json.loads(row[0]), "state": decision, "reviewed_by": actor, "reviewed_at": now()}
+            db.execute("UPDATE lessons SET state=?, data=?, updated_at=? WHERE id=?", (decision, canonical(record), now(), lesson_id))
+            self._event(db, "lesson_reviewed", {"lesson_id": lesson_id, "decision": decision, "actor": actor})
+            return record
+
+    def lessons(self, state=None):
+        with self.connection() as db:
+            rows = db.execute("SELECT data FROM lessons WHERE (? IS NULL OR state=?) ORDER BY created_at", (state, state)).fetchall()
+        return [json.loads(r[0]) for r in rows]
 
     @staticmethod
     def _budget(db):

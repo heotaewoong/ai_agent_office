@@ -33,3 +33,23 @@ def test_only_approved_lessons_change_weights():
     proposed = {"state": "proposed", "weight_change": {"factor": "demand", "delta": 30}}
     assert score_idea(card, lessons=[proposed])["score"] == base
     assert score_idea(card, lessons=[{**proposed, "state": "approved"}])["score"] > base
+
+
+def test_duplicate_idea_is_stored_once(store):
+    first = store.save_idea({"title": "Claude 에이전트 팀 실전", "source_url": "https://example.com/a"})
+    again = store.save_idea({"title": "  claude 에이전트 팀   실전 ", "source_url": "https://example.com/a"})
+    assert first["id"] == again["id"]
+    assert len(store.ideas()) == 1
+
+
+def test_blocked_idea_cannot_be_selected(store):
+    idea = store.save_idea(score_idea({"title": "근거 없는 주제", "primary_sources": 0}))
+    with pytest.raises(WorkflowError, match="막힌 기획"):
+        store.select_idea(idea["id"], "local-operator")
+
+
+def test_selected_idea_records_actor(store):
+    idea = store.save_idea(score_idea({"title": "근거 있는 주제", "primary_sources": 2}))
+    selected = store.select_idea(idea["id"], "local-operator")
+    assert selected["state"] == "selected" and selected["selected_by"] == "local-operator"
+    assert store.ideas("selected")[0]["id"] == idea["id"]
