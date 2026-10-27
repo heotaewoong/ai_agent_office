@@ -30,6 +30,7 @@ import {
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
+import { PerformancePanel } from "./performance-panel";
 import {
   EvidenceIntake,
   IdeaBank,
@@ -2196,6 +2197,7 @@ function Activity({
   return (
     <div className="activity-page">
       <BudgetStrip budget={dashboard.budget} />
+      <PerformancePanel />
       <section className="feed-panel">
         <div className="section-heading">
           <div>

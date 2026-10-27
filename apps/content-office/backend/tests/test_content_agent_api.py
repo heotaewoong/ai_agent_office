@@ -94,3 +94,19 @@ def test_invalid_packaging_and_snapshot_inputs_return_422(context):
     assert store.snapshots() == []
     assert client.post("/api/ideas", json={"title": "긴 URL", "source_url": "https://e.com/" + "a" * 2000}, headers=headers).status_code == 422
     assert client.post("/api/ideas", json={"title": "큰 조회수", "views": 10**13}, headers=headers).status_code == 422
+
+
+def test_studio_csv_upload_saves_snapshots_and_counts(context):
+    store, client, headers = context
+    csv = "Content,Views,Impressions click-through rate (%),Average percentage viewed (%)\nvid1,1000,5.0%,40%\nvid2,500,2.0%,45%\nTotal,1500,,\n"
+    r = client.post("/api/analytics/studio-csv", json={"channel": "youtube_long", "period": "7d", "csv": csv}, headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert [s["external_id"] for s in body["snapshots"]] == ["vid1", "vid2"]
+    assert len(store.snapshots("youtube_long")) == 2
+
+
+def test_studio_csv_without_rows_is_409(context):
+    _, client, headers = context
+    r = client.post("/api/analytics/studio-csv", json={"channel": "shorts", "period": "24h", "csv": "Content,Views\nTotal,1\n"}, headers=headers)
+    assert r.status_code == 409
