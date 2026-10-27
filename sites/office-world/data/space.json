@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "generatedAt": "2026-10-28T09:40:00+09:00",
+  "office": { "name": "HeoBrain 콘텐츠 오피스", "url": "http://localhost:3110" },
+  "brain": { "name": "공유 기억", "notes": 3192, "sources": 111, "label": "과거 기획·근거" },
+  "stages": [
+    {
+      "id": "inbox",
+      "name": "오늘의 뉴스",
+      "approval": "⓪ 기획 선택",
+      "color": "#f2a444",
+      "url": "http://localhost:3110/news",
+      "items": [
+        { "id": "idea-31", "title": "OpenAI 에이전트 빌더 공개, 노코드 워크플로 경쟁", "state": "candidate", "stateLabel": "후보 · 점수 82", "needsHuman": true, "agentId": "a1" },
+        { "id": "idea-32", "title": "구글 Gemini 3 발표 정리", "state": "candidate", "stateLabel": "후보 · 점수 77", "needsHuman": true, "agentId": "a1" },
+        { "id": "idea-33", "title": "네이버 클립 수익화 정책 변경", "state": "candidate", "stateLabel": "후보 · 점수 64", "needsHuman": true, "agentId": "a1" },
+        { "id": "idea-29", "title": "AI 에이전트 보안 사고 사례 3건", "state": "blocked", "stateLabel": "차단 · 1차 출처 없음", "needsHuman": false, "agentId": "a1" }
+      ]
+    },
+    {
+      "id": "scripts",
+      "name": "원고 작업실",
+      "approval": "① 원고 승인",
+      "color": "#4f8df7",
+      "url": "http://localhost:3110/studio",
+      "items": [
+        { "id": "job-118", "title": "Claude Code 2.0 업무 자동화 5가지", "state": "writing", "stateLabel": "원고 v2 · 비평 중", "needsHuman": false, "agentId": "a2" },
+        { "id": "job-117", "title": "Cursor vs Codex, 1주일 실사용 비교", "state": "review", "stateLabel": "사람 승인 대기 ①", "needsHuman": true, "agentId": "a3" },
+        { "id": "job-116", "title": "RSS 하나로 뉴스레터 만드는 법", "state": "research", "stateLabel": "근거 조사 · 문단 7개", "needsHuman": false, "agentId": "a2" }
+      ]
+    },
+    {
+      "id": "creative",
+      "name": "제작 스튜디오",
+      "approval": "영상 검토",
+      "color": "#8b6cf0",
+      "url": "http://localhost:3110/studio",
+      "items": [
+        { "id": "job-115", "title": "AI 썸네일 A/B, 3안 비교 결과", "state": "producing", "stateLabel": "음성 6장면 완료 · MP4 인코딩", "needsHuman": false, "agentId": "a4" },
+        { "id": "job-114", "title": "n8n으로 블로그 자동 초안", "state": "producing", "stateLabel": "카드 4장 · 체크리스트 PDF", "needsHuman": false, "agentId": "a5" },
+        { "id": "job-113", "title": "노션 AI 회의록 정리 루틴", "state": "failed", "stateLabel": "실패 · 음성 60초 초과, 재시도 필요", "needsHuman": true, "agentId": "a4" }
+      ]
+    },
+    {
+      "id": "outbox",
+      "name": "제작·출고함",
+      "approval": "② 출고 승인 · ③ 회차",
+      "color": "#e65fb8",
+      "url": "http://localhost:3110/outbox",
+      "items": [
+        { "id": "job-112", "title": "GPT 스토어 대신 쓰는 개인 에이전트 3종", "state": "ready", "stateLabel": "썸네일 5안 · 사람 영상 검토 대기", "needsHuman": true, "agentId": "a6" },
+        { "id": "job-111", "title": "AI 뉴스레터 10월 4주차", "state": "approved", "stateLabel": "출고 승인 ② 완료 · 수동 전달 대기", "needsHuman": false, "agentId": "a6" },
+        { "id": "job-110", "title": "쇼츠: 30초로 보는 에이전트 오피스", "state": "approved", "stateLabel": "ZIP 패키지 준비 · 수동 전달 대기", "needsHuman": false, "agentId": "a6" }
+      ]
+    },
+    {
+      "id": "ops",
+      "name": "운영 기록",
+      "approval": "교훈 승인",
+      "color": "#2ec4a6",
+      "url": "http://localhost:3110/ops",
+      "items": [
+        { "id": "snap-24h", "title": "10/27 출고 2건 · 24시간 스냅샷", "state": "measuring", "stateLabel": "노출·CTR 수집 중", "needsHuman": false, "agentId": "a7" },
+        { "id": "lesson-9", "title": "교훈 후보: 훅 첫 문장에 숫자", "state": "proposed", "stateLabel": "사람 승인 대기", "needsHuman": true, "agentId": "a7" },
+        { "id": "budget", "title": "외부 API 예산 10,000원 중 6,420원 예약", "state": "info", "stateLabel": "추정 원가 · 청구 대사 전", "needsHuman": false, "agentId": "a8" }
+      ]
+    }
+  ],
+  "agents": [
+    { "id": "a1", "name": "수집 담당", "engine": "Codex", "model": "gpt-5-codex", "stageId": "inbox", "status": "running", "task": "공식 RSS 후보 12편 발행일·중복 확인" },
+    { "id": "a2", "name": "원고 작성", "engine": "Claude Code", "model": "claude-sonnet-5-5", "stageId": "scripts", "status": "running", "task": "job-118 원고 v2 수정" },
+    { "id": "a3", "name": "비평·평가", "engine": "Claude Code", "model": "claude-opus-5-5", "stageId": "scripts", "status": "waiting", "task": "job-117 ① 원고 승인 답 대기" },
+    { "id": "a4", "name": "영상 제작", "engine": "Gemini CLI", "model": "gemini-2.5-pro", "stageId": "creative", "status": "running", "task": "job-115 장면 음성 → MP4" },
+    { "id": "a5", "name": "카드·PDF", "engine": "Codex", "model": "gpt-5-codex", "stageId": "creative", "status": "idle", "task": "job-114 카드 4장 완료, 다음 작업 대기" },
+    { "id": "a6", "name": "출고 패키징", "engine": "Hermes", "model": "hermes-4", "stageId": "outbox", "status": "waiting", "task": "job-112 사람 영상 검토 대기" },
+    { "id": "a7", "name": "성과 측정", "engine": "Codex", "model": "gpt-5-codex", "stageId": "ops", "status": "running", "task": "24시간 스냅샷 수집" },
+    { "id": "a8", "name": "예산·큐 관리", "engine": "Claude Code", "model": "claude-haiku-5-5", "stageId": "ops", "status": "idle", "task": "큐 비어 있음" }
+  ],
+  "events": [
+    { "time": "09:38", "stageId": "creative", "text": "제작 스튜디오가 'AI 썸네일 A/B' 장면 6개의 음성을 보존하고 MP4 인코딩을 시작했습니다." },
+    { "time": "09:35", "stageId": "scripts", "text": "원고 작업실이 'Claude Code 2.0 업무 자동화' 원고 v2를 별도 비평·평가에 보냈습니다." },
+    { "time": "09:31", "stageId": "outbox", "text": "제작·출고함에 'AI 뉴스레터 10월 4주차' ZIP 패키지가 준비되었습니다. 플랫폼 전달은 사람이 합니다." },
+    { "time": "09:27", "stageId": "inbox", "text": "오늘의 뉴스가 공식 RSS에서 후보 3편을 골라 ⓪ 기획 선택을 기다립니다." },
+    { "time": "09:22", "stageId": "ops", "text": "운영 기록이 외부 API 예산 6,420원을 예약했습니다. 추정 원가이며 청구 대사 전입니다." },
+    { "time": "09:18", "stageId": "scripts", "text": "비평·평가 담당이 공유 기억에서 '비교 원고 독자 기준' 메모 2건을 확인했습니다." },
+    { "time": "09:12", "stageId": "creative", "text": "'노션 AI 회의록 정리 루틴' 음성이 60초를 넘어 제작이 중단되었습니다. 운영 기록에서 재시도할 수 있습니다." },
+    { "time": "09:05", "stageId": "ops", "text": "10/27 출고 2건의 24시간 스냅샷 수집을 시작했습니다." },
+    { "time": "08:58", "stageId": "outbox", "text": "'GPT 스토어 대신 쓰는 개인 에이전트 3종' 썸네일 5안이 생성되어 사람 검토를 기다립니다." },
+    { "time": "08:50", "stageId": "inbox", "text": "'AI 에이전트 보안 사고 사례 3건'은 1차 출처가 없어 후보에서 차단되었습니다." }
+  ],
+  "flows": [
+    { "from": "scripts", "to": "creative", "itemId": "job-115" },
+    { "from": "creative", "to": "outbox", "itemId": "job-111" },
+    { "from": "inbox", "to": "scripts", "itemId": "job-118" },
+    { "from": "outbox", "to": "ops", "itemId": "snap-24h" }
+  ]
+}

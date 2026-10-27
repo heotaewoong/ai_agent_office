@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HeoBrain 오피스 월드</title>
+<meta name="description" content="콘텐츠 오피스의 작업 상태를 우주 위에 떠 있는 잔디 섬 마을로 보여주는 3D 관제 공간">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23070b1a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%237fe3ff'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%234f8df7' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="scene" aria-label="오피스 월드 3D 공간"></canvas>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-name" id="office-name">HeoBrain 오피스 월드</div>
+    <div class="brand-meta">
+      <span class="source-pill" id="source-pill">예시 데이터</span>
+      <span id="updated-at">갱신 —</span>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button type="button" class="reset-btn" id="btn-reset" hidden>← 전체 보기<span class="kbd">Esc</span></button>
+  <div class="view-switch" role="group" aria-label="시점">
+    <button type="button" id="btn-overview" aria-pressed="true">관제<span class="kbd">M</span></button>
+    <button type="button" id="btn-walk" class="walk-only" aria-pressed="false">걷기<span class="kbd">M</span></button>
+  </div>
+</header>
+
+<div class="cards" id="cards"></div>
+
+<aside class="panel" id="panel" hidden aria-live="polite">
+  <div class="panel-head">
+    <div>
+      <h2 id="panel-title">섬</h2>
+      <div class="panel-sub" id="panel-sub"></div>
+    </div>
+    <button type="button" class="panel-close" id="panel-close" aria-label="닫기">✕</button>
+  </div>
+  <div class="panel-body" id="panel-body"></div>
+  <div class="panel-foot" id="panel-foot"></div>
+</aside>
+
+<div class="ticker" id="ticker" aria-live="polite">
+  <span class="ticker-stage" id="ticker-stage">오피스</span>
+  <span class="ticker-time" id="ticker-time"></span>
+  <span class="ticker-text" id="ticker-text">데이터를 읽는 중입니다.</span>
+</div>
+
+<div class="help" id="help" hidden>WASD 이동 · Shift 달리기 · Space 점프 · 드래그 시선 · E 동료 확인 · R 카메라 복귀</div>
+<button type="button" class="exit-btn" id="btn-exit" hidden>↩ 공간에서 나가기<span class="kbd">Esc</span></button>
+<div class="tags" id="tags"></div>
+
+<div class="minimap">
+  <canvas id="minimap" width="336" height="252"></canvas>
+  <div class="minimap-label"><span>MAP</span><span id="minimap-zoom">—</span></div>
+</div>
+
+<div class="notice" id="notice" hidden>
+  <div>
+    <h1 id="notice-title">공간을 열 수 없습니다</h1>
+    <p id="notice-text"></p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/7.54.0/babylon.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

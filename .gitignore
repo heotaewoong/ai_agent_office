@@ -95,3 +95,4 @@ storageState*.json
 # Only the reviewed unified playbook belongs in this repository.
 /sites/*
 !/sites/heobrain-office-playbook-unified-20261027/
+!/sites/office-world/

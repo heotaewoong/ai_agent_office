@@ -7,6 +7,7 @@
 ## 공개 문서
 
 - [통합 플레이북](sites/heobrain-office-playbook-unified-20261027/dist/index.html)
+- [오피스 월드 (3D 관제 공간)](sites/office-world/README.md) · [설계서](docs/superpowers/specs/2026-10-28-office-world-design.md)
 - [AI 콘텐츠 에이전트 설계](docs/superpowers/specs/2026-10-27-ai-content-agent-design.md)
 - [AI 콘텐츠 에이전트 구현 계획](docs/superpowers/plans/2026-10-27-ai-content-agent.md)
 - [콘텐츠 자동화 벤치마킹](reports/AI%20콘텐츠%20자동화%20에이전트%20벤치마킹.md)
