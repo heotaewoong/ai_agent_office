@@ -94,3 +94,36 @@ def test_invalid_packaging_and_snapshot_inputs_return_422(context):
     assert store.snapshots() == []
     assert client.post("/api/ideas", json={"title": "긴 URL", "source_url": "https://e.com/" + "a" * 2000}, headers=headers).status_code == 422
     assert client.post("/api/ideas", json={"title": "큰 조회수", "views": 10**13}, headers=headers).status_code == 422
+
+
+def test_studio_csv_upload_saves_snapshots_and_counts(context):
+    store, client, headers = context
+    csv = "Content,Views,Impressions click-through rate (%),Average percentage viewed (%)\nvid1,1000,5.0%,40%\nvid2,500,2.0%,45%\nTotal,1500,,\n"
+    r = client.post("/api/analytics/studio-csv", json={"channel": "youtube_long", "period": "7d", "csv": csv}, headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert [s["external_id"] for s in body["snapshots"]] == ["vid1", "vid2"]
+    assert len(store.snapshots("youtube_long")) == 2
+
+
+def test_studio_csv_without_rows_is_409(context):
+    _, client, headers = context
+    r = client.post("/api/analytics/studio-csv", json={"channel": "shorts", "period": "24h", "csv": "Content,Views\nTotal,1\n"}, headers=headers)
+    assert r.status_code == 409
+
+
+def test_packaging_with_blank_titles_is_409(context):
+    store, client, headers = context
+    saved = client.post("/api/ideas", json={"title": "빈 제목 기획", "source_url": "https://example.com/blank", "primary_sources": 2, "demand": 70, "fit": 0.9}, headers=headers).json()
+    job_id = client.post(f"/api/ideas/{saved['id']}/select", json={}, headers=headers).json()["job"]["id"]
+    body = {"titles": ["", "", ""], "thumbnails": [{"text": "AI 팀", "visual": "화면"}] * 3, "hook": "블로그를 끝낸 결과", "logline": "한 줄", "reasons": ["수요", "화면"]}
+    assert client.post(f"/api/jobs/{job_id}/packaging", json=body, headers=headers).status_code == 409
+
+
+def test_studio_csv_duplicate_external_id_keeps_last_row(context):
+    store, client, headers = context
+    csv = "Content,Views\nvid1,100\nvid1,900\nTotal,1000\n"
+    r = client.post("/api/analytics/studio-csv", json={"channel": "youtube_long", "period": "7d", "csv": csv}, headers=headers)
+    assert r.status_code == 200
+    assert [s["external_id"] for s in r.json()["snapshots"]] == ["vid1"]
+    assert len(store.snapshots("youtube_long")) == 1

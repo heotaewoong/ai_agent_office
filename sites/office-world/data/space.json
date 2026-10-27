@@ -6,6 +6,7 @@
   "stages": [
     {
       "id": "inbox",
+      "view": "news",
       "name": "오늘의 뉴스",
       "approval": "⓪ 기획 선택",
       "color": "#f2a444",
@@ -19,30 +20,33 @@
     },
     {
       "id": "scripts",
+      "view": "studio",
       "name": "원고 작업실",
       "approval": "① 원고 승인",
       "color": "#4f8df7",
       "url": "http://localhost:3110/studio",
       "items": [
-        { "id": "job-118", "title": "Claude Code 2.0 업무 자동화 5가지", "state": "writing", "stateLabel": "원고 v2 · 비평 중", "needsHuman": false, "agentId": "a2" },
+        { "id": "job-118", "title": "Claude Code 2.0 업무 처리 5가지", "state": "writing", "stateLabel": "원고 v2 · 비평 중", "needsHuman": false, "agentId": "a2" },
         { "id": "job-117", "title": "Cursor vs Codex, 1주일 실사용 비교", "state": "review", "stateLabel": "사람 승인 대기 ①", "needsHuman": true, "agentId": "a3" },
-        { "id": "job-116", "title": "RSS 하나로 뉴스레터 만드는 법", "state": "research", "stateLabel": "근거 조사 · 문단 7개", "needsHuman": false, "agentId": "a2" }
+        { "id": "job-116", "title": "RSS 하나로 뉴스레터 만드는 법", "state": "research", "stateLabel": "근거 조사 · 문단 7개", "needsHuman": false, "agentId": "a2", "actions": [{ "id": "draft", "label": "원고 생성" }] }
       ]
     },
     {
       "id": "creative",
+      "view": "delivery",
       "name": "제작 스튜디오",
       "approval": "영상 검토",
       "color": "#8b6cf0",
       "url": "http://localhost:3110/studio",
       "items": [
         { "id": "job-115", "title": "AI 썸네일 A/B, 3안 비교 결과", "state": "producing", "stateLabel": "음성 6장면 완료 · MP4 인코딩", "needsHuman": false, "agentId": "a4" },
-        { "id": "job-114", "title": "n8n으로 블로그 자동 초안", "state": "producing", "stateLabel": "카드 4장 · 체크리스트 PDF", "needsHuman": false, "agentId": "a5" },
+        { "id": "job-114", "title": "n8n으로 블로그 초안", "state": "producing", "stateLabel": "카드 4장 · 체크리스트 PDF", "needsHuman": false, "agentId": "a5" },
         { "id": "job-113", "title": "노션 AI 회의록 정리 루틴", "state": "failed", "stateLabel": "실패 · 음성 60초 초과, 재시도 필요", "needsHuman": true, "agentId": "a4" }
       ]
     },
     {
       "id": "outbox",
+      "view": "delivery",
       "name": "제작·출고함",
       "approval": "② 출고 승인 · ③ 회차",
       "color": "#e65fb8",
@@ -55,6 +59,7 @@
     },
     {
       "id": "ops",
+      "view": "activity",
       "name": "운영 기록",
       "approval": "교훈 승인",
       "color": "#2ec4a6",
@@ -78,7 +83,7 @@
   ],
   "events": [
     { "time": "09:38", "stageId": "creative", "text": "제작 스튜디오가 'AI 썸네일 A/B' 장면 6개의 음성을 보존하고 MP4 인코딩을 시작했습니다." },
-    { "time": "09:35", "stageId": "scripts", "text": "원고 작업실이 'Claude Code 2.0 업무 자동화' 원고 v2를 별도 비평·평가에 보냈습니다." },
+    { "time": "09:35", "stageId": "scripts", "text": "원고 작업실이 'Claude Code 2.0 업무 처리' 원고 v2를 별도 비평·평가에 보냈습니다." },
     { "time": "09:31", "stageId": "outbox", "text": "제작·출고함에 'AI 뉴스레터 10월 4주차' ZIP 패키지가 준비되었습니다. 플랫폼 전달은 사람이 합니다." },
     { "time": "09:27", "stageId": "inbox", "text": "오늘의 뉴스가 공식 RSS에서 후보 3편을 골라 ⓪ 기획 선택을 기다립니다." },
     { "time": "09:22", "stageId": "ops", "text": "운영 기록이 외부 API 예산 6,420원을 예약했습니다. 추정 원가이며 청구 대사 전입니다." },

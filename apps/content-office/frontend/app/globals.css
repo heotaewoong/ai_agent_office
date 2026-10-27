@@ -3756,3 +3756,14 @@ td a {
   }
 }
 .voice-profile{display:flex;align-items:flex-start;gap:10px;padding:14px 16px;border:1px solid #dce4d0;border-radius:6px;background:#f2f6e9;margin-bottom:20px;color:#5e6853}.voice-profile>svg{margin-top:3px}.voice-profile strong{font-size:12px;font-weight:600;line-height:1.8}.voice-profile p{font-size:11px;line-height:1.9;margin-top:4px;overflow-wrap:anywhere}
+
+.world-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 220px);
+  min-height: 480px;
+  border: 1px solid var(--line, rgba(128, 128, 128, 0.25));
+  border-radius: 12px;
+  background: transparent;
+}
+.v6-packaging .editor-fields textarea{min-height:64px;border:1px solid var(--line);padding:8px}.v6-packaging-row{display:grid;gap:6px;margin-bottom:14px}.v6-packaging .editor-fields input:not([type=radio]){width:100%}.v6-packaging .editor-fields label>input[type=radio]{margin-right:6px}

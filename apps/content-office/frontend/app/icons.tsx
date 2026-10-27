@@ -21,6 +21,11 @@ const paths: Record<string, React.ReactNode> = {
       <path d="M3 12h4l3-8 4 16 3-8h4" />
     </>
   ),
+  map: (
+    <>
+      <path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2V6ZM9 4v14M15 6v14" />
+    </>
+  ),
   arrow: (
     <>
       <path d="M4 12h16m-6-6 6 6-6 6" />

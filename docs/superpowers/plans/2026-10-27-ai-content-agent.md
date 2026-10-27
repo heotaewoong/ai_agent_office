@@ -1435,7 +1435,7 @@ Expected: PASS — 기존 189 passed·1 skipped에 새 테스트 33개가 더해
 Run: `cd apps/content-office/frontend && npm run typecheck && npm test`
 Expected: PASS
 
-- [ ] **Step 3: 수동 확인** — 로컬 앱에서 기획 1건 저장 → ⓪ 선택 → 패키지 확정 → 초안 생성 → 승인 화면에서 `quality.gates` 사유가 보이는지 확인. Studio CSV 1개를 `POST /api/analytics/snapshots` 형식으로 넣어 교훈 카드가 `proposed`로 생기는지 확인.
+- [ ] **Step 3: 수동 확인** — 로컬 앱에서 기획 1건 저장 → ⓪ 선택 → 패키지 확정 → 초안 생성 → 승인 화면에서 `quality.gates` 사유가 보이는지 확인. Studio CSV 1개를 `POST /api/analytics/snapshots` 형식으로 넣어 교훈 카드가 `proposed`로 생기는지 확인. (2026-10-28: 네 단계 모두 화면이 생겼다 — `2026-10-28-v6-ui-and-world-link.md`. 수동 확인은 EC2에 앱이 뜬 뒤 화면으로 진행한다.)
 
 - [ ] **Step 4: 커밋**
 

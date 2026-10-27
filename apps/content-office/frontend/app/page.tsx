@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, OfficeApiError } from "../lib/api";
 import type {
+  Action,
   Article,
   Artifact,
   Dashboard,
@@ -29,6 +30,10 @@ import {
   toggleArticle,
 } from "../lib/workflow";
 import { Icon } from "./icons";
+import { WorldView } from "./world-view";
+import { PerformancePanel } from "./performance-panel";
+import { PackagingPanel } from "./packaging-panel";
+import { packagingRequired } from "../lib/packaging";
 import {
   EvidenceIntake,
   IdeaBank,
@@ -39,7 +44,7 @@ import {
   type IntakeDraft,
 } from "./support-panels";
 
-type View = "news" | "studio" | "delivery" | "activity";
+type View = "news" | "studio" | "delivery" | "world" | "activity";
 type LocalDraft = { title: string; body: string; baseHash?: string };
 const views: { id: View; title: string; icon: string; en: string }[] = [
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
@@ -50,6 +55,7 @@ const views: { id: View; title: string; icon: string; en: string }[] = [
     icon: "package",
     en: "PRODUCTION & DELIVERY",
   },
+  { id: "world", title: "오피스 월드", icon: "map", en: "OFFICE WORLD" },
   { id: "activity", title: "운영 기록", icon: "activity", en: "OFFICE LOG" },
 ];
 const defaultSelections: Selections = {
@@ -195,8 +201,9 @@ export default function Office() {
     label: string,
     execute: () => Promise<unknown>,
     success: string,
-  ) {
-    if (busy || !connected) return;
+  ): Promise<true | string> {
+    if (busy) return "이미 처리 중입니다";
+    if (!connected) return "연결을 확인해 주세요";
     setBusy(label);
     setError("");
     setNotice("");
@@ -204,6 +211,7 @@ export default function Office() {
       await execute();
       await Promise.all([loadDashboard(), loadJob()]);
       setNotice(success);
+      return true;
     } catch (cause) {
       const message =
         cause instanceof Error ? cause.message : "요청을 처리하지 못했습니다.";
@@ -219,6 +227,7 @@ export default function Office() {
           );
         }
       } else setError(message);
+      return message;
     } finally {
       setBusy("");
     }
@@ -353,7 +362,9 @@ export default function Office() {
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
                     : view === "delivery"
                       ? "완성된 결과를 확인하고, 내가 승인한 버전으로 출고하세요."
-                      : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
+                      : view === "world"
+                        ? "지금 진행 중인 모든 작업을 한 공간에서 보고, 바로 이동하거나 요청하세요."
+                        : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
               </p>
             </div>
             <div className="heading-actions">
@@ -670,6 +681,30 @@ export default function Office() {
                 </div>
               )}
 
+              {view === "world" && (
+                <WorldView
+                  activeId={activeId}
+                  busy={!!busy}
+                  connected={connected}
+                  onOpen={(v, id) => {
+                    if (id && dashboard?.jobs.some((j) => j.id === id))
+                      setActiveId(id);
+                    setView(v);
+                  }}
+                  onAction={async (a, id) => {
+                    const ok = await action(
+                      a === "draft" ? "원고 생성" : "제작 시작",
+                      () => (a === "draft" ? api.draft(id) : api.produce(id)),
+                      a === "draft"
+                        ? "원고 생성 작업을 요청했습니다."
+                        : "제작을 요청했습니다.",
+                    );
+                    if (ok !== true)
+                      throw new Error(typeof ok === "string" ? ok : "요청을 처리하지 못했습니다.");
+                  }}
+                />
+              )}
+
               {view === "activity" && (
                 <Activity
                   dashboard={dashboard}
@@ -844,12 +879,6 @@ function BudgetStrip({ budget }: { budget: Dashboard["budget"] }) {
   );
 }
 
-type Action = (
-  label: string,
-  execute: () => Promise<unknown>,
-  success: string,
-) => Promise<void>;
-
 function Studio({
   job,
   model,
@@ -973,6 +1002,14 @@ function Studio({
           <span>{job.error}</span>
         </div>
       )}
+      {job.article?.origin === "idea" && (
+        <PackagingPanel
+          key={job.packaging?.packaging_hash ?? "new"}
+          job={job}
+          busy={locked}
+          action={action}
+        />
+      )}
       <EvidenceIntake
         job={job}
         model={model}
@@ -1022,7 +1059,7 @@ function Studio({
               오기 전에는 승인할 수 없어요.
               <button
                 className="button primary"
-                disabled={locked}
+                disabled={locked || packagingRequired(job)}
                 onClick={() =>
                   void action(
                     "원고 생성",
@@ -1034,6 +1071,9 @@ function Studio({
                 원고 생성 시작
                 <Icon name="arrow" size={17} />
               </button>
+              {packagingRequired(job) && (
+                <p className="muted">패키지(제목·썸네일·훅)를 먼저 확정하세요.</p>
+              )}
             </Empty>
           ) : (
             <div className="editor-fields">
@@ -2168,6 +2208,7 @@ function Activity({
   return (
     <div className="activity-page">
       <BudgetStrip budget={dashboard.budget} />
+      <PerformancePanel />
       <section className="feed-panel">
         <div className="section-heading">
           <div>
