@@ -14,7 +14,7 @@ def default_store():
 
 
 def enrich(articles):
-    seed = json.loads((BACKEND / "config/editorial-seed.json").read_text())
+    seed = json.loads((BACKEND / "config/editorial-seed.json").read_text(encoding="utf-8"))
     selected = {normalize_url(item["primary_url"]): item for item in seed["selected"]}
     candidates = {normalize_url(item["url"]): item for item in seed["candidates"]}
     for article in articles:
@@ -49,7 +49,7 @@ def refresh(store):
 def initialize(store, *, live=True, create_selected=False):
     window_path = WORKSPACE / "research/content-office-2026-10-26/work-window.json"
     if store.setting("work_window") is None and window_path.is_file():
-        store.set_setting("work_window", json.loads(window_path.read_text()))
+        store.set_setting("work_window", json.loads(window_path.read_text(encoding="utf-8")))
     if live:
         refresh(store)
     if create_selected:

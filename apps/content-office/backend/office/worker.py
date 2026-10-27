@@ -7,7 +7,7 @@ import time
 from .bootstrap import default_store, refresh
 from .editorial import prepare_source
 from .store import WorkflowError, canonical, identifier, now
-from .runtime import WorkerRuntime, WorkerInterrupted, aware_time, utcnow, window_open, worker_heartbeat
+from .runtime import WorkerRuntime, WorkerInterrupted, WindowDeadline, run_before_deadline, window_open, worker_heartbeat
 
 
 def process_task(store, task):
@@ -70,6 +70,22 @@ def run_once(store, owner):
     return True
 
 
+def _worker_loop(state_root, owner, once, drain):
+    from .store import Store
+    store = Store(state_root)
+    def interrupted(signum, frame):
+        raise WorkerInterrupted(f"signal_{signum}")
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(signum, interrupted)
+    with WorkerRuntime(store, owner):
+        while window_open(store):
+            worked = run_once(store, owner)
+            if once or (drain and not worked):
+                break
+            if not worked:
+                time.sleep(2)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true")
@@ -77,29 +93,19 @@ def main():
     args = parser.parse_args()
     store = default_store()
     owner = identifier("worker")
+    if not window_open(store):
+        return
     def interrupted(signum, frame):
         raise WorkerInterrupted(f"signal_{signum}")
-
-    for signum in (signal.SIGTERM, signal.SIGINT, signal.SIGALRM):
+    for signum in (signal.SIGTERM, signal.SIGINT):
         signal.signal(signum, interrupted)
     try:
-        with WorkerRuntime(store, owner):
-            window = store.setting("work_window", {})
-            if window.get("authorized_end"):
-                seconds = (aware_time(window["authorized_end"]) - utcnow()).total_seconds()
-                if seconds <= 0:
-                    return
-                signal.setitimer(signal.ITIMER_REAL, seconds)
-            while window_open(store):
-                worked = run_once(store, owner)
-                if args.once or (args.drain and not worked):
-                    break
-                if not worked:
-                    time.sleep(2)
-    except WorkerInterrupted:
-        pass
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
+        run_before_deadline(_worker_loop, (str(store.root), owner, args.once, args.drain), store.setting("work_window", {}).get("authorized_end"))
+    except (WorkerInterrupted, WindowDeadline):
+        # Native Windows termination cannot unwind the child's Python finally.
+        # Reacquire the OS lock before marking calls unknown; never release costs.
+        with WorkerRuntime(store, owner, heartbeat_interval=0):
+            pass
 
 
 

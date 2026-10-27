@@ -1,8 +1,8 @@
 """Local process ownership, conservative recovery, and the authorized work window."""
 from __future__ import annotations
 
-import fcntl
 import json
+import multiprocessing
 import os
 import signal
 import threading
@@ -48,31 +48,55 @@ class WindowDeadline(BaseException):
 
 
 class ProcessLock:
-    """flock is released by the OS on process death; PID files alone are not locks."""
+    """OS locks are released on process death; PID files alone are not locks."""
     def __init__(self, path):
         self.path = Path(path)
         self.handle = None
 
     def __enter__(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.handle = self.path.open("a+")
+        self.handle = os.fdopen(os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600), "r+b")
         try:
-            fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            if os.name == "nt":
+                import msvcrt
+                # Windows byte-range locks require an existing byte. All owners
+                # lock byte zero, including while the PID text is rewritten.
+                self.handle.seek(0, os.SEEK_END)
+                if not self.handle.tell():
+                    self.handle.write(b"\0")
+                    self.handle.flush()
+                self.handle.seek(0)
+                msvcrt.locking(self.handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
             self.handle.close()
             self.handle = None
             raise AlreadyRunning(f"already running: {self.path.name}") from None
-        self.handle.seek(0)
-        self.handle.truncate()
-        self.handle.write(str(os.getpid()) + "\n")
-        self.handle.flush()
+        try:
+            self.handle.seek(0)
+            self.handle.write((str(os.getpid()) + "\n").encode("ascii"))
+            self.handle.truncate()
+            self.handle.flush()
+        except BaseException:
+            self.__exit__()
+            raise
         return self
 
     def __exit__(self, *_):
         if self.handle is not None:
-            fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
-            self.handle.close()
-            self.handle = None
+            try:
+                if os.name == "nt":
+                    import msvcrt
+                    self.handle.seek(0)
+                    msvcrt.locking(self.handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                self.handle.close()
+                self.handle = None
 
 
 def mark_running_unknown(store, *, owner=None, reason="worker_process_lost"):
@@ -142,27 +166,39 @@ class WorkerRuntime:
 
 
 def process_identity(pid):
-    """Linux start ticks and command prevent signalling a reused, unrelated PID."""
+    """Creation token and command prevent signalling a reused, unrelated PID."""
     try:
+        if not pid or int(pid) <= 0:
+            return None
+        if os.name == "nt":
+            import psutil
+            try:
+                process = psutil.Process(int(pid))
+                with process.oneshot():
+                    return {"pid": process.pid, "start_ticks": "windows:" + str(process.create_time()), "args": process.cmdline(), "executable": process.exe()}
+            except psutil.Error:
+                return None
         root = Path("/proc") / str(int(pid))
-        stat = (root / "stat").read_text().rsplit(")", 1)[1].split()
+        stat = (root / "stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
         args = (root / "cmdline").read_bytes().split(b"\0")
-        return {"pid": int(pid), "start_ticks": stat[19], "args": [arg.decode(errors="replace") for arg in args if arg]}
-    except (OSError, ValueError, IndexError):
+        return {"pid": int(pid), "start_ticks": stat[19], "args": [arg.decode(errors="replace") for arg in args if arg], "executable": str((root / "exe").resolve(strict=True))}
+    except (OSError, TypeError, ValueError, IndexError):
         return None
 
 
 def worker_heartbeat(store, owner, state="online", **values):
     identity = process_identity(os.getpid()) or {}
     previous = store.setting("worker_status", {})
-    store.set_setting("worker_status", {**(previous if previous.get("owner") == owner else {}), "state": state, "pid": os.getpid(), "start_ticks": identity.get("start_ticks"), "state_root": str(store.root), "heartbeat": now(), "owner": owner, **values})
+    store.set_setting("worker_status", {**(previous if previous.get("owner") == owner else {}), "state": state, "pid": os.getpid(), "start_ticks": identity.get("start_ticks"), "identity": identity, "role": "office.worker", "state_root": str(store.root), "heartbeat": now(), "owner": owner, **values})
 
 
 def stop_owned_worker(store, expected=None):
     status = store.setting("worker_status", {})
     pid = status.get("pid")
     identity = process_identity(pid) if pid else None
-    if not identity or "office.worker" not in identity["args"]:
+    saved_identity = status.get("identity", {})
+    supervised = status.get("role") == "office.worker" and saved_identity == identity
+    if not identity or ("office.worker" not in identity["args"] and not supervised):
         return {"state": "not_running_or_not_owned", "pid": pid}
     if status.get("state_root") != str(store.root) or not status.get("start_ticks") or identity["start_ticks"] != status["start_ticks"]:
         return {"state": "identity_changed", "pid": pid}
@@ -171,10 +207,192 @@ def stop_owned_worker(store, expected=None):
     if pid == os.getpid():
         return {"state": "refused_self", "pid": pid}
     try:
-        os.kill(pid, signal.SIGTERM)
+        if os.name == "nt":
+            return {"pid": pid, "start_ticks": identity["start_ticks"], **_WindowsProcessTree(identity).stop()}
+        else:
+            os.kill(pid, signal.SIGTERM)
         return {"state": "termination_requested", "pid": pid, "start_ticks": identity["start_ticks"]}
     except ProcessLookupError:
         return {"state": "already_exited", "pid": pid}
+
+
+class _WindowsProcessTree:
+    """Retain native creation identities even after the owned root exits.
+
+    A descendant is admitted only through psutil's PID-reuse-aware children()
+    traversal of a previously verified tree member. Every suspend/kill obtains
+    a fresh Process and rechecks creation time; a reused PID is never signalled.
+    """
+    def __init__(self, identity):
+        self.root = (identity["pid"], identity["start_ticks"])
+        self.members = {self.root: None}
+        self.changed = set()
+        self.errors = set()
+
+    def _matching(self, identity):
+        import psutil
+        try:
+            process = psutil.Process(identity[0])
+            if "windows:" + str(process.create_time()) != identity[1]:
+                self.changed.add(identity)
+                return None
+            return process
+        except psutil.NoSuchProcess:
+            return None
+        except psutil.Error:
+            self.errors.add(identity)
+            return None
+
+    def capture(self):
+        import psutil
+        visited = set()
+        # A retained child remains owned after its root exits. Traverse that
+        # verified child too, including grandchildren created since last poll.
+        for anchor in list(self.members):
+            if anchor in visited:
+                continue
+            owner = self._matching(anchor)
+            if owner is None:
+                continue
+            try:
+                visited.add(anchor)
+                for child in owner.children(recursive=True):
+                    try:
+                        identity = (child.pid, "windows:" + str(child.create_time()))
+                        self.members.setdefault(identity, None)
+                        visited.add(identity)
+                    except psutil.NoSuchProcess:
+                        continue
+                    except psutil.Error:
+                        self.errors.add((child.pid, "unreadable"))
+            except psutil.NoSuchProcess:
+                continue
+            except psutil.Error:
+                self.errors.add(anchor)
+
+    def stop(self):
+        import psutil
+        # Freeze each proven member before the final snapshot so a subprocess
+        # cannot create a new generation while its ancestors are being stopped.
+        frozen = set()
+        while True:
+            for identity in list(self.members):
+                if identity in frozen:
+                    continue
+                process = self._matching(identity)
+                if process is not None:
+                    try:
+                        process.suspend()
+                    except psutil.NoSuchProcess:
+                        pass
+                    except psutil.Error:
+                        self.errors.add(identity)
+                frozen.add(identity)
+            self.capture()
+            if all(identity in frozen for identity in self.members):
+                break
+        signalled = []
+        for identity in reversed(self.members):
+            process = self._matching(identity)
+            if process is None:
+                continue
+            try:
+                # psutil also checks for PID reuse immediately before kill().
+                process.kill()
+                signalled.append(process)
+            except psutil.NoSuchProcess:
+                pass
+            except psutil.Error:
+                self.errors.add(identity)
+        alive = psutil.wait_procs(signalled, timeout=2)[1] if signalled else []
+        if alive or self.errors:
+            return {"state": "termination_failed", "remaining_pids": [process.pid for process in alive], "unverified_pids": sorted({identity[0] for identity in self.errors})}
+        if self.root in self.changed:
+            return {"state": "identity_changed"}
+        return {"state": "termination_requested" if signalled else "already_exited", "tree_verified": True, "processes_stopped": len(signalled)}
+
+
+def _terminate_deadline_child(process, tree=None):
+    """Stop retained descendants even when the owned worker has already died."""
+    if os.name == "nt":
+        if tree is None and process.is_alive():
+            identity = process_identity(process.pid)
+            if identity:
+                tree = _WindowsProcessTree(identity)
+        if tree is not None:
+            outcome = tree.stop()
+            if outcome["state"] == "termination_failed":
+                raise WorkflowError("마감 작업 프로세스 트리 종료를 확인하지 못했습니다. 운영 기록과 작업 잠금을 확인하세요")
+        elif process.is_alive():
+            # The multiprocessing handle still proves ownership of this child;
+            # stop it, but never claim its unobservable subtree was verified.
+            process.terminate()
+            process.join(timeout=2)
+            raise WorkflowError("마감 작업 프로세스의 소유 트리를 확인하지 못했습니다")
+    elif process.is_alive():
+        process.terminate()
+    process.join(timeout=2)
+    if process.is_alive():
+        process.kill()
+        process.join(timeout=2)
+    if process.is_alive():
+        raise WorkflowError("마감 작업 프로세스 종료를 확인하지 못했습니다. 작업 잠금을 확인하세요")
+
+
+def run_before_deadline(target, args, end_at, *, subprocess_mode=None):
+    """Run a picklable target until authorization expires, including blocked I/O.
+
+    POSIX retains synchronous SIGALRM unwinding. Windows supervises a spawned
+    process because Python threads/signals cannot interrupt native blocking I/O.
+    The caller reconciles state after WindowDeadline under its normal OS lock.
+    """
+    end_at = aware_time(end_at) if end_at else None
+    seconds = (end_at - utcnow()).total_seconds() if end_at else None
+    if seconds is not None and seconds <= 0:
+        raise WindowDeadline()
+    subprocess_mode = os.name == "nt" if subprocess_mode is None else subprocess_mode
+    if subprocess_mode:
+        process = multiprocessing.get_context("spawn").Process(target=target, args=args)
+        process.start()
+        tree = None
+        try:
+            if os.name == "nt":
+                identity = process_identity(process.pid)
+                if identity:
+                    tree = _WindowsProcessTree(identity)
+                elif process.is_alive():
+                    raise WorkflowError("작업 프로세스 소유자를 확인하지 못했습니다")
+            while process.is_alive():
+                if end_at and (end_at - utcnow()).total_seconds() <= 0:
+                    _terminate_deadline_child(process, tree)
+                    raise WindowDeadline()
+                if tree is not None:
+                    tree.capture()
+                # Startup counts against authorization. Poll native descendants
+                # so cleanup retains their identities if another actor kills
+                # the root before the deadline supervisor wakes up.
+                remaining = (end_at - utcnow()).total_seconds() if end_at else None
+                if remaining is not None and remaining <= 0:
+                    _terminate_deadline_child(process, tree)
+                    raise WindowDeadline()
+                process.join(timeout=min(.2, remaining) if remaining is not None else .2)
+            if process.exitcode:
+                raise WorkerInterrupted(f"child_exit_{process.exitcode}")
+        finally:
+            _terminate_deadline_child(process, tree)
+            process.close()
+        return
+    if end_at is None:
+        return target(*args)
+    def deadline(signum, frame):
+        raise WindowDeadline()
+    previous = signal.signal(signal.SIGALRM, deadline)
+    signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        return target(*args)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 class WindowWatcher:

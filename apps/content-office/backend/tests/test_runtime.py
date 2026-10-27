@@ -224,22 +224,45 @@ def test_worker_process_death_is_recovered_only_after_os_lock_is_released(tmp_pa
     module = runtime()
     store = Store(tmp_path)
     task = store.enqueue("refresh", {}, "refresh")
-    code = "from office.store import Store; from office.runtime import WorkerRuntime; import sys,time; s=Store(sys.argv[1]); r=WorkerRuntime(s,'dead',heartbeat_interval=0); r.__enter__(); s.claim('dead'); print('ready',flush=True); time.sleep(60)"
+    code = "from office.store import Store; from office.runtime import WorkerRuntime; import sys,time; s=Store(sys.argv[1]); r=WorkerRuntime(s,'dead',heartbeat_interval=0); r.__enter__(); s.claim('dead'); s.reserve_cost('test',321,{'cache_key':'dead-worker'}); print('ready',flush=True); time.sleep(60)"
     child = subprocess.Popen([sys.executable, "-c", code, str(tmp_path)], stdout=subprocess.PIPE, text=True)
+    owned_process = None
     try:
         assert child.stdout.readline().strip() == "ready"
         with pytest.raises(module.AlreadyRunning):
             with module.WorkerRuntime(store, "new", heartbeat_interval=0):
                 pass
         assert store.task(task["id"])["state"] == "running"
-        child.kill()
-        child.wait(timeout=5)
+        status = store.setting("worker_status")
+        identity = status["identity"]
+        assert module.process_identity(status["pid"]) == identity
+        if os.name == "nt":
+            import psutil
+            # Popen may own the venv redirector rather than the actual process
+            # holding worker.lock. Verify and kill the heartbeat's OS owner.
+            owned_process = psutil.Process(identity["pid"])
+            assert "windows:" + str(owned_process.create_time()) == identity["start_ticks"]
+            owned_process.kill()
+            owned_process.wait(timeout=20)
+        else:
+            assert identity["pid"] == child.pid
+            child.kill()
+        child.wait(timeout=20)
+        current = module.process_identity(identity["pid"])
+        assert not current or current["start_ticks"] != identity["start_ticks"]
         with module.WorkerRuntime(store, "new", heartbeat_interval=0):
             assert store.task(task["id"])["state"] == "unknown"
+            assert store.budget()["reserved_krw"] == 321
+            assert store.claim("new") is None
+        with store.connection() as db:
+            assert db.execute("SELECT COUNT(*) FROM approvals").fetchone()[0] == 0
     finally:
+        if owned_process is not None and owned_process.is_running():
+            owned_process.kill()  # psutil checks the captured creation identity
+            owned_process.wait(timeout=20)
         if child.poll() is None:
             child.kill()
-            child.wait(timeout=5)
+        child.wait(timeout=20)
 
 
 def test_stale_queued_task_failure_does_not_block_a_new_source(tmp_path):
@@ -289,6 +312,7 @@ def test_inspection_ffprobes_real_audio_and_rejects_over_one_minute(tmp_path):
     assert any(item["code"] == "media_probe_failed" for item in report["issues"])
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX launcher; Windows launcher has separate lifecycle tests")
 def test_start_script_refuses_a_live_managed_process_without_launching_services(tmp_path):
     module = runtime()
     store = Store(tmp_path)
@@ -302,6 +326,7 @@ def test_start_script_refuses_a_live_managed_process_without_launching_services(
     assert not (directory / "api.log").exists()
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX launcher; Windows launcher has separate lifecycle tests")
 def test_stop_script_never_signals_a_reused_registry_pid(tmp_path):
     module = runtime()
     store = Store(tmp_path)

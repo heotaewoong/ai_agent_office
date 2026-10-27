@@ -251,7 +251,7 @@ class SpeechProvider:
         self.assets.mkdir(parents=True, exist_ok=True)
         with _lock(self.assets / ((self.config.get('budget_scope_id') or self.experiment_id) + ".lock")):
             audio_path, receipt_path = self.assets / (key[7:] + ".wav"), self.assets / (key[7:] + ".json")
-            receipt = json.loads(receipt_path.read_text()) if receipt_path.is_file() else None
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8")) if receipt_path.is_file() else None
             if receipt:
                 if receipt.get("status") != "complete":
                     raise WorkflowError("받은 음성 또는 사용량이 불명 상태입니다. 비용 예약과 자산을 먼저 확인하세요")
@@ -307,7 +307,7 @@ class SpeechProvider:
         with _lock(self.assets / ((self.config.get('budget_scope_id') or self.experiment_id) + ".lock")):
             receipt_path = self.assets / (key[11:] + ".asr.json")
             if receipt_path.is_file():
-                prior = json.loads(receipt_path.read_text())
+                prior = json.loads(receipt_path.read_text(encoding="utf-8"))
                 if prior.get("status") != "complete":
                     raise WorkflowError("이전 전사 결과 또는 사용량이 불명입니다. 예약·응답을 먼저 확인하세요")
             cached = self.store.cache_get(key)

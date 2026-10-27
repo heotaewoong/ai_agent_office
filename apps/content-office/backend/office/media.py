@@ -469,7 +469,7 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
         key = digest({'narration': scene['narration'], 'voice': voice_key, 'version': VOICE_CACHE_VERSION})[:24]
         audio = voice_cache_dir / f'voice-{key}.wav'
         info_path = audio.with_suffix('.json')
-        cached = json.loads(info_path.read_text()) if info_path.is_file() else None
+        cached = json.loads(info_path.read_text(encoding="utf-8")) if info_path.is_file() else None
         if not audio.is_file() or not cached or file_hash(audio) != cached.get('sha256'):
             partial = audio.with_name(audio.name + '.partial.wav')
             try:
@@ -501,7 +501,7 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
         clip = folder / f'clip-{index + 1:02}.mp4'
         clip_key = digest({'image': file_hash(image), 'audio': file_hash(audio), 'version': RENDER_VERSION})
         clip_meta = clip.with_suffix('.json')
-        cached_clip = json.loads(clip_meta.read_text()) if clip_meta.is_file() else {}
+        cached_clip = json.loads(clip_meta.read_text(encoding="utf-8")) if clip_meta.is_file() else {}
         if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
             command([executable('ffmpeg'), '-y', '-v', 'error', '-loop', '1', '-framerate', '24', '-i', image, '-i', audio, '-t', str(duration), '-vf', "zoompan=z='min(zoom+0.00035,1.025)':d=1:s=1080x1920:fps=24,setsar=1", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', clip], 300)
             write_json(clip_meta, {'key': clip_key, 'sha256': file_hash(clip)})
@@ -664,7 +664,7 @@ def produce(store, job_id, *, voice_renderer=None):
             records = [{**artifact_record(root, path), 'outputs': ['shared'] if path == shared else [kind for kind, paths in output_files.items() if path in paths]} for path in sorted(set(files))]
             manifest = {'source_hash': source_hash, 'production_contract': contract, 'output_status': output_status, 'completed_outputs': completed, 'files': records, 'media': media, 'thumbnail_candidates': [r for r in records if r['name'] in {p.name for p in thumbs}], 'warnings': ['게시·업로드는 실행되지 않았습니다', '완료된 제작물을 선택해 출고 승인②을 받습니다. 영상은 음성 청취와 화면 검토가 필요합니다']}
             if thumbs:
-                local_reviews = json.loads((folder / 'thumbnail-review.json').read_text())['candidates']
+                local_reviews = json.loads((folder / 'thumbnail-review.json').read_text(encoding="utf-8"))['candidates']
                 by_name = {review['name']: review for review in local_reviews}
                 manifest['thumbnail_candidates'] = [{**record, **by_name[record['name']]} for record in manifest['thumbnail_candidates']]
                 eligible = [candidate for candidate in manifest['thumbnail_candidates'] if candidate['scores']['source_alignment'] >= 3 and candidate['scores']['title_fit'] >= 3]

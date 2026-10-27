@@ -79,7 +79,7 @@ def execute(ledger_root, fixture_root):
                 partial.unlink(missing_ok=True)
                 if previous_voice is None: os.environ.pop("OFFICE_LOCAL_VOICE",None)
                 else: os.environ["OFFICE_LOCAL_VOICE"] = previous_voice
-        baseline_meta = json.loads(baseline_receipt.read_text())
+        baseline_meta = json.loads(baseline_receipt.read_text(encoding="utf-8"))
         if baseline_meta["text_hash"] != digest(TEXT): raise WorkflowError("기준 음성의 대본이 달라졌습니다")
         report["stages"].append({"kind":"local_baseline","path":str(baseline),**baseline_meta});_write(path,report)
         # Verify the current REST/usage contract on the known model before paid TTS.

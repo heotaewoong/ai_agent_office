@@ -96,6 +96,49 @@ cd "<저장소 경로>/apps/content-office"
 backend/.venv/bin/python scripts/watch_window.py
 ```
 
+### Windows PowerShell 5.1
+
+Windows에서는 Linux 가상환경·`node_modules`를 재사용하지 않고 Python3.12+, Node22+, FFmpeg/ffprobe와 한국어 TTF를 준비합니다. 앱 폴더에서 네이티브 의존성과 화면 빌드를 설치합니다. 아래 자리표시자는 본인 로컬 절대 경로로 바꿉니다.
+
+```powershell
+Set-Location '<저장소 경로>\apps\content-office'
+& 'C:\Python312\python.exe' -m venv backend\.venv
+& .\backend\.venv\Scripts\python.exe -m pip install -r backend\requirements-lock.txt
+Push-Location frontend
+npm ci
+npm run build
+Pop-Location
+$officeState = '<로컬 NTFS 상태 폴더 절대 경로>'
+.\scripts\start-windows.ps1 -StateDir $officeState
+.\scripts\status-windows.ps1 -StateDir $officeState
+.\scripts\stop-windows.ps1 -StateDir $officeState
+```
+
+`-ProjectRoot`는 `backend`, `frontend`, `scripts`가 있는 앱 폴더이며 기본값은 스크립트 상위 폴더입니다. 모든 명령에서 같은 `-StateDir`를 명시합니다. API8510·화면3110은 `127.0.0.1`에만 열립니다. `-NodePath`로 네이티브 `node.exe`를 지정할 수 있습니다. 기본 검색 순서는 `C:\nvm4w\nodejs`, Program Files, PATH입니다. 실행기가 이미 관리하는 서비스는 중복 시작하지 않습니다. 수동 실행 서비스가 포트를 사용하면 그대로 두고 시작을 거부합니다.
+
+시작 기본값은 API와 화면뿐입니다. **기존 승인 작업 시간이 열려 있을 때만** `-Worker`, `-Watcher`로 각각 명시적으로 추가합니다. 실행기는 작업 시간·비용·예약을 초기화하거나 연장하지 않습니다. 화면이 이미 열려 있어도 같은 명령으로 작업자·감시를 추가할 수 있습니다. 새 작업 시간은 위의 운영자 CLI 절차에 따라 따로 승인합니다. 작업자와 감시는 함께 실행하는 것을 권합니다.
+
+```powershell
+.\scripts\start-windows.ps1 -StateDir $officeState -Worker -Watcher
+.\scripts\stop-windows.ps1 -StateDir $officeState -Service worker
+```
+
+`-Service all|api|frontend|worker|watcher`로 종료 대상을 고릅니다. 종료는 저장한 프로젝트·PID·네이티브 시작 시각·실행 파일·명령이 모두 일치할 때만 요청합니다. Windows 종료는 해당 프로세스를 강제 종료하므로 진행 중인 작업은 재시작 뒤 장부의 `unknown` 상태와 비용 예약을 먼저 확인합니다. 작업 시간이 끝나기 전에 감시를 직접 중지하면 약속한 감시도 중단됩니다. 관리 기록과 각 서비스의 stdout/stderr는 상태 폴더의 `runtime`에 보존됩니다. 상태 명령은 프로세스 소유권을 보여주며 HTTP 응답 성공은 별도로 확인합니다.
+
+자격 정보가 필요하면 로컬에 보관한 UTF-8 환경 파일을 `-EnvFile '<로컬 환경 파일>'` 또는 `OFFICE_ENV_FILE`로 지정합니다. `KEY=value`, `export KEY=value`, 한 쌍의 따옴표와 `#` 주석 행을 지원하며 값은 문자 그대로 읽습니다. 셸 명령·변수 치환·여러 줄 값은 지원하지 않습니다. 기존 환경을 자식에게 전달하고 호출한 PowerShell의 환경은 복원합니다. 파일 내용과 전체 환경은 관리 기록에 저장하지 않습니다. 환경 파일·상태 폴더·로그는 공개 폴더나 저장소에 넣지 않습니다.
+
+분리된 검증 포트에서는 화면이 연결할 API 주소도 함께 바꿉니다. Next.js의 production rewrite는 **빌드할 때** 정해지므로 아래 환경값으로 다시 빌드한 뒤 같은 포트로 시작합니다. `-FrontendMode development`를 명시하면 개발 화면을 사용할 수도 있습니다.
+
+```powershell
+$env:OFFICE_API_URL = 'http://127.0.0.1:18510'
+Push-Location frontend
+npm run build
+Pop-Location
+.\scripts\start-windows.ps1 -StateDir '<별도 검증 상태 폴더>' -ApiPort 18510 -FrontendPort 13110
+```
+
+운영 포트로 되돌릴 때는 `OFFICE_API_URL`을 제거하거나 `http://127.0.0.1:8510`으로 바꿔 다시 빌드합니다. 실행 중인 관리 서비스의 포트를 바꾸려면 먼저 해당 서비스들을 종료합니다. 실행기가 만든 프로세스는 시작 직후만 확인하므로 브라우저와 `/api/health`를 확인한 뒤 사용합니다.
+
 ## 의존성과 설정
 
 이 작업공간에는 Python 가상환경·Node 의존성과 FFmpeg가 준비됐습니다. 새 환경에 설치할 때는 Python3.12+, Node22+, FFmpeg/ffprobe, 한국어 TTF 폰트를 준비합니다. Windows 기본 음성 경로에는 PowerShell과 `Microsoft Heami Desktop` ko-KR 음성이 필요합니다.
@@ -146,6 +189,12 @@ npm test
 npm run typecheck
 npm run test:ui
 npm run build
+```
+
+Windows 실행기 회귀 검사는 PowerShell 5.1에서 임시 폴더와 유료 호출 없는 가짜 서비스만 사용합니다. `-NodePath`를 주면 기본 실행·작업자/감시 추가·선택 종료까지 검사하며, 생략하면 환경·인수·잠금·포트·프로세스 소유권을 검사합니다.
+
+```powershell
+.\scripts\tests\windows-launchers.test.ps1 -TestRoot $env:TEMP -PythonPath 'C:\Python312\python.exe' -NodePath '<네이티브 node.exe 절대 경로>'
 ```
 
 검증 기록은 프로젝트 `research/content-office-2026-10-26/`에 있습니다. 실제 합성 자료의 브라우저→API→SQLite→음성/MP4→출고→ZIP→재시작 증거는 `e2e-report.md`, 원본 문서/참고 소스 범위는 `md-audit.md`, `research-md-audit.md`, `source-audit.md`에 있습니다. 검사는 실제 뉴스3편의 승인·제작·공개 완료를 대신하지 않습니다.

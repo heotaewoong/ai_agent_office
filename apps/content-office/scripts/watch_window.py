@@ -16,7 +16,7 @@ from urllib.request import urlopen
 BACKEND = Path(__file__).resolve().parents[1] / "backend"
 sys.path.insert(0, str(BACKEND))
 from office.bootstrap import default_store
-from office.runtime import WindowDeadline, WindowWatcher, aware_time, inspect_state, utcnow
+from office.runtime import AlreadyRunning, WindowDeadline, WindowWatcher, WorkerInterrupted, ProcessLock, aware_time, inspect_state, run_before_deadline, utcnow, mark_running_unknown
 from office.store import canonical
 
 
@@ -85,6 +85,17 @@ def build_inspection(store, api_url, end_at):
     return inspect
 
 
+def run_watcher(state_root, api_url, end_at, check_once=False):
+    """Top-level spawn target; rebuild closures only inside the owned child."""
+    from office.store import Store
+    store = Store(state_root)
+    inspection = build_inspection(store, api_url, end_at)
+    if check_once:
+        print(canonical(inspection()), flush=True)
+    else:
+        WindowWatcher(store, end_at, inspection).run()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--end-at", help="Timezone-aware ISO deadline; defaults to the saved authorized_end")
@@ -99,30 +110,29 @@ def main():
     end_at = aware_time(end_value)
     if saved.get("authorized_end") and end_at > aware_time(saved["authorized_end"]):
         parser.error("--end-at cannot extend the saved authorized work window")
-    inspection = build_inspection(store, args.api_url, end_at)
+    # Validate the loopback URL even if the window has already expired.
+    build_inspection(store, args.api_url, end_at)
     if args.check_once:
         if (end_at - utcnow()).total_seconds() <= 60:
             print(canonical({"state": "skipped", "reason": "authorized_window_ended_or_last_minute", "paid_calls": 0}))
             return
-        print(canonical(inspection()))
-        return
-    seconds = (end_at - utcnow()).total_seconds()
-    def deadline(signum, frame):
-        raise WindowDeadline()
     def interrupt(signum, frame):
         raise KeyboardInterrupt()
-    signal.signal(signal.SIGALRM, deadline)
     signal.signal(signal.SIGTERM, interrupt)
     signal.signal(signal.SIGINT, interrupt)
-    # SIGALRM interrupts hashing, ffprobe, and network waits at the exact authorization boundary.
-    if seconds > 0:
-        signal.setitimer(signal.ITIMER_REAL, seconds)
     try:
-        WindowWatcher(store, end_at, inspection).run()
-    except KeyboardInterrupt:
+        run_before_deadline(run_watcher, (str(store.root), args.api_url, end_at, args.check_once), end_at)
+    except WindowDeadline:
+        # The supervised inspection no longer holds watcher.lock. Close only
+        # under that lock, after its blocked native operation has been stopped.
+        WindowWatcher(store, end_at, lambda: {}).run()
+        try:
+            with ProcessLock(store.root / "worker.lock"):
+                mark_running_unknown(store, reason="authorized_window_ended")
+        except AlreadyRunning:
+            pass
+    except (KeyboardInterrupt, WorkerInterrupted):
         return
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 if __name__ == "__main__":

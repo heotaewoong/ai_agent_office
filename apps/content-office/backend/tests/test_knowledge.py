@@ -13,7 +13,8 @@ def manifest_for(workspace, sources):
     for name, text in sources.items():
         source = workspace / name
         source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_text(text, encoding="utf-8")
+        # Fixtures describe exact source bytes, independent of host newline rules.
+        source.write_bytes(text.encode("utf-8"))
         records.append({"path": name, "sha256": hashlib.sha256(source.read_bytes()).hexdigest()})
     manifest = workspace / "manifest.json"
     manifest.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
@@ -43,6 +44,24 @@ def test_korean_body_search_returns_source_section_hash_and_identical_copies(tmp
     assert {c["contract_id"] for c in hit["contracts"]} >= {"C01", "C04"}
     assert all(c["status"] == "candidate_evidence" for c in hit["contracts"])
     assert index["policy"] == {"local_only": True, "automatic_policy_promotion": False, "external_model_transfer": False}
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_index_preserves_source_newlines_and_hashes_exact_bytes(tmp_path, newline):
+    content = newline.join(["# 근거", "원고 승인① 후 제작.", ""])
+    manifest = manifest_for(tmp_path, {"database/evidence.md": content})
+    source = tmp_path / "database/evidence.md"
+    raw = source.read_bytes()
+    output = tmp_path / "index.json"
+    build_knowledge_index(tmp_path, manifest, output)
+    document = json.loads(output.read_text(encoding="utf-8"))["documents"][0]
+    digest = hashlib.sha256(raw).hexdigest()
+    assert document["text"] == content
+    assert document["text"].encode("utf-8") == raw
+    assert document["sections"][0]["text"] == content
+    assert document["sha256"] == digest
+    assert document["bytes"] == len(raw)
+    assert search_knowledge(output, "원고 승인")[0]["sha256"] == digest
 
 
 @pytest.mark.parametrize("bad_path", ["../outside.md", "/tmp/absolute.md", "secrets/key.md", "database/../../outside.md", "database/report.txt"])

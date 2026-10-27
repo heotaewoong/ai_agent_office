@@ -6,7 +6,7 @@ const config: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://127.0.0.1:8510/api/:path*",
+        destination: `${process.env.OFFICE_API_URL || "http://127.0.0.1:8510"}/api/:path*`,
       },
     ];
   },
