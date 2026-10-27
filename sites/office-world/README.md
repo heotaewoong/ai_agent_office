@@ -22,7 +22,10 @@ python -m http.server 8080
 
 `data/space.json`이 공간 투영 v1 예시입니다. 항목 모양은 설계서 6장을 따릅니다. 실시간으로 바꾸려면 같은 모양을 돌려주는 주소를 지정합니다.
 
-- 주소 쿼리: `index.html?api=/api/space`
+### 실시간 모드
+
+- **앱 안**: `/world/index.html?api=/api/space&embed=1` (메뉴 "오피스 월드"). 콘텐츠 오피스 백엔드의 `GET /api/space`(읽기 전용, 승인을 만들지 않음)가 투영을 돌려줍니다.
+- **단독 실행**: `index.html?api=https://서버/api/space` (다른 도메인이면 CORS 허용 필요. `/api/space`는 `Access-Control-Allow-Origin: *`를 보냅니다.)
 - 또는 `index.html`의 `app.js` 앞에 `<script>window.OFFICE_WORLD_API = '/api/space';</script>`
 
 실시간 모드는 10초마다 다시 읽고, 실패하면 마지막 상태를 유지한 채 상단에 표시합니다. 예시 모드에서만 동료가 기억을 확인하러 걷는 연출이 돕니다.
@@ -33,7 +36,7 @@ python -m http.server 8080
 
 이 공간은 데이터 파일 하나만 읽는 정적 페이지라서, 어떤 백엔드든 같은 모양의 JSON을 내놓으면 연결됩니다.
 
-1. **투영 API 만들기** — 설계서 6장의 "공간 투영 v1" 모양으로 `GET /api/space`를 제공합니다. 예시는 `data/space.json`입니다. `stages[]`(방), `agents[]`(동료), `events[]`(자막), `flows[]`(길 위 흐름), `brain`(중앙 기억)만 채우면 됩니다. 방 수·이름·색은 데이터가 정하므로 코드 수정이 필요 없습니다.
+1. **투영 API 만들기 (완료: `GET /api/space`, 구현은 `apps/content-office/backend/office/space.py`)** — 설계서 6장의 "공간 투영 v1" 모양으로 `GET /api/space`를 제공합니다. 예시는 `data/space.json`입니다. `stages[]`(방), `agents[]`(동료), `events[]`(자막), `flows[]`(길 위 흐름), `brain`(중앙 기억)만 채우면 됩니다. 방 수·이름·색은 데이터가 정하므로 코드 수정이 필요 없습니다.
 2. **주소 지정** — 페이지를 `index.html?api=https://내-서버/api/space`로 열거나, `app.js` 앞에 `window.OFFICE_WORLD_API`를 넣습니다. 다른 도메인이면 그 API에 CORS 허용이 필요합니다.
 3. **내 화면 안에 넣기** — `<iframe src=".../office-world/index.html?api=..." allow="fullscreen">`로 임베드할 수 있습니다. 방 패널의 "오피스에서 열기"는 각 `stages[].url`로 새 탭을 엽니다.
 4. **상태 조회·제어** — 페이지 전역 `window.__officeWorld`에 `space`(현재 데이터·선택), `controls`(`focusStage`, `enterStage`, `exitSpace`, `setView`), `hud`(`openStage`, `closePanel`)가 있습니다. 같은 origin에서 iframe의 `contentWindow.__officeWorld`로 접근할 수 있습니다. 공개 계약은 투영 JSON이며, 이 핸들은 보조 수단입니다.
