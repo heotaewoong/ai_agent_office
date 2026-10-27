@@ -9,6 +9,10 @@ import type {
   Lesson,
   PackagingBrief,
   GateReport,
+  IdeaInput,
+  SnapshotChannel,
+  SnapshotPeriod,
+  StudioCsvResult,
 } from "./types";
 
 export class OfficeApiError extends Error {
@@ -137,6 +141,13 @@ export const api = {
       artifact_id: artifactId,
     }),
   ideas: () => request<{ ideas: Idea[] }>("/ideas"),
+  addIdea: (input: IdeaInput) => request<Idea>("/ideas", "POST", input),
+  uploadStudioCsv: (body: {
+    channel: SnapshotChannel;
+    period: SnapshotPeriod;
+    csv: string;
+    job_id?: string;
+  }) => request<StudioCsvResult>("/analytics/studio-csv", "POST", body),
   selectIdea: (id: string) =>
     request<{ idea: Idea; job: Job }>(
       `/ideas/${encodeURIComponent(id)}/select`,
