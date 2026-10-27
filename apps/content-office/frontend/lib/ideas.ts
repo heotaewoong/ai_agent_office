@@ -11,11 +11,16 @@ function count(form: Form, key: string, label: string): number | null | { error:
   const raw = text(form, key).replace(/,/g, "");
   if (raw === "") return null;
   if (!/^\d+$/.test(raw)) return { error: `${label}은(는) 0 이상의 정수여야 합니다.` };
-  return Number(raw);
+  const n = Number(raw);
+  if (n > 1e12) return { error: "조회수는 1조 이하로 입력하세요" };
+  return n;
 }
 
 function ranged(form: Form, key: string, label: string, min: number, max: number): number | { error: string } {
   const raw = text(form, key);
+  if (raw !== "" && !/^\d+(\.\d+)?$/.test(raw)) {
+    return { error: `${label}은(는) 숫자로 입력하세요.` };
+  }
   const n = raw === "" ? 0 : Number(raw);
   if (!Number.isFinite(n) || n < min || n > max) {
     return { error: `${label}은(는) ${min}~${max} 사이여야 합니다.` };
