@@ -31,6 +31,7 @@ import {
 import { Icon } from "./icons";
 import {
   EvidenceIntake,
+  IdeaBank,
   KnowledgeDrawer,
   TaskHistory,
   OutputChoices,
@@ -469,6 +470,7 @@ export default function Office() {
                       </div>
                     </div>
                   </section>
+                  <IdeaBank />
                   <section
                     className="news-section"
                     aria-labelledby="news-heading"
