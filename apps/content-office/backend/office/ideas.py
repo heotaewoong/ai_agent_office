@@ -31,24 +31,31 @@ def outlier_band(ratio):
     return "under-2x"
 
 
+def _number(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def effective_weights(weights=None, lessons=()):
     result = dict(weights or WEIGHTS)
     for lesson in lessons:
         change = lesson.get("weight_change") or {}
         if lesson.get("state") == "approved" and change.get("factor") in result:
-            result[change["factor"]] = max(0, result[change["factor"]] + int(change.get("delta", 0)))
+            result[change["factor"]] = max(0, result[change["factor"]] + int(_number(change.get("delta"))))
     return result
 
 
 def score_idea(card, weights=None, lessons=()):
     w = effective_weights(weights, lessons)
     band = outlier_band(outlier_ratio(card.get("views"), card.get("channel_avg_views")))
-    sources = int(card.get("primary_sources", 0))
+    sources = int(_number(card.get("primary_sources")))
     parts = {
         "outlier": BAND_POINTS[band],
-        "demand": min(max(float(card.get("demand", 0)), 0.0), 100.0) / 100,
+        "demand": min(max(_number(card.get("demand")), 0.0), 100.0) / 100,
         "evidence": min(sources, 3) / 3,
-        "fit": min(max(float(card.get("fit", 0)), 0.0), 1.0),
+        "fit": min(max(_number(card.get("fit")), 0.0), 1.0),
         "novelty": 0.0 if card.get("covered_before") else 1.0,
     }
     score = round(100 * sum(w[k] * parts[k] for k in parts) / (sum(w.values()) or 1), 1)

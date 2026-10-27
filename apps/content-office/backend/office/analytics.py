@@ -21,13 +21,16 @@ COLUMNS = {
 
 
 def _number(value):
-    value = (value or "").strip().replace(",", "")
-    if ":" in value:
-        seconds = 0
-        for part in value.split(":"):
-            seconds = seconds * 60 + int(part)
-        return float(seconds)
-    return float(value) if value else None
+    value = (value or "").strip().replace(",", "").rstrip("%").strip()
+    try:
+        if ":" in value:
+            seconds = 0
+            for part in value.split(":"):
+                seconds = seconds * 60 + int(part)
+            return float(seconds)
+        return float(value) if value else None
+    except ValueError:
+        return None
 
 
 def parse_studio_csv(path):

@@ -21,6 +21,19 @@ def test_studio_csv_skips_total_and_parses_duration(tmp_path):
     assert rows[0]["external_id"] == "vid-a" and rows[0]["avd_seconds"] == 205.0 and rows[0]["ctr"] == 2.0
 
 
+def test_malformed_cells_become_none_without_aborting_import(tmp_path):
+    path = tmp_path / "bad.csv"
+    path.write_text(
+        "Content,Impressions,Impressions click-through rate (%),Views,Average percentage viewed (%),Average view duration\n"
+        "vid-x,N/A,5.0%,--,40,1:xx:yy\nvid-y,100,3.0,50,45,0:01:00\n",
+        encoding="utf-8",
+    )
+    rows = parse_studio_csv(path)
+    assert [r["external_id"] for r in rows] == ["vid-x", "vid-y"]
+    assert rows[0]["impressions"] is None and rows[0]["views"] is None and rows[0]["avd_seconds"] is None
+    assert rows[0]["ctr"] == 5.0 and rows[1]["avd_seconds"] == 60.0
+
+
 def test_low_ctr_high_retention_proposes_packaging_lesson(store):
     for vid, ctr in (("b1", 5.0), ("b2", 6.0), ("b3", 4.0)):
         store.save_snapshot("youtube_long", vid, "7d", {"ctr": ctr, "avp": 40})

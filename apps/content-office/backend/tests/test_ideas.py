@@ -53,3 +53,17 @@ def test_selected_idea_records_actor(store):
     selected = store.select_idea(idea["id"], "local-operator")
     assert selected["state"] == "selected" and selected["selected_by"] == "local-operator"
     assert store.ideas("selected")[0]["id"] == idea["id"]
+
+
+def test_unscored_idea_cannot_be_selected(store):
+    idea = store.save_idea({"title": "채점 전 주제", "primary_sources": 0})
+    with pytest.raises(WorkflowError, match="점수를 매기지 않은 기획"):
+        store.select_idea(idea["id"], "local-operator")
+
+
+def test_null_or_garbage_fields_score_as_zero():
+    result = score_idea({"title": "N", "primary_sources": None, "demand": None, "fit": "abc"})
+    assert result["blocked"] == ["1차 출처 없음"] and result["score"] == 0.0
+    assert result["parts"]["demand"] == 0.0 and result["parts"]["fit"] == 0.0
+    lesson = {"state": "approved", "weight_change": {"factor": "demand", "delta": None}}
+    assert score_idea({"title": "N", "primary_sources": 1}, lessons=[lesson])["score"] >= 0

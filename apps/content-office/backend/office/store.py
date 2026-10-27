@@ -381,6 +381,8 @@ class Store:
             if not row:
                 raise WorkflowError("기획을 찾을 수 없습니다")
             idea = json.loads(row[0])
+            if "blocked" not in idea:
+                raise WorkflowError("점수를 매기지 않은 기획은 선택할 수 없습니다")
             if idea.get("blocked"):
                 raise WorkflowError("정책·근거 검사에서 막힌 기획은 선택할 수 없습니다")
             idea.update(state="selected", selected_by=actor, selected_at=now())
