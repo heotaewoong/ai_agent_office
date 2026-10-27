@@ -1,6 +1,6 @@
 import json
 from fastapi.testclient import TestClient
-from office.api import create_app
+from office.api import AGENTS, create_app
 from office.space import project_space
 from office.store import Store
 
@@ -8,7 +8,7 @@ FORBIDDEN = ("게시됨", "자동")
 
 
 def test_empty_store_still_has_five_stages(tmp_path):
-    space = project_space(Store(tmp_path))
+    space = project_space(Store(tmp_path), agents=AGENTS)
     assert [s["id"] for s in space["stages"]] == ["inbox", "scripts", "creative", "outbox", "ops"]
     assert all(s["items"] == [] for s in space["stages"][:4])
     assert space["stages"][4]["items"][0]["id"] == "budget"
@@ -43,7 +43,7 @@ def test_projection_has_no_private_data_or_forbidden_words(tmp_path):
 def test_space_endpoint_is_public_read(tmp_path):
     client = TestClient(create_app(Store(tmp_path)), base_url="http://localhost:8510")
     r = client.get("/api/space")
-    assert r.status_code == 200 and r.headers["access-control-allow-origin"] == "*"
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
     assert r.json()["office"]["url"].startswith("http")
 
 
@@ -52,7 +52,7 @@ def test_running_draft_task_marks_editor_running(tmp_path):
     store.enqueue("draft", {}, key="k1")
     with store.connection(transaction=True) as db:
         db.execute("UPDATE tasks SET state='running'")
-    editor = next(a for a in project_space(store)["agents"] if a["id"] == "editor")
+    editor = next(a for a in project_space(store, agents=AGENTS)["agents"] if a["id"] == "editor")
     assert editor["status"] == "running"
 
 
@@ -69,3 +69,12 @@ def test_unscored_idea_is_pending(tmp_path):
     store.save_idea({"title": "미채점"})
     item = project_space(store)["stages"][0]["items"][0]
     assert item["state"] == "pending" and item["needsHuman"] is False
+
+
+def test_idea_job_without_packaging_offers_no_draft_action(tmp_path):
+    store = Store(tmp_path)
+    job = store.create_job({"id": "i1", "title": "기획", "url": "https://ex.com", "origin": "idea"})
+    store.update_job(job["id"], state="research_ready")
+    assert project_space(store)["stages"][1]["items"][0]["actions"] == []
+    store.update_job(job["id"], packaging={"packaging_hash": "h"})
+    assert project_space(store)["stages"][1]["items"][0]["actions"] == [{"id": "draft", "label": "원고 생성"}]

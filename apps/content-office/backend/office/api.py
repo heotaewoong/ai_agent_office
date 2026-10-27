@@ -193,7 +193,7 @@ def create_app(store: Store | None = None):
 
     @app.get("/api/space")
     def space():
-        return JSONResponse(project_space(store, office_url=os.environ.get("OFFICE_URL", "http://localhost:3110"), agents=AGENTS), headers={"Access-Control-Allow-Origin": "*", "Cache-Control": "no-store"})
+        return JSONResponse(project_space(store, office_url=os.environ.get("OFFICE_URL", "http://localhost:3110"), agents=AGENTS), headers={"Cache-Control": "no-store"})
 
     @app.post("/api/refresh", status_code=202)
     def refresh_feed():
@@ -451,6 +451,7 @@ def create_app(store: Store | None = None):
         rows = parse_studio_text(body.csv)
         if not rows:
             raise WorkflowError("CSV에서 저장할 행을 찾지 못했습니다. Studio '콘텐츠' 표를 그대로 내보낸 파일인지 확인하세요")
+        rows = list({row["external_id"]: row for row in rows}.values())
         saved = [
             store.save_snapshot(body.channel, row["external_id"], body.period, {k: v for k, v in row.items() if k != "external_id"}, body.job_id)
             for row in rows

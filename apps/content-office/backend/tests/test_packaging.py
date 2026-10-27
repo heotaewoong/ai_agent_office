@@ -47,3 +47,10 @@ def test_korean_particles_do_not_break_hook_promise():
     report = validate_packaging(brief(chosen_title="AI 팀이 블로그를 쓰는 법", hook="블로그 글을 팀에게 맡긴 결과부터 봅니다"))
     assert "훅이 제목의 약속을 이어받지 않습니다" not in report["issues"]
     assert validate_packaging(brief(chosen_title="AI 팀이 블로그를 쓰는 법", hook="오늘은 날씨 이야기를 합니다"))["issues"] == ["훅이 제목의 약속을 이어받지 않습니다"]
+
+
+def test_blank_titles_and_thumbnail_text_are_rejected():
+    report = validate_packaging(brief(titles=["", " ", "제목"], thumbnails=[{"text": " ", "visual": "a"}, {"text": "b", "visual": "b"}, {"text": "c", "visual": "c"}]))
+    assert not report["passed"]
+    assert "제목 1안이 비어 있습니다" in report["issues"] and "제목 2안이 비어 있습니다" in report["issues"]
+    assert "썸네일 1안 글자가 비어 있습니다" in report["issues"]

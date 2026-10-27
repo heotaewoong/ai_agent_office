@@ -25,7 +25,7 @@ python -m http.server 8080
 ### 실시간 모드
 
 - **앱 안**: `/world/index.html?api=/api/space&embed=1` (메뉴 "오피스 월드"). 콘텐츠 오피스 백엔드의 `GET /api/space`(읽기 전용, 승인을 만들지 않음)가 투영을 돌려줍니다.
-- **단독 실행**: `index.html?api=https://서버/api/space` (다른 도메인이면 CORS 허용 필요. `/api/space`는 `Access-Control-Allow-Origin: *`를 보냅니다.)
+- **단독 실행**: `index.html?api=https://서버/api/space` — 다른 도메인의 단독 페이지는 지금 `/api/space`를 읽을 수 없습니다(백엔드가 앱 자신의 origin만 받습니다). 지원하는 경로는 앱 안의 `/world/` 경로이거나, 리버스 프록시로 정적 사이트와 `/api/space`를 같은 origin에서 서빙하는 것입니다.
 - 또는 `index.html`의 `app.js` 앞에 `<script>window.OFFICE_WORLD_API = '/api/space';</script>`
 
 실시간 모드는 10초마다 다시 읽고, 실패하면 마지막 상태를 유지한 채 상단에 표시합니다. 예시 모드에서만 동료가 기억을 확인하러 걷는 연출이 돕니다.

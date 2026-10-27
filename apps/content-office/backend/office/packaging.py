@@ -44,9 +44,11 @@ def validate_packaging(brief):
     if len(titles) != 3:
         issues.append("제목은 비교용 3안이 필요합니다")
     issues += [f"제목 {i + 1}안이 {TITLE_MAX}자를 넘습니다" for i, t in enumerate(titles) if len(t) > TITLE_MAX]
+    issues += [f"제목 {i + 1}안이 비어 있습니다" for i, t in enumerate(titles) if not str(t).strip()]
     if len(thumbs) != 3:
         issues.append("썸네일은 비교용 3안이 필요합니다")
     issues += [f"썸네일 {i + 1}안 글자가 {THUMB_TEXT_MAX}자를 넘습니다" for i, t in enumerate(thumbs) if len(t.get("text", "")) > THUMB_TEXT_MAX]
+    issues += [f"썸네일 {i + 1}안 글자가 비어 있습니다" for i, t in enumerate(thumbs) if not str(t.get("text", "")).strip()]
     hook = brief.get("hook", "").strip()
     if not 0 < len(hook) <= HOOK_MAX:
         issues.append(f"훅은 1~{HOOK_MAX}자로 씁니다")

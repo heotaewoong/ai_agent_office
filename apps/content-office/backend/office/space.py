@@ -37,16 +37,24 @@ EVENT_TEXT = {
     "source_rejected": "① 원고 거절", "release_approved": "② 출고 승인", "release_rejected": "② 출고 거절",
     "lesson_proposed": "교훈 후보", "lesson_reviewed": "교훈 검토", "model_started": "모델 호출",
     "model_completed": "모델 완료", "thumbnail_selected": "썸네일 선택",
+    "production_completed": "제작 완료", "production_partial": "일부 제작 완료", "rss_refreshed": "RSS 새로 확인",
+    "evidence_collected": "근거 수집", "source_input_saved": "근거 입력 저장", "operator_source_registered": "운영자 근거 등록",
+    "draft_registered": "초안 등록", "task_result_unknown": "호출 결과 불명", "cost_unknown": "비용 불명",
+    "cost_exceeded_reservation": "예약 초과", "model_cache_hit": "모델 캐시 적중", "speech_request_started": "음성 요청 시작",
+    "operator_retry_requested": "재시도 요청",
 }
 FLOW = {
     "idea_selected": ("inbox", "scripts"), "job_created": ("inbox", "scripts"), "source_approved": ("scripts", "creative"),
-    "production_partial": ("creative", "outbox"), "release_approved": ("outbox", "ops"),
+    "production_partial": ("creative", "outbox"), "production_completed": ("creative", "outbox"), "release_approved": ("outbox", "ops"),
 }
 VIEW = {s["id"]: s["view"] for s in STAGES}
 
 
-def _actions(state):
+def _actions(state, job=None):
     if state in ("research_ready", "source_rejected"):
+        article = (job or {}).get("article") or {}
+        if article.get("origin") == "idea" and not (job or {}).get("packaging"):
+            return []
         return [{"id": "draft", "label": "원고 생성"}]
     if state == "source_approved":
         return [{"id": "produce", "label": "제작 시작"}]
@@ -63,10 +71,7 @@ def _clock(created_at):
         return ""
 
 
-def project_space(store, office_url: str = "http://localhost:3110", agents=None) -> dict:
-    if agents is None:
-        from .api import AGENTS
-        agents = AGENTS
+def project_space(store, office_url: str = "http://localhost:3110", agents=()) -> dict:
     jobs = store.jobs()
     by_job = {j["id"]: j for j in jobs}
     items = {s["id"]: [] for s in STAGES}
@@ -92,7 +97,7 @@ def project_space(store, office_url: str = "http://localhost:3110", agents=None)
         room = JOB_ROOM.get(state)
         if room:
             items[room].append(item(room, job.get("id", ""), job.get("title", ""), state, STATE_LABELS.get(state, state),
-                                    state in NEEDS_HUMAN, _actions(state)))
+                                    state in NEEDS_HUMAN, _actions(state, job)))
     for lesson in store.lessons("proposed"):
         items["ops"].append(item("ops", str(lesson.get("id", "")), lesson.get("hypothesis", ""), "proposed", "사람 승인 대기", True))
     budget = store.budget()
@@ -129,7 +134,7 @@ def project_space(store, office_url: str = "http://localhost:3110", agents=None)
         job = by_job.get(ev.get("job_id"))
         stage = JOB_ROOM.get(job.get("state", ""), "ops") if job else "ops"
         kind = ev.get("kind", "")
-        text = EVENT_TEXT.get(kind, kind)
+        text = EVENT_TEXT.get(kind, "작업 기록")
         title = job.get("title", "") if job else ""
         events.append({"time": _clock(ev.get("created_at", "")), "stageId": stage, "text": f"{text} · {title}" if title else text})
         if kind in FLOW and ev.get("job_id"):
