@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, OfficeApiError } from "../lib/api";
 import type {
+  Action,
   Article,
   Artifact,
   Dashboard,
@@ -846,12 +847,6 @@ function BudgetStrip({ budget }: { budget: Dashboard["budget"] }) {
   );
 }
 
-export type Action = (
-  label: string,
-  execute: () => Promise<unknown>,
-  success: string,
-) => Promise<void>;
-
 function Studio({
   job,
   model,
@@ -976,7 +971,12 @@ function Studio({
         </div>
       )}
       {job.article?.origin === "idea" && (
-        <PackagingPanel job={job} busy={locked} action={action} onSaved={onSaved} />
+        <PackagingPanel
+          key={job.packaging?.packaging_hash ?? "new"}
+          job={job}
+          busy={locked}
+          action={action}
+        />
       )}
       <EvidenceIntake
         job={job}

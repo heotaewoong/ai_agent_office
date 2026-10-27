@@ -3,21 +3,17 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { validatePackagingBrief } from "../lib/packaging";
-import type { Job, PackagingBrief } from "../lib/types";
-import type { Action } from "./page";
+import type { Action, Job, PackagingBrief } from "../lib/types";
 
 export function PackagingPanel({
   job,
   busy,
   action,
-  onSaved,
 }: {
   job: Job;
   busy: boolean;
   action: Action;
-  onSaved: (job: Job) => void;
 }) {
-  void onSaved; // action이 저장 뒤 작업을 다시 불러온다
   const p = job.packaging;
   const [titles, setTitles] = useState<string[]>(() => [0, 1, 2].map((i) => p?.titles?.[i] ?? ""));
   const [thumbs, setThumbs] = useState(() =>
@@ -27,7 +23,7 @@ export function PackagingPanel({
   const [logline, setLogline] = useState(p?.logline ?? "");
   const [reasons, setReasons] = useState<string[]>(() => [0, 1, 2].map((i) => p?.reasons?.[i] ?? ""));
   const [chosen, setChosen] = useState(() => {
-    const idx = p?.chosen_title ? p.titles.indexOf(p.chosen_title) : 0;
+    const idx = p?.chosen_title ? p.titles?.indexOf(p.chosen_title) : 0;
     return idx >= 0 ? idx : 0;
   });
   const [issues, setIssues] = useState<string[]>([]);
@@ -71,7 +67,7 @@ export function PackagingPanel({
         {titles.map((t, i) => (
           <div key={i} className="v6-packaging-row">
             <label htmlFor={`pk-title-${i}`}>
-              <input type="radio" name="pk-chosen" checked={chosen === i} disabled={busy} onChange={() => setChosen(i)} /> 제목 {i + 1}안
+              <input id={`pk-chosen-${i}`} aria-label={`제목 ${i + 1}안 선택`} type="radio" name="pk-chosen" checked={chosen === i} disabled={busy} onChange={() => setChosen(i)} /> 제목 {i + 1}안
             </label>
             <input id={`pk-title-${i}`} value={t} disabled={busy} onChange={(e) => setTitles(titles.map((x, j) => (j === i ? e.target.value : x)))} />
           </div>
