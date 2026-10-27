@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import mimetypes
 import os
 import secrets
@@ -13,8 +14,9 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .bootstrap import default_store
@@ -25,7 +27,7 @@ from .analytics import baseline, propose_lessons
 from .brand import load_brand
 from .gates import run_gates
 from .ideas import rank_ideas, score_idea
-from .packaging import attach_packaging
+from .packaging import attach_packaging, require_packaging
 
 ALLOWED_ORIGINS = {"http://localhost:3110", "http://127.0.0.1:3110", "http://localhost:8510", "http://127.0.0.1:8510"}
 AGENTS = [
@@ -69,9 +71,9 @@ class EvidenceInput(BaseModel):
 
 class IdeaInput(BaseModel):
     title: str = Field(min_length=1, max_length=200)
-    source_url: str = ""
-    views: int | None = None
-    channel_avg_views: int | None = None
+    source_url: str = Field(default="", max_length=2000)
+    views: int | None = Field(default=None, le=10**12)
+    channel_avg_views: int | None = Field(default=None, le=10**12)
     demand: float = Field(default=0, ge=0, le=100)
     primary_sources: int = Field(default=0, ge=0)
     fit: float = Field(default=0, ge=0, le=1)
@@ -79,9 +81,14 @@ class IdeaInput(BaseModel):
     policy_flags: list[str] = []
 
 
+class ThumbnailInput(BaseModel):
+    text: str
+    visual: str
+
+
 class PackagingInput(BaseModel):
     titles: list[str]
-    thumbnails: list[dict]
+    thumbnails: list[ThumbnailInput]
     hook: str
     logline: str
     reasons: list[str]
@@ -94,6 +101,13 @@ class SnapshotInput(BaseModel):
     period: Literal["24h", "7d", "28d"]
     metrics: dict[str, float | int | None]
     job_id: str | None = None
+
+    @field_validator("metrics")
+    @classmethod
+    def finite_metrics(cls, value):
+        if any(isinstance(v, float) and not math.isfinite(v) for v in value.values()):
+            raise ValueError("지표 값은 유한한 숫자여야 합니다")
+        return value
 
 
 class LessonReview(BaseModel):
@@ -142,6 +156,12 @@ def create_app(store: Store | None = None):
     @app.exception_handler(WorkflowError)
     async def workflow_error(request, error):
         return JSONResponse({"detail": str(error), "code": "workflow_blocked"}, status_code=409)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, error):
+        # 입력값(NaN 등)을 되돌려 직렬화하다 500이 나지 않도록 위치·메시지만 돌려준다
+        detail = [{"loc": list(e.get("loc", ())), "msg": e.get("msg", ""), "type": e.get("type", "")} for e in error.errors()]
+        return JSONResponse({"detail": detail}, status_code=422)
 
     @app.get("/api/health")
     def health():
@@ -198,6 +218,7 @@ def create_app(store: Store | None = None):
     def draft_source(job_id: str):
         require_open_window()
         job = store.job(job_id)
+        require_packaging(job)
         return store.enqueue("draft", {"job_id": job_id, "source_hash": job["source_hash"]}, key=f"draft:{job_id}:{job['source_hash'] or 'initial'}")
 
     @app.post("/api/jobs/{job_id}/evaluate", status_code=202)

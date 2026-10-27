@@ -156,4 +156,11 @@ npm run build
 
 판매 자료·타사 자산·폰트·음성의 실제 사용 조건은 출고 목적에 맞춰 검토합니다. 상품을 임의로 끼워 넣거나 가격·쿠폰·다운로드 권한을 AI가 바꾸지 않습니다. 현재 기능과 전체 장기 계획을 구분한 범위는 두 연결 문서에 기록했습니다.
 
-v6 편집 통제실 1차 연결로 기획 은행(⓪ 기획 선택)·패키지 카드·브랜드 번들·품질/정책 게이트·성과 스냅샷/교훈 API와 뉴스 화면의 기획 은행 패널이 연결되었습니다. 기획에서 시작한 작업은 패키지(제목 3안·썸네일 3안·훅)를 확정하기 전에는 원고를 만들지 않습니다. 게이트에 걸리면 원고 품질을 blocked로 표시할 뿐, 사람의 승인을 대신하지 않습니다. 포맷 분기·TTS 발음 사전·Studio CSV 업로드는 아직 연결되지 않았습니다.
+v6 편집 통제실 1차 연결로 기획 은행(⓪ 기획 선택)·패키지 카드·브랜드 번들·품질/정책 게이트·성과 스냅샷/교훈 API와 뉴스 화면의 기획 은행 패널이 연결되었습니다. 기획에서 시작한 작업은 패키지(제목 3안·썸네일 3안·훅)를 확정하기 전에는 원고를 만들지 않습니다. 게이트에 걸리면 원고 품질을 blocked로 표시할 뿐, 사람의 승인을 대신하지 않습니다. 포맷 분기·TTS 발음 사전·Studio CSV 업로드는 아직 연결되지 않았습니다. 기획 등록·패키지 확정·성과 스냅샷·교훈 검토는 현재 API로만 가능하고(세션 쿠키·CSRF·Origin 필요) 화면에는 기획 은행 패널만 있으며, 기획 선택에는 https 출처 URL이 필요합니다.
+
+```
+curl -c j -H "Host: localhost:8510" http://localhost:8510/api/session            # csrf 토큰 확인
+curl -b j -H "Origin: http://localhost:3110" -H "X-Office-CSRF: <csrf>" -H "Content-Type: application/json" -d '{"title":"기획","source_url":"https://...","primary_sources":2,"demand":70,"fit":0.9}' http://localhost:8510/api/ideas
+curl -b j -H "Origin: http://localhost:3110" -H "X-Office-CSRF: <csrf>" -H "Content-Type: application/json" -d '{}' http://localhost:8510/api/ideas/<id>/select
+curl -b j -H "Origin: http://localhost:3110" -H "X-Office-CSRF: <csrf>" -H "Content-Type: application/json" -d @packaging.json http://localhost:8510/api/jobs/<job_id>/packaging
+```
