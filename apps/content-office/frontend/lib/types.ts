@@ -12,6 +12,7 @@ export type Article = {
   category?: string;
   evidence?: Evidence[];
   limitations?: string[];
+  origin?: string;
 };
 export type Review = {
   role: string;
@@ -36,6 +37,7 @@ export type Evidence = {
 export type SourcePacket = {
   title: string;
   body: string;
+  packaging_hash?: string;
   evidence?: Evidence[];
   quality?: {
     status: string;
@@ -135,6 +137,7 @@ export type Job = {
   error?: string | null;
   source_hash?: string;
   source_packet?: SourcePacket | null;
+  packaging?: PackagingRecord | null;
   manifest?: {
     hash: string;
     files: Artifact[];
@@ -274,8 +277,34 @@ export type PackagingBrief = {
   reasons: string[];
   chosen_title?: string;
 };
+export type PackagingRecord = PackagingBrief & {
+  packaging_hash: string;
+  selected_by?: string;
+};
 export type GateReport = {
   status: "pass" | "warn" | "block";
   items: { level: "warn" | "block"; rule: string; message: string }[];
   disclosure: { youtube_altered_content: boolean; reasons: string[] };
+};
+export type IdeaInput = {
+  title: string;
+  source_url: string;
+  views?: number | null;
+  channel_avg_views?: number | null;
+  demand: number;
+  primary_sources: number;
+  fit: number;
+  covered_before: boolean;
+  policy_flags: string[];
+};
+export type SnapshotChannel =
+  | "youtube_long"
+  | "shorts"
+  | "blog_tistory"
+  | "blog_naver"
+  | "newsletter";
+export type SnapshotPeriod = "24h" | "7d" | "28d";
+export type StudioCsvResult = {
+  snapshots: { id: string; external_id: string; period: string }[];
+  lessons: Lesson[];
 };
