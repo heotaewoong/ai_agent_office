@@ -10,6 +10,7 @@ import {
   formatDate,
 } from "../lib/workflow";
 import { Icon } from "./icons";
+import { IdeaIntake } from "./idea-intake";
 
 type Action = (
   label: string,
@@ -581,8 +582,9 @@ export function IdeaBank({ onSelected }: { onSelected?: (job: Job) => void }) {
           <span className="count-pill">{ideas.length}</span>
         </div>
       </div>
+      <IdeaIntake onSaved={() => void load()} />
       {error && <p role="alert">{error}</p>}
-      {ideas.length === 0 && !error && <p>아직 점수를 매긴 기획이 없습니다.</p>}
+      {ideas.length === 0 && !error && <p>아직 점수를 매긴 기획이 없습니다. 아래에서 직접 등록하세요.</p>}
       <ol>
         {ideas.map((idea) => (
           <li key={idea.id}>
