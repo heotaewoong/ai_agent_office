@@ -19,14 +19,18 @@ def _numbers(text):
 
 
 def narration(packet):
-    return " ".join(scene.get("narration", "") for scene in packet.get("video", {}).get("scenes", []))
+    return " ".join((scene.get("narration") or "") for scene in ((packet.get("video") or {}).get("scenes") or []) if isinstance(scene, dict))
 
 
 def metadata_fact_check(packet):
     evidence = _numbers(" ".join(e.get("claim", "") + " " + " ".join(e.get("numbers", [])) for e in packet.get("evidence", [])))
     body = _numbers(packet.get("body", ""))
-    video = packet.get("video", {})
-    fields = {"블로그 제목": packet.get("title", ""), "영상 제목": video.get("title", ""), "영상 설명": video.get("description", ""), "태그": " ".join(video.get("tags", []))}
+    video = packet.get("video") or {}
+    fields = {"블로그 제목": packet.get("title") or "", "영상 제목": video.get("title") or "", "영상 설명": video.get("description") or "", "태그": " ".join(video.get("tags") or [])}
+    thumbs = [t for t in (video.get("thumbnails") or []) if isinstance(t, dict)]
+    for index, thumb in enumerate(thumbs, 1):
+        fields[f"썸네일 {index} 제목"] = thumb.get("title") or ""
+        fields[f"썸네일 {index} 보조"] = thumb.get("subtitle") or ""
     items = []
     for name, text in fields.items():
         for number in sorted(_numbers(text) - evidence):

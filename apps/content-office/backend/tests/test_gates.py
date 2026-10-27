@@ -61,3 +61,21 @@ def test_banned_claim_in_thumbnail_and_none_values_safe():
     p = packet()
     p["video"].update({"thumbnails": ["x", {"title": None, "subtitle": "수익 보장"}]})
     assert "banned_claim" in [i["rule"] for i in run_gates(p, brand={"banned": ["수익 보장"]})["items"]]
+
+
+def test_none_video_and_tags_do_not_raise():
+    p = packet()
+    p["video"]["tags"] = None
+    assert run_gates(p)["status"] in ("pass", "warn")
+    p["video"] = {"scenes": [{"narration": None}], "title": None, "description": None}
+    run_gates(p)
+    p["video"] = None
+    assert run_gates(p)["status"] in ("pass", "warn")
+
+
+def test_thumbnail_number_without_evidence_blocks():
+    p = packet()
+    p["video"]["thumbnails"] = [{"title": "수익 10배", "subtitle": ""}, "bad"]
+    report = run_gates(p)
+    assert report["status"] == "block"
+    assert any(i["rule"] == "metadata_numbers" and "썸네일 1 제목" in i["message"] for i in report["items"])
