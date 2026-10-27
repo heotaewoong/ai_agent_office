@@ -1,6 +1,6 @@
 # HeoBrain 오피스 월드 설계 (3D 메타버스 관제 공간)
 
-작성 2026-10-28 · 참고 자료: OneDrive 공유 폴더의 `CnvMatrixV1`(여백) 1~8단계 스냅샷 분석(2026-10-27), 사용자가 제시한 아이소메트릭 AI 오피스 참고 이미지, 기존 설계 `docs/superpowers/specs/2026-10-26-content-office-design.md`, `2026-10-27-ai-content-agent-design.md`
+작성 2026-10-28 · 참고 자료: [3D 오피스 월드 배경 조사와 결정](../../reports/3D%20오피스%20월드%20배경%20조사와%20결정.md)(외부 참고 프로젝트 `CnvMatrixV1` 1~8단계 분석과 경로 선택), 사용자가 제시한 아이소메트릭 AI 오피스 참고 이미지, 기존 설계 `docs/superpowers/specs/2026-10-26-content-office-design.md`, `2026-10-27-ai-content-agent-design.md`
 
 ## 1. 결정
 
