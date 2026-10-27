@@ -1,0 +1,157 @@
+# HeoBrain 콘텐츠 오피스
+
+공식 AI RSS에서 기사를 고르고, 근거가 연결된 한국어 원고를 검토한 뒤 블로그와 YouTube Shorts를 제작하는 개인용 로컬 앱입니다. 현재 작업실은 **http://localhost:3110**, API는 **http://localhost:8510/api/health**입니다. Windows 브라우저에서도 두 주소의 응답을 확인했습니다.
+
+이번 사용자 지정 작업 시간은 **2026-10-26 02:20–08:20 KST**, 외부 API 총한도는 **10,000원**입니다. 앱 장부의 비용은 제공자 사용량과 확인한 단가를 이용한 추정 원가이며 계정 청구서 대사 금액이 아닙니다. 예산 환산 가정은 1달러=2,000원으로, 시장 환율을 뜻하지 않습니다.
+
+## 처음 사용하는 순서
+
+1. **오늘의 뉴스**에서 공식 RSS의 발행일·선정 이유·수집 실패를 확인합니다. 최근 7일의 날짜가 확인된 후보 중 최대3편을 작업으로 만듭니다. 초기 실제 선정3편은 이미 원고 검토 상태로 준비했습니다.
+2. **콘텐츠 작업실**에서 원문 링크, 주장별 근거, 한계, 원고와 영상 대본을 읽습니다. 원문 접근이 막힌 경우 허용된 공개 본문을 직접 넣을 수 있습니다. 이때 선택한 본문만 지정 Gemini로 전송해 근거·원고를 다시 만들며, 과거 기획서 전체를 업로드하지 않습니다.
+3. 수정한 원고는 새 버전으로 저장하고 비평·평가를 다시 받습니다. 영상·글·카드·PDF를 선택한 뒤 사람이 **원고 승인①**을 합니다. 승인 전에는 음성·이미지·영상 제작을 시작하지 않습니다.
+4. **선택 제작**을 실행합니다. 글과 영상은 승인한 같은 원고에서 나뉩니다. 영상 실패가 완성된 글의 출고를 막지 않으며, 출력별 완료/실패와 남은 행동을 확인합니다.
+5. **제작·출고함**에서 완료된 출고 대상만 고릅니다. 영상은 실제 음성·화면·자막을 확인하고 썸네일5안 중 최종안을 선택합니다. **출고 승인②** 뒤 선택한 제작물만 ZIP으로 내려받습니다.
+6. 패키지를 플랫폼 편집기에 직접 전달합니다. 앱의 다운로드·출고 승인은 외부 공개 완료를 뜻하지 않습니다. 계정·일정·상품 조건과 실제 게시 결과는 플랫폼에서 확인합니다.
+
+작업이 실패하면 **운영 기록**에서 현재 버전의 실패/부분 완료를 명시적으로 재시도할 수 있습니다. 모델 응답이 불명인 경우는 먼저 비용·결과를 대사해야 합니다. 같은 불명 호출은 재시도 버튼을 눌러도 제공자 연결부에서 차단하며, 열린 예약을 자동으로 지우지 않습니다.
+
+## 실제 구현한 파이프라인
+
+```mermaid
+flowchart TD
+  A[공식 RSS · 발행일 · 이벤트 중복] --> B[본문 조사 · 문단 근거 · 한계]
+  B --> C[한국어 원고 · 독자 기준]
+  C --> D[별도 Critique + Eval · 형식과 수치 검사]
+  D -->|수정 최대2회| C
+  D --> E[사람 원고 승인① · 내용 해시 · 제작 선택]
+  E --> F[블로그 HTML · Markdown · 네이버 텍스트]
+  E --> G[음성 · 실제 길이 · 장면 · SRT · FFmpeg MP4]
+  E --> H[선택 카드 · 요약 체크리스트 PDF]
+  G --> I[썸네일5안 · 최종 선택 · 사람 영상 검토]
+  F --> J[완료한 출력별 출고 승인②]
+  H --> J
+  I --> J
+  J --> K[해시 확인 · 선택 제작물 ZIP · 수동 전달]
+```
+
+- **수집:** RSS/Atom, HTTPS 공개 주소, 응답 크기/리다이렉트 제한, 날짜 없음·미래 날짜 제외, URL 및 구체적 동일 이벤트 묶기. 실패 피드를 기사0개와 구분합니다.
+- **조사:** 실제 본문에서 문단을 추출합니다. 모델의 근거 후보에 정확한 원문 문단을 붙이며, 단일 발행자 본문을 읽었다는 사실을 ‘독립 검증’으로 승격하지 않습니다. 링크 존재와 주장의 논리적 지지는 별도 검토 대상입니다.
+- **작성:** Gen → 별도 Critique/Eval → Refine 최대2회. 두 검수 호출은 서로의 답변을 받지 않습니다. 현재 같은 모델의 별도 호출이므로 독립적인 외부 사실 증명으로 해석하지 않습니다.
+- **버전:** 실제 모델 입력·schema·모델·옵션을 캐시에 묶습니다. 원고/제작 선택 변경은 관련 승인과 현재 제작물을 무효화합니다. 예전 원고는 버전 장부에 남습니다.
+- **제작:** 블로그와 영상은 서로의 공개를 기다리지 않습니다. 성공한 음성은 즉시 보존하고 재사용합니다. 코드·폰트·음성 설정이 달라지면 새 제작 폴더에 보존합니다. 실제 음성60초 초과/무음/잘못된 스트림은 차단합니다.
+- **출고:** 선택한 완료 출력에만 승인·ZIP을 적용합니다. 파일 내용 해시와 부모 원고를 다시 확인합니다. 영상 출고에는 썸네일 선택 및 음성·영상 검토 확인이 필요합니다.
+- **운영:** SQLite WAL, 영속 큐, OS 단일 작업자 lock, 강제 종료 작업의 unknown 전환, 예산 원자 예약, 명시적 재시도, 고정 마감 감시를 구현했습니다.
+- **과거 지식:** 원본111개 Markdown/고유103개/3,192절을 로컬 검색할 수 있습니다. 검색 결과는 과거 계획·근거이며 현재 지시나 실행 권한이 아닙니다.
+
+세부 연결은 [이전 파이프라인→실제 구현표](docs/pipeline-traceability.md), [기존 소스 재사용과 미연결 범위](docs/reference-reuse.md)를 참고합니다.
+
+## 결과 파일
+
+| 선택 | 생성되는 결과 |
+|---|---|
+| 블로그 | `tistory.md`, `tistory.html`, `naver.txt` |
+| 영상 | `youtube-script.md`, `youtube-plan.json`, `description.txt`, 장면별 WAV/PNG, `captions.srt`, `short.mp4`, 가로 썸네일5안, 세로 `shorts-cover.png`, `media.json` |
+| 카드 | 승인 장면별 PNG와 검수 메타데이터 |
+| 무료 자료 | `summary-checklist.pdf` |
+| 공통 | `asset-rights.json`, 출력별 상태·파일 해시·부모 원고를 가진 manifest |
+| 출고 승인 후 | 선택 제작물과 `handoff.json`을 포함한 ZIP |
+
+MP4는1080×1920 H.264/AAC입니다. SRT는 실제 장면 음성 길이에 연결합니다. 생성된 커버·SRT 파일이 YouTube에 적용됐다는 뜻은 아닙니다. 썸네일 점수는 로컬 가독성·대비·원고 표현 일치 검사이며 실제 CTR 예측이나 성과 측정이 아닙니다.
+
+## 실행과 종료
+
+현재 작업실이 열려 있다면 중복으로 시작할 필요가 없습니다. 준비된 이 WSL 작업공간에서 서비스가 모두 종료된 뒤 시작하는 명령입니다.
+
+```bash
+cd "<저장소 경로>/apps/content-office"
+./scripts/start-local.sh
+```
+
+관리 스크립트는 자기 PID·시작 시각·명령과 포트 사용을 확인합니다. 기존에 수동으로 시작한 서비스를 강제로 빼앗지 않습니다. 전체 서비스 종료는 다음 명령입니다.
+
+```bash
+./scripts/stop-local.sh --all
+```
+
+`--worker`, `--watcher`로 관리 대상만 종료할 수도 있습니다. watcher를 수동 종료하는 것은 약속한 감시를 중단하는 일이므로, 이번08:20 종료 전에는 그대로 유지합니다.
+
+08:20에는 작업자·자동 RSS 감시·새 유료 호출을 멈추고 검토 화면은 열어둡니다. 나중에 운영자가 새 작업 시간을 직접 지정할 수 있습니다. **기존 비용·불명 예약·총한도는 초기화하지 않습니다.** 현재 진행 중인 시간을 이 명령으로 조용히 연장할 수 없습니다.
+
+```bash
+cd "<저장소 경로>/apps/content-office/backend"
+.venv/bin/python -m office.session status
+# 기존 작업자와 감시의 종료를 확인한 뒤, 운영자가 직접 실행:
+.venv/bin/python -m office.session start --minutes 60
+```
+
+그다음 별도 터미널에서 작업자와 감시를 시작합니다. 이미 열린 API·화면을 다시 시작할 필요는 없습니다.
+
+```bash
+cd "<저장소 경로>/apps/content-office/backend"
+.venv/bin/python -m office.worker
+```
+
+```bash
+cd "<저장소 경로>/apps/content-office"
+backend/.venv/bin/python scripts/watch_window.py
+```
+
+## 의존성과 설정
+
+이 작업공간에는 Python 가상환경·Node 의존성과 FFmpeg가 준비됐습니다. 새 환경에 설치할 때는 Python3.12+, Node22+, FFmpeg/ffprobe, 한국어 TTF 폰트를 준비합니다. Windows 기본 음성 경로에는 PowerShell과 `Microsoft Heami Desktop` ko-KR 음성이 필요합니다.
+
+```bash
+cd apps/content-office
+python3 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -r backend/requirements-lock.txt
+cd frontend
+npm ci
+npm run build
+```
+
+| 설정 | 의미 |
+|---|---|
+| `GEMINI_API_KEY` | 기존 Gemini 연결. 환경으로만 전달하며 UI·ZIP·저장소에 넣지 않습니다 |
+| `OFFICE_STATE_DIR` | DB·자산·캐시 위치. 기본 `~/.local/state/heobrain-content-office` |
+| `OFFICE_MODEL` | 새 장부의 명시적 모델 선택. 현재 실제 작성에 검증한 모델은 `gemini-3.5-flash-lite`이며 저장된 모델 설정이 우선합니다 |
+| `CONTENT_OFFICE_FONT` | 한국어 TTF 경로. 이 환경은 Windows Malgun Gothic을 사용하며 폰트 파일을 배포하지 않습니다 |
+| `OFFICE_LOCAL_VOICE` | 명시적인 설치 음성 이름. 기본 `Microsoft Heami Desktop`, rate0 |
+| `OFFICE_ENV_FILE` | start-local에 필요한 본인 소유 환경 파일을 지정할 때만 사용합니다 |
+
+음성 프로필은 운영자가 명시적으로 선택합니다. 로컬 Heami와 실제 합성 자료에서 시험한 Gemini3.8 Flash TTS/Kore를 제공합니다. Gemini 경로도 원고 승인① 후 승인된3~7장면 대본에만 호출하며, 원고당1,000원 하위한도와 기존 총10,000원 한도를 함께 적용합니다. 요청이 실패해도 다른 유료 음성으로 자동 전환하지 않습니다. 실제 음성/전사 비교는 아래 조사 폴더의 음성 품질 보고서에 있으며, 자동 전사 차이가 주관적 청취 품질 보증은 아닙니다.
+
+```bash
+cd "<저장소 경로>/apps/content-office/backend"
+.venv/bin/python -m office.voice_selection status
+# 선택 자체는 유료 호출을 하지 않습니다.
+.venv/bin/python -m office.voice_selection set --profile gemini-kore
+# 로컬을 명시적으로 고르려면:
+.venv/bin/python -m office.voice_selection set --profile windows-heami
+```
+
+유료 모델을 사용할 수 없거나 단가 검증 기간이 지나면 보류합니다. 자동 유료 대체 호출은 없습니다. 외부 모델로 원본111문서·Windows 소스·자격 파일을 통째 전송하지 않습니다.
+
+## 검사와 증거
+
+```bash
+cd apps/content-office/backend
+.venv/bin/python -m pytest -q
+# Windows 실제 한국어 음성·FFmpeg까지 포함하는 별도 합성 자료 검사:
+OFFICE_REAL_MEDIA_E2E=1 .venv/bin/python -m pytest tests/test_e2e_workflow.py -q
+```
+
+```bash
+cd apps/content-office/frontend
+npm test
+npm run typecheck
+npm run test:ui
+npm run build
+```
+
+검증 기록은 프로젝트 `research/content-office-2026-10-26/`에 있습니다. 실제 합성 자료의 브라우저→API→SQLite→음성/MP4→출고→ZIP→재시작 증거는 `e2e-report.md`, 원본 문서/참고 소스 범위는 `md-audit.md`, `research-md-audit.md`, `source-audit.md`에 있습니다. 검사는 실제 뉴스3편의 승인·제작·공개 완료를 대신하지 않습니다.
+
+## 이번 경계
+
+현재는 한 컴퓨터의 단일 운영자용입니다. 로컬 세션·Origin/CSRF·경로·파일 해시를 검사하지만, 원격 고객의 계정 인증·다중 사용자 자료 격리를 구현한 서비스는 아닙니다. Hermes native runtime, 기존 Windows 엔진 전체, 외부 플랫폼 업로드, 뉴스레터 발송, Marketplace 상품/쿠폰/주문 쓰기는 연결하지 않았습니다. 이 연결 없이도 선택·원고 검토·승인·제작·수동 전달을 사용할 수 있습니다.
+
+판매 자료·타사 자산·폰트·음성의 실제 사용 조건은 출고 목적에 맞춰 검토합니다. 상품을 임의로 끼워 넣거나 가격·쿠폰·다운로드 권한을 AI가 바꾸지 않습니다. 현재 기능과 전체 장기 계획을 구분한 범위는 두 연결 문서에 기록했습니다.

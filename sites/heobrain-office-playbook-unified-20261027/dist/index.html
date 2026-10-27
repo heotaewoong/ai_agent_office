@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#F7F9F8">
+  <meta name="description" content="18부서 AI 오피스의 학습 확장·코드 TOP3·벤치마크 1,921선·외부 오픈소스 129개를 합친 에이전트 팀·파이프라인 플레이북.">
+  <title>HeoBrain AI 오피스 플레이북</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 40 40%27%3E%3Crect width=%2740%27 height=%2740%27 rx=%279%27 fill=%27%23086A72%27/%3E%3Ctext x=%2720%27 y=%2728%27 text-anchor=%27middle%27 font-size=%2722%27 font-family=%27sans-serif%27 font-weight=%27700%27 fill=%27white%27%3EH%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hahmlet:wght@500;650;750&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<a class="skip" href="#main">본문으로 건너뛰기</a>
+<div class="shell">
+  <aside class="toc" aria-label="목차">
+    <div class="brand"><b>HeoBrain 오피스</b><span>Playbook · 2026.10.27</span></div>
+    <ol id="toc"></ol>
+    <p class="doc-link"><a href="./document.html">문서 버전 보기</a> · <a href="./downloads/heobrain-office-playbook.md" download>Markdown 받기</a></p>
+  </aside>
+
+  <main id="main">
+    <nav class="mnav" aria-label="섹션 이동"><div class="in" id="mnav"></div></nav>
+
+    <header class="hero">
+      <p class="eyebrow">HeoBrain · AI Office · 통합본 2026.10.27</p>
+      <h1>18부서를 모두 등록하고,<br><em>한 번에 한 주문</em>을 끝까지 완결한다.</h1>
+      <p class="lead">전체 설계의 학습 확장, 소스 키트 TOP3, 오픈소스 벤치마크 1,921선을 한 페이지로 합쳤습니다. database 마크다운 33개와 외부 오픈소스 129개를 더해 에이전트 팀과 파이프라인으로 정리했고, 외부 최고 사례를 벤치마킹한 <strong>AI 콘텐츠 에이전트 v6</strong> 설계·구현 계획을 더했습니다.</p>
+      <div class="ledger" aria-label="핵심 숫자">
+        <div><small>DEPARTMENTS</small><b>18</b><span>부서, 업무마다 필요한 역할만 호출</span></div>
+        <div><small>OF CONTRACTS</small><b>144</b><span>기본 업무 계약 + EX 보강 37</span></div>
+        <div><small>FIELDS</small><b>29</b><span>전문 분야, 분야별 TOP3</span></div>
+        <div><small>APPROVALS</small><b>3</b><span>원고① · 출고② · 회차③</span></div>
+        <div><small>LEARNING</small><b>9 → 21</b><span>지정 소스에서 확장 파이프라인으로, 기능 260행</span></div>
+        <div><small>CODE KITS</small><b>30 → 3</b><span>코드 후보에서 마감용 TOP3</span></div>
+        <div><small>BENCHMARK</small><b>1,921</b><span>GitHub 부품 후보, 실행 검증 0</span></div>
+        <div><small>OPEN SOURCE</small><b>129</b><span>이번 큐레이션, 우선 연결·비교 40</span></div>
+      </div>
+      <div class="actions"><a class="primary" href="./document.html">문서 버전 보기</a><a href="./downloads/heobrain-office-playbook.md" download>Markdown 받기</a><button type="button" id="print">인쇄 / PDF 저장</button></div>
+      <div class="status" role="note"><b>현재 상태</b><span>조사·설계·소스 확보 단계입니다. 외부 키트 설치·실행 0건, 유료 API 호출 0건, 계정 연결 0건. 아래 일정과 기능은 구현 계획이며 완료 표시가 아닙니다.</span></div>
+      <div class="merge" aria-label="합친 원본">
+        <a href="https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/complete/#learning-expansion" target="_blank" rel="noopener noreferrer"><span class="mono">원본 1 · complete</span><b>지정 9소스 분석·학습 확장</b><span>21개 확장, 260기능, 내 유튜버 학습 비서</span></a>
+        <a href="https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/source-kits/#top3" target="_blank" rel="noopener noreferrer"><span class="mono">원본 2 · source-kits</span><b>토요일까지 실제 코드 TOP3</b><span>30개 후보, 5개 완결 흐름, 날짜별 계획</span></a>
+        <a href="https://heobrain-ai-office-benchmarks-20261020.ihtwandy0528.chatgpt.site/" target="_blank" rel="noopener noreferrer"><span class="mono">원본 3 · benchmarks</span><b>AI 오피스 벤치마크 1,921선</b><span>3D 후보 8개, 관련 영상 18개</span></a>
+      </div>
+    </header>
+
+    <section id="overview" data-t="한눈에 보는 결론">
+      <div class="sh"><span class="no">§01 · 결론</span><h2>무엇을 바꾸고, 무엇을 지키는가</h2>
+      <p>세 사이트와 database 문서를 합쳐 내린 결론은 세 가지입니다. <strong>뼈대는 유지하고, 외부 코드는 부품으로만 들이고, 확장은 통과 조건 순서대로</strong> 갑니다.</p></div>
+      <ol class="decide">
+        <li><span class="k">1</span><b>뼈대는 바꾸지 않는다</b><p>한 화면 + Hermes 총괄 + 기존 Next.js·FastAPI·Python·SQLite·FFmpeg + 같은 업무 장부. 새 총괄·새 메모리·새 화면을 한꺼번에 들이지 않습니다.</p></li>
+        <li><span class="k">2</span><b>외부 코드는 부품으로만 들인다</b><p>TOP3(FastCampus MCP·A2A, 보유한 CLASS101 n8n 실습, Cole Medin oTTomator)에서 결과 계약과 검토 패턴만 떼어 기존 worker에 붙입니다.</p></li>
+        <li><span class="k">3</span><b>확장은 21개 파이프라인 순서를 따른다</b><p>첫 기반(NX01·09·10·12) → 콘텐츠 첫 실험(NX03·07) → 영상 품질(NX04·06·15) → 운영 연결 → 전체 부서·매출.</p></li>
+      </ol>
+    </section>
+
+    <section id="arch" data-t="추천 아키텍처">
+      <div class="sh"><span class="no">§02 · 아키텍처</span><h2>요청은 한 장부를 거치고, 사람은 세 번 승인한다</h2>
+      <p>예약·승인·재시도의 최종 결정은 업무마다 한 곳입니다. 팀 관리가 병목이면 Paperclip, 장기 재개 공백이 확인되면 LangGraph를 해당 역할에만 비교합니다.</p></div>
+      <div class="arch" role="img" aria-label="나에서 접수함, Hermes 총괄, 업무 장부, 작업자 5종, 결과 확인으로 이어지는 구조. 사람 승인은 접수함으로, 관측 화면은 장부를 읽기만 한다">
+        <div class="nd" style="grid-area:me"><span>나 · 요청 · 자료 · 목적 · 마감 · 예산</span></div>
+        <div class="cv" style="grid-area:c1"></div>
+        <div class="nd" style="grid-area:inbox"><b>한 화면 접수함</b><span>오늘 할 일 · 18부서 · 콘텐츠 작업실 · 발행함 · 자료·지식 · 개인 업무 · 비용</span></div>
+        <div class="ch la" style="grid-area:la"></div>
+        <div class="nd sealed appr" style="grid-area:appr"><b>사람 승인</b><span>① 원고 · ② 출고 · ③ 회차<br>접수함에서 결정</span></div>
+        <div class="cv" style="grid-area:c2"></div>
+        <div class="nd main" style="grid-area:herm"><b>Hermes 총괄</b><span>담당 배정 · 필요한 기억 · 위임 · 예약 주체 한 곳 · 필요한 역할만 호출</span></div>
+        <div class="nd view" style="grid-area:view"><b>3D·목록 관측 화면</b><span>장부를 읽기만 함<br>움직임은 완료 증거가 아님</span></div>
+        <div class="cv" style="grid-area:c3"></div>
+        <div class="cv upw up" style="grid-area:up"></div>
+        <div class="nd tint" style="grid-area:ledg"><b>업무 장부 · SQLite</b><span>요청 · 원고 판본과 해시 · 승인 기록 · 예산 · 외부 ID · 결과 불명 상태</span></div>
+        <div class="c5row" style="grid-area:c4"><div class="cv"></div><div class="cv"></div><div class="cv"></div><div class="cv"></div><div class="cv"></div></div>
+        <div class="workers" style="grid-area:work">
+          <div class="nd"><b>콘텐츠 엔진</b><span>Python · FFmpeg</span></div>
+          <div class="nd"><b>연구·문서</b><span>Docling · 검색</span></div>
+          <div class="nd"><b>개발</b><span>Codex · Claude Code</span></div>
+          <div class="nd"><b>금융 읽기</b><span>검산만 · 매매 0</span></div>
+          <div class="nd"><b>반복 전달</b><span>n8n</span></div>
+        </div>
+        <div class="c5row" style="grid-area:c5"><div class="cv"></div><div class="cv"></div><div class="cv"></div><div class="cv"></div><div class="cv"></div></div>
+        <div class="nd" style="grid-area:res"><b>결과 확인</b><span>실제 파일 · 검사 · 외부 상태 대사 → 다음 행동. 실패는 원래 담당에게 반환</span></div>
+      </div>
+      <div class="stamps" aria-label="세 번의 승인">
+        <span class="stamp"><i>①</i><b>원고</b><span>승인 전 미디어 제작 0건</span></span>
+        <span class="stamp"><i>②</i><b>출고</b><span>채널별로 받고 외부 ID 보존</span></span>
+        <span class="stamp"><i>③</i><b>회차</b><span>발송 직전 최신 동의·수신 거부 검사</span></span>
+      </div>
+      <div class="tw"><table class="t"><thead><tr><th>원칙</th><th>뜻</th><th>지키는 방법</th></tr></thead><tbody>
+        <tr><td><b>판본·해시</b></td><td>승인한 원고와 제작에 쓴 원고가 같은가</td><td>파일 지문(해시)과 manifest 대조</td></tr>
+        <tr><td><b>unknown 상태</b></td><td>외부 응답이 사라진 작업</td><td>재전송 전에 외부 상태부터 조회</td></tr>
+        <tr><td><b>한 곳의 책임</b></td><td>같은 일을 두 플랫폼이 예약·재시도</td><td>예약 주체·재시도 책임을 업무마다 하나로</td></tr>
+        <tr><td><b>역할 ≠ 모델</b></td><td>18부서가 18개 모델 상시 실행을 뜻하지 않음</td><td>등록은 전부, 호출은 필요한 역할만</td></tr>
+      </tbody></table></div>
+    </section>
+
+    <section id="deadline" data-t="10/31 마감 TOP3">
+      <div class="sh"><span class="no">§03 · 토요일 마감</span><h2>강의를 더 사기 전에, 확인한 코드부터</h2>
+      <p>30개 후보(FastCampus 6 · CLASS101 6 · Inflearn 8 · YouTube 10) 중 현재 앱과 10월 31일 마감에 맞춘 재사용 우선순위입니다. 공개 ZIP 4개, 선택 파일 5개, 보유 워크플로 4개를 확보했습니다.</p></div>
+      <div class="grid3" id="top3"></div>
+      <p class="note">인프런에서 하나를 고른다면 <a href="https://github.com/jasonkang14/inflearn-langgraph-agent" target="_blank" rel="noopener noreferrer">LangGraph를 활용한 AI Agent 개발</a>(MIT)의 HITL·멀티 에이전트·MCP 예제 일부입니다.</p>
+      <h3>받은 코드를 부품으로 바꾸는 5단계</h3>
+      <ol class="steps">
+        <li><span class="sn">STEP 1</span><b>정확히 받기</b><span>강의·영상과 실제 파일을 대조하고 버전·해시·이용 조건 기록</span></li>
+        <li><span class="sn">STEP 2</span><b>작은 부분 선택</b><span>처리 하나만 고르고 예제 계정·수신자·경로 교체</span></li>
+        <li><span class="sn">STEP 3</span><b>기존 앱에 연결</b><span>Python 작업자·업무 장부에 붙이고 ①②③ 유지</span></li>
+        <li><span class="sn">STEP 4</span><b>정상·실패 확인</b><span>파일·근거·재시작·중복·권한·비용·unknown 검사</span></li>
+        <li><span class="sn">STEP 5</span><b>실제 사용</b><span>내 블로그·영상·학습 결과로 검토 시간과 원가 측정</span></li>
+      </ol>
+      <h3>화요일에서 토요일까지 <small>구현 계획</small></h3>
+      <ol class="steps">
+        <li><span class="sn">10/27 화</span><b>소스와 현재 앱 기준 고정</b><span>버전·허가·개인자료 정리</span><span class="gate">n8n 또는 Python에서 작은 처리 1개 검증</span></li>
+        <li><span class="sn">10/28 수</span><b>읽히는 블로그 + 재생되는 영상</b><span>RSS → 근거 원고 → 승인① → 독립 제작</span><span class="gate">화면·음성·자막·썸네일·PDF·비용 확인</span></li>
+        <li><span class="sn">10/29 목</span><b>선택 자료로 배우고 Wiki에 인계</b><span>고른 채널·영상의 허용 자료만</span><span class="gate">출처 있는 답·실습·검토한 노트</span></li>
+        <li><span class="sn">10/30 금</span><b>Hermes와 18부서 상태·출고 연결</b><span>등록 업무만 호출</span><span class="gate">미구현 도구는 지원·대기로 표시</span></li>
+        <li><span class="sn">10/31 토</span><b>실제 사용으로 통과 검사</b><span>블로그 열람·영상 재생·학습→Wiki</span><span class="gate">원고 변경·중복·응답 유실 검사, 검토 시간·원가 기록</span></li>
+      </ol>
+      <p class="note">마감이 밀리면 두 주력 흐름(콘텐츠 제작, 선택 자료 학습)을 먼저 통과시키고 복습 엔진·Anki·재무·생활 어댑터는 뒤로 미룹니다.</p>
+    </section>
+
+    <section id="learning" data-t="학습 확장 9→21">
+      <div class="sh"><span class="no">§04 · 학습 확장</span><h2>9개 소스에서 21개 파이프라인으로</h2>
+      <p>강의·영상·자료실에서 확인한 기능 260행을 21개 확장(NX01~NX21)에 연결했습니다. 기준은 역할 수가 아니라 <strong>정확한 결과, 사람이 덜 고치는 제작, 중단 후 이어지는 업무</strong>입니다.</p></div>
+      <div class="grid3" id="highlights"></div>
+      <h3>21개 확장 파이프라인 <small>단계를 눌러 거르고, 행을 눌러 펼치기</small></h3>
+      <div class="controls"><div class="chipbar" id="nx-stages"></div></div>
+      <div class="list" id="nx-list"></div>
+      <h3>지정 9개 소스와 읽은 범위</h3>
+      <div class="list" id="sources9"></div>
+      <h3>내가 고른 유튜버로 공부하는 학습 비서 <small>R16 주관</small></h3>
+      <ol class="steps" id="yt"></ol>
+      <p class="note">등록 후보 채널: CONNECT AI LAB · 투더제이 TTJ · 후츠릿 · 커맨드스페이스(구요한) · Career Hacker Alex. 실제 구독 연동·자동 학습은 꺼져 있습니다. 자막 공식 다운로드 API는 영상 편집 권한이 필요하므로, 다른 사람의 영상은 허용 텍스트와 내 노트를 구분해 다룹니다.</p>
+      <h3>확인한 기능 260행 찾기</h3>
+      <div class="controls">
+        <input type="search" id="ft-q" placeholder="기능·입력·결과 검색 (예: 자막, 쿠폰, 차트)" aria-label="기능 검색">
+        <select id="ft-dep" aria-label="담당 부서"></select>
+        <select id="ft-src" aria-label="출처"></select>
+        <span class="count" id="ft-count"></span>
+      </div>
+      <div class="list" id="ft-list"></div>
+      <button class="more" id="ft-more" type="button">20개 더 보기</button>
+      <h3>읽은 강의·자료실·영상 목록</h3>
+      <div class="list" id="refgroups"></div>
+    </section>
+
+    <section id="flows" data-t="다섯 완결 흐름">
+      <div class="sh"><span class="no">§05 · 완결 흐름</span><h2>먼저 끝까지 이을 다섯 흐름</h2>
+      <p>외부 코드·공식 문서 20개를 추가 대조해 기존 계획의 구현 공백 18건을 다섯 흐름으로 묶었습니다. 토요일에는 FLOW2·FLOW3 안에 근거·판본·인계·완료 검사를 넣는 것이 우선입니다.</p></div>
+      <div id="flow-list"></div>
+      <h3>흐름을 받치는 보강안 18개</h3>
+      <div class="tw"><table class="t" id="ideas"><thead><tr><th>ID</th><th>보강안</th><th>적용</th><th>담당</th></tr></thead><tbody></tbody></table></div>
+      <p class="note">참고 구현(subtitle.js, changedetection, Plane, Paperless-ngx, SWE-agent 등)의 코드는 그대로 반입하지 않고 계약만 독립 구현합니다.</p>
+    </section>
+
+    <section id="depts" data-t="18부서">
+      <div class="sh"><span class="no">§06 · 조직</span><h2>18부서와 부서별 첫 납품</h2>
+      <p>부서는 책임, 비서는 맡길 역할, 작업자는 실제로 파일을 만들거나 계산하는 프로그램입니다. 각 부서는 기본 업무 8개(OF)와 첫 납품 하나로 시작합니다.</p></div>
+      <div class="dgrid" id="dept-grid"></div>
+      <p class="note">금융은 근거·계산까지만 맡기고 실제 매매는 0건입니다. 건강은 기록·질문 준비까지이며 진단·치료 결정은 위임하지 않습니다.</p>
+    </section>
+
+    <section id="teams" data-t="에이전트 팀">
+      <div class="sh"><span class="no">§07 · 에이전트 팀</span><h2>팀은 부서를 묶은 주문 단위다</h2>
+      <p>18부서는 그대로 두고, 주문마다 필요한 부서만 모아 <strong>주관 한 곳이 끝까지 책임</strong>집니다. 아래 8개 팀은 database의 18부서 계약과 외부 팀 패턴을 합쳐 새로 설계한 것입니다.</p></div>
+      <div class="tw"><table class="t" id="our-teams"><thead><tr><th>팀</th><th>구성 (주관 → 협력)</th><th>첫 주문</th><th>완료 증거</th></tr></thead><tbody></tbody></table></div>
+      <h3>검증된 팀 운영 패턴</h3>
+      <div class="grid3" id="patterns"></div>
+      <h3>비교한 올인원 AI 비서팀 TOP5</h3>
+      <div class="tw"><table class="t" id="teams5"><thead><tr><th>#</th><th>팀</th><th>확인한 규모</th><th>제공 형태</th><th>가져올 가치</th></tr></thead><tbody></tbody></table></div>
+      <p class="note">역할 수는 동시 실행 인원이 아닙니다. 1·4번은 팀 정의를 가져올 수 있지만 실행 환경·계정·도구 구성은 우리가 맞춥니다.</p>
+    </section>
+
+    <section id="pipelines" data-t="파이프라인">
+      <div class="sh"><span class="no">§08 · 파이프라인</span><h2>가치가 가장 큰 흐름은 자료에서 여러 납품물로</h2>
+      <p>보유한 Python 콘텐츠 엔진과 가장 가깝고, 한 번의 조사를 글·숏폼·뉴스레터로 바꿔 제작 노동을 줄입니다. 순위는 구축 우선순위이며 실측 절감 시간은 아직 없습니다.</p></div>
+      <div class="tw"><table class="t" id="pipes"><thead><tr><th>#</th><th>파이프라인</th><th>참고할 실물</th><th>남는 가치</th></tr></thead><tbody></tbody></table></div>
+      <h3>콘텐츠 v5 <small>승인한 원고 하나에서 독립 분기</small></h3>
+      <div class="v5">
+        <div class="st"><span class="dot">1</span><div class="tx">접수<span>주제·독자·원본 자료·제작 여부·예산·상품 선택. 상품이 있으면 캠페인 초안·쿠폰 조건을 함께 검증</span></div></div>
+        <div class="st"><span class="dot">2</span><div class="tx">근거<span>입력 검사 → 자료 수집 → 주장별 근거·권리 확인</span></div></div>
+        <div class="st"><span class="dot">3</span><div class="tx">Gen · Critique · Eval<span>공통 원고를 같은 기준으로 독립 평가. 수정은 최대 2회, 근거 부족은 자료 단계로</span></div></div>
+        <div class="st"><span class="dot seal">①</span><div class="tx"><b>원고 승인</b><span>사람이 원고와 제작 범위를 승인하고 원고 버전을 고정</span></div></div>
+        <div class="branches" role="list">
+          <div role="listitem"><b>글</b>티스토리 · 네이버 · LinkedIn · Threads</div>
+          <div role="listitem"><b>카드뉴스</b>카드별 기획 → 렌더 → 장별 검사</div>
+          <div role="listitem"><b>영상</b>대본·장면표 → 음성·화면 → 합성·자막 → 커버 5안</div>
+          <div role="listitem"><b>PDF · 뉴스레터</b>무료 자료, 회차 후보(블로그와 독립)</div>
+        </div>
+        <div class="st"><span class="dot">5</span><div class="tx">검사<span>결과물별 검사 · 미리보기 · 원가 표시</span></div></div>
+        <div class="st"><span class="dot seal">②</span><div class="tx"><b>출고 승인</b><span>게시·업로드를 채널별로 승인하고 외부 ID 보존</span></div></div>
+        <div class="st"><span class="dot seal">③</span><div class="tx"><b>회차 승인</b><span>뉴스레터·홍보 발송, 직전 동의 검사 후 실제 공개·발송 상태 확인</span></div></div>
+      </div>
+      <p class="note">실패 시 되돌아갈 곳: 근거 오류 → 연구 · 말하기 문제 → 대본 · 음성 길이 초과 → 대본 축약 · 장면 오류 → 해당 컷만 · 게시 응답 유실 → 외부 상태부터 조회.</p>
+      <h3>Obsidian · LLM Wiki 8단계 <small>CMDS 스타터킷을 별도 실습 볼트에서 검토</small></h3>
+      <div class="tw"><table class="t" id="obsidian"><thead><tr><th>단계</th><th>하는 일</th><th>완료 결과</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section id="agent" data-t="AI 콘텐츠 에이전트">
+      <div class="sh"><span class="no">§09 · 콘텐츠 에이전트 v6</span><h2>생성 공장 대신 편집 통제실을 짓는다</h2>
+      <p>2026년 10월 외부 벤치마킹(오픈소스 약 55개, 상용 도구 공식 문서, 크리에이터 방법론, 플랫폼 정책, 미디어 생성 스택, 인용 104개)의 결론입니다. <strong>데이터로 기획을 고르고, 제목·썸네일·훅을 원고보다 먼저 정하고, 자동 게이트로 사람이 볼 곳을 좁히고, 승인한 교훈만 다음 회차에 반영</strong>합니다. 중간 단계(버전 승인·예산 예약·Critique/Eval)는 이미 상위권이라 앞단과 뒷단에 투자합니다.</p></div>
+      <div class="grid3">
+        <div class="card"><h4>전 주기를 닫은 제품은 없다</h4><p>리서치부터 성과 환류까지 한 시스템에서 닫은 오픈소스·상용 제품은 없었습니다. 성과를 다음 기획으로 되돌리는 오픈소스는 darkzOGx/youtube-automation-agent 하나였습니다.</p></div>
+        <div class="card"><h4>정책이 겨냥하는 것은 반복이다</h4><p>YouTube·Google·네이버 모두 AI 사용 자체가 아니라 템플릿 반복, 가치 없는 대량 생산, 지어낸 경험을 문제 삼습니다. 그래서 유사도 게이트가 곧 성장 장치입니다.</p></div>
+        <div class="card"><h4>비용의 80~95%는 생성 영상</h4><p>음성·자막·썸네일은 합쳐도 편당 2달러 미만입니다. 실제 화면을 런타임의 70~90%로 두면 비용과 신뢰를 함께 지킵니다.</p></div>
+      </div>
+      <h3>0~13단계 파이프라인 <small>⓪ 기획 선택이 새로 생기고, ①②③의 의미는 그대로</small></h3>
+      <div class="tw"><table class="t" id="ag-stages"><thead><tr><th>#</th><th>단계</th><th>하는 일</th><th>사람 결정</th><th>외부 기준</th></tr></thead><tbody></tbody></table></div>
+      <h3>품질·정책 게이트 G0~G8 <small>차단 기준은 첫 값이며 오탐률을 보고 조정</small></h3>
+      <div class="tw"><table class="t" id="ag-gates"><thead><tr><th>게이트</th><th>시점</th><th>검사</th><th>차단 기준</th></tr></thead><tbody></tbody></table></div>
+      <h3>편당 비용 추정 <small>원화는 앱 예약 환율 1달러=2,000원</small></h3>
+      <div class="tw"><table class="t" id="ag-costs"><thead><tr><th>항목</th><th>프리미엄 API</th><th>저가 API</th><th>로컬(RTX 4090급)</th></tr></thead><tbody></tbody></table></div>
+      <h3>도구 판단</h3>
+      <div class="grid3" id="ag-tools"></div>
+      <h3>구현 우선순위</h3>
+      <ol class="steps" id="ag-pri"></ol>
+      <h3>지켜야 할 정책</h3>
+      <ul class="checks" id="ag-policy" style="grid-template-columns:minmax(0,1fr)"></ul>
+      <p class="note">설계서 <span class="mono">docs/superpowers/specs/2026-10-27-ai-content-agent-design.md</span> · 구현 계획 <span class="mono">docs/superpowers/plans/2026-10-27-ai-content-agent.md</span>(11개 작업, 코드는 임시 사본에서 테스트 통과 확인) · 근거 보고서는 아래 다운로드에 있습니다. MrBeast 메모는 진위 미확인 자료이고, 네이버 정책은 2차 자료 기준입니다.</p>
+      <div class="actions" style="margin-top:12px"><a href="./downloads/ai-content-agent-benchmark.md" download>근거 보고서 받기</a><a href="./downloads/ai-content-agent-design.md" download>설계서 받기</a><a href="./downloads/ai-content-agent-plan.md" download>구현 계획 받기</a></div>
+    </section>
+
+    <section id="oss" data-t="오픈소스 지도">
+      <div class="sh"><span class="no">§10 · 오픈소스</span><h2>외부 오픈소스 129개, 우선 연결과 비교 40개</h2>
+      <p>2026년 10월 기준으로 다시 찾은 목록입니다. 기준은 <strong>기존 앱에 작은 부품으로 붙일 수 있는가, 라이선스·운영 부담을 감당할 수 있는가</strong>입니다. 49개는 1,921 카탈로그와 겹치고 80개는 이번에 추가했습니다.</p></div>
+      <div class="controls">
+        <input type="search" id="os-q" placeholder="이름·설명 검색 (예: kanban, 자막, MCP)" aria-label="오픈소스 검색">
+        <select id="os-fit" aria-label="판단">
+          <option value="">모든 판단</option><option value="now">우선 연결</option><option value="cmp">먼저 비교</option><option value="ref">참고</option><option value="hold">보류</option>
+        </select>
+        <label class="count"><input type="checkbox" id="os-new"> 1,921 밖에서 새로 찾은 것만</label>
+        <span class="count" id="os-count"></span>
+      </div>
+      <div class="chipbar" id="os-cats" style="margin-bottom:6px"></div>
+      <div id="os-list"></div>
+      <h3>2026년에 바뀐 판단</h3>
+      <div class="grid3">
+        <div class="card"><h4>표준이 한곳에 모였다</h4><p>MCP(2025-12)에 이어 A2A도 2026-08 Agentic AI Foundation에 합류했습니다. 도구 연결은 MCP, 에이전트 사이 인계는 A2A로 나눕니다.</p></div>
+        <div class="card"><h4>AutoGen은 유지보수 모드</h4><p>새로 볼 대상은 Microsoft Agent Framework 또는 AG2입니다. 역할 팀은 CrewAI, 상태·재개는 LangGraph가 기준입니다.</p></div>
+        <div class="card"><h4>에이전트 회사 레이어 등장</h4><p>Paperclip·Multica·ChatDev 2.0·Claw Empire가 조직도·칸반·예산·승인을 제공합니다. 에이전트가 하나면 필요 없고, 여럿을 관리하는 것이 병목일 때 비교합니다.</p></div>
+      </div>
+      <p class="note">별 수와 순위 기사는 대부분 제작사·홍보성 출처라 채택 근거로 쓰지 않았습니다. 라이선스 표기는 확인한 것만 적었고 설치·실행 검증은 하지 않았습니다.</p>
+    </section>
+
+    <section id="bench" data-t="벤치마크 1,921">
+      <div class="sh"><span class="no">§11 · 벤치마크</span><h2>3D 오피스는 지도이고, 일은 엔진이 한다</h2>
+      <p>GitHub 공식 검색 응답 25개에서 2,116개를 찾아 1,921개를 남긴 부품 후보 목록입니다(2026-10-19 수집). 관측 화면은 Roving Office를 1순위로 비교합니다. 전체 목록은 <a href="https://heobrain-ai-office-benchmarks-20261020.ihtwandy0528.chatgpt.site/" target="_blank" rel="noopener noreferrer">원본 탐색기</a>에 있습니다.</p></div>
+      <h3>범주별 후보 수 <small>허용적 라이선스 표시 1,358개</small></h3>
+      <div class="bars" id="bars"></div>
+      <h3>먼저 비교할 3D 후보 8개</h3>
+      <div class="tw"><table class="t" id="core8"><thead><tr><th>후보</th><th>확인한 범위</th><th>채택 판단</th></tr></thead><tbody></tbody></table></div>
+      <p class="note">최소 구성은 실행 엔진 하나 → 전문 작업자 → 근거·결과·승인 기록 → 읽기 전용 상태 연결 → 3D/목록 화면입니다. 첫 실험은 한 부서·6명 규모의 모의 장면에서 시작해 중복·누락·재연결을 검사하고, 프레임 속도와 업무 품질을 따로 잽니다.</p>
+      <h3>관련 영상 18개 <small>제목·채널·설명 확인, 전편 시청·실행 아님</small></h3>
+      <div class="list" id="videos"></div>
+    </section>
+
+    <section id="fields" data-t="29분야 TOP3">
+      <div class="sh"><span class="no">§12 · 29분야</span><h2>29분야 TOP3, 317개 후보에서</h2>
+      <p>전체 구축 우선 TOP3는 <strong>WRITER Agent의 자료→콘텐츠 납품 묶음, OpenHands Issue-to-PR, CMDS LLM Wiki</strong>입니다. 링크는 제품 홈이 아니라 정확한 업무 예제 문서입니다.</p></div>
+      <div class="controls"><input type="search" id="fd-q" placeholder="분야·도구 검색" aria-label="분야 검색"><span class="count" id="fd-count"></span></div>
+      <div class="tw"><table class="t" id="fd"><thead><tr><th>분야</th><th>비교</th><th>1순위</th><th>2순위</th><th>3순위</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section id="kits" data-t="코드 후보 30">
+      <div class="sh"><span class="no">§13 · 코드 후보</span><h2>정확한 링크 30개와 재사용 판단</h2>
+      <p>강의 이름을 펼치면 제공물·재사용할 부분·제한을 볼 수 있습니다. 공개 코드라도 LICENSE가 없으면 같은 이용 허가로 보지 않습니다. 개인 자료 폴더 링크는 이 페이지에 넣지 않았습니다.</p></div>
+      <div class="controls">
+        <input type="search" id="kt-q" placeholder="강의·도구 검색" aria-label="코드 후보 검색">
+        <select id="kt-pf" aria-label="플랫폼"><option value="">전체 플랫폼</option><option>FastCampus</option><option>CLASS101</option><option>Inflearn</option><option>YouTube</option></select>
+        <select id="kt-dec" aria-label="재사용 판단"><option value="">전체 판단</option><option>우선 재사용</option><option>조건부 검토</option><option>보류</option><option>참고만</option></select>
+        <span class="count" id="kt-count"></span>
+      </div>
+      <div class="list" id="kt-list"></div>
+    </section>
+
+    <section id="roadmap" data-t="로드맵·측정">
+      <div class="sh"><span class="no">§14 · 로드맵</span><h2>단계는 날짜가 아니라 통과 조건으로 넘어간다</h2>
+      <p>앞 단계가 실제 사용으로 통과해야 다음 단계의 새 도구를 들입니다. 한 단계에 새 도구 하나가 원칙입니다.</p></div>
+      <ol class="steps" id="phases"></ol>
+      <h3>사람의 일이 실제로 줄었는가</h3>
+      <p class="formula">순절감 시간 = 같은 품질의 수동 시간 − (준비 + 검토 + 수정 + 복구 + 추가 운영)<small>같은 입력·허용 행동·한도에서 수용된 결과 수, 중요한 오류 수, 실패·재시도를 포함한 총비용을 비교합니다. 무료 주문은 매출 0원이며 투자 수익은 보장하지 않습니다.</small></p>
+      <h3>반드시 통과할 실패 시나리오</h3>
+      <ul class="checks" id="fails"></ul>
+      <h3>위험과 대응</h3>
+      <div class="tw"><table class="t" id="risks"><thead><tr><th>위험</th><th>예</th><th>대응</th></tr></thead><tbody></tbody></table></div>
+    </section>
+
+    <section id="sources" data-t="출처·범위">
+      <div class="sh"><span class="no">§15 · 출처</span><h2>무엇을 읽었고, 무엇은 확인하지 않았나</h2>
+      <p>원본 세 사이트의 데이터 파일, database 마크다운 33개의 구조와 핵심 결론, 외부 공식 저장소·문서를 대조했습니다. 개인 경로·계정·원본 강의 파일·비공개 코드는 이 페이지에 넣지 않았습니다.</p></div>
+      <div class="grid2">
+        <div class="card"><h4>확인한 것</h4><p>원본 사이트의 expansion.json(9소스·21확장·260기능), catalog.json(30후보·TOP3), office-improvements.json(5흐름·18보강), 벤치마크 catalog.json(1,921)·videos.json(18). database 문서의 결론 절과 표. 외부 GitHub 저장소·공식 문서·2026년 기사.</p></div>
+        <div class="card"><h4>확인하지 않은 것</h4><p>외부 키트 설치·실행·성능, 유료 강의 본문, 전체 채널 시청, 모든 코드·영상 프레임, 실계정 연동. 라이선스는 API·README 표시 수준이며 법률 판정이 아닙니다. 별 수는 인기 신호일 뿐입니다.</p></div>
+      </div>
+      <h3>읽은 database 문서 <small>33개</small></h3>
+      <ul class="cols" id="dbdocs"></ul>
+      <h3>이번에 연 외부 출처</h3>
+      <ul class="cols">
+        <li><a href="https://github.com/paperclipai/paperclip" target="_blank" rel="noopener noreferrer">Paperclip 저장소</a> · <a href="https://betterstack.com/community/guides/ai/paperclip-multi-agent/" target="_blank" rel="noopener noreferrer">Better Stack 가이드</a></li>
+        <li><a href="https://github.com/multica-ai/multica" target="_blank" rel="noopener noreferrer">Multica 저장소</a></li>
+        <li><a href="https://hermes-agent.nousresearch.com/docs/user-guide/profiles" target="_blank" rel="noopener noreferrer">Hermes Agent 프로필 문서</a></li>
+        <li><a href="https://arxiv.org/pdf/2609.00714" target="_blank" rel="noopener noreferrer">ChatDev 2.0 논문</a></li>
+        <li><a href="https://munderdiffl.in/blog/ai-agent-office-github/" target="_blank" rel="noopener noreferrer">Open Source AI Agent Office Apps (2026-10, 제작사 글)</a></li>
+        <li><a href="https://github.com/topics/agent-office" target="_blank" rel="noopener noreferrer">GitHub topic: agent-office</a></li>
+        <li><a href="https://www.axios.com/2026/08/17/a2a-agentic-ai-foundation-open-ai-standards" target="_blank" rel="noopener noreferrer">A2A의 AAIF 합류 (Axios)</a></li>
+        <li><a href="https://futureagi.com/blog/best-multi-agent-frameworks-2026" target="_blank" rel="noopener noreferrer">2026 멀티에이전트 프레임워크 비교</a></li>
+        <li><a href="https://www.mindstudio.ai/blog/what-is-openclaw-ai-agent" target="_blank" rel="noopener noreferrer">OpenClaw 소개</a></li>
+        <li><a href="https://recca0120.github.io/en/2026/04/07/aionui-ai-cowork-app/" target="_blank" rel="noopener noreferrer">AionUi 소개</a></li>
+        <li><a href="https://www.cognee.ai/blog/guides/open-source-memory-frameworks-llm-agents" target="_blank" rel="noopener noreferrer">에이전트 기억 프레임워크 비교 (제작사 글)</a></li>
+      </ul>
+      <footer>HeoBrain AI 오피스 플레이북 · 통합본 2026-10-27 · 조사·설계 문서이며 운영 앱과 구분됩니다. 원본: complete/#learning-expansion · source-kits/#top3 · ai-office-benchmarks-20261020.</footer>
+    </section>
+  </main>
+</div>
+
+<script src="./data.js"></script>
+<script src="./app.js"></script>
+</body>
+</html>

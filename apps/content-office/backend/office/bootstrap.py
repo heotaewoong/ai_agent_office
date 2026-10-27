@@ -1,0 +1,69 @@
+from __future__ import annotations
+import json
+import os
+from pathlib import Path
+from .feeds import collect_feeds, normalize_url, deduplicate_events
+from .store import Store, digest, now
+
+BACKEND = Path(__file__).resolve().parents[1]
+WORKSPACE = Path(__file__).resolve().parents[4]
+
+
+def default_store():
+    return Store(os.environ.get("OFFICE_STATE_DIR", str(Path.home() / ".local/state/heobrain-content-office")))
+
+
+def enrich(articles):
+    seed = json.loads((BACKEND / "config/editorial-seed.json").read_text())
+    selected = {normalize_url(item["primary_url"]): item for item in seed["selected"]}
+    candidates = {normalize_url(item["url"]): item for item in seed["candidates"]}
+    for article in articles:
+        candidate = candidates.get(normalize_url(article["url"]))
+        if candidate:
+            article["event_id"] = candidate.get("event_id") or candidate["id"]
+        if any(part in article["url"] for part in ("chatgpt-ads-expands-26-new-countries", "building-chatgpt-ad-stack")):
+            article["event_id"] = "chatgpt-ads-2026-10-21"
+        item = selected.get(normalize_url(article["url"]))
+        if not item:
+            continue
+        article.update(editorial_title=item["headline_ko"], selected=True, editorial_rank=item["rank"], score=100 - item["rank"], score_note="원문을 확인한 편집 선정. 객관적 성과 점수 아님", score_reasons=[item["reader_value_ko"], item["blog_angle_ko"]], evidence=[{"id": claim["id"], "url": claim["evidence_url"], "claim": claim["statement_ko"], "scope": claim["scope"], "numbers": claim["numbers"], "evidence_type": claim["evidence_type"]} for claim in item["claims"]], limitations=item["uncertainty_ko"], avoid=item["avoid_ko"], hook=item["hook_ko"], category=item["category"], evidence_checked_at=seed["retrieved_at"])
+        for evidence in article["evidence"]:
+            if evidence["id"] == "TB3":
+                evidence["checks"] = [{"prohibited_pattern": r"(반복|전부|모두|항상)[^。.!?\n]{0,25}(87[.,]97|89[.,]35)", "message": "반복 신뢰성과 20회 중 한번 이상 성공을 혼동했는지 확인하세요"}]
+            if evidence["id"] == "AD2":
+                evidence["checks"] = [{"prohibited_pattern": r"누적\s*(집행\s*횟수|캠페인\s*횟수)", "message": "누적 광고주 수를 캠페인 집행 횟수로 바꾸지 마세요"}]
+    return articles
+
+
+def refresh(store):
+    report = collect_feeds(store.root)
+    articles = deduplicate_events(enrich(report.pop("articles")))
+    report["active_article_ids"] = [article["id"] for article in articles]
+    report["eligible_items"] = len(articles)
+    store.save_articles(articles)
+    store.set_setting("feed_report", report)
+    store.event("rss_refreshed", {"role": "RSS 연구", "total_items": report["total_items"], "eligible_items": report["eligible_items"], "failed_feeds": [f["name"] for f in report["feeds"] if f["state"] != "ok"]})
+    return report
+
+
+def initialize(store, *, live=True, create_selected=False):
+    window_path = WORKSPACE / "research/content-office-2026-10-26/work-window.json"
+    if store.setting("work_window") is None and window_path.is_file():
+        store.set_setting("work_window", json.loads(window_path.read_text()))
+    if live:
+        refresh(store)
+    if create_selected:
+        selected = sorted([a for a in store.articles_list() if a.get("selected")], key=lambda a: a["editorial_rank"])
+        for article in selected[:3]:
+            job = store.create_job(article)
+            if not job["source_packet"]:
+                store.enqueue("draft", {"job_id": job["id"]}, key=f"draft:{job['id']}:initial")
+    return {"articles": len(store.articles_list()), "jobs": len(store.jobs()), "budget": store.budget(), "at": now()}
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--create-selected", action="store_true")
+    args = parser.parse_args()
+    print(json.dumps(initialize(default_store(), create_selected=args.create_selected), ensure_ascii=False, indent=2))

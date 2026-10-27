@@ -1,0 +1,398 @@
+{
+  "retrieved_at": "2026-10-25T17:21:44+00:00",
+  "selected": [
+    {
+      "id": "thinkingbox",
+      "rank": 1,
+      "category": "AI Agent",
+      "headline_ko": "AI가 “완료”라고 해도, 데이터베이스가 동의하는지 확인해야 한다",
+      "published_at": "2026-10-22T22:24:34+00:00",
+      "primary_url": "https://huggingface.co/blog/microsoft/thinkingbox-training",
+      "hook_ko": "AI가 일을 끝냈다고 했는데, 예약과 환불 기록은 틀려 있다면요? 에이전트의 실력은 대답보다 마지막 데이터에서 드러납니다.",
+      "reader_value_ko": "업무 자동화를 도입하는 한국 팀이 성공 메시지와 실제 결과를 구분하고, 한 번 성공과 반복 성공을 따로 평가할 이유를 제시한다.",
+      "claims": [
+        {
+          "id": "TB1",
+          "statement_ko": "Microsoft·Hugging Face 후속 실험은 최종 DB 상태 검사를 학습 보상으로 활용했다. Qwen3.8-27B를 GRPO 50단계 학습하고 507개 합성 업무를 각각 20회 평가했다.",
+          "evidence_url": "https://huggingface.co/blog/microsoft/thinkingbox-training",
+          "section": "What happened after training / The training loop",
+          "evidence_type": "개발팀 공개 실험, 독립 재현 아님",
+          "numbers": [
+            "507 tasks × 20 attempts = 10,140 attempts",
+            "50 GRPO steps"
+          ],
+          "scope": "원논문은 8/20 초판·10/1 v4; 이번 10/22 뉴스는 후속 학습 실험 및 스택 공개"
+        },
+        {
+          "id": "TB2",
+          "statement_ko": "평균 시도 성공률은 51.70%에서 60.78%로 9.08%p 증가했고, 관측된 20회 전부 성공 과제는 38개에서 107개로 늘었다.",
+          "evidence_url": "https://huggingface.co/blog/microsoft/thinkingbox-training",
+          "section": "Table 1",
+          "evidence_type": "저자 보고 벤치마크",
+          "numbers": [
+            "pass@1 51.70% → 60.78%, +9.08 percentage points",
+            "observed 20/20: 38 → 107 of 507 tasks"
+          ],
+          "scope": "한 번에 모든 업무를 성공한다거나 일반 기업 업무 전체로 확대할 수 없음"
+        },
+        {
+          "id": "TB3",
+          "statement_ko": "20회 중 한 번이라도 성공한 과제 비율은 89.35%에서 87.97%로 줄었다. 반복 신뢰성 향상과 해결 범위 감소를 함께 보고해야 한다.",
+          "evidence_url": "https://huggingface.co/blog/microsoft/thinkingbox-training",
+          "section": "Table 1 / Where this goes next / Before you start",
+          "evidence_type": "같은 실험의 상충 결과 및 공개 범위",
+          "numbers": [
+            "pass@20 453 → 446 tasks; 89.35% → 87.97%",
+            "187-task training pool not public"
+          ],
+          "scope": "공개 샘플만으로 보고된 학습 실험을 그대로 재현할 수 없음"
+        }
+      ],
+      "uncertainty_ko": [
+        "합성 벤치마크의 저자 보고 결과이며 한국어 실제 업무나 다른 모델로 일반화하지 않는다.",
+        "관측된20/20은 유한한20회 결과이지 영구 무실패 보장이 아니다.",
+        "학습 비용 절감 수치를 쓰려면 학습·난이도 탐색 비용 제외와 추정 서빙비라는 조건을 함께 적는다."
+      ],
+      "avoid_ko": [
+        "AI 업무 오류를 해결했다",
+        "성공률 89.35%에서 100%",
+        "비용 67% 절감으로 전체 운영비 감소",
+        "이번 주 새 논문이 처음 발표됐다"
+      ],
+      "blog_angle_ko": "고객 티켓·예약·장부를 예로 들어 최종 상태와 부수 변경까지 확인하는 완료 기준을 설명한다.",
+      "youtube_visual_ko": "왼쪽 “완료했습니다” 말풍선, 오른쪽 실제 DB 결과; pass@1과20/20, pass@20을 서로 다른 지표로 표시.",
+      "supporting_urls": [
+        "https://github.com/microsoft/thinkingbox-training",
+        "https://arxiv.org/abs/2608.19741"
+      ]
+    },
+    {
+      "id": "decisions",
+      "rank": 2,
+      "category": "실사용·개발",
+      "headline_ko": "긴 답변 대신 작은 판단을 빠르게: Decisions API가 겨냥한 일",
+      "published_at": "2026-10-22T19:00:00+00:00",
+      "primary_url": "https://openai.com/index/decisions-api",
+      "hook_ko": "문의가 들어올 때마다 긴 답변을 만들 필요가 있을까요? 분류·다음 행동 선택·위험 점수만 빠르게 얻는 API가 정식 출시됐습니다.",
+      "reader_value_ko": "고객 문의 분류와 에이전트 라우팅처럼 경계가 분명한 판단을 긴 텍스트 생성과 구분해 설계할 수 있다.",
+      "claims": [
+        {
+          "id": "DC1",
+          "statement_ko": "OpenAI는 10월22일 Decisions API 정식 제공을 발표했다. gpt-6-luna로 텍스트·이미지·JSON을 평가하고 predicate·choice·score를 반환한다.",
+          "evidence_url": "https://developers.openai.com/api/docs/guides/decisions",
+          "section": "How decisions work / Choose a question type",
+          "evidence_type": "공식 API 문서와 출시 발표 일치",
+          "numbers": [
+            "3 answer types"
+          ],
+          "scope": "범용 장문 생성 API가 아닌 제한된 선택지·조건·척도 판단"
+        },
+        {
+          "id": "DC2",
+          "statement_ko": "한 요청에서 공유 입력에 대한 독립 질문을 1~400개 처리한다. 이전 답에 의존하는 질문은 별도 요청이 필요하다.",
+          "evidence_url": "https://developers.openai.com/api/docs/guides/decisions",
+          "section": "Ask multiple questions",
+          "evidence_type": "공식 사용 제약",
+          "numbers": [
+            "1–400 independent questions per request"
+          ],
+          "scope": "400개 완전한 업무를 자동완료한다는 뜻이 아님"
+        },
+        {
+          "id": "DC3",
+          "statement_ko": "미캐시 입력은 100만토큰당0.10달러, 출력 토큰 요금은 없다. 발표문은 캐시 읽기0.01달러를 명시하지만 쓰기·지역 처리·장문 조건은 별도다.",
+          "evidence_url": "https://developers.openai.com/api/docs/guides/decisions",
+          "additional_evidence_url": "https://openai.com/index/decisions-api",
+          "section": "Pricing and availability / Build and evaluate your first decision",
+          "evidence_type": "2026-10-26 조회 시 공식 요금, 추후 변경 가능",
+          "numbers": [
+            "uncached input $0.10 / 1M tokens",
+            "cached read $0.01 / 1M tokens (launch post)",
+            "no output-token charge"
+          ],
+          "scope": "지역 처리 프리미엄·장문 배수·캐시 쓰기 요금이 적용될 수 있음"
+        }
+      ],
+      "uncertainty_ko": [
+        "최대10배 속도는 GPT-6 Luna Responses API 대비 공급사 발표이며 자체 성능 검증을 수행하지 않았다.",
+        "업무 정확도·신뢰도 임계값은 실제 입력과 오탐/미탐 비용으로 평가해야 한다.",
+        "회사 소개의 고객 사례 성능을 한국 독자의 서비스에서 보장되는 수치로 옮기지 않는다."
+      ],
+      "avoid_ko": [
+        "모든 AI 작업이10배 빨라진다",
+        "AI 판단 정확도가 보장된다",
+        "400개 업무를 한 번에 끝낸다",
+        "0.10달러면 모든 비용이 끝난다"
+      ],
+      "blog_angle_ko": "고객 문의를 배송·결제·반품으로 분류하는 예시와 낮은 확신을 검토로 보내는 설계를 설명한다. 예시는 제안이며 이번에 API를 실호출한 결과가 아니다.",
+      "youtube_visual_ko": "긴 답변 상자 대신 분류 선택지3개·확률·검토 경로를 보여준다. API 요금의 분모100만 입력토큰과 별도 조건을 자막으로 명시.",
+      "supporting_urls": [
+        "https://developers.openai.com/api/docs/guides/decisions"
+      ]
+    },
+    {
+      "id": "ads-expansion",
+      "rank": 3,
+      "category": "경제·콘텐츠 영향",
+      "headline_ko": "ChatGPT 광고가89개국으로 확대됐다: 한국 창작자와 마케터가 볼 변화",
+      "published_at": "2026-10-21T13:00:00+00:00",
+      "primary_url": "https://openai.com/index/chatgpt-ads-expands-26-new-countries",
+      "hook_ko": "사람들이 검색 결과만 보지 않고 AI와 대화하며 물건을 고른다면, 광고가 들어가는 자리도 달라집니다.",
+      "reader_value_ko": "해외 고객을 상대하는 한국 브랜드·창작자가 대화형 발견 경로와 광고·일반 답변의 구분을 점검할 계기다. 국내 신규 지원을 뜻하지 않는다.",
+      "claims": [
+        {
+          "id": "AD1",
+          "statement_ko": "OpenAI는10월21일 ChatGPT Ads를26개국에 추가해 제공 국가가 총89개국이 됐다고 발표했다.",
+          "evidence_url": "https://openai.com/index/chatgpt-ads-expands-26-new-countries",
+          "section": "Opening / Supporting more businesses around the world",
+          "evidence_type": "광고사업 운영사 자체 발표",
+          "numbers": [
+            "26 additional countries",
+            "89 countries total"
+          ],
+          "scope": "발표문은 추가 국가 일부만 예시. 이번 조사로 한국 신규지원 또는 한국 광고주의 계정 자격을 확인하지 못함"
+        },
+        {
+          "id": "AD2",
+          "statement_ko": "출시 약8개월 후 누적10만개 이상의 광고주가 캠페인을 실행했다고 회사는 밝혔다. 현재 활성 광고주 수나 광고 수익성 지표는 아니다.",
+          "evidence_url": "https://openai.com/index/chatgpt-ads-expands-26-new-countries",
+          "section": "Opening",
+          "evidence_type": "누적 집행 광고주에 관한 회사 발표; 외부 감사 미확인",
+          "numbers": [
+            "over 100,000 advertisers have run campaigns",
+            "just over eight months since launch"
+          ],
+          "scope": "광고 성과·전환율·한국 시장 규모를 증명하지 않음"
+        },
+        {
+          "id": "AD3",
+          "statement_ko": "회사는 광고 선택을 ChatGPT 답변 생성과 별도 서비스로 운영하며 광고를 표시·구분한다고 설명했다. Free·Go에만 광고가 나오며 Plus·Pro·Enterprise는 광고 없이 유지한다고 밝혔다.",
+          "evidence_url": "https://openai.com/index/chatgpt-ads-expands-26-new-countries",
+          "additional_evidence_url": "https://openai.com/index/building-chatgpt-ad-stack",
+          "section": "Guided by our ads principles / ad-stack architecture",
+          "evidence_type": "설계·정책에 대한 회사 설명; 독립 감사 결과 아님",
+          "numbers": [],
+          "scope": "광고가 답변에 영향을 주지 않는다는 회사 설명을 실제 무영향이 검증됐다는 뜻으로 쓰지 않음"
+        }
+      ],
+      "uncertainty_ko": [
+        "한국 신규 출시 여부와 계정별 접근·집행 조건은 이번 소스로 확인하지 못했다.",
+        "대화형 광고가 기존 검색·블로그 유입을 얼마나 대체하는지 보여 주는 인과 자료는 없다.",
+        "광고 ROI나 전환율 향상은 확인하지 않았다. 광고 집행을 권유하는 자료가 아니다."
+      ],
+      "avoid_ko": [
+        "한국에도 드디어 ChatGPT 광고 출시",
+        "검색광고와 블로그는 끝났다",
+        "10만 광고주가 현재 모두 활동한다",
+        "광고와 답변의 완전 독립이 외부 검증됐다",
+        "연환산 매출을 실제 연간 확정 매출로 표시"
+      ],
+      "blog_angle_ko": "해외 고객의 질문·제품 비교에 도움이 되는 콘텐츠와 광고 라벨 구분을 설명하되, 매출 효과는 가설로 표시한다.",
+      "youtube_visual_ko": "26개 추가→누적89개국 지도와 “누적 캠페인 집행10만+·회사발표” 자막. 한국 지원 여부는 미확인으로 별도 표기.",
+      "supporting_urls": [
+        "https://openai.com/index/building-chatgpt-ad-stack"
+      ],
+      "merged_candidate_ids": [
+        "ads-stack"
+      ]
+    }
+  ],
+  "candidates": [
+    {
+      "id": "thinkingbox",
+      "title": "Turning Database Grading into RL Rewards: Post-Training Agents with ThinkingBox",
+      "url": "https://huggingface.co/blog/microsoft/thinkingbox-training",
+      "feed_id": "huggingface",
+      "published_at": "2026-10-22T22:24:34+00:00",
+      "published_at_kst": "2026-10-23T07:24:34+09:00",
+      "event_id": "thinkingbox",
+      "category": "agent-reliability",
+      "editorial_score_out_of_25": 23,
+      "decision": "선정: 결과 검증·반복 신뢰성·상충 지표가 있어 홍보를 넘어 설명할 수 있음",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "decisions",
+      "title": "Build more responsive apps with the Decisions API",
+      "url": "https://openai.com/index/decisions-api",
+      "feed_id": "openai",
+      "published_at": "2026-10-22T19:00:00+00:00",
+      "published_at_kst": "2026-10-23T04:00:00+09:00",
+      "event_id": "decisions",
+      "category": "developer-usage",
+      "editorial_score_out_of_25": 22,
+      "decision": "선정: 반복되는 작은 분류·라우팅 결정의 실제 개발 선택지",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "ads-expansion",
+      "title": "ChatGPT Ads expands to 26 new countries as over 100,000 advertisers have used the platform",
+      "url": "https://openai.com/index/chatgpt-ads-expands-26-new-countries",
+      "feed_id": "openai",
+      "published_at": "2026-10-21T13:00:00+00:00",
+      "published_at_kst": "2026-10-21T22:00:00+09:00",
+      "event_id": "chatgpt-ads-2026-10-21",
+      "category": "content-economy",
+      "editorial_score_out_of_25": 22,
+      "decision": "선정: 한국 마케터·창작자가 볼 유통과 광고 접점의 변화",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "ads-stack",
+      "title": "How we built ChatGPT’s novel ad stack for user trust and relevance",
+      "url": "https://openai.com/index/building-chatgpt-ad-stack",
+      "feed_id": "openai",
+      "published_at": "2026-10-21T07:00:00+00:00",
+      "published_at_kst": "2026-10-21T16:00:00+09:00",
+      "event_id": "chatgpt-ads-2026-10-21",
+      "category": "content-economy",
+      "editorial_score_out_of_25": 20,
+      "decision": "동일 ChatGPT Ads 이벤트의 보강 근거로 병합",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "agent-toolkit",
+      "title": "NVIDIA Agent Toolkit Expands, Grounding Enterprise Agents in Company Data",
+      "url": "https://blogs.nvidia.com/blog/enterprise-platforms-agent-toolkit/",
+      "feed_id": "nvidia",
+      "published_at": "2026-10-21T10:10:01+00:00",
+      "published_at_kst": "2026-10-21T19:10:01+09:00",
+      "event_id": "agent-toolkit",
+      "category": "enterprise-data",
+      "editorial_score_out_of_25": 20,
+      "decision": "예비: 회사 데이터·권한통제 관점은 유용하나 공급사 성능 주장 재현 없음",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "granite-speech",
+      "title": "Granite Speech 5.0: Transcribe, Translate, and Attribute more Accurately and Faster",
+      "url": "https://huggingface.co/blog/ibm-granite/granite-speech-5",
+      "feed_id": "huggingface",
+      "published_at": "2026-10-21T14:58:18+00:00",
+      "published_at_kst": "2026-10-21T23:58:18+09:00",
+      "event_id": "granite-speech",
+      "category": "speech-tools",
+      "editorial_score_out_of_25": 19,
+      "decision": "예비: 오픈 음성모델 활용은 좋으나 명시된 지원 언어에 한국어가 없음",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": "RSS 10/21 14:58:18 UTC와 본문 Published October 21 일치. 댓글/관련자료 time 태그를 기사 날짜로 쓰지 않음."
+    },
+    {
+      "id": "litpivot",
+      "title": "LitPivot: Developing research ideas through dynamic contextualization within the literature landscape",
+      "url": "https://huggingface.co/blog/allenai/litpivot",
+      "feed_id": "huggingface",
+      "published_at": "2026-10-23T16:15:50+00:00",
+      "published_at_kst": "2026-10-24T01:15:50+09:00",
+      "event_id": "litpivot",
+      "category": "research-assistant",
+      "editorial_score_out_of_25": 20,
+      "decision": "예비: 연구 초안 근거 추적이 유용하나 사용자 연구 17명",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "copilot-handoff",
+      "title": "How to continue a GitHub Copilot app session in VS Code",
+      "url": "https://github.blog/ai-and-ml/github-copilot/how-to-continue-a-github-copilot-app-session-in-vs-code/",
+      "feed_id": "github-ai",
+      "published_at": "2026-10-19T18:47:22+00:00",
+      "published_at_kst": "2026-10-20T03:47:22+09:00",
+      "event_id": "copilot-handoff",
+      "category": "developer-workflow",
+      "editorial_score_out_of_25": 19,
+      "decision": "예비: 검토·로컬 실행까지 이어지는 흐름이 실용적이나 새 모델/대규모 효과 검증은 아님",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "flint",
+      "title": "Flint-interactive: A language for creating interactive data visualizations",
+      "url": "https://www.microsoft.com/en-us/research/blog/flint-interactive-a-language-for-creating-interactive-data-visualizations/",
+      "feed_id": "microsoft-research",
+      "published_at": "2026-10-22T16:00:00+00:00",
+      "published_at_kst": "2026-10-23T01:00:00+09:00",
+      "event_id": "flint",
+      "category": "interactive-reports",
+      "editorial_score_out_of_25": 20,
+      "decision": "예비: 대화형 보고서의 제작 난이도를 줄이는 연구; 대중적 시급성은 TOP3보다 낮음",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "forest",
+      "title": "Beyond tree cover: mapping the world’s forest types",
+      "url": "https://deepmind.google/blog/beyond-tree-cover-mapping-the-worlds-forest-types/",
+      "feed_id": "deepmind",
+      "published_at": "2026-10-22T14:30:24+00:00",
+      "published_at_kst": "2026-10-22T23:30:24+09:00",
+      "event_id": "forest",
+      "category": "ai-science",
+      "editorial_score_out_of_25": 18,
+      "decision": "예비: 10m 산림 유형 지도·2017~2025 시계열; 직접 사용·콘텐츠 경제와 거리가 있음",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "cosmos",
+      "title": "NVIDIA Cosmos Opens New Tools to Train, Evaluate and Deploy World Models",
+      "url": "https://blogs.nvidia.com/blog/cosmos-open-train-evaluate-deploy-world-models/",
+      "feed_id": "nvidia",
+      "published_at": "2026-10-22T05:00:27+00:00",
+      "published_at_kst": "2026-10-22T14:00:27+09:00",
+      "event_id": "cosmos",
+      "category": "physical-ai",
+      "editorial_score_out_of_25": 19,
+      "decision": "예비: 합성 데이터 도구가 구체적이나 일반 독자가 바로 재현하기 어려움",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": "RSS 10/22 05:00:27 UTC, 원문 화면 October21(미국시간)로 하루 차이; 동일 순간의 시간대 차이 가능, 정확한 현지 타임존 확인 없이 UTC를 수정하지 않음."
+    },
+    {
+      "id": "sea-economy",
+      "title": "Southeast Asia’s digital economy to hit $368 billion",
+      "url": "https://blog.google/company-news/inside-google/around-the-globe/google-asia/e-conomy-sea-report-2026/",
+      "feed_id": "google-ai",
+      "published_at": "2026-10-21T04:00:00+00:00",
+      "published_at_kst": "2026-10-21T13:00:00+09:00",
+      "event_id": "sea-economy",
+      "category": "regional-economy",
+      "editorial_score_out_of_25": 18,
+      "decision": "예비: 한국 콘텐츠 수출 독자에게 유용하나 전망값·조사 정의를 별도로 검토해야 함",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "anylanguage",
+      "title": "AnyLanguageModel 1.0: One Year of Local Models on Apple Platforms",
+      "url": "https://huggingface.co/blog/anylanguagemodel-1-0",
+      "feed_id": "huggingface",
+      "published_at": "2026-10-20T00:00:00+00:00",
+      "published_at_kst": "2026-10-20T09:00:00+09:00",
+      "event_id": "anylanguage",
+      "category": "local-models",
+      "editorial_score_out_of_25": 19,
+      "decision": "예비: Apple 앱 개발자 대상의 로컬/호스티드 공통 인터페이스로 독자 폭이 제한됨",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    },
+    {
+      "id": "bio-agents",
+      "title": "Using thousands of AI agents to uncover new leads in biological data",
+      "url": "https://openai.com/index/scaling-ai-research-for-complex-biological-data",
+      "feed_id": "openai",
+      "published_at": "2026-10-21T04:50:00+00:00",
+      "published_at_kst": "2026-10-21T13:50:00+09:00",
+      "event_id": "bio-agents",
+      "category": "ai-science",
+      "editorial_score_out_of_25": 19,
+      "decision": "예비: 32분 분석은 연구 가설 탐색 사례이며 질병 치료 성과로 해석하면 안 됨",
+      "original_read_method": "web.run.open; requests 별도 HTTP 기록은 feeds/article-fetch-log.json",
+      "date_caveat": null
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+# Dependencies, build products and local caches
+node_modules/
+.venv/
+venv/
+.next/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+coverage/
+htmlcov/
+.coverage*
+playwright-report/
+test-results/
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# Secrets, cloud credentials, agent state and browser authentication
+.env*
+*.env
+.aws/
+.ssh/
+.gnupg/
+.azure/
+.gcloud/
+.hermes/
+.claude/
+.codex/
+.agents/
+.gemini/
+.openai/
+.vercel/
+.supabase/
+.netrc
+.npmrc
+.pypirc
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa*
+id_ed25519*
+credentials*.json
+credential*.json
+client_secret*.json
+service-account*.json
+service_account*.json
+secrets.*
+auth.json
+token.json
+tokens.json
+cookies*.json
+browser-session.json
+storage-state*.json
+storageState*.json
+
+# Runtime databases, logs, exports and backup archives
+*.log
+*.pid
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.bak
+*.backup
+*.swp
+*.swo
+
+# Local knowledge and evidence contain personal links, course/member
+# material and copies whose filenames do not necessarily say PRIVATE.
+# Preserve these files on disk; publish only separately reviewed documents.
+/database/
+/research/
+/output/
+*[Pp][Rr][Ii][Vv][Aa][Tt][Ee]*
+/OFFICE_INDEX.md
+/docs/superpowers/plans/*heobrain-promo*
+/docs/superpowers/specs/*heobrain-promo*
+/apps/content-office/frontend/public/free-video-sample-*/
+
+# Other Sites projects have their own Git history and hosting metadata.
+# Only the reviewed unified playbook belongs in this repository.
+/sites/*
+!/sites/heobrain-office-playbook-unified-20261027/
