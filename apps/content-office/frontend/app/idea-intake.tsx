@@ -88,7 +88,7 @@ export function IdeaIntake({ onSaved }: { onSaved: () => void }) {
             <label htmlFor={`${uid}-covered`}>전에 다룸</label>
           </div>
           {field("policy_flags", "정책 플래그 (쉼표로 구분)", "no_primary_source, templated_series, ai_persona_real_person_ymyl")}
-          <p className="muted">자유 입력도 가능하지만 위 세 키만 등록을 막습니다.</p>
+          <p className="muted">자유 입력도 가능합니다. 위 세 키나 1차 출처 0개는 ⓪ 기획 선택을 막습니다(저장은 됩니다).</p>
         </div>
         </fieldset>
         {error && (

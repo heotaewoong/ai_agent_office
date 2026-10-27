@@ -10,11 +10,14 @@ export function validatePackagingBrief(brief: PackagingBrief): string[] {
   const thumbs = brief.thumbnails ?? [];
   if (titles.length !== 3) issues.push("제목은 비교용 3안이 필요합니다");
   titles.forEach((t, i) => {
-    if (t.length > TITLE_MAX) issues.push(`제목 ${i + 1}안이 ${TITLE_MAX}자를 넘습니다`);
+    if (!(t ?? "").trim()) issues.push(`제목 ${i + 1}안이 비어 있습니다`);
+    else if (t.length > TITLE_MAX) issues.push(`제목 ${i + 1}안이 ${TITLE_MAX}자를 넘습니다`);
   });
   if (thumbs.length !== 3) issues.push("썸네일은 비교용 3안이 필요합니다");
   thumbs.forEach((t, i) => {
-    if ((t.text ?? "").length > THUMB_TEXT_MAX)
+    const tx = t.text ?? "";
+    if (!tx.trim()) issues.push(`썸네일 ${i + 1}안 글자가 비어 있습니다`);
+    else if (tx.length > THUMB_TEXT_MAX)
       issues.push(`썸네일 ${i + 1}안 글자가 ${THUMB_TEXT_MAX}자를 넘습니다`);
   });
   const hook = (brief.hook ?? "").trim();

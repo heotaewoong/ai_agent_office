@@ -11,4 +11,5 @@ test("확장자별 타입", () => {
 test("상위 경로·알 수 없는 확장자는 거부", () => {
   assert.equal(resolveWorldFile(root, ["..", "secret.md"]), null);
   assert.equal(resolveWorldFile(root, ["README.md"]), null);
+  assert.equal(resolveWorldFile(root, ["a/../../x.html"]), null);
 });
