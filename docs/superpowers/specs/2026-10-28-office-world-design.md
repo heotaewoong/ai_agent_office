@@ -122,3 +122,17 @@ HTML 오버레이로 그린다. 3D 좌표를 화면 좌표로 투영해 매 프�
 1. 콘텐츠 오피스 백엔드에 `GET /api/space` 투영 구현(2차 설계).
 2. 동료 캐릭터를 실제 AI 세션에 연결하는 실행 서비스 검토(3차). 이때 `CnvMatrixV1` 코드 사용 여부는 작성자 동의로 결정한다.
 3. 섬 안 가구와 캐릭터의 외형 교체(glTF 저폴리 에셋), 낮·밤 테마.
+
+## 12. 2026-10-28 수정: 콘텐츠 오피스 앱과의 연동
+
+사용자 결정(2026-10-28): 오피스 월드는 따로 떨어진 관제 화면이 아니라 **콘텐츠 오피스 앱의 한 화면**이어야 하며, 앱과 공간이 서로를 조작할 수 있어야 한다. 1장·2장의 "보여주는 쪽" 범위를 아래처럼 넓힌다. 승인 단계의 의미는 그대로다.
+
+- **같은 출처에서 제공**: Next.js 앱이 `/world/`(index.html·styles.css·app.js·data/space.json)를 `sites/office-world/`에서 그대로 읽어 제공한다. 공간은 `/world/index.html?api=/api/space&embed=1`로 앱 안 iframe에 뜨고, 메뉴에 "오피스 월드"가 추가된다. 같은 출처이므로 CORS 없이 `/api/space`를 읽는다.
+- **투영 v1 확장**: `stages[].view`와 `items[].view`는 앱 화면 이름(`news`·`studio`·`delivery`·`activity`), `items[].actions`는 그 항목에서 사람이 지금 요청할 수 있는 일(`[{ "id": "draft", "label": "원고 생성" }]` 등)이다. 백엔드가 상태에서 계산하고 공간은 해석하지 않는다.
+- **앱 → 공간**: 앱에서 작업을 고르면 공간이 그 작업이 있는 방으로 카메라를 옮기고 패널에서 그 항목을 강조한다. 앱에서 요청이 끝나면 공간에 다시 읽으라고 알린다.
+- **공간 → 앱**: 패널의 "오피스에서 열기"는 새 탭 대신 앱의 해당 화면·작업으로 이동한다. `actions`가 있으면 패널에 버튼이 생기고, 누르면 앱이 자기 세션으로 API를 호출한 뒤 결과를 공간에 돌려준다. 공간 자체는 세션·CSRF·쓰기 API를 갖지 않는다.
+- **승인은 앱에서**: ⓪·①·②·③ 승인은 원고·근거·파일을 다 볼 수 있는 앱 화면에서만 한다. 공간의 승인 대기 항목은 "오피스에서 열기"로 그 화면에 바로 간다. 원고 생성·제작 시작처럼 승인이 아닌 요청만 공간의 버튼으로 보낸다.
+- **메시지 계약**(`window.postMessage`, 양쪽 모두 `event.origin === location.origin`일 때만 처리):
+  - 공간 → 앱: `{ source: "office-world", type: "ready" }` · `{ source: "office-world", type: "open", view, itemId }` · `{ source: "office-world", type: "action", action, itemId }`
+  - 앱 → 공간: `{ source: "content-office", type: "focus", itemId }` · `{ source: "content-office", type: "refresh" }` · `{ source: "content-office", type: "result", ok, message }`
+- **단독 실행 유지**: `embed=1`이 없으면 지금처럼 정적 페이지로 동작한다. 그때 `actions` 버튼은 숨기고 "오피스에서 열기"는 새 탭 링크다.
