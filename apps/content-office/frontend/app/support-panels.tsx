@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Idea, Job, KnowledgeSearch, Task, OutputKind } from "../lib/types";
+import type { Action, Idea, Job, KnowledgeSearch, Task, OutputKind } from "../lib/types";
 import {
   completedOutputs,
   evidenceInputAllowed,
@@ -12,11 +12,6 @@ import {
 import { Icon } from "./icons";
 import { IdeaIntake } from "./idea-intake";
 
-type Action = (
-  label: string,
-  execute: () => Promise<unknown>,
-  success: string,
-) => Promise<void | boolean>;
 export type IntakeDraft = {
   text: string;
   version: string | null;

@@ -308,3 +308,9 @@ export type StudioCsvResult = {
   snapshots: { id: string; external_id: string; period: string }[];
   lessons: Lesson[];
 };
+
+export type Action = (
+  label: string,
+  execute: () => Promise<unknown>,
+  success: string,
+) => Promise<void | boolean>;

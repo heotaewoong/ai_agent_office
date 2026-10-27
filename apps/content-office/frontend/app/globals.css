@@ -3766,3 +3766,4 @@ td a {
   border-radius: 12px;
   background: transparent;
 }
+.v6-packaging .editor-fields textarea{min-height:64px;border:1px solid var(--line);padding:8px}.v6-packaging-row{display:grid;gap:6px;margin-bottom:14px}.v6-packaging .editor-fields input:not([type=radio]){width:100%}.v6-packaging .editor-fields label>input[type=radio]{margin-right:6px}

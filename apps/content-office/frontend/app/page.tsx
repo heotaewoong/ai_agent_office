@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, OfficeApiError } from "../lib/api";
 import type {
+  Action,
   Article,
   Artifact,
   Dashboard,
@@ -31,6 +32,8 @@ import {
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
 import { PerformancePanel } from "./performance-panel";
+import { PackagingPanel } from "./packaging-panel";
+import { packagingRequired } from "../lib/packaging";
 import {
   EvidenceIntake,
   IdeaBank,
@@ -873,12 +876,6 @@ function BudgetStrip({ budget }: { budget: Dashboard["budget"] }) {
   );
 }
 
-type Action = (
-  label: string,
-  execute: () => Promise<unknown>,
-  success: string,
-) => Promise<void | boolean>;
-
 function Studio({
   job,
   model,
@@ -1002,6 +999,14 @@ function Studio({
           <span>{job.error}</span>
         </div>
       )}
+      {job.article?.origin === "idea" && (
+        <PackagingPanel
+          key={job.packaging?.packaging_hash ?? "new"}
+          job={job}
+          busy={locked}
+          action={action}
+        />
+      )}
       <EvidenceIntake
         job={job}
         model={model}
@@ -1051,7 +1056,7 @@ function Studio({
               오기 전에는 승인할 수 없어요.
               <button
                 className="button primary"
-                disabled={locked}
+                disabled={locked || packagingRequired(job)}
                 onClick={() =>
                   void action(
                     "원고 생성",
@@ -1063,6 +1068,9 @@ function Studio({
                 원고 생성 시작
                 <Icon name="arrow" size={17} />
               </button>
+              {packagingRequired(job) && (
+                <p className="muted">패키지(제목·썸네일·훅)를 먼저 확정하세요.</p>
+              )}
             </Empty>
           ) : (
             <div className="editor-fields">
