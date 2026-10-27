@@ -1,0 +1,97 @@
+{
+  "version": "v7.1 검토 보강판",
+  "date": "2026-10-28",
+  "scope": "Planning documents and public-safe metadata; no original third-party PDFs, private studies, credentials or runtime state",
+  "files": [
+    {
+      "name": "brand-fit.md",
+      "bytes": 6942,
+      "sha256": "9bd24a08b860c78156a67e046815dd9a8b0c6c12dc24a5d07a74949b25cedb65"
+    },
+    {
+      "name": "current-implementation.md",
+      "bytes": 1088,
+      "sha256": "41c5d7e964cbe30886ab83bca6df6ceb2c1d21f9ac1a395dbe7245b631c94010"
+    },
+    {
+      "name": "execution-ideas.md",
+      "bytes": 39583,
+      "sha256": "5e87a524a97a3a2821729e2539e72fa71ff65c789925d0071b2e7d0f53644d91"
+    },
+    {
+      "name": "hub-data.json",
+      "bytes": 129891,
+      "sha256": "194e6ed0df78b4b414524604b87a6d25a3c6f6d06f1942776273d089941a71ba"
+    },
+    {
+      "name": "input-sources-detail.md",
+      "bytes": 13082,
+      "sha256": "2934a104bff0f7ae48106a48dc15974cc846e6bc916e6ba798b291b552418f5e"
+    },
+    {
+      "name": "input-sources.md",
+      "bytes": 12832,
+      "sha256": "54e46e4333a1c549013992944945799bb54bdc2f683563fb5e42ac31d0bbfe08"
+    },
+    {
+      "name": "master-guide.md",
+      "bytes": 26401,
+      "sha256": "acbdd021186c508532fc4172ee5f0ee492c032299819a72a6fbffef2fd8907db"
+    },
+    {
+      "name": "models-and-rights.md",
+      "bytes": 15884,
+      "sha256": "6ac012f079d5384ccd7972394d50ab0bf6321c15e4992dd6ca103dbccc412a7e"
+    },
+    {
+      "name": "models-research.md",
+      "bytes": 22167,
+      "sha256": "9795e7be8774c7b08018ebd9f9128b90fe978676f02f34071ca8172544b16174"
+    },
+    {
+      "name": "pdf-design-evidence.md",
+      "bytes": 11439,
+      "sha256": "c5edde8d3e29d9c66dd9c394887da4e9ea0ef85e3445d314196ab1cd550b71e9"
+    },
+    {
+      "name": "pipeline-blueprint.json",
+      "bytes": 15352,
+      "sha256": "4ddf7c464fcc295194227ea4c3480258f724ac94b6ba3b9f0b42fda032f6822f"
+    },
+    {
+      "name": "production-economics.md",
+      "bytes": 29734,
+      "sha256": "dc73db9bf48c734655e285206efaa9f6584dc00f05636b0218c02d393be912c2"
+    },
+    {
+      "name": "quality-evaluation.md",
+      "bytes": 21044,
+      "sha256": "a0ead92e6d5fa9f4743250c0fe5a746305e0333b26665dce509b755207678505"
+    },
+    {
+      "name": "README.md",
+      "bytes": 5118,
+      "sha256": "00a72d40e01aa85bd7b03529fdb894fa7b7e1553f3e48c4994ce496287637ab9"
+    },
+    {
+      "name": "source-benchmarking.md",
+      "bytes": 21200,
+      "sha256": "3df71b469c36f0e9b80b042de3eddc427d48c93917c1cddca7eab5d8b65ac63a"
+    },
+    {
+      "name": "update-checklist.md",
+      "bytes": 836,
+      "sha256": "5429e3ea8caffc3702769e587998259edf0d18264f46528899e2f6dc5b4d515f"
+    },
+    {
+      "name": "voice-distribution.md",
+      "bytes": 27499,
+      "sha256": "53f3b8697a46f0cf489afbd899db5e5776f17583b505aefceafbc63077557ecb"
+    },
+    {
+      "name": "youtube-benchmark-sample.md",
+      "bytes": 15968,
+      "sha256": "b77b13bf956e40acf8c387366699ecae6b398e94127234a2446027dc687ddb8f"
+    }
+  ]
+}

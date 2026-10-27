@@ -25,3 +25,9 @@
 ## 범위
 
 조사·설계 문서입니다. 외부 키트 설치·실행, 유료 API 호출, 계정 연결은 하지 않았습니다. 개인 학습 PDF·강의 원본·개인 드라이브 링크는 넣지 않았습니다.
+
+## 콘텐츠 스튜디오 v7.1 인계
+
+[기존 Sites의 콘텐츠 가이드](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-studio/) · [문서 README](handoffs/content-studio-v7.1-20261028/README.md) · [정본과 갱신](handoffs/content-studio-v7.1-20261028/SOURCE.md)
+
+이 인계 스냅샷은 모델·소스·제작·승인 계약을 보강합니다. 이 폴더의 기존 dist와 Sites 연결 저장소는 별도 소스이므로 기존 파일을 통째로 덮어쓰지 않습니다. Sites 최신 소스에서 추가된 content-studio 경로와 문서를 갱신합니다.
