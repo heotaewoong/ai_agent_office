@@ -313,4 +313,4 @@ export type Action = (
   label: string,
   execute: () => Promise<unknown>,
   success: string,
-) => Promise<void | boolean>;
+) => Promise<void | boolean | string>;

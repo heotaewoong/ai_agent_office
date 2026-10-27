@@ -23,3 +23,7 @@ test("기획에서 시작했고 패키지가 없을 때만 필요", () => {
   assert.equal(packagingRequired({ article: { origin: "idea" } as never, packaging: { packaging_hash: "h" } as never }), false);
   assert.equal(packagingRequired({ article: {} as never }), false);
 });
+test("빈 제목·빈 썸네일 글자는 문제", () => {
+  const issues = validatePackagingBrief({ ...good, titles: ["a", "  ", "c"], thumbnails: [{ text: "", visual: "v" }, { text: "a", visual: "v" }, { text: " ", visual: "v" }] });
+  assert.deepEqual(issues, ["제목 2안이 비어 있습니다", "썸네일 1안 글자가 비어 있습니다", "썸네일 3안 글자가 비어 있습니다"]);
+});

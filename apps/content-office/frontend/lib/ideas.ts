@@ -12,7 +12,7 @@ function count(form: Form, key: string, label: string): number | null | { error:
   if (raw === "") return null;
   if (!/^\d+$/.test(raw)) return { error: `${label}은(는) 0 이상의 정수여야 합니다.` };
   const n = Number(raw);
-  if (n > 1e12) return { error: "조회수는 1조 이하로 입력하세요" };
+  if (n > 1e12) return { error: `${label}은(는) 1조 이하로 입력하세요` };
   return n;
 }
 

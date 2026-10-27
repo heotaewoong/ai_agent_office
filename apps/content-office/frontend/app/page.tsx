@@ -201,8 +201,9 @@ export default function Office() {
     label: string,
     execute: () => Promise<unknown>,
     success: string,
-  ): Promise<boolean> {
-    if (busy || !connected) return false;
+  ): Promise<true | string> {
+    if (busy) return "이미 처리 중입니다";
+    if (!connected) return "연결을 확인해 주세요";
     setBusy(label);
     setError("");
     setNotice("");
@@ -226,7 +227,7 @@ export default function Office() {
           );
         }
       } else setError(message);
-      return false;
+      return message;
     } finally {
       setBusy("");
     }
@@ -683,7 +684,8 @@ export default function Office() {
               {view === "world" && (
                 <WorldView
                   activeId={activeId}
-                  busy={!!busy || !connected}
+                  busy={!!busy}
+                  connected={connected}
                   onOpen={(v, id) => {
                     if (id && dashboard?.jobs.some((j) => j.id === id))
                       setActiveId(id);
@@ -697,7 +699,8 @@ export default function Office() {
                         ? "원고 생성 작업을 요청했습니다."
                         : "제작을 요청했습니다.",
                     );
-                    if (!ok) throw new Error("요청을 처리하지 못했습니다.");
+                    if (ok !== true)
+                      throw new Error(typeof ok === "string" ? ok : "요청을 처리하지 못했습니다.");
                   }}
                 />
               )}

@@ -24,6 +24,7 @@
   // ======================================================================
   // 공유 상태
   // ======================================================================
+  const actionTimers = new Map();
   const space = {
     data: null,            // 정규화된 투영
     stages: [],            // 배치 정보가 붙은 단계 목록
@@ -1088,15 +1089,17 @@
         if (act) {
           const key = `${act.dataset.item}:${act.dataset.action}`;
           if (space.pendingActions.has(key)) return;
+          clearTimeout(actionTimers.get(key));
           embed.post({ type: 'action', action: act.dataset.action, itemId: act.dataset.item });
           space.pendingActions.add(key);
           space.embedResult = null;
           act.disabled = true;
-          setTimeout(() => {
+          actionTimers.set(key, setTimeout(() => {
+            actionTimers.delete(key);
             if (!space.pendingActions.delete(key)) return;
             space.embedResult = { ok: false, message: '응답이 없습니다' };
             if (space.selectedStage) hud.openStage(space.selectedStage, true);
-          }, 15000);
+          }, 15000));
           return;
         }
         const op = e.target.closest('[data-open]');
@@ -1200,6 +1203,7 @@
     openStage(id, silent) {
       const st = space.stages.find((s) => s.id === id);
       if (!st) return;
+      if (!silent && id !== space.selectedStage) space.embedResult = null;
       space.selectedStage = id;
       const panel = $('panel');
       panel.style.setProperty('--stage', st.color);
@@ -1376,6 +1380,8 @@
         } else if (m.type === 'result') {
           space.embedResult = { ok: !!m.ok, message: String(m.message || '') };
           space.pendingActions.clear();
+          actionTimers.forEach((t) => clearTimeout(t));
+          actionTimers.clear();
           if (space.selectedStage) hud.openStage(space.selectedStage, true);
         }
       });

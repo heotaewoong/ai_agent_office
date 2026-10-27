@@ -18,3 +18,20 @@ export function parseWorldMessage(data: unknown): WorldMessage | null {
     return { type: "action", action: d.action as "draft", itemId: d.itemId };
   return null;
 }
+
+export type WorldRoute =
+  | { kind: "focus" }
+  | { kind: "open" }
+  | { kind: "action" }
+  | { kind: "reply"; ok: false; message: string };
+
+export function routeWorldMessage(
+  msg: WorldMessage,
+  ctx: { busy: boolean; connected: boolean; inFlight: boolean },
+): WorldRoute {
+  if (msg.type === "ready") return { kind: "focus" };
+  if (msg.type === "open") return { kind: "open" };
+  if (!ctx.connected) return { kind: "reply", ok: false, message: "연결을 확인해 주세요" };
+  if (ctx.busy || ctx.inFlight) return { kind: "reply", ok: false, message: "이미 처리 중입니다" };
+  return { kind: "action" };
+}
