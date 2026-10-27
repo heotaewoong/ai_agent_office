@@ -19,6 +19,7 @@ def sources():
         'apps/content-office/README.md', 'apps/content-office/docs/*.md',
         'apps/content-office/backend/office/*.py', 'apps/content-office/backend/tests/*.py',
         'apps/content-office/backend/requirements*.txt', 'apps/content-office/backend/config/*.json',
+        'apps/content-office/backend/config/brand/*',
         'apps/content-office/frontend/app/**/*.tsx', 'apps/content-office/frontend/app/**/*.css',
         'apps/content-office/frontend/components/**/*.tsx', 'apps/content-office/frontend/lib/*.ts',
         'apps/content-office/frontend/tests/*.ts', 'apps/content-office/frontend/e2e/*.ts',

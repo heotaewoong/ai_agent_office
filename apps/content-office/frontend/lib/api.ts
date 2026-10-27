@@ -5,6 +5,10 @@ import type {
   Selections,
   KnowledgeSearch,
   OutputKind,
+  Idea,
+  Lesson,
+  PackagingBrief,
+  GateReport,
 } from "./types";
 
 export class OfficeApiError extends Error {
@@ -131,5 +135,21 @@ export const api = {
   selectThumbnail: (id: string, artifactId: string) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/thumbnail`, "POST", {
       artifact_id: artifactId,
+    }),
+  ideas: () => request<{ ideas: Idea[] }>("/ideas"),
+  selectIdea: (id: string) =>
+    request<{ idea: Idea; job: Job }>(
+      `/ideas/${encodeURIComponent(id)}/select`,
+      "POST",
+      {},
+    ),
+  setPackaging: (jobId: string, brief: PackagingBrief) =>
+    request(`/jobs/${encodeURIComponent(jobId)}/packaging`, "POST", brief),
+  gates: (jobId: string) =>
+    request<GateReport>(`/jobs/${encodeURIComponent(jobId)}/gates`),
+  lessons: () => request<{ lessons: Lesson[] }>("/lessons"),
+  reviewLesson: (id: string, decision: "approved" | "rejected") =>
+    request<Lesson>(`/lessons/${encodeURIComponent(id)}/review`, "POST", {
+      decision,
     }),
 };

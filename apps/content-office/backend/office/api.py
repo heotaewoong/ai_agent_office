@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import mimetypes
 import os
 import secrets
@@ -13,14 +14,20 @@ from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .bootstrap import default_store
 from .feeds import rank_articles
 from .store import Store, WorkflowError, canonical, digest, identifier, now
 from .runtime import window_open
+from .analytics import baseline, propose_lessons
+from .brand import load_brand
+from .gates import run_gates
+from .ideas import rank_ideas, score_idea
+from .packaging import attach_packaging, require_packaging
 
 ALLOWED_ORIGINS = {"http://localhost:3110", "http://127.0.0.1:3110", "http://localhost:8510", "http://127.0.0.1:8510"}
 AGENTS = [
@@ -60,6 +67,51 @@ class ThumbnailChoice(BaseModel):
 class EvidenceInput(BaseModel):
     source_text: str = Field(min_length=200, max_length=20000)
     version: str | None = None
+
+
+class IdeaInput(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    source_url: str = Field(default="", max_length=2000)
+    views: int | None = Field(default=None, le=10**12)
+    channel_avg_views: int | None = Field(default=None, le=10**12)
+    demand: float = Field(default=0, ge=0, le=100)
+    primary_sources: int = Field(default=0, ge=0)
+    fit: float = Field(default=0, ge=0, le=1)
+    covered_before: bool = False
+    policy_flags: list[str] = []
+
+
+class ThumbnailInput(BaseModel):
+    text: str
+    visual: str
+
+
+class PackagingInput(BaseModel):
+    titles: list[str]
+    thumbnails: list[ThumbnailInput]
+    hook: str
+    logline: str
+    reasons: list[str]
+    chosen_title: str | None = None
+
+
+class SnapshotInput(BaseModel):
+    channel: Literal["youtube_long", "shorts", "blog_tistory", "blog_naver", "newsletter"]
+    external_id: str = Field(min_length=1, max_length=200)
+    period: Literal["24h", "7d", "28d"]
+    metrics: dict[str, float | int | None]
+    job_id: str | None = None
+
+    @field_validator("metrics")
+    @classmethod
+    def finite_metrics(cls, value):
+        if any(isinstance(v, float) and not math.isfinite(v) for v in value.values()):
+            raise ValueError("지표 값은 유한한 숫자여야 합니다")
+        return value
+
+
+class LessonReview(BaseModel):
+    decision: Literal["approved", "rejected"]
 
 
 def create_app(store: Store | None = None):
@@ -104,6 +156,12 @@ def create_app(store: Store | None = None):
     @app.exception_handler(WorkflowError)
     async def workflow_error(request, error):
         return JSONResponse({"detail": str(error), "code": "workflow_blocked"}, status_code=409)
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, error):
+        # 입력값(NaN 등)을 되돌려 직렬화하다 500이 나지 않도록 위치·메시지만 돌려준다
+        detail = [{"loc": list(e.get("loc", ())), "msg": e.get("msg", ""), "type": e.get("type", "")} for e in error.errors()]
+        return JSONResponse({"detail": detail}, status_code=422)
 
     @app.get("/api/health")
     def health():
@@ -160,6 +218,7 @@ def create_app(store: Store | None = None):
     def draft_source(job_id: str):
         require_open_window()
         job = store.job(job_id)
+        require_packaging(job)
         return store.enqueue("draft", {"job_id": job_id, "source_hash": job["source_hash"]}, key=f"draft:{job_id}:{job['source_hash'] or 'initial'}")
 
     @app.post("/api/jobs/{job_id}/evaluate", status_code=202)
@@ -336,6 +395,52 @@ def create_app(store: Store | None = None):
         from .knowledge import search_knowledge
         path = store.setting("knowledge_index_path")
         return {"summary": store.setting("knowledge_summary", {}), "results": search_knowledge(path, query, limit=min(max(limit, 1), 20)) if path and query.strip() else []}
+
+    @app.get("/api/ideas")
+    def list_ideas():
+        return {"ideas": rank_ideas(store.ideas(), lessons=store.lessons("approved"))}
+
+    @app.post("/api/ideas")
+    def add_idea(idea: IdeaInput):
+        return store.save_idea(score_idea(idea.model_dump(), lessons=store.lessons("approved")))
+
+    @app.post("/api/ideas/{idea_id}/select")
+    def choose_idea(idea_id: str):
+        stored = next((i for i in store.ideas() if i["id"] == idea_id), None)
+        if not stored:
+            raise WorkflowError("기획을 찾을 수 없습니다")
+        refreshed = store.save_idea(score_idea(stored, lessons=store.lessons("approved")))
+        if refreshed.get("blocked"):
+            raise WorkflowError("정책·근거 검사에서 막힌 기획은 선택할 수 없습니다")
+        if not str(refreshed.get("source_url", "")).startswith("https://"):
+            raise WorkflowError("기획을 선택하려면 https 출처 URL이 필요합니다")
+        idea = store.select_idea(idea_id, "local-operator")
+        job = store.create_job({"id": idea_id, "title": idea["title"], "url": idea["source_url"], "origin": "idea", "evidence": []})
+        return {"idea": idea, "job": job}
+
+    @app.post("/api/jobs/{job_id}/packaging")
+    def set_packaging(job_id: str, brief: PackagingInput):
+        return attach_packaging(store, job_id, brief.model_dump(exclude_none=True), "local-operator")
+
+    @app.get("/api/jobs/{job_id}/gates")
+    def job_gates(job_id: str):
+        packet = store.job(job_id).get("source_packet") or {}
+        previous = [j["source_packet"] for j in store.jobs() if j["id"] != job_id and j.get("source_packet")]
+        return run_gates(packet, previous, packet.get("assets", []), load_brand())
+
+    @app.post("/api/analytics/snapshots")
+    def add_snapshot(snapshot: SnapshotInput):
+        saved = store.save_snapshot(snapshot.channel, snapshot.external_id, snapshot.period, snapshot.metrics, snapshot.job_id)
+        base = baseline([s for s in store.snapshots(snapshot.channel) if s["period"] == snapshot.period and s["id"] != saved["id"]])
+        return {"snapshot": saved, "lessons": [store.add_lesson(lesson) for lesson in propose_lessons(saved, base)]}
+
+    @app.get("/api/lessons")
+    def list_lessons():
+        return {"lessons": store.lessons()}
+
+    @app.post("/api/lessons/{lesson_id}/review")
+    def review_lesson(lesson_id: str, review: LessonReview):
+        return store.review_lesson(lesson_id, review.decision, "local-operator")
 
     return app
 

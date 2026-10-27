@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Job, KnowledgeSearch, Task, OutputKind } from "../lib/types";
+import type { Idea, Job, KnowledgeSearch, Task, OutputKind } from "../lib/types";
 import {
   completedOutputs,
   evidenceInputAllowed,
@@ -542,6 +542,63 @@ export function OutputChoices({
           );
         })}
       </div>
+    </section>
+  );
+}
+
+export function IdeaBank({ onSelected }: { onSelected?: (job: Job) => void }) {
+  const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
+  async function load() {
+    try {
+      setIdeas((await api.ideas()).ideas);
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "기획 은행을 읽지 못했습니다.");
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+  async function choose(id: string) {
+    setBusy(id);
+    try {
+      const result = await api.selectIdea(id);
+      onSelected?.(result.job);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "기획을 선택하지 못했습니다.");
+    } finally {
+      setBusy(null);
+    }
+  }
+  return (
+    <section className="news-section" aria-labelledby="idea-bank-heading">
+      <div className="section-heading">
+        <div className="section-title">
+          <h2 id="idea-bank-heading">기획 은행 · ⓪ 기획 선택</h2>
+          <span className="count-pill">{ideas.length}</span>
+        </div>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {ideas.length === 0 && !error && <p>아직 점수를 매긴 기획이 없습니다.</p>}
+      <ol>
+        {ideas.map((idea) => (
+          <li key={idea.id}>
+            <strong>{idea.title}</strong> · {idea.score}점 · 이상치 {idea.outlier_band}
+            {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
+            <button
+              className="button secondary"
+              type="button"
+              disabled={idea.blocked.length > 0 || idea.state === "selected" || busy === idea.id}
+              onClick={() => void choose(idea.id)}
+            >
+              {idea.state === "selected" ? "선택됨" : "이 기획으로 작업 만들기"}
+            </button>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
