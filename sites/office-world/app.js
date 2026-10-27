@@ -7,6 +7,8 @@
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const isPhone = () => window.innerWidth < 720;
   const B = window.BABYLON;
+  // ?quality=low 이면 그림자·SSAO·블룸을 끈다(저사양 PC·휴대폰)
+  const QUALITY = new URLSearchParams(location.search).get('quality') || (isPhone() ? 'low' : 'high');
 
   const notice = (title, text) => {
     $('notice-title').textContent = title;
@@ -167,8 +169,68 @@
       if (opts.emissive) m.emissiveColor = c.scale(opts.emissive);
       if (opts.alpha !== undefined) m.alpha = opts.alpha;
       if (opts.unlit) m.disableLighting = true;
-      m.freeze();
       this.matCache.set(k, m);
+      return m;
+    },
+
+    // 그림자: 드리우는 쪽과 받는 쪽
+    castShadow(mesh) { if (this.shadows) this.shadows.addShadowCaster(mesh, false); },
+    receiveShadow(mesh) { if (this.shadows) mesh.receiveShadows = true; },
+
+    // ---------------- 픽셀 텍스처 (코드로 그린 16×16 블록 질감) ----------------
+    pixelTexture(name, tiles, paint) {
+      // tiles: 가로로 이어 붙일 타일 수. paint(x, y, tile, rnd) → [r,g,b]
+      const S = 16, W = S * tiles, data = new Uint8Array(W * S * 4);
+      let seed = name.length * 7919 + 13;
+      const rnd = () => { seed = (seed * 48271) % 2147483647; return seed / 2147483647; };
+      for (let t = 0; t < tiles; t++) for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        const [r, g, b] = paint(x, y, t, rnd);
+        const i = (y * W + t * S + x) * 4; // 행 0이 아래(v=0), 행 15가 위(v=1)
+        data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
+      }
+      const tex = B.RawTexture.CreateRGBATexture(data, W, S, this.scene, false, false, B.Texture.NEAREST_SAMPLINGMODE);
+      tex.wrapU = B.Texture.WRAP_ADDRESSMODE; tex.wrapV = B.Texture.WRAP_ADDRESSMODE;
+      return tex;
+    },
+
+    blockTextures() {
+      if (this.blockTex) return this.blockTex;
+      const mix = (c, d) => [Math.max(0, Math.min(255, c[0] + d)), Math.max(0, Math.min(255, c[1] + d)), Math.max(0, Math.min(255, c[2] + d))];
+      const GRASS = [96, 196, 92], DIRT = [134, 98, 62], STONE = [118, 124, 150], PATH = [182, 190, 214], PLANK = [96, 72, 52], LEAF = [62, 158, 78], TRUNK = [88, 60, 38];
+      const noise = (c, rnd, amp) => mix(c, Math.floor((rnd() - 0.5) * amp));
+      const grassSide = (x, y, rnd) => {
+        const edge = 3 + Math.floor(rnd() * 2);
+        if (y >= 16 - edge) return noise(GRASS, rnd, 26);
+        return noise(DIRT, rnd, 30);
+      };
+      const T = {
+        // 잔디 블록: 타일 0 윗면, 1 옆면, 2 아랫면(흙)
+        grass: this.pixelTexture('grass', 3, (x, y, t, rnd) => t === 0 ? (rnd() < 0.08 ? mix(GRASS, 28) : noise(GRASS, rnd, 30)) : t === 1 ? grassSide(x, y, rnd) : noise(DIRT, rnd, 30)),
+        dirt: this.pixelTexture('dirt', 1, (x, y, t, rnd) => rnd() < 0.1 ? mix(DIRT, -34) : noise(DIRT, rnd, 30)),
+        stone: this.pixelTexture('stone', 1, (x, y, t, rnd) => ((x + y * 3) % 11 === 0 && rnd() < 0.6) ? mix(STONE, -40) : noise(STONE, rnd, 26)),
+        path: this.pixelTexture('path', 1, (x, y, t, rnd) => (x % 8 === 0 || y % 8 === 0 || (x % 8 === 4 && y % 8 < 4)) ? mix(PATH, -48) : noise(PATH, rnd, 18)),
+        planks: this.pixelTexture('planks', 1, (x, y, t, rnd) => (y % 4 === 0) ? mix(PLANK, -36) : (x === (y < 8 ? 3 : 11) ? mix(PLANK, -28) : noise(PLANK, rnd, 22))),
+        leaves: this.pixelTexture('leaves', 1, (x, y, t, rnd) => rnd() < 0.12 ? mix(LEAF, -46) : noise(LEAF, rnd, 34)),
+        // 통나무: 타일 0 옆면(세로 결), 1 윗면(나이테)
+        trunk: this.pixelTexture('trunk', 2, (x, y, t, rnd) => t === 0 ? (x % 4 === 0 ? mix(TRUNK, -30) : noise(TRUNK, rnd, 20)) : (Math.hypot(x - 7.5, y - 7.5) % 3 < 1 ? mix(TRUNK, 26) : noise(TRUNK, rnd, 18))),
+      };
+      this.blockTex = T;
+      return T;
+    },
+
+    blockMaterial(name, tex) {
+      const m = new B.StandardMaterial(`blk-${name}-mat`, this.scene);
+      m.diffuseTexture = tex;
+      m.specularColor = new B.Color3(0.02, 0.02, 0.03);
+      return m;
+    },
+
+    // 면별 타일 지정 박스: faces [back, front, right, left, top, bottom] 각각 타일 번호
+    blockMesh(name, tex, tiles, faceTiles) {
+      const uv = faceTiles.map((t) => new B.Vector4(t / tiles, 0, (t + 1) / tiles, 1));
+      const m = B.MeshBuilder.CreateBox(name, { size: 1, faceUV: uv, wrap: true }, this.scene);
+      m.material = this.blockMaterial(name, tex);
+      m.isPickable = false;
       return m;
     },
 
@@ -191,14 +253,25 @@
       scene.ambientColor = new B.Color3(0.25, 0.28, 0.4);
 
       const hemi = new B.HemisphericLight('hemi', new B.Vector3(0.2, 1, 0.1), scene);
-      hemi.intensity = 0.75;
+      hemi.intensity = 0.85;
       hemi.groundColor = new B.Color3(0.12, 0.14, 0.3);
       const sun = new B.DirectionalLight('sun', new B.Vector3(-0.5, -1, 0.35), scene);
-      sun.intensity = 0.9;
-      sun.diffuse = new B.Color3(1, 0.96, 0.9);
+      sun.intensity = 1.15;
+      sun.diffuse = new B.Color3(1, 0.95, 0.86);
+      sun.position = new B.Vector3(45, 90, -32);
+      sun.shadowMinZ = 20; sun.shadowMaxZ = 220;
+      sun.shadowFrustumSize = 125;
+      this.sun = sun;
 
-      this.glow = new B.GlowLayer('glow', scene, { blurKernelSize: 48 });
-      this.glow.intensity = 0.5;
+      if (QUALITY !== 'low') {
+        // 방향광 그림자: PCF 필터, 블록 면의 줄무늬(acne) 방지 바이어스
+        this.shadows = new B.ShadowGenerator(2048, sun);
+        this.shadows.usePercentageCloserFiltering = true;
+        this.shadows.filteringQuality = B.ShadowGenerator.QUALITY_MEDIUM;
+        this.shadows.bias = 0.0012;
+        this.shadows.normalBias = 0.035;
+        this.shadows.darkness = 0.35;
+      }
 
       this.buildSky();
       this.buildHub();
@@ -255,8 +328,10 @@
       // 광장: 블록 땅 위에 놓인 밝은 돌 원판. 클릭하면 공유 기억 패널.
       const plaza = B.MeshBuilder.CreateCylinder('hub-plaza', { height: 0.14, diameter: HUB_R * 2 - 1.0, tessellation: 12 }, s);
       plaza.position.y = 0.07;
-      plaza.material = this.mat('plaza', '#9aa7c7');
+      plaza.material = this.blockMaterial('plaza', this.blockTextures().path);
+      plaza.material.diffuseTexture.uScale = 7; plaza.material.diffuseTexture.vScale = 7;
       plaza.metadata = { hub: true };
+      this.receiveShadow(plaza);
       [HUB_R * 2 - 2.2, HUB_R * 2 - 4.6].forEach((d, i) => {
         const ring = B.MeshBuilder.CreateTorus(`hub-ring-${i}`, { diameter: d, thickness: 0.14, tessellation: 96 }, s);
         ring.position.y = 0.16;
@@ -266,12 +341,12 @@
       });
       const core = B.MeshBuilder.CreateSphere('brain-core', { diameter: 2.4, segments: 24 }, s);
       core.position.y = 4.2;
-      core.material = this.mat('core', '#bff4ff', { emissive: 0.75, unlit: true });
+      core.material = this.mat('core', '#bff4ff', { emissive: 1.6, unlit: true });
       core.metadata = { hub: true };
       this.hub.core = core;
       const halo = B.MeshBuilder.CreateSphere('brain-halo', { diameter: 3.4, segments: 16 }, s);
       halo.position.y = 4.2;
-      halo.material = this.mat('halo', '#7fe3ff', { emissive: 0.4, alpha: 0.1, unlit: true });
+      halo.material = this.mat('halo', '#7fe3ff', { emissive: 0.9, alpha: 0.14, unlit: true });
       halo.isPickable = false;
       [[2.1, 0.5, 0.2], [2.9, 1.1, -0.4], [3.6, -0.3, 0.9]].forEach((r, i) => {
         const orbit = B.MeshBuilder.CreateTorus(`brain-orbit-${i}`, { diameter: r[0] * 2, thickness: 0.06, tessellation: 64 }, s);
@@ -291,6 +366,7 @@
         const post = this.box(`hub-post-${i}`, 0.18, 1, 0.18, '#7fe3ff', { emissive: 0.6, unlit: true });
         post.position.set(Math.cos(a) * (HUB_R - 0.5), 0.5, Math.sin(a) * (HUB_R - 0.5));
         post.isPickable = false;
+        this.castShadow(post);
       }
     },
 
@@ -370,23 +446,15 @@
           cols.set(key(x, z), { x: cx, z: cz, level, depth, zone });
         }
       }
-      // 블록 종류별 thin instance
-      const faceBox = (name, top, side, bottom) => {
-        const c = (hex) => B.Color4.FromHexString(hex + 'ff');
-        const m = B.MeshBuilder.CreateBox(name, { size: 1, faceColors: [c(side), c(side), c(side), c(side), c(top), c(bottom)] }, s);
-        const mat = new B.StandardMaterial(`${name}-mat`, s);
-        mat.diffuseColor = new B.Color3(1, 1, 1);
-        mat.specularColor = new B.Color3(0.02, 0.02, 0.03);
-        mat.freeze();
-        m.material = mat; m.isPickable = false;
-        return m;
-      };
-      const grass = faceBox('blk-grass', '#6fd36f', '#7b5a3a', '#4a3827');
-      const dirt = faceBox('blk-dirt', '#8a6642', '#7b5a3a', '#5a4230');
-      const stone = faceBox('blk-stone', '#6c7390', '#5b6180', '#3f4461');
-      const path = faceBox('blk-path', '#b9c2dd', '#8e97b8', '#5b6180');
-      const trunk = faceBox('blk-trunk', '#5a3d25', '#6b4a2d', '#5a3d25');
-      const leaf = faceBox('blk-leaf', '#3f9f4e', '#378f45', '#2e7a3b');
+      // 블록 종류별 thin instance (픽셀 텍스처)
+      const T = this.blockTextures();
+      void s;
+      const grass = this.blockMesh('grass', T.grass, 3, [1, 1, 1, 1, 0, 2]);
+      const dirt = this.blockMesh('dirt', T.dirt, 1, [0, 0, 0, 0, 0, 0]);
+      const stone = this.blockMesh('stone', T.stone, 1, [0, 0, 0, 0, 0, 0]);
+      const path = this.blockMesh('path', T.path, 1, [0, 0, 0, 0, 0, 0]);
+      const trunk = this.blockMesh('trunk', T.trunk, 2, [0, 0, 0, 0, 1, 1]);
+      const leaf = this.blockMesh('leaf', T.leaves, 1, [0, 0, 0, 0, 0, 0]);
       const bufs = { grass: [], dirt: [], stone: [], path: [], trunk: [], leaf: [] };
       const put = (kind, x, y, z) => bufs[kind].push(B.Matrix.Translation(x, y, z));
       let seed = 11;
@@ -413,6 +481,8 @@
         bufs[k].forEach((mtx, i) => mtx.copyToArray(arr, i * 16));
         meshes[k].thinInstanceSetBuffer('matrix', arr, 16, true);
         meshes[k].freezeWorldMatrix();
+        this.receiveShadow(meshes[k]);
+        if (k !== 'dirt' && k !== 'stone') this.castShadow(meshes[k]);
       });
       this.terrain = { cols, key, meshes: Object.values(meshes), landR: LAND_R };
     },
@@ -446,12 +516,12 @@
       const P = (mesh, x, y, z) => { mesh.parent = st.node; mesh.position.set(x, y, z); mesh.metadata = { stageId: st.id }; return mesh; };
       const deep = this.tint(st.color, '#0b1026', 0.55);   // 벽 안쪽 어두운 톤
       const soft = this.tint(st.color, '#1a2040', 0.35);   // 가구에 쓰는 단계색
-      // 바닥: 어두운 나무 판자 두 톤
-      P(this.box('floor', 12.4, 0.12, 11.4, '#2a2238'), 0, 0.06, 0);
-      for (let i = 0; i < 11; i++) {
-        const plank = P(this.box(`plank-${i}`, 12.0, 0.04, 0.9, i % 2 ? '#4b3a2c' : '#5a4634'), 0, 0.14, -5.0 + i * 1.0);
-        plank.isPickable = false;
-      }
+      // 바닥: 나무 판자 픽셀 텍스처
+      const floor = P(B.MeshBuilder.CreateBox('floor', { width: 12.4, height: 0.16, depth: 11.4 }, s), 0, 0.08, 0);
+      floor.material = this.blockMaterial(`floor-${st.id}`, this.blockTextures().planks);
+      floor.material.diffuseTexture.uScale = 12; floor.material.diffuseTexture.vScale = 11;
+      floor.material.diffuseColor = B.Color3.FromHexString(this.tint(st.color, '#ffffff', 0.75));
+      this.receiveShadow(floor);
       // 러그: 단계색
       P(this.box('rug', 5.2, 0.05, 4.2, soft), 2.4, 0.18, 2.4).isPickable = false;
       // 벽: 바깥은 단계색, 안쪽은 어두운 단계색 패널
@@ -494,6 +564,8 @@
       this.buildPlant(st, -5.2, -4.6);
       // 입구 바닥 띠(단계색 발광)
       P(this.box('edge', 12.4, 0.08, 0.25, st.color, { emissive: 0.6, unlit: true }), 0, 0.2, 5.6).isPickable = false;
+      // 방 안 모든 물체가 그림자를 드리우고 받는다
+      st.node.getChildMeshes().forEach((m) => { if (m.name !== 'edge' && !/glow|screen|bulb|board-bar/.test(m.name)) this.castShadow(m); this.receiveShadow(m); });
     },
 
     buildDesk(st, x, z, rotY, slot) {
@@ -572,6 +644,7 @@
       const marker = B.MeshBuilder.CreateSphere(`${name}-marker`, { diameter: 0.26, segments: 8 }, s);
       marker.parent = root; marker.position.y = hipY + 0.78 + 0.95; marker.isPickable = false;
       marker.material = this.mat('marker', '#4ad994', { emissive: 1.0, unlit: true });
+      root.getChildMeshes().forEach((m) => { if (m !== marker) { this.castShadow(m); this.receiveShadow(m); } });
       return { root, legL, legR, armL, armR, head, body, marker, hipY, phase: Math.random() * 6 };
     },
 
@@ -833,10 +906,38 @@
       this.walk.inputs.clear();
       this.walk.minZ = 0.3; this.walk.maxZ = 900;
 
-      // 계단 현상 완화: MSAA 4배 + FXAA
-      const pipeline = new B.DefaultRenderingPipeline('aa', false, s, [this.overview, this.walk]);
+      if (QUALITY !== 'low') {
+        // 화면 공간 주변광 차폐: 블록 틈과 가구 밑을 어둡게 (톤 매핑보다 먼저 적용되도록 먼저 만든다)
+        const ssao = new B.SSAO2RenderingPipeline('ssao', s, { ssaoRatio: 0.5, blurRatio: 0.5 }, [this.overview, this.walk]);
+        ssao.radius = 1.6;
+        ssao.totalStrength = 1.1;
+        ssao.base = 0.08;
+        ssao.samples = 16;
+        ssao.maxZ = 160;
+        ssao.expensiveBlur = false;
+        this.ssao = ssao;
+      }
+
+      // 후처리: MSAA 4배 + FXAA, 블룸, ACES 톤 매핑, 약한 비네트
+      const pipeline = new B.DefaultRenderingPipeline('post', true, s, [this.overview, this.walk]);
       pipeline.samples = 4;
       pipeline.fxaaEnabled = true;
+      if (QUALITY !== 'low') {
+        pipeline.bloomEnabled = true;
+        pipeline.bloomThreshold = 0.62;
+        pipeline.bloomWeight = 0.42;
+        pipeline.bloomKernel = 64;
+        pipeline.bloomScale = 0.5;
+      }
+      pipeline.imageProcessingEnabled = true;
+      pipeline.imageProcessing.toneMappingEnabled = true;
+      pipeline.imageProcessing.toneMappingType = B.ImageProcessingConfiguration.TONEMAPPING_ACES;
+      pipeline.imageProcessing.exposure = 1.38;
+      pipeline.imageProcessing.contrast = 1.12;
+      pipeline.imageProcessing.vignetteEnabled = true;
+      pipeline.imageProcessing.vignetteWeight = 1.6;
+      pipeline.imageProcessing.vignetteColor = new B.Color4(0.02, 0.03, 0.08, 0);
+      this.pipeline = pipeline;
 
       const av = world.buildAvatar('player', '#f5d6b8', '#f4f1ea', '#7fe3ff');
       av.marker.isVisible = false;
