@@ -52,7 +52,7 @@ def test_reader_shows_actual_blog_without_release_and_leaves_state_unchanged(blo
 
 def test_reader_rejects_changed_export_bytes(blog_context):
     store, client, job_id, files = blog_context
-    next(p for p in files if p.suffix == '.html').write_text('changed')
+    next(p for p in files if p.suffix == '.html').write_text('changed', encoding="utf-8")
     assert client.get(f'/api/jobs/{job_id}/blog-preview').status_code == 409
 
 

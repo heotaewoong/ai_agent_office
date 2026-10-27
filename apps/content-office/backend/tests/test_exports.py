@@ -15,22 +15,22 @@ def test_blog_exports_escape_html_and_make_paste_safe_numbered_lists(tmp_path):
     from office.exports import write_blog_exports
     files = write_blog_exports(packet(), tmp_path)
     assert {p.name for p in files} == {"tistory.md", "tistory.html", "naver.txt"}
-    html = (tmp_path / "tistory.html").read_text()
+    html = (tmp_path / "tistory.html").read_text(encoding="utf-8")
     assert "<h1" not in html
     assert '<h2' in html and '<script>' not in html
     assert 'hb-number-badge' in html and 'color:inherit' in html
     assert 'overflow-wrap:anywhere' in html
-    assert "핵심 설명" in (tmp_path / "naver.txt").read_text()
-    assert "## " not in (tmp_path / "naver.txt").read_text()
+    assert "핵심 설명" in (tmp_path / "naver.txt").read_text(encoding="utf-8")
+    assert "## " not in (tmp_path / "naver.txt").read_text(encoding="utf-8")
 
 
 def test_video_handoff_has_narration_scenes_and_direct_evidence(tmp_path):
     from office.exports import write_video_exports
     files = write_video_exports(packet(), tmp_path)
     assert {p.name for p in files} == {"youtube-script.md", "youtube-plan.json", "description.txt"}
-    assert "근거를 먼저 확인합니다." in (tmp_path / "youtube-script.md").read_text()
-    assert "https://example.com/research" in (tmp_path / "description.txt").read_text()
-    assert "합성 음성" in (tmp_path / "description.txt").read_text()
+    assert "근거를 먼저 확인합니다." in (tmp_path / "youtube-script.md").read_text(encoding="utf-8")
+    assert "https://example.com/research" in (tmp_path / "description.txt").read_text(encoding="utf-8")
+    assert "합성 음성" in (tmp_path / "description.txt").read_text(encoding="utf-8")
 
 
 def test_reference_pdf_and_asset_rights_are_real_files(tmp_path):
@@ -38,8 +38,8 @@ def test_reference_pdf_and_asset_rights_are_real_files(tmp_path):
     pdf = write_reference_pdf(packet(), tmp_path)
     rights = write_rights_manifest(packet(), tmp_path)
     assert pdf.read_bytes().startswith(b"%PDF-") and pdf.stat().st_size > 3000
-    assert "not_commercially_cleared" in rights.read_text()
-    assert "https://example.com/research" in rights.read_text()
+    assert "not_commercially_cleared" in rights.read_text(encoding="utf-8")
+    assert "https://example.com/research" in rights.read_text(encoding="utf-8")
 
 
 def test_blog_html_keeps_citations_clickable_without_activating_untrusted_markup(tmp_path):
@@ -47,7 +47,7 @@ def test_blog_html_keeps_citations_clickable_without_activating_untrusted_markup
     source = packet()
     source['body'] += '\n\n**확인한 근거**는 [공식 원문](https://example.com/report?a=1&b=2)입니다. `print(1)`\n\n[실행](javascript:alert(1))'
     write_blog_exports(source, tmp_path)
-    html = (tmp_path / 'tistory.html').read_text()
+    html = (tmp_path / 'tistory.html').read_text(encoding="utf-8")
     assert '<a href="https://example.com/report?a=1&amp;b=2"' in html
     assert '<a href="https://example.com/research"' in html
     assert '<strong>확인한 근거</strong>' in html
@@ -62,7 +62,7 @@ def test_blog_comparison_table_is_readable_cells_with_escaped_content(tmp_path):
     source = packet()
     source['body'] = '## 완료 기준\n\n| 확인 항목 | 기대 상태 |\n|---|---|\n| 결제 서비스 | **환불 완료** |\n| 내부 장부 | <img src=x onerror=alert(1)> 30,000원 |'
     write_blog_exports(source, tmp_path)
-    html = (tmp_path / 'tistory.html').read_text()
+    html = (tmp_path / 'tistory.html').read_text(encoding="utf-8")
     class Cells(HTMLParser):
         def __init__(self):
             super().__init__(); self.tags = []; self.text = []

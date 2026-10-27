@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from office.store import Store, WorkflowError
+from platform_support import requires_ffmpeg
 
 
 def runtime():
@@ -115,7 +116,7 @@ def test_watcher_runs_real_checks_every_twenty_minutes_and_waits_separately(tmp_
     watcher = module.WindowWatcher(store, end, inspect, clock=fake.now, sleeper=fake.sleep)
     watcher.run()
     assert checks == [start, start + timedelta(minutes=20), start + timedelta(minutes=40)]
-    events = [json.loads(line) for line in watcher.log_path.read_text().splitlines()]
+    events = [json.loads(line) for line in watcher.log_path.read_text(encoding="utf-8").splitlines()]
     assert sum(event["kind"] == "inspection_completed" for event in events) == 3
     assert any(event["kind"] == "waiting" for event in events)
     assert store.setting("watcher_status")["checks_completed"] == 3
@@ -185,7 +186,7 @@ def test_state_inspection_hashes_actual_files_once_per_new_manifest(tmp_path):
     store = Store(tmp_path)
     job, _ = make_task(store)
     asset = store.artifacts / "actual.txt"
-    asset.write_text("actual file")
+    asset.write_text("actual file", encoding="utf-8")
     store.update_job(job["id"], manifest={"hash": "manifest", "source_hash": job["source_hash"], "files": [{"id": "asset_1", "name": "actual.txt", "path": "actual.txt", "sha256": hashlib.sha256(b"actual file").hexdigest()}]})
     seen = set()
     first = module.inspect_state(store, seen)
@@ -289,6 +290,7 @@ def test_stop_worker_refuses_reused_pid_even_if_module_name_matches(tmp_path, mo
     assert result["state"] == "identity_changed"
 
 
+@requires_ffmpeg
 def test_inspection_ffprobes_real_audio_and_rejects_over_one_minute(tmp_path):
     import hashlib
     import wave
@@ -319,7 +321,7 @@ def test_start_script_refuses_a_live_managed_process_without_launching_services(
     scripts = Path(__file__).resolve().parents[2] / "scripts"
     directory = tmp_path / "runtime"
     directory.mkdir()
-    (directory / "services.json").write_text(json.dumps({"services": {"api": module.process_identity(os.getpid())}}))
+    (directory / "services.json").write_text(json.dumps({"services": {"api": module.process_identity(os.getpid())}}), encoding="utf-8")
     result = subprocess.run([str(scripts / "start-local.sh")], env={**os.environ, "OFFICE_STATE_DIR": str(tmp_path)}, capture_output=True, text=True, timeout=10)
     assert result.returncode != 0
     assert "already running" in result.stderr
@@ -335,7 +337,7 @@ def test_stop_script_never_signals_a_reused_registry_pid(tmp_path):
     identity["start_ticks"] = "wrong-old-process"
     directory = tmp_path / "runtime"
     directory.mkdir()
-    (directory / "services.json").write_text(json.dumps({"scope": "heobrain-content-office", "app_dir": str(scripts.parent), "services": {"api": identity}}))
+    (directory / "services.json").write_text(json.dumps({"scope": "heobrain-content-office", "app_dir": str(scripts.parent), "services": {"api": identity}}), encoding="utf-8")
     result = subprocess.run([str(scripts / "stop-local.sh")], env={**os.environ, "OFFICE_STATE_DIR": str(tmp_path)}, capture_output=True, text=True, timeout=10)
     assert result.returncode == 0
     assert "no matching managed processes" in result.stdout

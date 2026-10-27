@@ -60,6 +60,14 @@ try {
     try { Assert-Throws { Assert-OfficePortAvailable $listener.LocalEndpoint.Port } 'occupied port rejected' }
     finally { $listener.Stop() }
 
+    # Regression: artifact paths add about 160 characters below the state folder.
+    # Without Windows long-path support a long state folder must be refused up front.
+    $longState = 'C:' + ('x' * 120)
+    Assert-Throws { Assert-OfficeStatePathBudget -StateDir $longState -LongPathsEnabled $false } 'long state folder rejected without long path support'
+    Assert-OfficeStatePathBudget -StateDir $longState -LongPathsEnabled $true
+    Assert-OfficeStatePathBudget -StateDir 'C:\office-state' -LongPathsEnabled $false
+    Assert-True ((Get-OfficeLongPathsEnabled) -is [bool]) 'long path setting is readable as a boolean'
+
     $fixture = Join-Path $app 'harmless fixture.py'
     $output = Join-Path $app 'arguments.json'
     [IO.File]::WriteAllText($fixture, "import json,os,pathlib,sys,time`npathlib.Path(sys.argv[1]).write_text(json.dumps({'args':sys.argv[2:],'env':os.getenv('OFFICE_LAUNCHER_TEST')},ensure_ascii=False),encoding='utf-8')`ntime.sleep(120)`n", [Text.UTF8Encoding]::new($false))

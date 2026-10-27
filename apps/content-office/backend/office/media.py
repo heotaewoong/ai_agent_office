@@ -58,12 +58,11 @@ def powershell(script):
     encoded = base64.b64encode(script.encode('utf-16le')).decode('ascii')
     return command([executable('powershell.exe'), '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], 150).decode('utf-8', errors='replace')
 
-def windows_local_path(path):
-    if os.name == 'nt':
-        return Path(path)
-    if not re.match('^[A-Za-z]:\\\\', path):
-        raise WorkflowError('Windows 임시 경로를 WSL 경로로 변환할 수 없습니다')
-    return Path('/mnt') / path[0].lower() / path[3:].replace('\\', '/')
+def windows_local_path(path, *, platform=None):
+    # The built-in voice is Windows System.Speech; there is no WSL bridge any more.
+    if (platform or os.name) != 'nt':
+        raise WorkflowError('Windows 기본 음성은 Windows에서만 생성합니다. Linux(EC2)에서는 유료 음성 프로필을 선택하세요')
+    return Path(path)
 
 def local_voice(text, out_path):
     if not isinstance(text, str) or not text.strip():

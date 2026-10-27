@@ -136,7 +136,7 @@ def test_workspace_drafts_pass_the_offices_own_structure_checks(name):
     draft = load_folder(folder)
     prefix = {'01_ThinkingBox': 'TB', '02_Decisions_API': 'DC', '03_ChatGPT_광고': 'AD'}[name]
     import json
-    seed = json.loads((Path(__file__).resolve().parents[1] / 'config/editorial-seed.json').read_text())
+    seed = json.loads((Path(__file__).resolve().parents[1] / 'config/editorial-seed.json').read_text(encoding="utf-8"))
     claims = [c for item in seed['selected'] for c in item['claims'] if c['id'].startswith(prefix)]
     evidence = enrich([{'url': next(i['primary_url'] for i in seed['selected'] if any(c['id'].startswith(prefix) for c in i['claims'])), 'title': draft['title']}])[0]['evidence']
     assert {e['id'] for e in evidence} == {c['id'] for c in claims}

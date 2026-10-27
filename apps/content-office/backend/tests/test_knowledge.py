@@ -6,6 +6,7 @@ import json
 import pytest
 
 from office.knowledge import build_knowledge_index, search_knowledge
+from platform_support import symlink_or_skip
 
 
 def manifest_for(workspace, sources):
@@ -38,7 +39,7 @@ def test_korean_body_search_returns_source_section_hash_and_identical_copies(tmp
     assert "원고 승인① 후 선택 미디어 제작." in hit["excerpt"]
     assert hit["duplicate_paths"] == ["research/snapshot.md"]
     assert len(hit["sha256"]) == 64
-    index = json.loads(output.read_text())
+    index = json.loads(output.read_text(encoding="utf-8"))
     assert index["documents"][0]["text"] == content
     assert index["documents"][1]["duplicate_of"] == "database/plan.md"
     assert {c["contract_id"] for c in hit["contracts"]} >= {"C01", "C04"}
@@ -68,7 +69,7 @@ def test_index_preserves_source_newlines_and_hashes_exact_bytes(tmp_path, newlin
 def test_unregistered_roots_and_escaping_source_paths_are_rejected(tmp_path, bad_path):
     # Removing containment or Markdown/root checks must not expose arbitrary files.
     manifest = tmp_path / "manifest.json"
-    manifest.write_text(json.dumps([{"path": bad_path, "sha256": "0" * 64}]))
+    manifest.write_text(json.dumps([{"path": bad_path, "sha256": "0" * 64}]), encoding="utf-8")
     output = tmp_path / "knowledge.json"
     with pytest.raises(ValueError):
         build_knowledge_index(tmp_path, manifest, output)
@@ -80,11 +81,11 @@ def test_symlink_to_external_source_is_rejected(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     external = tmp_path / "outside.md"
-    external.write_text("private material")
+    external.write_text("private material", encoding="utf-8")
     (workspace / "database").mkdir()
-    (workspace / "database/link.md").symlink_to(external)
+    symlink_or_skip(workspace / "database/link.md", external)
     manifest = workspace / "manifest.json"
-    manifest.write_text(json.dumps([{"path": "database/link.md", "sha256": hashlib.sha256(external.read_bytes()).hexdigest()}]))
+    manifest.write_text(json.dumps([{"path": "database/link.md", "sha256": hashlib.sha256(external.read_bytes()).hexdigest()}]), encoding="utf-8")
     with pytest.raises(ValueError):
         build_knowledge_index(workspace, manifest, workspace / "index.json")
 
@@ -94,10 +95,10 @@ def test_symlink_cannot_bypass_registered_source_roots(tmp_path):
     (tmp_path / "database").mkdir()
     (tmp_path / "private").mkdir()
     private = tmp_path / "private/note.md"
-    private.write_text("private content")
-    (tmp_path / "database/alias.md").symlink_to(private)
+    private.write_text("private content", encoding="utf-8")
+    symlink_or_skip(tmp_path / "database/alias.md", private)
     manifest = tmp_path / "manifest.json"
-    manifest.write_text(json.dumps([{"path": "database/alias.md", "sha256": hashlib.sha256(private.read_bytes()).hexdigest()}]))
+    manifest.write_text(json.dumps([{"path": "database/alias.md", "sha256": hashlib.sha256(private.read_bytes()).hexdigest()}]), encoding="utf-8")
     with pytest.raises(ValueError):
         build_knowledge_index(tmp_path, manifest, tmp_path / "index.json")
 
@@ -106,11 +107,11 @@ def test_hash_drift_preserves_previous_index(tmp_path):
     # Accepting silently changed source bytes would break manifest provenance.
     manifest = manifest_for(tmp_path, {"database/plan.md": "원본"})
     output = tmp_path / "index.json"
-    output.write_text("previous validated index")
-    (tmp_path / "database/plan.md").write_text("변조된 원문")
+    output.write_text("previous validated index", encoding="utf-8")
+    (tmp_path / "database/plan.md").write_text("변조된 원문", encoding="utf-8")
     with pytest.raises(ValueError, match="hash drift"):
         build_knowledge_index(tmp_path, manifest, output)
-    assert output.read_text() == "previous validated index"
+    assert output.read_text(encoding="utf-8") == "previous validated index"
 
 
 @pytest.mark.parametrize("destination", ["../outside-index.json", "database/plan.md", "manifest.json"])
@@ -119,7 +120,7 @@ def test_output_cannot_escape_or_overwrite_source_or_manifest(tmp_path, destinat
     manifest = manifest_for(tmp_path, {"database/plan.md": "원본"})
     with pytest.raises(ValueError):
         build_knowledge_index(tmp_path, manifest, tmp_path / destination)
-    assert (tmp_path / "database/plan.md").read_text() == "원본"
+    assert (tmp_path / "database/plan.md").read_text(encoding="utf-8") == "원본"
 
 
 def test_fenced_headings_are_body_and_unicode_search_is_normalized(tmp_path):
@@ -160,7 +161,7 @@ def test_source_hash_search_finds_the_registered_document(tmp_path):
     manifest = manifest_for(tmp_path, {"database/source.md": "# 근거\n검토한 원문\n"})
     output = tmp_path / "index.json"
     build_knowledge_index(tmp_path, manifest, output)
-    digest = json.loads(manifest.read_text())[0]["sha256"]
+    digest = json.loads(manifest.read_text(encoding="utf-8"))[0]["sha256"]
     hits = search_knowledge(output, digest)
     assert len(hits) == 1
     assert hits[0]["path"] == "database/source.md"

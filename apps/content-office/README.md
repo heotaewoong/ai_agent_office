@@ -60,7 +60,7 @@ MP4는1080×1920 H.264/AAC입니다. SRT는 실제 장면 음성 길이에 연�
 
 ## 실행과 종료
 
-현재 작업실이 열려 있다면 중복으로 시작할 필요가 없습니다. 준비된 이 WSL 작업공간에서 서비스가 모두 종료된 뒤 시작하는 명령입니다.
+현재 작업실이 열려 있다면 중복으로 시작할 필요가 없습니다. Linux(EC2) 환경에서 서비스가 모두 종료된 뒤 시작하는 명령입니다. WSL은 더 이상 지원 대상이 아니며, Windows는 아래 PowerShell 절차를 따릅니다.
 
 ```bash
 cd "<저장소 경로>/apps/content-office"
@@ -114,7 +114,7 @@ $officeState = '<로컬 NTFS 상태 폴더 절대 경로>'
 .\scripts\stop-windows.ps1 -StateDir $officeState
 ```
 
-`-ProjectRoot`는 `backend`, `frontend`, `scripts`가 있는 앱 폴더이며 기본값은 스크립트 상위 폴더입니다. 모든 명령에서 같은 `-StateDir`를 명시합니다. API8510·화면3110은 `127.0.0.1`에만 열립니다. `-NodePath`로 네이티브 `node.exe`를 지정할 수 있습니다. 기본 검색 순서는 `C:\nvm4w\nodejs`, Program Files, PATH입니다. 실행기가 이미 관리하는 서비스는 중복 시작하지 않습니다. 수동 실행 서비스가 포트를 사용하면 그대로 두고 시작을 거부합니다.
+`-ProjectRoot`는 `backend`, `frontend`, `scripts`가 있는 앱 폴더이며 기본값은 스크립트 상위 폴더입니다. 모든 명령에서 같은 `-StateDir`를 명시합니다. 산출물 경로는 상태 폴더 아래로 약 160자가 더 붙으므로(`artifacts\job_<16자>\<64자 해시>\production-<24자>\파일`), Windows 긴 경로 설정이 꺼져 있으면 `-StateDir`는 99자 이하여야 하며 실행기가 더 길면 시작을 거부합니다. 더 긴 경로를 쓰려면 레지스트리 `HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem`의 `LongPathsEnabled`를 1로 두고 재시작합니다. 같은 이유로 저장소도 짧은 경로(예: `C:\dev\...`)에 두는 것이 안전합니다. API8510·화면3110은 `127.0.0.1`에만 열립니다. `-NodePath`로 네이티브 `node.exe`를 지정할 수 있습니다. 기본 검색 순서는 `C:\nvm4w\nodejs`, Program Files, PATH입니다. 실행기가 이미 관리하는 서비스는 중복 시작하지 않습니다. 수동 실행 서비스가 포트를 사용하면 그대로 두고 시작을 거부합니다.
 
 시작 기본값은 API와 화면뿐입니다. **기존 승인 작업 시간이 열려 있을 때만** `-Worker`, `-Watcher`로 각각 명시적으로 추가합니다. 실행기는 작업 시간·비용·예약을 초기화하거나 연장하지 않습니다. 화면이 이미 열려 있어도 같은 명령으로 작업자·감시를 추가할 수 있습니다. 새 작업 시간은 위의 운영자 CLI 절차에 따라 따로 승인합니다. 작업자와 감시는 함께 실행하는 것을 권합니다.
 
@@ -138,6 +138,10 @@ Pop-Location
 ```
 
 운영 포트로 되돌릴 때는 `OFFICE_API_URL`을 제거하거나 `http://127.0.0.1:8510`으로 바꿔 다시 빌드합니다. 실행 중인 관리 서비스의 포트를 바꾸려면 먼저 해당 서비스들을 종료합니다. 실행기가 만든 프로세스는 시작 직후만 확인하므로 브라우저와 `/api/health`를 확인한 뒤 사용합니다.
+
+### Linux(EC2)
+
+Linux에서는 `scripts/start-local.sh`, `scripts/stop-local.sh`와 위의 `.venv/bin/python` 절차를 그대로 씁니다. 기본 음성은 Windows System.Speech(`Microsoft Heami Desktop`)라 Linux에서는 생성되지 않으므로, 영상을 만들기 전에 운영자가 `office.voice_selection set --profile gemini-kore`로 유료 음성 프로필을 명시적으로 선택해야 합니다. 한국어 폰트는 `CONTENT_OFFICE_FONT` 또는 `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`(예: `fonts-noto-cjk` 패키지)를 준비합니다. FFmpeg/ffprobe는 PATH에 있어야 합니다.
 
 ## 의존성과 설정
 
@@ -191,7 +195,9 @@ npm run test:ui
 npm run build
 ```
 
-Windows 실행기 회귀 검사는 PowerShell 5.1에서 임시 폴더와 유료 호출 없는 가짜 서비스만 사용합니다. `-NodePath`를 주면 기본 실행·작업자/감시 추가·선택 종료까지 검사하며, 생략하면 환경·인수·잠금·포트·프로세스 소유권을 검사합니다.
+Windows 실행기 회귀 검사는 PowerShell 5.1에서 임시 폴더와 유료 호출 없는 가짜 서비스만 사용합니다. `-NodePath`를 주면 기본 실행·작업자/감시 추가·선택 종료까지 검사하며, 생략하면 환경·인수·잠금·포트·경로 길이·프로세스 소유권을 검사합니다.
+
+백엔드 테스트는 로케일에 의존하지 않도록 모든 텍스트 입출력에 UTF-8을 명시하므로 한국어 Windows(cp949)에서도 `PYTHONUTF8` 없이 통과합니다. FFmpeg/ffprobe가 없으면 영상 렌더링 테스트 7개가 이유와 함께 스킵되고, Windows 개발자 모드가 꺼져 있으면 symlink 테스트 3개가 스킵됩니다. 영상 경로까지 검증하려면 FFmpeg를 PATH에 두고 다시 실행합니다.
 
 ```powershell
 .\scripts\tests\windows-launchers.test.ps1 -TestRoot $env:TEMP -PythonPath 'C:\Python312\python.exe' -NodePath '<네이티브 node.exe 절대 경로>'

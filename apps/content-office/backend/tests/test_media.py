@@ -7,6 +7,7 @@ import wave
 import pytest
 
 from office.store import Store, WorkflowError
+from platform_support import requires_ffmpeg, symlink_or_skip
 
 
 def approved_job(tmp_path, *, blog=True, video=True, cards=False, pdf=False):
@@ -46,6 +47,7 @@ def test_production_refuses_unapproved_before_any_artifact(tmp_path):
     assert list(store.artifacts.iterdir()) == []
 
 
+@requires_ffmpeg
 def test_real_mp4_subtitles_thumbnails_and_manifest_are_bound_to_source(tmp_path):
     from office.media import produce, probe
     from PIL import Image
@@ -57,7 +59,7 @@ def test_real_mp4_subtitles_thumbnails_and_manifest_are_bound_to_source(tmp_path
     assert (video["width"], video["height"]) == (1080, 1920)
     assert any(s["codec_type"] == "audio" for s in info["streams"])
     assert 1.2 < float(info["format"]["duration"]) < 2
-    assert "00:00:00,650 --> 00:00:01,300" in files["captions.srt"].read_text()
+    assert "00:00:00,650 --> 00:00:01,300" in files["captions.srt"].read_text(encoding="utf-8")
     assert len(manifest["thumbnail_candidates"]) == 5
     for item in manifest["thumbnail_candidates"]:
         with Image.open(store.artifacts / item["path"]) as image:
@@ -67,6 +69,7 @@ def test_real_mp4_subtitles_thumbnails_and_manifest_are_bound_to_source(tmp_path
     assert all(f["url"] == "/api/artifacts/" + f["id"] for f in manifest["files"])
 
 
+@requires_ffmpeg
 def test_failed_scene_retains_successful_voice_for_retry(tmp_path):
     from office.media import produce
     store, job_id = approved_job(tmp_path, blog=False)
@@ -127,6 +130,7 @@ def test_missing_font_blocks_visual_output_but_keeps_independent_blog(tmp_path, 
 
 
 
+@requires_ffmpeg
 def test_voice_over_sixty_seconds_blocks_without_cutting_or_losing_cache(tmp_path):
     from office.media import produce
     store, job_id = approved_job(tmp_path, blog=False)
@@ -190,6 +194,7 @@ def test_font_bytes_and_explicit_voice_configuration_change_production_contract(
     assert first["hash"] != second["hash"] != third["hash"]
 
 
+@requires_ffmpeg
 def test_reapproved_source_reuses_same_speech_input_without_repeating_renderer(tmp_path):
     from office import media
     store, job_id = approved_job(tmp_path)
@@ -226,7 +231,7 @@ def test_artifact_folder_symlink_cannot_escape_root(tmp_path):
     from office.media import produce
     store, job_id = approved_job(tmp_path, video=False)
     outside = tmp_path / "outside"; outside.mkdir()
-    (store.artifacts / job_id).symlink_to(outside, target_is_directory=True)
+    symlink_or_skip(store.artifacts / job_id, outside, target_is_directory=True)
     with pytest.raises(WorkflowError, match="경로"):
         produce(store, job_id)
     assert list(outside.iterdir()) == []
@@ -251,7 +256,7 @@ def test_interrupted_production_lock_does_not_block_restart(tmp_path):
     store, job_id = approved_job(tmp_path, video=False)
     folder = store.artifacts / job_id / store.job(job_id)["source_hash"]
     folder.mkdir(parents=True)
-    (folder / ".production.lock").write_text("999999999")
+    (folder / ".production.lock").write_text("999999999", encoding="utf-8")
     result = produce(store, job_id)
     assert any(item["name"] == "tistory.html" for item in result["files"])
 
@@ -267,6 +272,7 @@ def test_concurrent_production_on_same_source_is_rejected(tmp_path):
     assert store.job(job_id)["manifest"] is None
 
 
+@requires_ffmpeg
 def test_silent_audio_is_rejected_instead_of_becoming_a_successful_video(tmp_path):
     from office.media import produce
     store, job_id = approved_job(tmp_path, blog=False)
@@ -305,6 +311,7 @@ def test_comparison_uses_actual_pair_and_never_invents_before_after_labels():
     assert no_pair["comparison"] == []
 
 
+@requires_ffmpeg
 def test_thumbnail_concepts_get_distinct_layouts_local_scores_and_recommendation(tmp_path):
     from office.media import produce
     store, job_id = approved_job(tmp_path)
@@ -351,7 +358,7 @@ def test_old_plan_thumbnail_fallback_keeps_approved_title_and_visible_limits(tmp
     from office.media import draw_thumbnails
     plan = {"title": "승인한 원고로 제작", "description": "출처를 확인하고 승인한 원고로 제작합니다", "scenes": [{"caption": "출처 확인", "narration": "출처를 확인합니다.", "visual": "explanation"}]}
     paths = draw_thumbnails(plan, tmp_path)
-    review = json.loads((tmp_path / "thumbnail-review.json").read_text())
+    review = json.loads((tmp_path / "thumbnail-review.json").read_text(encoding="utf-8"))
     assert len(paths) == 5
     assert all(item["title"] == "승인한 원고로 제작" for item in review["candidates"])
     assert all(item["human_selection"] == "pending" for item in review["candidates"])
@@ -379,7 +386,7 @@ def test_thumbnail_spotlight_stays_with_its_headline_when_unrelated_scene_number
     with Image.open(first / "thumbnail-03.png") as before, Image.open(second / "thumbnail-03.png") as after:
         # The actual visible spotlight must not change with an unrelated metric.
         assert before.crop((875, 245, 1205, 575)).tobytes() == after.crop((875, 245, 1205, 575)).tobytes()
-    review = json.loads((first / "thumbnail-review.json").read_text())
+    review = json.loads((first / "thumbnail-review.json").read_text(encoding="utf-8"))
     assert review["candidates"][2]["spotlight_value"] == expected
 
 
@@ -433,7 +440,7 @@ def test_actual_scene_image_does_not_display_phonetic_narration_or_repeat_global
     draw_scene({"title": "모든 장면에 반복되던 긴 전체 제목"}, scene, 1, 5, first)
     draw_scene({"title": "다른 전체 제목"}, {**scene, "narration": "표시하면 안 되는 다른 발음 문장"}, 1, 5, second)
     assert first.read_bytes() == second.read_bytes()
-    metadata = json.loads(first.with_suffix('.json').read_text())
+    metadata = json.loads(first.with_suffix('.json').read_text(encoding="utf-8"))
     assert metadata['title_metrics']['displayed_text'] == "조건 판단 · 선택지 · 점수"
     assert len(metadata['comparison_metrics']) == 3
     assert all(not item['truncated'] and not item['overflow'] for item in metadata['comparison_metrics'])
@@ -444,7 +451,7 @@ def test_numeric_scene_draws_every_approved_metric_inside_the_frame(tmp_path):
     path = tmp_path / 'numbers.png'
     draw_scene({'title': '실험 결과'}, {'caption': '과제 507개 · 평가 20회 · 학습 50단계',
                'narration': '발음 전용 문장', 'visual': 'number: 507개 / 20회 / 50단계'}, 0, 1, path)
-    content = json.loads(path.with_suffix('.json').read_text())
+    content = json.loads(path.with_suffix('.json').read_text(encoding="utf-8"))
     assert [item['value'] for item in content['numbers']] == ['507개', '20회', '50단계']
     assert len(content['number_metrics']) == 3
     assert all(not item['truncated'] and not item['overflow'] for item in content['number_metrics'])
@@ -455,3 +462,10 @@ def test_numeric_scene_keeps_the_approved_price_with_its_currency():
     content = scene_content({'caption': '입력 100만 토큰당 $0.10 · 조건 별도',
                              'narration': '미캐시 입력 100만 토큰에 영 점 일 달러.', 'visual': 'number'})
     assert [item['value'] for item in content['numbers']] == ['100만토큰', '$0.10']
+
+
+def test_windows_voice_temp_path_is_only_accepted_on_windows():
+    from office.media import windows_local_path
+    assert windows_local_path("C:\Temp\hb-office-x\speech.wav", platform="nt") == Path("C:\Temp\hb-office-x\speech.wav")
+    with pytest.raises(WorkflowError, match="Windows"):
+        windows_local_path("C:\Temp\hb-office-x\speech.wav", platform="posix")

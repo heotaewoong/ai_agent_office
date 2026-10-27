@@ -13,6 +13,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows-launcher.ps1')
 $context = New-OfficeContext -ProjectRoot $ProjectRoot -StateDir $StateDir
+Assert-OfficeStatePathBudget -StateDir $context.StateDir -LongPathsEnabled (Get-OfficeLongPathsEnabled)
 if ($ApiPort -eq $FrontendPort) { throw 'API and frontend ports must differ.' }
 $python = Join-Path $context.ProjectRoot 'backend\.venv\Scripts\python.exe'
 $next = Join-Path $context.ProjectRoot 'frontend\node_modules\next\dist\bin\next'

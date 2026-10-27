@@ -21,14 +21,14 @@ from office.worker import run_once
 @pytest.mark.parametrize("video", [False, pytest.param(True, marks=pytest.mark.skipif(os.environ.get("OFFICE_REAL_MEDIA_E2E") != "1", reason="Set OFFICE_REAL_MEDIA_E2E=1 for installed Korean SAPI/FFmpeg integration"))])
 def test_synthetic_http_worker_download_and_source_invalidation(tmp_path, monkeypatch, video):
     # office.api has a module-level ASGI app; isolate it before first import too.
-    monkeypatch.setenv("OFFICE_STATE_DIR", str(tmp_path / "synthetic-e2e-state"))
+    monkeypatch.setenv("OFFICE_STATE_DIR", str(tmp_path / "e2e-state"))
     from office.api import create_app
     def forbidden_model(*args, **kwargs):
         pytest.fail("Synthetic workflow must never call a model")
     monkeypatch.setattr("office.worker.prepare_source", forbidden_model)
     monkeypatch.setattr("office.providers.requests.post", forbidden_model)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    store = Store(tmp_path / "synthetic-e2e-state")
+    store = Store(tmp_path / "e2e-state")
     article = {"id": "synthetic-fixture", "title": "[합성] 승인 흐름 검증", "url": "https://example.com/synthetic-fixture", "published_at": now(), "evidence": [{"id": "SYNTH-E1", "url": "https://example.com/synthetic-fixture", "claim": "실제 뉴스가 아닌 합성 fixture"}]}
     store.save_articles([article])
     with TestClient(create_app(store), base_url="http://localhost:8510") as client:

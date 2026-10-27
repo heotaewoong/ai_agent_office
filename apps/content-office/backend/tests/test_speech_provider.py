@@ -67,10 +67,10 @@ def test_success_persists_wav_usage_receipt_and_reuses_without_new_charge(tmp_pa
     assert first_budget["spent_krw"] == 4 and first_budget["reserved_krw"] == 0
     receipts = list((store.root/"speech-assets").glob("*.json"))
     assert len(receipts) == 1
-    receipt = json.loads(receipts[0].read_text())
+    receipt = json.loads(receipts[0].read_text(encoding="utf-8"))
     assert receipt["status"] == "complete" and receipt["response_id"] == "interaction_synthetic_tts"
     assert receipt["sha256"] and receipt["usage"]["total_output_tokens"] == 200
-    assert "test-placeholder" not in receipts[0].read_text()
+    assert "test-placeholder" not in receipts[0].read_text(encoding="utf-8")
 
 
 def test_missing_usage_preserves_received_audio_and_unknown_reservation(tmp_path, monkeypatch):

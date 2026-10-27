@@ -224,6 +224,23 @@ function Write-OfficeRegistry {
     } finally { if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Force } }
 }
 
+function Get-OfficeLongPathsEnabled {
+    try {
+        return ((Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -ErrorAction Stop).LongPathsEnabled -eq 1)
+    } catch { return $false }
+}
+
+function Assert-OfficeStatePathBudget {
+    param([string]$StateDir, [bool]$LongPathsEnabled)
+    # Deepest artifact below the state folder: artifacts\job_<16>\<64-hex source hash>\production-<24>\<file name>.
+    # That adds about 160 characters, so without long-path support the state folder itself must stay short.
+    $artifactBudget = 160
+    $limit = 259 - $artifactBudget
+    if (-not $LongPathsEnabled -and $StateDir.TrimEnd('\').Length -gt $limit) {
+        throw "StateDir exceeds $limit characters and Windows long paths are disabled; artifact paths would pass MAX_PATH (260). Use a shorter state folder, or set HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem LongPathsEnabled=1 and restart. No process was changed."
+    }
+}
+
 function Assert-OfficePortAvailable {
     param([int]$Port)
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $Port)
