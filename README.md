@@ -10,6 +10,7 @@
 - [오피스 월드 (3D 관제 공간)](sites/office-world/README.md) · [설계서](docs/superpowers/specs/2026-10-28-office-world-design.md) · [배경 조사와 결정](reports/3D%20오피스%20월드%20배경%20조사와%20결정.md)
 - [AI 콘텐츠 에이전트 설계](docs/superpowers/specs/2026-10-27-ai-content-agent-design.md)
 - [AI 콘텐츠 에이전트 구현 계획](docs/superpowers/plans/2026-10-27-ai-content-agent.md)
+- [콘텐츠 오피스 작업 보고 2026-10-28](reports/2026-10-28%20콘텐츠%20오피스%20작업%20보고.md) · 유료 제공자 연결·EC2 준비 상태
 - [콘텐츠 자동화 벤치마킹](reports/AI%20콘텐츠%20자동화%20에이전트%20벤치마킹.md)
 - [저장소 공개 범위와 업로드 전 확인](docs/repository-sharing.md)
 
