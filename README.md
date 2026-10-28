@@ -19,6 +19,18 @@
 
 ## 콘텐츠 자동화 설계와 제작 작업실
 
+### 현재 정본 · 콘텐츠 자동화 v7.3.1
+
+[처음 읽는 실행안](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-start.html) · [전체 도구·소스·자료 확보 상태](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html) · [현재 정본 JSON](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.json) · [다른 AI용 갱신 키트](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-maintenance-kit.zip) · [키트 SHA256](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-maintenance-kit.sha256)
+
+2026-10-28 KST 기준: 전체 설계는 도구49개·입력46개·전달채널12개·설계요구79개를 비교합니다. v7.3.1 안내 웹은 Site14/source `a4ff63f20edb3911849c79e139aa29ff884fc676`로 게시했고, 추가 핵심 회귀32개와 HTTPS 문서·ZIP 바이트 일치를 확인했습니다. 이는 정적 안내와 이관 검증이며 새 모델 생성·계정 연결·실제 콘텐츠 게시·발송·쿠폰/주문 실행의 검증이 아닙니다. 추가 요청의 09:54:57~13:54:57 검토 창은 진행 중입니다.
+
+CLASS101 자료는 전부 확보 상태가 아닙니다. 최신 파일 대조와 과거 읽기 원장은 감사 대상·확인 시점이 달라 합산하지 않습니다. 회원 원문·개인 경로·계정·운영 DB·키는 이 저장소와 공개 갱신 키트에 넣지 않습니다. HTTPS의 기존 본인 전용 접근도 유지합니다.
+
+다른 AI는 갱신 키트의 `KIT-README.md` → `README.md` → `dist/downloads/content-start.md` → `content-system/source.json` 순서로 읽습니다. 같은 정본을 고친 뒤 생성·검사·포장하고 현재 Sites 소스와 병합합니다. 같은 HTTPS를 게시할 접근 도구는 별도로 필요합니다. 실제 오피스가 있으면 먼저 그곳의 AGENTS·OFFICE_INDEX·앱 README를 대조합니다. 아래 인계 경로는 이전 스냅샷으로 보존하며 현재 Sites 정본을 덮어쓰지 않습니다.
+
+### 보존한 이전 인계 스냅샷
+
 [통합 HTTPS 설계](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#content-system) · [자료·원가·실습](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-studio/) · [인계 README](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/README.md) · [정본·업데이트](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/SOURCE.md) · [편집 소스](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/editable-source/README.md)
 
 상위 v7.2의49도구·38입력과 보조 작업실의35세부도구·21선별출처는 서로 다른 범위입니다. PDF56개·3205쪽 파일감사와10종96쪽 선택읽기, 원가 가정 계산·후반작업·이관 소스를 보강했습니다. 실제 모델 생성·유료 호출·개별 게시·회차③ 발송·상품/쿠폰/주문 쓰기는 실행하지 않았습니다. 기존 본인 전용 HTTPS 접근을 유지합니다.
