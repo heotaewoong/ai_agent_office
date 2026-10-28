@@ -356,3 +356,16 @@ def test_queued_production_contract_change_is_returned_for_review(tmp_path, monk
         worker.process_task(store, task)
     assert not list(store.artifacts.rglob('tistory.html'))
 
+
+
+def test_managed_process_match_survives_process_title_change_but_not_pid_reuse():
+    """Next.js rewrites its argv to 'next-server (vX)'; the start time and executable still identify it."""
+    from office.runtime import same_managed_process
+    recorded = {"pid": 42, "start_ticks": "100", "args": ["node", "/app/node_modules/.bin/next", "start"], "executable": "/opt/node/bin/node"}
+    renamed = {"pid": 42, "start_ticks": "100", "args": ["next-server (v16.4.3)"], "executable": "/opt/node/bin/node"}
+    assert same_managed_process(renamed, recorded) is True
+    assert same_managed_process({**renamed, "args": recorded["args"]}, recorded) is True
+    assert same_managed_process({**renamed, "start_ticks": "999"}, recorded) is False
+    assert same_managed_process({**renamed, "executable": "/usr/bin/python3"}, recorded) is False
+    assert same_managed_process(None, recorded) is False
+    assert same_managed_process(renamed, {k: v for k, v in recorded.items() if k != "executable"}) is False

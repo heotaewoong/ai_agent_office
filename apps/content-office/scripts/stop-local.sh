@@ -16,7 +16,7 @@ if mode not in ("--all", "--worker", "--watcher"):
     raise SystemExit("Usage: stop-local.sh [--all|--worker|--watcher]")
 sys.path.insert(0, str(app / "backend"))
 from office.bootstrap import default_store
-from office.runtime import ProcessLock, process_identity
+from office.runtime import ProcessLock, process_identity, same_managed_process
 from office.store import canonical
 store = default_store()
 runtime = store.root / "runtime"
@@ -34,7 +34,7 @@ with ProcessLock(runtime / "services-management.lock"):
         if not item:
             continue
         identity = process_identity(item["pid"])
-        if not identity or identity["start_ticks"] != item.get("start_ticks") or identity["args"] != item.get("args"):
+        if not same_managed_process(identity, item):
             continue
         os.killpg(item["pid"], signal.SIGTERM)
         stopped.append(name)

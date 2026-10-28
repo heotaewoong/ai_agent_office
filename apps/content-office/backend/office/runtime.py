@@ -165,6 +165,19 @@ class WorkerRuntime:
             self.lock.__exit__()
 
 
+def same_managed_process(identity, recorded):
+    """True only for the very process we started: same start time, and same argv or same executable.
+
+    Next.js rewrites its argv to 'next-server (vX)', so argv alone wrongly rejects our own frontend.
+    The start time already rules out PID reuse; the executable check keeps an unrelated program out.
+    """
+    if not identity or not recorded or identity.get("start_ticks") != recorded.get("start_ticks"):
+        return False
+    if identity.get("args") == recorded.get("args"):
+        return True
+    return bool(recorded.get("executable")) and identity.get("executable") == recorded.get("executable")
+
+
 def process_identity(pid):
     """Creation token and command prevent signalling a reused, unrelated PID."""
     try:
