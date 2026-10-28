@@ -141,7 +141,7 @@ Pop-Location
 
 ### Linux(EC2)
 
-Linux에서는 `scripts/start-local.sh`, `scripts/stop-local.sh`와 위의 `.venv/bin/python` 절차를 그대로 씁니다. 기본 음성은 Windows System.Speech(`Microsoft Heami Desktop`)라 Linux에서는 생성되지 않으므로, 영상을 만들기 전에 운영자가 `office.voice_selection set --profile gemini-kore`로 유료 음성 프로필을 명시적으로 선택해야 합니다. 한국어 폰트는 `CONTENT_OFFICE_FONT` 또는 `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`(예: `fonts-noto-cjk` 패키지)를 준비합니다. FFmpeg/ffprobe는 PATH에 있어야 합니다.
+Linux에서는 `scripts/start-local.sh`, `scripts/stop-local.sh`와 위의 `.venv/bin/python` 절차를 그대로 씁니다. 기본 음성은 Windows System.Speech(`Microsoft Heami Desktop`)라 Linux에서는 생성되지 않으므로, 영상을 만들기 전에 운영자가 `office.voice_selection set --profile gemini-kore`로 유료 음성 프로필을 명시적으로 선택해야 합니다. 생성 배경을 쓰려면 환경 파일에 운영자의 `OPENAI_API_KEY`를 넣고 `office.image_selection set --profile openai-gpt-image`를 선택합니다. 한국어 폰트는 `CONTENT_OFFICE_FONT` 또는 `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`(예: `fonts-noto-cjk` 패키지)를 준비합니다. FFmpeg/ffprobe는 PATH에 있어야 합니다.
 
 ## 의존성과 설정
 
@@ -159,6 +159,7 @@ npm run build
 | 설정 | 의미 |
 |---|---|
 | `GEMINI_API_KEY` | 기존 Gemini 연결. 환경으로만 전달하며 UI·ZIP·저장소에 넣지 않습니다 |
+| `OPENAI_API_KEY` | 배경 이미지 프로필 `openai-gpt-image`를 고른 경우에만 필요합니다. 실행하는 운영자가 자신의 키를 환경 파일에 넣으며, 영수증·UI·ZIP·저장소에 기록하지 않습니다 |
 | `OFFICE_STATE_DIR` | DB·자산·캐시 위치. 기본 `~/.local/state/heobrain-content-office` |
 | `OFFICE_MODEL` | 새 장부의 명시적 모델 선택. 현재 실제 작성에 검증한 모델은 `gemini-3.5-flash-lite`이며 저장된 모델 설정이 우선합니다 |
 | `CONTENT_OFFICE_FONT` | 한국어 TTF 경로. 이 환경은 Windows Malgun Gothic을 사용하며 폰트 파일을 배포하지 않습니다 |
@@ -176,7 +177,17 @@ cd "<저장소 경로>/apps/content-office/backend"
 .venv/bin/python -m office.voice_selection set --profile windows-heami
 ```
 
-유료 모델을 사용할 수 없거나 단가 검증 기간이 지나면 보류합니다. 자동 유료 대체 호출은 없습니다. 외부 모델로 원본111문서·Windows 소스·자격 파일을 통째 전송하지 않습니다.
+배경 이미지 프로필도 같은 방식으로 운영자가 명시적으로 선택합니다. 기본값 `none`은 지금처럼 글자 카드만 그립니다. `openai-gpt-image`를 고르면 원고 승인① 후 영상·카드 출력의 장면마다 OpenAI `gpt-image-2.5-flare`(1024×1536, medium)로 배경 한 장을 받고, 제목·수치·단계 같은 한국어 글자는 그 위에 로컬 Pillow 레이어로 얹습니다. 생성 이미지에 글자를 맡기지 않습니다. 장당 200원을 예약하고 공식 사용량으로 정산하며, 업무당 2,000원 하위한도와 총 10,000원 한도를 함께 적용합니다. 키가 없거나 호출이 실패하면 해당 출력만 실패로 남기고 블로그 같은 독립 출력과 성공한 자산은 보존합니다. 다른 제공자로 자동 전환하지 않으며, 글자 카드로 돌아가려면 프로필을 `none`으로 바꾼 뒤 다시 제작을 요청합니다. 같은 장면의 완료 영수증이 있으면 재호출 없이 재사용합니다. 단가는 2026-10-28 공식 가격표 기준이고 2026-11-04까지 유효합니다.
+
+```bash
+cd "<저장소 경로>/apps/content-office/backend"
+.venv/bin/python -m office.image_selection status
+# 선택 자체는 유료 호출을 하지 않습니다. 키 존재 여부만 configured로 표시합니다.
+.venv/bin/python -m office.image_selection set --profile openai-gpt-image
+.venv/bin/python -m office.image_selection set --profile none
+```
+
+유료 모델을 사용할 수 없거나 단가 검증 기간이 지나면 보류합니다. 자동 유료 대체 호출은 없습니다. 외부 모델로 원본111문서·Windows 소스·자격 파일을 통째 전송하지 않습니다. 배경 이미지 프롬프트에는 승인된 장면의 자막과 시각 지시만 들어갑니다.
 
 ## 검사와 증거
 

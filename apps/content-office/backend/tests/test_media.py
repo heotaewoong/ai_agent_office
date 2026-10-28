@@ -469,3 +469,78 @@ def test_windows_voice_temp_path_is_only_accepted_on_windows():
     assert windows_local_path("C:\Temp\hb-office-x\speech.wav", platform="nt") == Path("C:\Temp\hb-office-x\speech.wav")
     with pytest.raises(WorkflowError, match="Windows"):
         windows_local_path("C:\Temp\hb-office-x\speech.wav", platform="posix")
+
+
+def background_renderer(color='#7a2e1e'):
+    from PIL import Image
+    calls = []
+
+    def render(scene_index, out_path):
+        calls.append(scene_index)
+        Image.new('RGB', (64, 96), color).save(out_path, 'PNG')
+        return {'provider': 'test-background', 'model': 'fake-image', 'disclosure': '테스트 배경'}
+    render.cache_key = 'test-background-' + color
+    render.asset_cache_key = 'test-background-asset-' + color
+    render.calls = calls
+    return render
+
+
+def test_scene_with_background_composites_full_frame_and_records_source(tmp_path):
+    from office.media import draw_scene
+    from PIL import Image
+    scene = {'caption': '배경 합성 확인', 'narration': '발음 전용', 'visual': '설명: 배경 위 글자'}
+    plain, backed, background = tmp_path / 'plain.png', tmp_path / 'backed.png', tmp_path / 'bg.png'
+    Image.new('RGB', (64, 96), '#7a2e1e').save(background, 'PNG')
+    draw_scene({'title': '제목'}, scene, 0, 1, plain)
+    draw_scene({'title': '제목'}, scene, 0, 1, backed, background=background)
+    assert Image.open(backed).size == (1080, 1920)
+    assert plain.read_bytes() != backed.read_bytes()
+    # The generated background shows through where no text panel is drawn.
+    pixel = Image.open(backed).convert('RGB').getpixel((1040, 1500))
+    assert pixel[0] > pixel[2], pixel
+    metadata = json.loads(backed.with_suffix('.json').read_text(encoding='utf-8'))
+    assert metadata['drawing_source'] == 'generated_background+approved_scene_fields'
+    assert len(metadata['background_sha256']) == 64
+    plain_meta = json.loads(plain.with_suffix('.json').read_text(encoding='utf-8'))
+    assert plain_meta['drawing_source'] == 'approved_scene_fields' and 'background_sha256' not in plain_meta
+
+
+def test_background_renderer_changes_production_contract_deterministically(tmp_path):
+    from office import media
+    selections = {'blog': True, 'video': False, 'cards': True, 'pdf': False}
+    without = media.production_contract(None, selections)
+    with_bg = media.production_contract(None, selections, image_renderer=background_renderer())
+    again = media.production_contract(None, selections, image_renderer=background_renderer())
+    other = media.production_contract(None, selections, image_renderer=background_renderer('#112233'))
+    assert without['hash'] != with_bg['hash'] == again['hash'] != other['hash']
+    assert with_bg['background'] == 'test-background-#7a2e1e' and without['background'] is None
+    assert media.production_contract(None, {'blog': True})['background'] is None
+
+
+def test_cards_use_background_renderer_per_scene_and_manifest_discloses_it(tmp_path):
+    from office.media import produce
+    from PIL import Image
+    store, job_id = approved_job(tmp_path, blog=False, video=False, cards=True)
+    renderer = background_renderer()
+    manifest = produce(store, job_id, background_renderer=renderer)
+    assert renderer.calls == [0, 1]
+    files = {x['name']: store.artifacts / x['path'] for x in manifest['files']}
+    assert Image.open(files['scene-01.png']).size == (1080, 1920)
+    scene_meta = json.loads(files['scene-01.json'].read_text(encoding='utf-8'))
+    assert scene_meta['background_provider'] == 'test-background'
+    assert manifest['production_contract']['background'] == 'test-background-#7a2e1e'
+    assert manifest['background'] == {'provider': 'test-background', 'model': 'fake-image', 'disclosure': '테스트 배경', 'scenes': 2}
+
+
+def test_background_failure_fails_only_visual_output_and_keeps_blog(tmp_path):
+    from office.media import produce
+    store, job_id = approved_job(tmp_path, blog=True, video=False, cards=True)
+
+    def failing(scene_index, out_path):
+        raise WorkflowError('OPENAI_API_KEY가 설정되지 않았습니다')
+    failing.cache_key = failing.asset_cache_key = 'failing-background'
+    manifest = produce(store, job_id, background_renderer=failing)
+    assert manifest['output_status']['blog']['state'] == 'completed'
+    assert manifest['output_status']['cards']['state'] == 'failed'
+    assert 'OPENAI_API_KEY' in manifest['output_status']['cards']['error']
+    assert 'background' not in manifest

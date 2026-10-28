@@ -185,11 +185,12 @@ def create_app(store: Store | None = None):
     @app.get("/api/dashboard")
     def dashboard():
         from .voice_selection import profile_summary
+        from .image_selection import profile_summary as image_profile_summary
         feed_report = store.setting("feed_report", {})
         current_ids = {article["id"] for article in rank_articles(store.articles_list())}
         active_ids = set(feed_report.get("active_article_ids", current_ids))
         articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
-        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store)}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff"}
+        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store)}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff"}
 
     @app.get("/api/space")
     def space():
@@ -270,7 +271,8 @@ def create_app(store: Store | None = None):
         job = store.require_source_approval(job_id)
         from .media import production_contract
         from .voice_selection import renderer_for_job
-        contract = production_contract(renderer_for_job(store, job), job['selections'])
+        from .image_selection import background_renderer_for_job
+        contract = production_contract(renderer_for_job(store, job), job['selections'], image_renderer=background_renderer_for_job(store, job))
         task = store.enqueue("produce", {"job_id": job_id, "source_hash": job["source_hash"], "production_contract": contract['hash']}, key=f"produce:{job_id}:{job['source_hash']}:{contract['hash']}")
         if task["state"] == "queued":
             store.update_job(job_id, state="production_queued")

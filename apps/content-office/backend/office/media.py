@@ -101,10 +101,17 @@ def voice_identity(renderer):
     return str(getattr(renderer, 'asset_cache_key', getattr(renderer, 'cache_key', getattr(renderer, '__qualname__', 'injected-renderer'))))
 
 
-def production_contract(voice_renderer, selections):
-    """Bind outputs to actual code, font bytes and the selected voice configuration."""
+def background_identity(renderer):
+    if renderer is None:
+        return None
+    return str(getattr(renderer, 'cache_key', getattr(renderer, '__qualname__', 'injected-background-renderer')))
+
+
+def production_contract(voice_renderer, selections, image_renderer=None):
+    """Bind outputs to actual code, font bytes, the selected voice and background image configuration."""
     renderer = voice_renderer or local_voice
     visual = any(selections.get(kind) for kind in ('video', 'cards', 'pdf'))
+    scenes_drawn = bool(selections.get('video') or selections.get('cards'))
     font_sha, font_status = None, 'not_required'
     if visual:
         try:
@@ -118,6 +125,8 @@ def production_contract(voice_renderer, selections):
               'font_sha256': font_sha, 'font_status': font_status,
               'voice': (voice_identity(renderer) if renderer is local_voice else str(getattr(renderer, 'cache_key', voice_identity(renderer)))) if selections.get('video') else None,
               'voice_asset_key': voice_identity(renderer) if selections.get('video') else None,
+              'background': background_identity(image_renderer) if scenes_drawn else None,
+              'background_asset_key': str(getattr(image_renderer, 'asset_cache_key', background_identity(image_renderer))) if (scenes_drawn and image_renderer is not None) else None,
               'selections': dict(selections)}
     return {**config, 'hash': digest(config)}
 
@@ -267,9 +276,23 @@ def approved_display_title(plan):
     return short[0] if short else original
 
 
-def draw_scene(plan, scene, index, total, path):
+def cover_background(source, size=(1080, 1920)):
+    """Scale a generated background to cover the frame, then dim it so the local text layer stays readable."""
+    with Image.open(source) as opened:
+        background = opened.convert('RGB')
+    width, height = background.size
+    if width <= 0 or height <= 0:
+        raise WorkflowError('배경 이미지를 읽을 수 없습니다')
+    scale = max(size[0] / width, size[1] / height)
+    resized = background.resize((max(size[0], math.ceil(width * scale)), max(size[1], math.ceil(height * scale))), Image.LANCZOS)
+    left, top = (resized.width - size[0]) // 2, (resized.height - size[1]) // 2
+    frame = resized.crop((left, top, left + size[0], top + size[1]))
+    return Image.blend(frame, Image.new('RGB', size, '#0b1327'), 0.55)
+
+
+def draw_scene(plan, scene, index, total, path, *, background=None, background_meta=None):
     content = scene_content(scene, index)
-    image = Image.new('RGB', (1080, 1920), '#0b1327')
+    image = cover_background(background) if background else Image.new('RGB', (1080, 1920), '#0b1327')
     draw = ImageDraw.Draw(image)
     accent = ['#6de8d5', '#9aa7ff', '#ffc684', '#94d9ff'][index % 4]
     for n in range(4):
@@ -322,7 +345,12 @@ def draw_scene(plan, scene, index, total, path):
             text_box(draw, phrase, (165, y+50, 760, height-85), 58, minimum_size=28)
     text_box(draw, f'{index+1:02} / {total:02} · 출처와 한계는 설명란 확인', (85, 1790, 910, 70), 28, '#b8c9e4')
     image.save(path, 'PNG')
-    write_json(path.with_suffix('.json'), {**content, 'title_metrics': title_metrics, 'comparison_metrics': comparison_metrics, 'number_metrics': number_metrics, 'drawing_source': 'approved_scene_fields'})
+    record = {**content, 'title_metrics': title_metrics, 'comparison_metrics': comparison_metrics, 'number_metrics': number_metrics, 'drawing_source': 'approved_scene_fields'}
+    if background:
+        record.update(drawing_source='generated_background+approved_scene_fields', background_sha256=file_hash(background),
+                      background_provider=str((background_meta or {}).get('provider', 'injected'))[:80],
+                      background_disclosure=str((background_meta or {}).get('disclosure', '생성 배경 이미지'))[:200])
+    write_json(path.with_suffix('.json'), record)
     return kind
 
 
@@ -448,7 +476,18 @@ def write_json(path, data):
     partial.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
     os.replace(partial, path)
 
-def render_short(plan, folder, *, voice_renderer=None, check_current=None, source_text=None, voice_cache_dir=None):
+def scene_background(background_renderer, folder, index):
+    """Fetch one approved scene's generated background; returns (path, metadata) or (None, None)."""
+    if background_renderer is None:
+        return None, None
+    path = folder / f'background-{index + 1:02}.png'
+    meta = background_renderer(index, path) or {}
+    if not path.is_file():
+        raise WorkflowError('배경 이미지 렌더러가 파일을 만들지 않았습니다')
+    return path, meta
+
+
+def render_short(plan, folder, *, voice_renderer=None, check_current=None, source_text=None, voice_cache_dir=None, background_renderer=None):
     scenes = plan.get('scenes', [])
     if not isinstance(scenes, list) or not 1 <= len(scenes) <= 12:
         raise WorkflowError('영상에는 1~12개 장면이 필요합니다')
@@ -491,12 +530,16 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
     elapsed = 0.0
     paths = list(audios)
     templates = []
+    backgrounds = []
     for index, (scene, audio, duration) in enumerate(zip(scenes, audios, durations)):
         if check_current:
             check_current()
         image = folder / f'scene-{index + 1:02}.png'
-        templates.append(draw_scene(plan, scene, index, len(scenes), image))
-        paths.extend([image, image.with_suffix('.json')])
+        background, background_meta = scene_background(background_renderer, folder, index)
+        templates.append(draw_scene(plan, scene, index, len(scenes), image, background=background, background_meta=background_meta))
+        paths.extend([image, image.with_suffix('.json')] + ([background] if background else []))
+        if background_meta:
+            backgrounds.append(background_meta)
         clip = folder / f'clip-{index + 1:02}.mp4'
         clip_key = digest({'image': file_hash(image), 'audio': file_hash(audio), 'version': RENDER_VERSION})
         clip_meta = clip.with_suffix('.json')
@@ -528,9 +571,17 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
     shutil.copyfile(folder / 'scene-01.png', cover)
     paths.append(cover)
     media = {'duration': actual, 'speech_duration': elapsed, 'scene_durations': durations, 'voice': metadata[0].get('voice', voice_key), 'voice_provider': metadata[0].get('provider', 'injected'), 'voice_disclosure': metadata[0].get('disclosure', '합성 음성'), 'resolution': [1080, 1920], 'scene_templates': templates, 'visual_review': 'pending', 'listening_review': 'pending', 'synthetic_voice': True}
+    if backgrounds:
+        media['background'] = background_summary(backgrounds)
     write_json(folder / 'media.json', media)
     paths.append(folder / 'media.json')
-    return {'files': paths, 'media': media, 'thumbnails': thumbs}
+    return {'files': paths, 'media': media, 'thumbnails': thumbs, 'backgrounds': backgrounds}
+
+
+def background_summary(backgrounds):
+    first = backgrounds[0]
+    return {'provider': str(first.get('provider', 'injected'))[:80], 'model': str(first.get('model', ''))[:80],
+            'disclosure': str(first.get('disclosure', '생성 배경 이미지'))[:200], 'scenes': len(backgrounds)}
 
 def artifact_record(root, path):
     relative = path.relative_to(root).as_posix()
@@ -567,8 +618,8 @@ def production_lock(folder):
     finally:
         os.close(fd)
 
-def produce(store, job_id, *, voice_renderer=None):
-    # This guard must run before directory creation or any external voice callback.
+def produce(store, job_id, *, voice_renderer=None, background_renderer=None):
+    # This guard must run before directory creation or any external voice or image callback.
     job = store.require_source_approval(job_id)
     source_hash = job['source_hash']
     selections = dict(job['selections'])
@@ -576,11 +627,14 @@ def produce(store, job_id, *, voice_renderer=None):
     if voice_renderer is None:
         from .voice_selection import renderer_for_job
         voice_renderer = renderer_for_job(store, job)
+    if background_renderer is None:
+        from .image_selection import background_renderer_for_job
+        background_renderer = background_renderer_for_job(store, job)
     if not re.fullmatch('job_[a-zA-Z0-9_-]+', job_id) or not re.fullmatch('[0-9a-f]{64}', source_hash):
         raise WorkflowError('제작 경로 식별자가 유효하지 않습니다')
     root = store.artifacts.resolve()
     source_folder = root / job_id / source_hash
-    contract = production_contract(voice_renderer, selections)
+    contract = production_contract(voice_renderer, selections, image_renderer=background_renderer)
     folder = source_folder / ('production-' + contract['hash'][:24])
     voice_cache_dir = root / job_id / 'voices'
     if not folder.resolve().is_relative_to(root) or not voice_cache_dir.resolve().is_relative_to(root):
@@ -596,12 +650,13 @@ def produce(store, job_id, *, voice_renderer=None):
         files = []
         media = {}
         thumbs = []
+        backgrounds = []
         output_status = {}
         output_files = {}
         store.event('production_started', {'source_hash': source_hash, 'role': '영상·자료 제작'}, job_id)
         try:
             def run_output(kind, action):
-                nonlocal media, thumbs
+                nonlocal media, thumbs, backgrounds
                 if not selections.get(kind):
                     return
                 check_current()
@@ -619,6 +674,8 @@ def produce(store, job_id, *, voice_renderer=None):
                             if kind == 'video':
                                 media = previous.get('media', {})
                                 thumbs = [root / record['path'] for record in previous.get('thumbnail_candidates', [])]
+                            if previous.get('background') and kind in ('video', 'cards') and not backgrounds:
+                                backgrounds = [dict(previous['background'])] * int(previous['background'].get('scenes', 1))
                             store.event('output_reused', {'output': kind, 'source_hash': source_hash, 'files': len(old_records)}, job_id)
                             return
                     output_files[kind] = action()
@@ -632,22 +689,31 @@ def produce(store, job_id, *, voice_renderer=None):
                     store.event('output_failed', {'output': kind, 'error': message, 'source_hash': source_hash, 'successful_assets_preserved': True}, job_id)
 
             def video_output():
-                nonlocal media, thumbs
+                nonlocal media, thumbs, backgrounds
                 if contract['font_status'] != 'ready':
                     raise WorkflowError('한국어 폰트를 확인한 뒤 영상 제작을 다시 요청하세요. 유료 음성은 호출하지 않았습니다')
                 exports = write_video_exports(packet, folder)
-                rendered = render_short(packet['video'], folder, voice_renderer=voice_renderer, check_current=check_current, source_text=packet['body'], voice_cache_dir=voice_cache_dir)
+                rendered = render_short(packet['video'], folder, voice_renderer=voice_renderer, check_current=check_current, source_text=packet['body'], voice_cache_dir=voice_cache_dir, background_renderer=background_renderer)
                 media, thumbs = rendered['media'], rendered['thumbnails']
+                backgrounds = backgrounds or rendered['backgrounds']
                 return exports + rendered['files']
 
             def card_output():
+                nonlocal backgrounds
                 paths = []
-                for index, scene in enumerate(packet.get('video', {}).get('scenes', [])):
+                drawn = []
+                scenes = packet.get('video', {}).get('scenes', [])
+                for index, scene in enumerate(scenes):
+                    check_current()
                     path = folder / f'scene-{index + 1:02}.png'
-                    draw_scene(packet['video'], scene, index, len(packet['video']['scenes']), path)
-                    paths.extend([path, path.with_suffix('.json')])
+                    background, background_meta = scene_background(background_renderer, folder, index)
+                    draw_scene(packet['video'], scene, index, len(scenes), path, background=background, background_meta=background_meta)
+                    paths.extend([path, path.with_suffix('.json')] + ([background] if background else []))
+                    if background_meta:
+                        drawn.append(background_meta)
                 if not paths:
                     raise WorkflowError('카드로 제작할 승인 장면이 없습니다')
+                backgrounds = backgrounds or drawn
                 return paths
 
             run_output('blog', lambda: write_blog_exports(packet, folder))
@@ -662,6 +728,9 @@ def produce(store, job_id, *, voice_renderer=None):
             files = [shared] + [path for paths in output_files.values() for path in paths]
             records = [{**artifact_record(root, path), 'outputs': ['shared'] if path == shared else [kind for kind, paths in output_files.items() if path in paths]} for path in sorted(set(files))]
             manifest = {'source_hash': source_hash, 'production_contract': contract, 'output_status': output_status, 'completed_outputs': completed, 'files': records, 'media': media, 'thumbnail_candidates': [r for r in records if r['name'] in {p.name for p in thumbs}], 'warnings': ['게시·업로드는 실행되지 않았습니다', '완료된 제작물을 선택해 출고 승인②을 받습니다. 영상은 음성 청취와 화면 검토가 필요합니다']}
+            if backgrounds and any(kind in completed for kind in ('video', 'cards')):
+                manifest['background'] = background_summary(backgrounds)
+                manifest['warnings'].append('배경은 생성 이미지이며 한국어 글자는 로컬 레이어입니다. 출고 전 화면 검토가 필요합니다')
             if thumbs:
                 local_reviews = json.loads((folder / 'thumbnail-review.json').read_text(encoding="utf-8"))['candidates']
                 by_name = {review['name']: review for review in local_reviews}

@@ -22,14 +22,16 @@ def process_task(store, task):
     if task["kind"] == "produce":
         from .media import produce, production_contract
         from .voice_selection import renderer_for_job
+        from .image_selection import background_renderer_for_job
         current = store.require_source_approval(job_id)
         if payload["source_hash"] != current["source_hash"]:
             raise WorkflowError("대기 중인 제작의 원고 버전이 변경되었습니다")
         renderer = renderer_for_job(store, current)
-        if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'])['hash']:
+        background = background_renderer_for_job(store, current)
+        if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background)['hash']:
             raise WorkflowError('대기 중 제작 설정이 변경되었습니다. 현재 설정으로 제작을 다시 요청하세요')
         store.update_job(job_id, state="producing", error=None)
-        manifest = produce(store, job_id, voice_renderer=renderer)
+        manifest = produce(store, job_id, voice_renderer=renderer, background_renderer=background)
         return {"job_id": job_id, "manifest_hash": manifest["hash"], 'partial': any(status.get('state') != 'completed' for status in manifest.get('output_status', {}).values()), 'completed_outputs': manifest.get('completed_outputs')}
     raise WorkflowError("등록되지 않은 작업입니다")
 
