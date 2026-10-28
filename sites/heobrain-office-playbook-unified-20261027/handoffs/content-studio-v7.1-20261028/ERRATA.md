@@ -15,7 +15,7 @@
 
 ## 감사 이후 앱 변경 (49dcba9)
 
-- Windows 기본 음성의 WSL 경로 변환을 지웠다. Windows가 아닌 환경에서 Windows 기본 음성을 고르면 오류로 멈춘다. Linux(EC2)에서는 gemini-kore 같은 유료 음성 프로필을 선택해야 한다.
+- Windows 기본 음성의 WSL 경로 변환을 지웠다. Windows가 아닌 환경에서 Windows 기본 음성을 고르면 오류로 멈춘다. Linux(EC2)에서는 gemini-kore 같은 유료 음성 프로필을 선택해야 한다. 한국어 폰트는 fonts-nanum 같은 TrueType(.ttf)이어야 하며 Noto CJK의 TTC는 PDF 생성기가 읽지 못한다.
 - Windows 실행기는 긴 경로 설정이 꺼져 있으면 99자를 넘는 상태 폴더를 거부한다. 산출물 경로가 Windows 경로 한계 260자를 넘는 것을 막기 위해서다.
 - 백엔드 테스트는 한국어 Windows 기본 인코딩(cp949)에서도 UTF-8로 읽고 쓴다. FFmpeg가 없거나 symlink 권한이 없으면 해당 테스트는 이유를 남기고 건너뛴다.
 - 자세한 실행 조건은 apps/content-office/README.md의 Windows와 Linux(EC2) 절에 있다. 실행 위치는 이 스냅샷 162행의 "개발 EC2, 제작 앱 Windows, WSL 운영 종료"와 같다.

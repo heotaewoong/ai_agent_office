@@ -10,11 +10,24 @@ import re
 from .store import WorkflowError
 
 
+# TrueType (.ttf) only: reportlab cannot read TTC collections or CFF-based OTF such as Noto Sans CJK.
+FONT_CANDIDATES = ("C:/Windows/Fonts/malgun.ttf",
+                   "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+                   "/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf",
+                   "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.ttf")
+
+
 def korean_font() -> Path:
-    for candidate in (os.environ.get("CONTENT_OFFICE_FONT"), "/mnt/c/Windows/Fonts/malgun.ttf", "C:/Windows/Fonts/malgun.ttf", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"):
-        if candidate and Path(candidate).is_file():
+    explicit = os.environ.get("CONTENT_OFFICE_FONT")
+    if explicit:
+        path = Path(explicit)
+        if path.suffix.lower() != ".ttf" or not path.is_file():
+            raise WorkflowError("CONTENT_OFFICE_FONT는 존재하는 한글 TTF 파일이어야 합니다. TTC/OTF는 PDF 생성기가 읽지 못합니다 (예: fonts-nanum의 NanumGothic.ttf)")
+        return path
+    for candidate in FONT_CANDIDATES:
+        if Path(candidate).is_file():
             return Path(candidate)
-    raise WorkflowError("한글 폰트가 없습니다. CONTENT_OFFICE_FONT에 한글 TTF 경로를 지정하세요")
+    raise WorkflowError("한글 TTF 폰트가 없습니다. Linux는 fonts-nanum을 설치하거나 CONTENT_OFFICE_FONT에 한글 TTF 경로를 지정하세요")
 
 
 def write_text(folder: Path, name: str, text: str) -> Path:

@@ -1,3 +1,4 @@
+import pytest
 from pathlib import Path
 
 
@@ -77,3 +78,21 @@ def test_blog_comparison_table_is_readable_cells_with_escaped_content(tmp_path):
     assert not any('|---|' in text for text in parsed.text)
     assert 'img' not in parsed.tags and '<img src=x' not in html
     assert '&lt;img src=x onerror=alert(1)&gt;' in html
+
+
+def test_korean_font_accepts_only_truetype_and_never_uses_wsl_paths(tmp_path, monkeypatch):
+    """reportlab cannot read TTC/OTF collections; the WSL bridge path is gone."""
+    from office import exports
+    from office.store import WorkflowError
+    ttc = tmp_path / 'NotoSansCJK-Regular.ttc'
+    ttc.write_bytes(b'ttcf' + b'\0' * 64)
+    monkeypatch.setenv('CONTENT_OFFICE_FONT', str(ttc))
+    with pytest.raises(WorkflowError, match='TTF'):
+        exports.korean_font()
+    ttf = tmp_path / 'NanumGothic.ttf'
+    ttf.write_bytes(b'\x00\x01\x00\x00' + b'\0' * 64)
+    monkeypatch.setenv('CONTENT_OFFICE_FONT', str(ttf))
+    assert exports.korean_font() == ttf
+    monkeypatch.delenv('CONTENT_OFFICE_FONT')
+    assert all(not str(candidate).startswith('/mnt/') and str(candidate).lower().endswith('.ttf') for candidate in exports.FONT_CANDIDATES)
+    assert '/usr/share/fonts/truetype/nanum/NanumGothic.ttf' in exports.FONT_CANDIDATES

@@ -143,7 +143,11 @@ Pop-Location
 
 ### Linux(EC2)
 
-Linux에서는 `scripts/start-local.sh`, `scripts/stop-local.sh`와 위의 `.venv/bin/python` 절차를 그대로 씁니다. 기본 음성은 Windows System.Speech(`Microsoft Heami Desktop`)라 Linux에서는 생성되지 않으므로, 영상을 만들기 전에 운영자가 `office.voice_selection set --profile gemini-kore`로 유료 음성 프로필을 명시적으로 선택해야 합니다. 생성 배경을 쓰려면 환경 파일에 운영자의 `OPENAI_API_KEY`를 넣고 `office.image_selection set --profile openai-gpt-image`를 선택합니다. 한국어 폰트는 `CONTENT_OFFICE_FONT` 또는 `/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc`(예: `fonts-noto-cjk` 패키지)를 준비합니다. FFmpeg/ffprobe는 PATH에 있어야 합니다.
+Linux에서는 `scripts/start-local.sh`, `scripts/stop-local.sh`와 위의 `.venv/bin/python` 절차를 그대로 씁니다. 기본 음성은 Windows System.Speech(`Microsoft Heami Desktop`)라 Linux에서는 생성되지 않으므로, 영상을 만들기 전에 운영자가 `office.voice_selection set --profile gemini-kore`로 유료 음성 프로필을 명시적으로 선택해야 합니다. 생성 배경을 쓰려면 환경 파일에 운영자의 `OPENAI_API_KEY`를 넣고 `office.image_selection set --profile openai-gpt-image`를 선택합니다. 한국어 폰트는 TrueType(.ttf)이어야 합니다. PDF 생성기(reportlab)가 Noto Sans CJK 같은 TTC/OTF를 읽지 못하므로 `fonts-nanum` 패키지의 `/usr/share/fonts/truetype/nanum/NanumGothic.ttf`를 기본으로 찾고, 다른 폰트는 `CONTENT_OFFICE_FONT`에 TTF 경로로 지정합니다. FFmpeg/ffprobe는 PATH에 있어야 합니다. Ubuntu 기준 준비 명령은 다음과 같습니다.
+
+```bash
+sudo apt-get install -y nodejs npm ffmpeg fonts-nanum python3-venv
+```
 
 ## 의존성과 설정
 
