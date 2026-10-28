@@ -235,3 +235,28 @@ def test_delivery_routes_require_release_and_report_ledger(context, monkeypatch)
     assert response.status_code == 409 and '출고 승인②' in response.json()['detail']
     assert client.get('/api/dashboard').json()['provider']['youtube'] == {'configured': False, 'visibility': 'private', 'automatic_retry': False}
     assert client.post(f"/api/jobs/{job['id']}/deliveries/missing/reconcile", headers=headers).status_code == 409
+
+
+def test_public_origin_is_opt_in_https_only_and_marks_cookie_secure(tmp_path, monkeypatch):
+    from office.store import WorkflowError
+    store = Store(tmp_path)
+    store.save_articles([{"id": "one", "title": "AI 발표", "url": "https://example.com/news", "summary": "공식 발표", "evidence": [], "published_at": datetime.now(timezone.utc).isoformat()}])
+    public = "https://office.example.com"
+    monkeypatch.delenv("OFFICE_PUBLIC_ORIGIN", raising=False)
+    local = TestClient(create_app(store), base_url="http://localhost:8510")
+    token = local.get("/api/session").json()["csrf"]
+    assert local.post("/api/jobs", json={"article_ids": ["one"]}, headers={"Origin": public, "X-Office-CSRF": token}).status_code == 403
+    for bad in ("http://office.example.com", "https://office.example.com/path", "https://*.example.com", "https://user@office.example.com", "office.example.com"):
+        monkeypatch.setenv("OFFICE_PUBLIC_ORIGIN", bad)
+        with pytest.raises(WorkflowError, match="OFFICE_PUBLIC_ORIGIN"):
+            create_app(store)
+    monkeypatch.setenv("OFFICE_PUBLIC_ORIGIN", public + "/")
+    # The browser reaches the proxy over HTTPS, so the Secure cookie is returned.
+    client = TestClient(create_app(store), base_url="https://localhost:8510")
+    session = client.get("/api/session")
+    assert "secure" in session.headers["set-cookie"].lower()
+    headers = {"Origin": public, "X-Office-CSRF": session.json()["csrf"]}
+    created = client.post("/api/jobs", json={"article_ids": ["one"]}, headers=headers)
+    assert created.status_code in (200, 201), created.text
+    assert client.post("/api/jobs", json={"article_ids": ["one"]}, headers={**headers, "Origin": "https://attacker.example"}).status_code == 403
+    assert client.post("/api/jobs", json={"article_ids": ["one"]}, headers={"Origin": public}).status_code == 403

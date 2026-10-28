@@ -31,6 +31,24 @@ from .packaging import attach_packaging, require_packaging
 from .space import project_space
 
 ALLOWED_ORIGINS = {"http://localhost:3110", "http://127.0.0.1:3110", "http://localhost:8510", "http://127.0.0.1:8510"}
+
+
+def public_origin():
+    """One explicit HTTPS origin served by an authenticating reverse proxy, or None.
+
+    The API itself has no user accounts, so a public origin is only safe behind a proxy that
+    authenticates every request (for example nginx basic auth over TLS).
+    """
+    raw = os.environ.get("OFFICE_PUBLIC_ORIGIN", "").strip()
+    if not raw:
+        return None
+    from urllib.parse import urlsplit
+    value = raw[:-1] if raw.endswith("/") else raw
+    parts = urlsplit(value)
+    if (parts.scheme != "https" or not parts.hostname or parts.username or parts.password or parts.path
+            or parts.query or parts.fragment or "*" in value or value != f"https://{parts.netloc}"):
+        raise WorkflowError("OFFICE_PUBLIC_ORIGIN은 https://호스트 형식의 단일 주소여야 합니다 (경로·와일드카드·계정 정보 불가)")
+    return value
 AGENTS = [
     {"id": "director", "name": "총괄", "description": "목표·담당·완료 상태", "mode": "업무 규칙"},
     {"id": "research", "name": "RSS 연구", "description": "공식 피드·날짜·원문 근거", "mode": "수집 + 검토"},
@@ -131,6 +149,8 @@ def create_app(store: Store | None = None):
         secret_path.write_bytes(secrets.token_bytes(32))
         secret_path.chmod(0o600)
     secret = secret_path.read_bytes()
+    public = public_origin()
+    allowed_origins = ALLOWED_ORIGINS | ({public} if public else set())
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "testserver"])
 
     def sign(value):
@@ -153,11 +173,11 @@ def create_app(store: Store | None = None):
     @app.middleware("http")
     async def local_session_guard(request: Request, call_next):
         origin = request.headers.get("Origin")
-        if origin and origin not in ALLOWED_ORIGINS:
+        if origin and origin not in allowed_origins:
             return JSONResponse({"detail": "허용되지 않은 화면의 요청입니다"}, status_code=403)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             sid = session(request)
-            if origin not in ALLOWED_ORIGINS or not sid or not hmac.compare_digest(request.headers.get("X-Office-CSRF", ""), sign("csrf:" + sid)):
+            if origin not in allowed_origins or not sid or not hmac.compare_digest(request.headers.get("X-Office-CSRF", ""), sign("csrf:" + sid)):
                 return JSONResponse({"detail": "로컬 운영자 세션과 검토 화면에서 다시 요청하세요"}, status_code=403)
         return await call_next(request)
 
@@ -179,7 +199,7 @@ def create_app(store: Store | None = None):
     def operator_session(request: Request):
         sid = session(request) or secrets.token_urlsafe(24) + "." + str(int(time.time()))
         response = JSONResponse({"csrf": sign("csrf:" + sid), "actor": "local-operator", "scope": "이 컴퓨터의 로컬 검토 화면"})
-        response.set_cookie("hb_office_session", sid + "." + sign(sid), httponly=True, samesite="strict", max_age=86400)
+        response.set_cookie("hb_office_session", sid + "." + sign(sid), httponly=True, samesite="strict", max_age=86400, secure=bool(public))
         return response
 
     @app.get("/api/dashboard")

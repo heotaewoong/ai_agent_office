@@ -180,6 +180,7 @@ npm run build
 | `CONTENT_OFFICE_FONT` | 한국어 TTF 경로. 이 환경은 Windows Malgun Gothic을 사용하며 폰트 파일을 배포하지 않습니다 |
 | `OFFICE_LOCAL_VOICE` | 명시적인 설치 음성 이름. 기본 `Microsoft Heami Desktop`, rate0 |
 | `OFFICE_ENV_FILE` | start-local에 필요한 본인 소유 환경 파일을 지정할 때만 사용합니다 |
+| `OFFICE_PUBLIC_ORIGIN` | 외부 공개 시 브라우저가 여는 단일 HTTPS 주소(예: `https://77-114-15-207.sslip.io`). 앱에는 사용자 계정이 없으므로 모든 요청을 인증하는 리버스 프록시(nginx 기본 인증+TLS) 뒤에서만 설정합니다. 설정하면 세션 쿠키에 Secure가 붙습니다 |
 
 음성 프로필은 운영자가 명시적으로 선택합니다. 로컬 Heami와 실제 합성 자료에서 시험한 Gemini3.8 Flash TTS/Kore를 제공합니다. Gemini 경로도 원고 승인① 후 승인된3~7장면 대본에만 호출하며, 원고당1,000원 하위한도와 기존 총10,000원 한도를 함께 적용합니다. 요청이 실패해도 다른 유료 음성으로 자동 전환하지 않습니다. 실제 음성/전사 비교는 아래 조사 폴더의 음성 품질 보고서에 있으며, 자동 전사 차이가 주관적 청취 품질 보증은 아닙니다.
 
