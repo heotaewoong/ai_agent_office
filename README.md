@@ -20,15 +20,22 @@
 
 ## 콘텐츠 자동화 설계와 제작 작업실
 
-### 현재 정본 · 콘텐츠 자동화 v7.3.1
+### 현재 정본 · 콘텐츠 자동화 v7.3.3
 
 [처음 읽는 실행안](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-start.html) · [전체 도구·소스·자료 확보 상태](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html) · [현재 정본 JSON](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.json) · [다른 AI용 갱신 키트](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-maintenance-kit.zip) · [키트 SHA256](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-maintenance-kit.sha256)
 
-2026-10-28 KST 기준: 전체 설계는 도구49개·입력46개·전달채널12개·설계요구79개를 비교합니다. v7.3.1 안내 웹은 Site14/source `a4ff63f20edb3911849c79e139aa29ff884fc676`로 게시했고, 추가 핵심 회귀32개와 HTTPS 문서·ZIP 바이트 일치를 확인했습니다. 이는 정적 안내와 이관 검증이며 새 모델 생성·계정 연결·실제 콘텐츠 게시·발송·쿠폰/주문 실행의 검증이 아닙니다. 추가 요청의 09:54:57~13:54:57 검토 창은 진행 중입니다.
+2026-10-28 KST 기준: 도구49개·입력46개·전달채널12개·설계요구79개를 비교한 안내·이관 정본입니다. v7.3.3은 Site18/source `0d186418f196cfb56fd7ce5d846abe21472c0de4`로 14:42 KST 게시했고, 실제 HTTPS Markdown·ZIP이 검증한 원본과 바이트까지 일치합니다. 키트 SHA256은 `4ce2df4047d6a1c47fda3944e4fd599b4348691e67b2c478e4d10b37cf2c55ad`입니다.
 
-CLASS101 자료는 전부 확보 상태가 아닙니다. 최신 파일 대조와 과거 읽기 원장은 감사 대상·확인 시점이 달라 합산하지 않습니다. 회원 원문·개인 경로·계정·운영 DB·키는 이 저장소와 공개 갱신 키트에 넣지 않습니다. HTTPS의 기존 본인 전용 접근도 유지합니다.
+추가 검토 요청 창은 09:54:57~13:54:57 KST, 마감 상태 기록은 14:38:46 KST입니다. 13:55 경계 확인 이후 지연된 마감 처리·게시를 추가 조사나 연속 독해·모델 실험 시간으로 세지 않습니다. 이전 04~08시 기록은 별도로 보존합니다.
 
-다른 AI는 갱신 키트의 `KIT-README.md` → `README.md` → `dist/downloads/content-start.md` → `content-system/source.json` 순서로 읽습니다. 같은 정본을 고친 뒤 생성·검사·포장하고 현재 Sites 소스와 병합합니다. 같은 HTTPS를 게시할 접근 도구는 별도로 필요합니다. 실제 오피스가 있으면 먼저 그곳의 AGENTS·OFFICE_INDEX·앱 README를 대조합니다. 아래 인계 경로는 이전 스냅샷으로 보존하며 현재 Sites 정본을 덮어쓰지 않습니다.
+- 현재 구현: 같은 JSON에서 짧은·전체 안내와 이관 자료를 생성합니다. 기존 앱의 Gemini·Pillow·FFmpeg 기준선은 유지합니다.
+- 이번 검증 완료: v7.3.2의 핵심 회귀35개와 영향2개 보완 검증, v7.3.3 마감 관련 회귀4개, 생성물13개·구조 검사·정확 재포장·HTTPS 문서/ZIP 일치입니다. 보조292검사는 변경 없는 Site16 작업실의 기록이며 앱 전체 실행시험이 아닙니다.
+- 계획/제안: Claude·이미지/음성·모션/실사 후보 비교, 계정별 업로드, Resend 우선 뉴스레터 회차와 상품/쿠폰 연결입니다. 스티비·Buttondown은 요구에 따른 대안이며 실제 발송 어댑터는 미연결입니다.
+- 미구현/미검증: 새 모델 생성 품질·실청구·새 계정 권한·운영 콘텐츠 게시·발송·쿠폰/주문·매출 효과입니다. 이 연구의 새 유료 생성·계정 연결·운영 게시/발송·쿠폰 쓰기는0건이며 Upside는 식별 보류입니다.
+
+CLASS101 자료는 전부 확보 상태가 아닙니다. 현재 파일 대조와 과거 읽기 원장은 대상·시점이 달라 합산하지 않습니다. 회원 원문·개인 경로·계정·운영 DB·키는 이 저장소와 갱신 키트에 넣지 않으며 HTTPS의 기존 본인 전용 접근을 유지합니다.
+
+다른 AI는 키트의 `KIT-README.md` → `README.md` → `dist/downloads/content-start.md` → `content-system/source.json` 순서로 읽고 원본 수정·생성·검사·동일 HTTPS 갱신 절차를 따릅니다. 사람 승인 ⓪기획·①원고·②출고·③회차와 실제 실행 권한은 문서나 ZIP으로 이전되지 않습니다. 이 갱신은 README 한 파일의 인계이며 앱·EC2 checkout을 동기화하거나 배포한 것이 아닙니다.
 
 ### 보존한 이전 인계 스냅샷
 
