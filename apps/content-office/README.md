@@ -55,6 +55,8 @@ flowchart TD
 | 무료 자료 | `summary-checklist.pdf` |
 | 공통 | `asset-rights.json`, 출력별 상태·파일 해시·부모 원고를 가진 manifest |
 | 출고 승인 후 | 선택 제작물과 `handoff.json`을 포함한 ZIP |
+| 생성 배경·영상 선택 시 | 장면별 `background-NN.png`, 생성 장면의 `generated-NN.mp4`와 글자 레이어 `overlay-NN.png`, manifest의 `background`·`clips` 고지 |
+| YouTube 비공개 업로드 후 | 상태 폴더 설정의 업로드 장부(`deliveries`): 상태·외부 ID·자산 해시·대사 시각 |
 
 MP4는1080×1920 H.264/AAC입니다. SRT는 실제 장면 음성 길이에 연결합니다. 생성된 커버·SRT 파일이 YouTube에 적용됐다는 뜻은 아닙니다. 썸네일 점수는 로컬 가독성·대비·원고 표현 일치 검사이며 실제 CTR 예측이나 성과 측정이 아닙니다.
 
@@ -160,6 +162,8 @@ npm run build
 |---|---|
 | `GEMINI_API_KEY` | 기존 Gemini 연결. 환경으로만 전달하며 UI·ZIP·저장소에 넣지 않습니다 |
 | `OPENAI_API_KEY` | 배경 이미지 프로필 `openai-gpt-image`를 고른 경우에만 필요합니다. 실행하는 운영자가 자신의 키를 환경 파일에 넣으며, 영수증·UI·ZIP·저장소에 기록하지 않습니다 |
+| `RUNWAYML_API_SECRET` | 생성 영상 프로필 `runway-*`를 고른 경우에만 필요합니다. 같은 규칙으로 환경으로만 전달합니다 |
+| `YOUTUBE_CLIENT_ID` · `YOUTUBE_CLIENT_SECRET` · `YOUTUBE_REFRESH_TOKEN` | YouTube 비공개 업로드를 요청할 때만 필요한 채널 소유자의 OAuth 자격입니다. 장부·이벤트·ZIP에 기록하지 않습니다 |
 | `OFFICE_STATE_DIR` | DB·자산·캐시 위치. 기본 `~/.local/state/heobrain-content-office` |
 | `OFFICE_MODEL` | 새 장부의 명시적 모델 선택. 현재 실제 작성에 검증한 모델은 `gemini-3.5-flash-lite`이며 저장된 모델 설정이 우선합니다 |
 | `CONTENT_OFFICE_FONT` | 한국어 TTF 경로. 이 환경은 Windows Malgun Gothic을 사용하며 폰트 파일을 배포하지 않습니다 |
@@ -187,7 +191,27 @@ cd "<저장소 경로>/apps/content-office/backend"
 .venv/bin/python -m office.image_selection set --profile none
 ```
 
+생성 영상 프로필은 세 번째 선택입니다. 기본값 `none`은 모든 장면을 정지 화면에 줌 효과로 만듭니다. `runway-gen4-turbo`(5초 25크레딧, 500원 예약) 또는 `runway-gen4.5`(5초 60크레딧, 1,200원 예약)를 고르면, 승인 원고의 장면 중 `"clip": "generated"`로 지정한 장면만 Runway image-to-video로 5초 720×1280 클립을 받습니다. 선택 사항인 `"motion"` 필드로 카메라 움직임을 지시할 수 있습니다. 입력 프레임은 그 장면의 생성 배경이므로 배경 이미지 프로필이 함께 켜져 있어야 하며, 없으면 유료 호출 전에 거부합니다. 글자는 투명한 로컬 레이어로 클립 위에 얹고 FFmpeg가 음성 길이만큼 반복·자릅니다. 한 업무에 최대 3개 장면, 업무당 3,000원 하위한도입니다. 작업이 제한 시간 안에 끝나지 않으면 결과 불명으로 남기고 영수증의 `task_id`로 나중에 대사합니다. 제공자 산출물 URL은 24~48시간 뒤 만료되므로 받은 파일을 상태 폴더에 보관합니다. 환경변수는 `RUNWAYML_API_SECRET`입니다.
+
+```bash
+.venv/bin/python -m office.video_selection status
+.venv/bin/python -m office.video_selection set --profile runway-gen4-turbo
+```
+
 유료 모델을 사용할 수 없거나 단가 검증 기간이 지나면 보류합니다. 자동 유료 대체 호출은 없습니다. 외부 모델로 원본111문서·Windows 소스·자격 파일을 통째 전송하지 않습니다. 배경 이미지 프롬프트에는 승인된 장면의 자막과 시각 지시만 들어갑니다.
+
+### YouTube 비공개 업로드
+
+출고 승인②를 받은 영상에 한해 운영자가 명시적으로 요청하면 소유 채널에 `privacyStatus: private`로 올립니다. 공개·예약 공개는 앱이 바꾸지 않으며 YouTube Studio에서 운영자가 결정합니다. 제목·태그는 승인 원고의 영상 계획, 설명은 제작물의 `description.txt`를 쓰고 합성 음성·생성 화면 고지를 덧붙입니다. 같은 영상(자산 해시·제작물 판본)은 한 번만 올리며, 결과 불명이면 자동 재전송 대신 대사(reconcile)로 세션을 이어 올리거나 외부 ID로 상태를 확인합니다. 업로드 결과의 공개 범위가 private가 아니면 `needs_review`로 표시합니다.
+
+채널 소유자의 OAuth 자격은 `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` 환경변수로만 전달합니다. 접근 토큰은 호출 동안만 메모리에 있고 장부·이벤트에 기록하지 않습니다. 2026-10-28 기준 YouTube Data API는 업로드 전용 일일 버킷(100회)과 기타 메서드 10,000단위를 따로 둡니다.
+
+```bash
+.venv/bin/python -m office.youtube_delivery status --job <job_id>
+.venv/bin/python -m office.youtube_delivery deliver --job <job_id>
+.venv/bin/python -m office.youtube_delivery reconcile --job <job_id> --delivery <delivery_id>
+# API: GET /api/jobs/{id}/deliveries · POST /api/jobs/{id}/deliveries/youtube · POST /api/jobs/{id}/deliveries/{delivery_id}/reconcile
+```
 
 ## 검사와 증거
 

@@ -223,3 +223,15 @@ def test_unselected_missing_output_does_not_block_selected_blog_release(context)
     approved = client.post(f"/api/jobs/{job['id']}/reviews/release", json={'version': job['manifest']['hash'], 'decision': 'approved', 'outputs': ['blog']}, headers=headers)
     assert approved.status_code == 200
     assert client.get(f"/api/jobs/{job['id']}/package").status_code == 200
+
+
+def test_delivery_routes_require_release_and_report_ledger(context, monkeypatch):
+    store, client, headers = context
+    for key in ('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN'):
+        monkeypatch.delenv(key, raising=False)
+    job = store.create_job({'id': 'delivery-route', 'title': '업로드 경로'})
+    assert client.get(f"/api/jobs/{job['id']}/deliveries").json() == {'deliveries': [], 'youtube_configured': False}
+    response = client.post(f"/api/jobs/{job['id']}/deliveries/youtube", headers=headers)
+    assert response.status_code == 409 and '출고 승인②' in response.json()['detail']
+    assert client.get('/api/dashboard').json()['provider']['youtube'] == {'configured': False, 'visibility': 'private', 'automatic_retry': False}
+    assert client.post(f"/api/jobs/{job['id']}/deliveries/missing/reconcile", headers=headers).status_code == 409

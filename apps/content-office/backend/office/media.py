@@ -107,8 +107,8 @@ def background_identity(renderer):
     return str(getattr(renderer, 'cache_key', getattr(renderer, '__qualname__', 'injected-background-renderer')))
 
 
-def production_contract(voice_renderer, selections, image_renderer=None):
-    """Bind outputs to actual code, font bytes, the selected voice and background image configuration."""
+def production_contract(voice_renderer, selections, image_renderer=None, clip_renderer=None):
+    """Bind outputs to actual code, font bytes, the selected voice, background image and generated clip configuration."""
     renderer = voice_renderer or local_voice
     visual = any(selections.get(kind) for kind in ('video', 'cards', 'pdf'))
     scenes_drawn = bool(selections.get('video') or selections.get('cards'))
@@ -127,6 +127,8 @@ def production_contract(voice_renderer, selections, image_renderer=None):
               'voice_asset_key': voice_identity(renderer) if selections.get('video') else None,
               'background': background_identity(image_renderer) if scenes_drawn else None,
               'background_asset_key': str(getattr(image_renderer, 'asset_cache_key', background_identity(image_renderer))) if (scenes_drawn and image_renderer is not None) else None,
+              'clip': background_identity(clip_renderer) if selections.get('video') else None,
+              'clip_asset_key': str(getattr(clip_renderer, 'asset_cache_key', background_identity(clip_renderer))) if (selections.get('video') and clip_renderer is not None) else None,
               'selections': dict(selections)}
     return {**config, 'hash': digest(config)}
 
@@ -290,13 +292,20 @@ def cover_background(source, size=(1080, 1920)):
     return Image.blend(frame, Image.new('RGB', size, '#0b1327'), 0.55)
 
 
-def draw_scene(plan, scene, index, total, path, *, background=None, background_meta=None):
+def draw_scene(plan, scene, index, total, path, *, background=None, background_meta=None, overlay_only=False):
     content = scene_content(scene, index)
-    image = cover_background(background) if background else Image.new('RGB', (1080, 1920), '#0b1327')
+    if overlay_only:
+        # Transparent text layer composited over a generated clip; the clip supplies the picture.
+        image = Image.new('RGBA', (1080, 1920), (0, 0, 0, 0))
+    else:
+        image = cover_background(background) if background else Image.new('RGB', (1080, 1920), '#0b1327')
     draw = ImageDraw.Draw(image)
     accent = ['#6de8d5', '#9aa7ff', '#ffc684', '#94d9ff'][index % 4]
-    for n in range(4):
-        draw.arc((760-n*35, -170+n*50, 1320+n*35, 390+n*50), 70, 310, fill='#1b2c48', width=3)
+    if overlay_only:
+        draw.rounded_rectangle((60, 80, 1020, 570), 28, fill=(11, 19, 39, 200))
+    else:
+        for n in range(4):
+            draw.arc((760-n*35, -170+n*50, 1320+n*35, 390+n*50), 70, 310, fill='#1b2c48', width=3)
     text_box(draw, 'HeoBrain / AI 개념 노트', (85, 100, 900, 70), 32, accent)
     # The current scene is the headline. The approved global title remains in
     # the plan/thumbnail, rather than competing with every scene's explanation.
@@ -343,9 +352,13 @@ def draw_scene(plan, scene, index, total, path, *, background=None, background_m
             draw.rounded_rectangle((80, y, 1000, y+height), 32, fill='#192c45')
             draw.rectangle((115, y+35, 125, y+height-35), fill=accent)
             text_box(draw, phrase, (165, y+50, 760, height-85), 58, minimum_size=28)
+    if overlay_only:
+        draw.rounded_rectangle((60, 1770, 1020, 1875), 20, fill=(11, 19, 39, 200))
     text_box(draw, f'{index+1:02} / {total:02} · 출처와 한계는 설명란 확인', (85, 1790, 910, 70), 28, '#b8c9e4')
     image.save(path, 'PNG')
     record = {**content, 'title_metrics': title_metrics, 'comparison_metrics': comparison_metrics, 'number_metrics': number_metrics, 'drawing_source': 'approved_scene_fields'}
+    if overlay_only:
+        record['drawing_source'] = 'overlay_only+approved_scene_fields'
     if background:
         record.update(drawing_source='generated_background+approved_scene_fields', background_sha256=file_hash(background),
                       background_provider=str((background_meta or {}).get('provider', 'injected'))[:80],
@@ -487,7 +500,31 @@ def scene_background(background_renderer, folder, index):
     return path, meta
 
 
-def render_short(plan, folder, *, voice_renderer=None, check_current=None, source_text=None, voice_cache_dir=None, background_renderer=None):
+def scene_clip(clip_renderer, folder, index, background):
+    """Fetch a generated clip for an opted-in scene. Needs the generated background as the input frame."""
+    if clip_renderer is None or index not in list(getattr(clip_renderer, 'generated_scenes', [])):
+        return None, None
+    if not background:
+        raise WorkflowError('생성 영상 장면에는 배경 이미지 프로필이 켜져 있어야 합니다. 유료 영상은 호출하지 않았습니다')
+    path = folder / f'generated-{index + 1:02}.mp4'
+    meta = clip_renderer(index, background, path) or {}
+    if not path.is_file():
+        raise WorkflowError('생성 영상 렌더러가 파일을 만들지 않았습니다')
+    return path, meta
+
+
+def clip_command(generated, overlay, audio, duration, out):
+    """Loop the generated clip under the transparent text layer for exactly the voice duration."""
+    graph = ('[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=24[bg];'
+             '[bg][1:v]overlay=0:0:format=auto[v]')
+    # Pure argument builder; command() reports a missing ffmpeg when the list is actually run.
+    return [shutil.which('ffmpeg') or 'ffmpeg', '-y', '-v', 'error', '-stream_loop', '-1', '-i', generated, '-i', overlay, '-i', audio,
+            '-filter_complex', graph, '-map', '[v]', '-map', '2:a', '-t', str(duration),
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', out]
+
+
+def render_short(plan, folder, *, voice_renderer=None, check_current=None, source_text=None, voice_cache_dir=None, background_renderer=None, clip_renderer=None):
     scenes = plan.get('scenes', [])
     if not isinstance(scenes, list) or not 1 <= len(scenes) <= 12:
         raise WorkflowError('영상에는 1~12개 장면이 필요합니다')
@@ -531,6 +568,7 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
     paths = list(audios)
     templates = []
     backgrounds = []
+    clips = []
     for index, (scene, audio, duration) in enumerate(zip(scenes, audios, durations)):
         if check_current:
             check_current()
@@ -540,13 +578,24 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
         paths.extend([image, image.with_suffix('.json')] + ([background] if background else []))
         if background_meta:
             backgrounds.append(background_meta)
+        generated, generated_meta = scene_clip(clip_renderer, folder, index, background)
         clip = folder / f'clip-{index + 1:02}.mp4'
-        clip_key = digest({'image': file_hash(image), 'audio': file_hash(audio), 'version': RENDER_VERSION})
         clip_meta = clip.with_suffix('.json')
         cached_clip = json.loads(clip_meta.read_text(encoding="utf-8")) if clip_meta.is_file() else {}
-        if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
-            command([executable('ffmpeg'), '-y', '-v', 'error', '-loop', '1', '-framerate', '24', '-i', image, '-i', audio, '-t', str(duration), '-vf', "zoompan=z='min(zoom+0.00035,1.025)':d=1:s=1080x1920:fps=24,setsar=1", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', clip], 300)
-            write_json(clip_meta, {'key': clip_key, 'sha256': file_hash(clip)})
+        if generated:
+            overlay = folder / f'overlay-{index + 1:02}.png'
+            draw_scene(plan, scene, index, len(scenes), overlay, overlay_only=True)
+            paths.extend([overlay, overlay.with_suffix('.json'), generated])
+            clips.append({**generated_meta, 'scene': index + 1, 'sha256': file_hash(generated)})
+            clip_key = digest({'generated': file_hash(generated), 'overlay': file_hash(overlay), 'audio': file_hash(audio), 'version': RENDER_VERSION})
+            if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
+                command(clip_command(generated, overlay, audio, duration, clip), 300)
+                write_json(clip_meta, {'key': clip_key, 'sha256': file_hash(clip), 'generated_clip': True})
+        else:
+            clip_key = digest({'image': file_hash(image), 'audio': file_hash(audio), 'version': RENDER_VERSION})
+            if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
+                command([executable('ffmpeg'), '-y', '-v', 'error', '-loop', '1', '-framerate', '24', '-i', image, '-i', audio, '-t', str(duration), '-vf', "zoompan=z='min(zoom+0.00035,1.025)':d=1:s=1080x1920:fps=24,setsar=1", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', clip], 300)
+                write_json(clip_meta, {'key': clip_key, 'sha256': file_hash(clip)})
         subtitles.append(f'{index + 1}\n{stamp(elapsed)} --> {stamp(elapsed + duration)}\n{scene['narration']}\n')
         elapsed += duration
     srt = folder / 'captions.srt'
@@ -573,9 +622,18 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
     media = {'duration': actual, 'speech_duration': elapsed, 'scene_durations': durations, 'voice': metadata[0].get('voice', voice_key), 'voice_provider': metadata[0].get('provider', 'injected'), 'voice_disclosure': metadata[0].get('disclosure', '합성 음성'), 'resolution': [1080, 1920], 'scene_templates': templates, 'visual_review': 'pending', 'listening_review': 'pending', 'synthetic_voice': True}
     if backgrounds:
         media['background'] = background_summary(backgrounds)
+    if clips:
+        media['clips'] = clip_summary(clips)
     write_json(folder / 'media.json', media)
     paths.append(folder / 'media.json')
-    return {'files': paths, 'media': media, 'thumbnails': thumbs, 'backgrounds': backgrounds}
+    return {'files': paths, 'media': media, 'thumbnails': thumbs, 'backgrounds': backgrounds, 'clips': clips}
+
+
+def clip_summary(clips):
+    first = clips[0]
+    return {'provider': str(first.get('provider', 'injected'))[:80], 'model': str(first.get('model', ''))[:80],
+            'disclosure': str(first.get('disclosure', '생성 영상 장면'))[:200], 'scenes': [int(c['scene']) for c in clips],
+            'count': len(clips)}
 
 
 def background_summary(backgrounds):
@@ -618,7 +676,7 @@ def production_lock(folder):
     finally:
         os.close(fd)
 
-def produce(store, job_id, *, voice_renderer=None, background_renderer=None):
+def produce(store, job_id, *, voice_renderer=None, background_renderer=None, clip_renderer=None):
     # This guard must run before directory creation or any external voice or image callback.
     job = store.require_source_approval(job_id)
     source_hash = job['source_hash']
@@ -630,11 +688,14 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None):
     if background_renderer is None:
         from .image_selection import background_renderer_for_job
         background_renderer = background_renderer_for_job(store, job)
+    if clip_renderer is None:
+        from .video_selection import clip_renderer_for_job
+        clip_renderer = clip_renderer_for_job(store, job)
     if not re.fullmatch('job_[a-zA-Z0-9_-]+', job_id) or not re.fullmatch('[0-9a-f]{64}', source_hash):
         raise WorkflowError('제작 경로 식별자가 유효하지 않습니다')
     root = store.artifacts.resolve()
     source_folder = root / job_id / source_hash
-    contract = production_contract(voice_renderer, selections, image_renderer=background_renderer)
+    contract = production_contract(voice_renderer, selections, image_renderer=background_renderer, clip_renderer=clip_renderer)
     folder = source_folder / ('production-' + contract['hash'][:24])
     voice_cache_dir = root / job_id / 'voices'
     if not folder.resolve().is_relative_to(root) or not voice_cache_dir.resolve().is_relative_to(root):
@@ -651,12 +712,13 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None):
         media = {}
         thumbs = []
         backgrounds = []
+        clips = []
         output_status = {}
         output_files = {}
         store.event('production_started', {'source_hash': source_hash, 'role': '영상·자료 제작'}, job_id)
         try:
             def run_output(kind, action):
-                nonlocal media, thumbs, backgrounds
+                nonlocal media, thumbs, backgrounds, clips
                 if not selections.get(kind):
                     return
                 check_current()
@@ -676,6 +738,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None):
                                 thumbs = [root / record['path'] for record in previous.get('thumbnail_candidates', [])]
                             if previous.get('background') and kind in ('video', 'cards') and not backgrounds:
                                 backgrounds = [dict(previous['background'])] * int(previous['background'].get('scenes', 1))
+                            if previous.get('clips') and kind == 'video' and not clips:
+                                clips = [{**previous['clips'], 'scene': scene} for scene in previous['clips'].get('scenes', [])]
                             store.event('output_reused', {'output': kind, 'source_hash': source_hash, 'files': len(old_records)}, job_id)
                             return
                     output_files[kind] = action()
@@ -689,13 +753,14 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None):
                     store.event('output_failed', {'output': kind, 'error': message, 'source_hash': source_hash, 'successful_assets_preserved': True}, job_id)
 
             def video_output():
-                nonlocal media, thumbs, backgrounds
+                nonlocal media, thumbs, backgrounds, clips
                 if contract['font_status'] != 'ready':
                     raise WorkflowError('한국어 폰트를 확인한 뒤 영상 제작을 다시 요청하세요. 유료 음성은 호출하지 않았습니다')
                 exports = write_video_exports(packet, folder)
-                rendered = render_short(packet['video'], folder, voice_renderer=voice_renderer, check_current=check_current, source_text=packet['body'], voice_cache_dir=voice_cache_dir, background_renderer=background_renderer)
+                rendered = render_short(packet['video'], folder, voice_renderer=voice_renderer, check_current=check_current, source_text=packet['body'], voice_cache_dir=voice_cache_dir, background_renderer=background_renderer, clip_renderer=clip_renderer)
                 media, thumbs = rendered['media'], rendered['thumbnails']
                 backgrounds = backgrounds or rendered['backgrounds']
+                clips = clips or rendered['clips']
                 return exports + rendered['files']
 
             def card_output():
@@ -731,6 +796,9 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None):
             if backgrounds and any(kind in completed for kind in ('video', 'cards')):
                 manifest['background'] = background_summary(backgrounds)
                 manifest['warnings'].append('배경은 생성 이미지이며 한국어 글자는 로컬 레이어입니다. 출고 전 화면 검토가 필요합니다')
+            if clips and 'video' in completed:
+                manifest['clips'] = clip_summary(clips)
+                manifest['warnings'].append('일부 장면은 생성 영상입니다. 손·글자·로고·피사체 변형을 실제로 재생해 확인하세요')
             if thumbs:
                 local_reviews = json.loads((folder / 'thumbnail-review.json').read_text(encoding="utf-8"))['candidates']
                 by_name = {review['name']: review for review in local_reviews}

@@ -544,3 +544,57 @@ def test_background_failure_fails_only_visual_output_and_keeps_blog(tmp_path):
     assert manifest['output_status']['cards']['state'] == 'failed'
     assert 'OPENAI_API_KEY' in manifest['output_status']['cards']['error']
     assert 'background' not in manifest
+
+
+def test_overlay_only_scene_is_transparent_outside_text_panels(tmp_path):
+    from office.media import draw_scene
+    from PIL import Image
+    scene = {'caption': '오버레이 확인', 'narration': '발음 전용', 'visual': '설명: 글자만 겹침'}
+    path = tmp_path / 'overlay.png'
+    draw_scene({'title': '제목'}, scene, 0, 1, path, overlay_only=True)
+    image = Image.open(path)
+    assert image.mode == 'RGBA' and image.size == (1080, 1920)
+    assert image.getpixel((1040, 1500))[3] == 0
+    assert image.getpixel((300, 280))[3] > 0
+    assert image.getpixel((300, 700))[3] == 255
+    meta = json.loads(path.with_suffix('.json').read_text(encoding='utf-8'))
+    assert meta['drawing_source'] == 'overlay_only+approved_scene_fields'
+
+
+def test_clip_command_loops_generated_clip_under_overlay_for_voice_duration(tmp_path):
+    from office.media import clip_command
+    args = [str(a) for a in clip_command(tmp_path / 'gen.mp4', tmp_path / 'overlay.png', tmp_path / 'voice.wav', 3.25, tmp_path / 'clip-02.mp4')]
+    assert args[0].endswith('ffmpeg') or args[0].endswith('ffmpeg.exe') or args[0] == 'ffmpeg'
+    assert '-stream_loop' in args and args[args.index('-stream_loop') + 1] == '-1'
+    assert str(tmp_path / 'gen.mp4') in args and str(tmp_path / 'overlay.png') in args and str(tmp_path / 'voice.wav') in args
+    graph = args[args.index('-filter_complex') + 1]
+    assert 'scale=1080:1920:force_original_aspect_ratio=increase' in graph and 'crop=1080:1920' in graph and 'overlay=0:0' in graph
+    assert args[args.index('-t') + 1] == '3.25'
+    assert args[-1] == str(tmp_path / 'clip-02.mp4')
+
+
+def test_clip_renderer_changes_production_contract_only_for_video(tmp_path):
+    from office import media
+
+    def clips(scene_index, image_path, out_path):
+        raise AssertionError('must not be called by the contract')
+    clips.cache_key = 'runway-clip:test'
+    clips.asset_cache_key = 'runway-clip-asset:test'
+    video = {'blog': True, 'video': True, 'cards': False, 'pdf': False}
+    cards = {'blog': True, 'video': False, 'cards': True, 'pdf': False}
+    assert media.production_contract(None, video)['hash'] != media.production_contract(None, video, clip_renderer=clips)['hash']
+    assert media.production_contract(None, video, clip_renderer=clips)['clip'] == 'runway-clip:test'
+    assert media.production_contract(None, cards, clip_renderer=clips)['hash'] == media.production_contract(None, cards)['hash']
+    assert media.production_contract(None, cards, clip_renderer=clips)['clip'] is None
+
+
+def test_generated_clip_requires_background_before_any_paid_call(tmp_path):
+    from office.media import scene_clip
+
+    def clips(scene_index, image_path, out_path):
+        raise AssertionError('must not be called without a background')
+    clips.generated_scenes = [1]
+    with pytest.raises(WorkflowError, match='배경'):
+        scene_clip(clips, tmp_path, 1, None)
+    assert scene_clip(clips, tmp_path, 0, None) == (None, None)
+    assert scene_clip(None, tmp_path, 1, tmp_path / 'bg.png') == (None, None)
