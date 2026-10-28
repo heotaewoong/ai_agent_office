@@ -435,3 +435,57 @@ a { color: var(--accent); }
 .panel-result { display: block; margin-top: 6px; font-size: 12px; color: #ff8f8f; }
 .panel-result.ok { color: #6fe0b0; }
 .panel-result:empty { display: none; }
+
+/* 탐험 일지: 점수의 의미와 저장 범위를 화면에서 명확하게 표시한다. */
+.expedition { position: fixed; z-index: 18; left: max(16px, env(safe-area-inset-left, 0px)); top: 94px; width: 272px; padding: 13px 15px; border: 1px solid rgba(127,227,255,.25); border-radius: 14px; background: rgba(8,19,35,.88); backdrop-filter: blur(14px); box-shadow: 0 15px 50px #0003; }
+.expedition summary { cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; list-style: none; font-weight: 700; }
+.expedition summary::-webkit-details-marker { display:none; }
+.expedition summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+.expedition summary strong { color: #83eadc; font: 11px var(--font-mono); white-space: nowrap; }
+.expedition p { font-size: 12px; line-height: 1.8; color: #bccbdd; }
+.expedition progress { width: 100%; height: 5px; accent-color: #68e9d0; }
+.expedition ul { list-style: none; padding: 0; display: grid; gap: 9px; font-size: 12px; color: #c1cde0; }
+.expedition .explored { color: #8aefc9; }
+.expedition small { display: block; font-size: 10px; color: #a2b2c7; line-height: 1.6; }
+@media (max-width:719px) { .expedition { top: 93px; left: 10px; width: 230px; padding: 10px 12px; } .expedition:not([open]) { width: 205px; } .expedition summary { font-size:12px; } }
+
+.tags { max-width: min(680px, calc(100vw - 240px)); flex-wrap: wrap; align-items: flex-start; }
+.tag { flex-shrink: 0; white-space: nowrap; }
+@media (max-width:850px) { .tags { display:none; } }
+
+.wide-overview .card.stage { padding: 7px 10px; gap:6px; max-width:156px; }
+.wide-overview .card.stage .card-title { font-size:12px; }
+.wide-overview .card.stage .card-faces, .wide-overview .card.stage .running, .wide-overview .card.stage .human { display:none; }
+.wide-overview .card.brain { max-width:155px; padding:7px 10px; }
+.wide-overview .card.brain .card-meta { font-size:10px; }
+
+@media (max-width:720px) { .brand-meta { display:flex; font-size:10px; } #updated-at { display:none; } .expedition[open] { max-height:48vh; overflow:auto; } }
+.walking-view .expedition { display:none; }
+
+.layer-nav { position:fixed; z-index:21; top:85px; right:16px; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+.layer-nav span { color:#e4f7ee; text-shadow:0 2px 6px #001; font-size:12px; background:#112b36cc; padding:6px 10px; border-radius:6px; }
+.layer-nav button { cursor:pointer; border:1px solid #7adac799; border-radius:9px; color:#dffff4; background:#123c42ee; padding:10px 16px; font-weight:700; }
+.layer-nav button:focus-visible { outline:2px solid white; outline-offset:3px; }
+@media (max-width:720px) { .layer-nav { top:auto; bottom:16px; right:12px; max-width:calc(100vw - 24px); } .layer-nav span{font-size:10px;} .layer-nav button{padding:8px 12px;} }
+
+.rooms-menu { display:none; }
+@media (max-width:720px) {
+  .rooms-menu { display:block; position:fixed; z-index:19; top:151px; left:10px; border:1px solid #83d8cc77; border-radius:8px; padding:9px 12px; background:#0c2837ed; color:#e5fff6; font-size:12px; cursor:pointer; }
+  .cards { display:none; position:fixed; inset:auto 10px 103px; z-index:19; padding:8px; height:auto; max-height:110px; gap:8px; overflow-x:auto; overflow-y:hidden; border:1px solid #72bdca66; border-radius:12px; background:#0b1c2ce8; pointer-events:auto; }
+  .cards.mobile-open { display:flex; }
+  .cards .card { position:relative!important; inset:auto!important; left:auto!important; top:auto!important; transform:none!important; flex:0 0 145px; min-width:130px; min-height:60px; max-width:155px; }
+  .cards .card.agent { display:none!important; }
+  .cards .card.brain { align-self:stretch; }
+  .ticker { bottom:calc(env(safe-area-inset-bottom,0px) + 226px); }
+  .expedition[open] { max-height:39vh; }
+  .expedition[open] ~ .rooms-menu { top:calc(39vh + 102px); }
+}
+
+/* 지상에서는 먼 공중 팀의 간판을 투영하지 않고 모든 화면 크기에서 접이식 목록을 쓴다. */
+.meadow-layer .rooms-menu { display:block; position:fixed; z-index:19; top:151px; left:16px; border:1px solid #83d8cc77; border-radius:8px; padding:9px 12px; background:#0c2837ed; color:#e5fff6; font-size:12px; cursor:pointer; }
+.meadow-layer .cards { display:none; position:fixed; inset:auto 16px 103px; z-index:19; padding:8px; height:auto; max-height:110px; gap:8px; overflow-x:auto; overflow-y:hidden; border:1px solid #72bdca66; border-radius:12px; background:#0b1c2ce8; pointer-events:auto; }
+.meadow-layer .cards.mobile-open { display:flex; }
+.meadow-layer .cards .card { position:relative!important; inset:auto!important; left:auto!important; top:auto!important; transform:none!important; flex:0 0 145px; min-width:130px; min-height:60px; max-width:155px; }
+.meadow-layer .cards .card.agent { display:none!important; }
+.meadow-layer .expedition[open] ~ .rooms-menu { top:450px; }
+@media (max-width:720px) { .meadow-layer .rooms-menu { left:10px; } .meadow-layer .expedition[open] ~ .rooms-menu { top:calc(39vh + 102px); } }

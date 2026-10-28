@@ -5,7 +5,7 @@
 
   const $ = (id) => document.getElementById(id);
   const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const isPhone = () => window.innerWidth < 720;
+  const isPhone = () => window.innerWidth <= 720;
   const B = window.BABYLON;
   // ?quality=low 이면 그림자·SSAO·블룸을 끈다(저사양 PC·휴대폰)
   const QUALITY = new URLSearchParams(location.search).get('quality') || (isPhone() ? 'low' : 'high');
@@ -17,7 +17,7 @@
   };
 
   if (!B) {
-    notice('3D 라이브러리를 불러오지 못했습니다', 'cdnjs.cloudflare.com 접근이 막혀 있으면 babylon.min.js를 같은 폴더에 두고 index.html의 script 주소를 바꿔 주세요.');
+    notice('3D 라이브러리를 불러오지 못했습니다', '같은 폴더의 vendor/babylon.min.js를 읽지 못했습니다. 페이지를 새로 열거나 파일 구성을 확인해 주세요.');
     return;
   }
 
@@ -29,6 +29,7 @@
     data: null,            // 정규화된 투영
     stages: [],            // 배치 정보가 붙은 단계 목록
     agents: [],            // 아바타가 붙은 동료 목록
+    layer: 'office',      // office=y0 공중 팀 대지, meadow=약 -85m 지상
     view: 'overview',      // 'overview' | 'walk'
     selectedStage: null,
     embedFocus: null,
@@ -42,6 +43,31 @@
   const ISLAND_W = 18;       // 섬 너비(x)
   const ISLAND_D = 16;       // 섬 깊이(z)
   const BRIDGE_W = 2.6;
+
+  // 탐험 XP는 공간을 둘러본 기록이며, 업무 성과나 실제 에이전트 완료를 뜻하지 않는다.
+  const explored = new Set();
+  const explorationNames = new Map([['hub', '공유 기억 살펴보기']]);
+  try {
+    const saved = JSON.parse(localStorage.getItem('heobrain.exploration.v1') || '[]');
+    if (Array.isArray(saved)) saved.filter((v) => typeof v === 'string').slice(0, 50).forEach((v) => explored.add(v));
+  } catch (_) { /* 저장할 수 없는 환경에서도 탐험은 계속한다. */ }
+  function exploration(id) {
+    if (id) {
+      explored.add(id);
+      try { localStorage.setItem('heobrain.exploration.v1', JSON.stringify([...explored])); } catch (_) { /* 세션 동안 유지 */ }
+    }
+    const total = explorationNames.size;
+    const done = [...explorationNames.keys()].filter((key) => explored.has(key)).length;
+    $('explore-count').textContent = `${done * 20} XP · ${done}/${total}`;
+    $('explore-progress').max = total; $('explore-progress').value = done;
+    $('explore-list').replaceChildren(...[...explorationNames].map(([key, label]) => {
+      const li = document.createElement('li');
+      li.textContent = `${explored.has(key) ? '✓' : '○'} ${label}`;
+      li.className = explored.has(key) ? 'explored' : '';
+      return li;
+    }));
+  }
+
 
   // ======================================================================
   // data — 투영 읽기와 폴링
@@ -180,6 +206,73 @@
       return m;
     },
 
+
+    // 건축에만 PBR을 사용한다. 아바타/업무 마커의 StandardMaterial 계약은 그대로 둔다.
+    pbr(key, hex, metallic = 0, roughness = .6, surface = '') {
+      const id=`pbr:${key}:${hex}:${metallic}:${roughness}:${surface}`;
+      if(this.matCache.has(id))return this.matCache.get(id);
+      const m=new B.PBRMaterial(id,this.scene);m.albedoColor=B.Color3.FromHexString(hex);
+      m.metallic=metallic;m.roughness=roughness;m.environmentIntensity=QUALITY==='low'?.55:.8;
+      m.directIntensity=1;m.specularIntensity=.7;
+      if(surface){
+        this.surfaceTextures ||= new Map();
+        if(!this.surfaceTextures.has(surface)){
+          const size=64,rgba=new Uint8Array(size*size*4);let seed=71;
+          for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+            seed=seed*16807%2147483647;const grain=(seed/2147483647-.5)*(surface==='metal'?4:10),v=Math.round(248+grain+(surface==='metal'?Math.sin(y*.8)*2:0)),i=(y*size+x)*4;
+            rgba.set([v,v,v,255],i);
+          }
+          const t=B.RawTexture.CreateRGBATexture(rgba,size,size,this.scene,true,false,B.Texture.TRILINEAR_SAMPLINGMODE);
+          t.wrapU=t.wrapV=B.Texture.WRAP_ADDRESSMODE;t.uScale=t.vScale=surface==='stone'?5:3;t.anisotropicFilteringLevel=QUALITY==='low'?1:4;
+          this.surfaceTextures.set(surface,t);
+        }
+        m.albedoTexture=this.surfaceTextures.get(surface);
+      }
+      this.matCache.set(id,m);return m;
+    },
+
+    buildReflectionEnvironment() {
+      // 자체 생성된 작은 스튜디오 큐브맵: 외부 HDR/사진/네트워크 요청을 사용하지 않는다.
+      const size=QUALITY==='low'?32:64,faces=[];
+      for(let face=0;face<6;face++){
+        const data=new Uint8Array(size*size*4);
+        for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+          const t=y/(size-1),sky=face===2?1:face===3?0:1-t;
+          const strip=face!==3&&x>size*.36&&x<size*.47&&y<size*.78?26:0;
+          const i=(y*size+x)*4;
+          data.set([Math.round(27+sky*98+strip),Math.round(42+sky*112+strip),Math.round(56+sky*126+strip),255],i);
+        }
+        faces.push(data);
+      }
+      const env=new B.RawCubeTexture(this.scene,faces,size,B.Engine.TEXTUREFORMAT_RGBA,B.Engine.TEXTURETYPE_UNSIGNED_BYTE,true,false,B.Texture.TRILINEAR_SAMPLINGMODE);
+      env.name='procedural-studio-environment';this.scene.environmentTexture=env;
+      this.scene.environmentIntensity=.75;
+    },
+
+    deckSurfaceMaterial() {
+      const m=this.pbr('team-paved-surface','#b6c8d2',.12,.76);
+      const layout=space.stages.map(st=>st.id+':'+st.angle).join('|');
+      if(this.deckTexture&&this.deckStageKey===layout){m.albedoTexture=this.deckTexture;return m;}
+      if(this.deckTexture)this.deckTexture.dispose();
+      this.deckStageKey=layout;
+      const size=QUALITY==='low'?512:1024,texture=new B.DynamicTexture('team-paving-plan',{width:size,height:size},this.scene,true),c=texture.getContext(),h=size/2,k=size/136;
+      c.fillStyle='#708a9d';c.fillRect(0,0,size,size);
+      c.fillStyle='#a8bdcc';c.beginPath();c.arc(h,h,35*k,0,Math.PI*2);c.fill();
+      // 포장은 한 표면의 그림이다. 겹친 평면이나 발광 격자를 만들지 않는다.
+      c.strokeStyle='#536f84';c.lineWidth=2.7*k;c.beginPath();c.arc(h,h,43*k,0,Math.PI*2);c.stroke();
+      c.strokeStyle='#aec8d2';c.lineWidth=.18*k;c.beginPath();c.arc(h,h,44.8*k,0,Math.PI*2);c.stroke();
+      space.stages.forEach(st=>{
+        c.strokeStyle='#48677f';c.lineWidth=3.6*k;c.beginPath();c.moveTo(h+Math.cos(st.angle)*8*k,h+Math.sin(st.angle)*8*k);c.lineTo(h+Math.cos(st.angle)*64*k,h+Math.sin(st.angle)*64*k);c.stroke();
+        c.strokeStyle='#9db7c6';c.lineWidth=.2*k;c.stroke();
+      });
+      for(let i=0;i<12;i++){
+        const a=i*Math.PI/6,x=h+Math.cos(a)*57*k,y=h+Math.sin(a)*57*k;
+        c.beginPath();for(let j=0;j<6;j++){const b=j*Math.PI/3;const px=x+Math.cos(b)*5.8*k,py=y+Math.sin(b)*5.8*k;if(j)c.lineTo(px,py);else c.moveTo(px,py);}c.closePath();
+        c.fillStyle=i%3?'#8aa4b7':'#506d85';c.fill();c.strokeStyle='#a5bcca';c.lineWidth=.16*k;c.stroke();
+      }
+      texture.update();texture.anisotropicFilteringLevel=QUALITY==='low'?1:4;m.albedoTexture=texture;this.deckTexture=texture;return m;
+    },
+
     // 그림자: 드리우는 쪽과 받는 쪽
     castShadow(mesh) { if (this.shadows) this.shadows.addShadowCaster(mesh, false); },
     receiveShadow(mesh) { if (this.shadows) mesh.receiveShadows = true; },
@@ -257,14 +350,18 @@
       this.scene = scene;
       this.applyDpr = applyDpr;
       scene.clearColor = new B.Color4(0.02, 0.03, 0.09, 1);
-      scene.ambientColor = new B.Color3(0.25, 0.28, 0.4);
+      scene.ambientColor = new B.Color3(0.31, 0.36, 0.46);
+      scene.fogMode = B.Scene.FOGMODE_EXP2;
+      scene.fogDensity = 0.00135;
+      scene.fogColor = new B.Color3(0.12, 0.21, 0.32);
 
       const hemi = new B.HemisphericLight('hemi', new B.Vector3(0.2, 1, 0.1), scene);
       hemi.intensity = 0.85;
       hemi.groundColor = new B.Color3(0.12, 0.14, 0.3);
       const sun = new B.DirectionalLight('sun', new B.Vector3(-0.5, -1, 0.35), scene);
       sun.intensity = 1.15;
-      sun.diffuse = new B.Color3(1, 0.95, 0.86);
+      sun.diffuse = new B.Color3(1, 0.94, 0.84);
+      const fill=new B.HemisphericLight('city-cool-fill',new B.Vector3(-.7,.5,-.3),scene);fill.diffuse=new B.Color3(.54,.75,1);fill.intensity=.16;
       sun.position = new B.Vector3(45, 90, -32);
       sun.shadowMinZ = 20; sun.shadowMaxZ = 220;
       sun.shadowFrustumSize = 125;
@@ -280,7 +377,12 @@
         this.shadows.darkness = 0.35;
       }
 
+      this.buildReflectionEnvironment();
       this.buildSky();
+      this.buildCosmos();
+      this.buildMeadow();
+      this.buildGroundCity();
+      this.buildTraffic();
       this.buildHub();
 
       scene.onBeforeRenderObservable.add(() => this.tick());
@@ -292,11 +394,13 @@
       const size = 1024;
       const tex = new B.DynamicTexture('sky', { width: size * 2, height: size }, this.scene, false);
       const ctx = tex.getContext();
-      ctx.fillStyle = '#05081c';
+      const dusk = ctx.createLinearGradient(0, 0, 0, size);
+      dusk.addColorStop(0, '#060a20'); dusk.addColorStop(0.45, '#172d58'); dusk.addColorStop(0.7, '#3d6378'); dusk.addColorStop(1, '#0b1429');
+      ctx.fillStyle = dusk;
       ctx.fillRect(0, 0, size * 2, size);
       const blobs = [
-        [300, 420, 420, 'rgba(96, 58, 170, 0.28)'],
-        [1500, 300, 380, 'rgba(36, 120, 150, 0.22)'],
+        [300, 420, 560, 'rgba(100, 58, 220, 0.40)'],
+        [1500, 300, 580, 'rgba(36, 190, 180, 0.38)'],
         [1050, 760, 300, 'rgba(180, 70, 140, 0.16)'],
       ];
       blobs.forEach(([x, y, r, color]) => {
@@ -319,7 +423,7 @@
         ctx.fill();
       }
       tex.update();
-      const sky = B.MeshBuilder.CreateSphere('skybox', { diameter: 700, segments: 24, sideOrientation: B.Mesh.BACKSIDE }, this.scene);
+      const sky = B.MeshBuilder.CreateSphere('skybox', { diameter: 6000, segments: 24, sideOrientation: B.Mesh.BACKSIDE }, this.scene);
       const m = new B.StandardMaterial('skymat', this.scene);
       m.emissiveTexture = tex;
       m.disableLighting = true;
@@ -330,13 +434,395 @@
       this.sky = sky;
     },
 
+
+    // 독자 제작 도형으로 만든 궤도 도시. 정적 도형은 재질별 병합해 draw call을 제한한다.
+    buildCosmos() {
+      const s = this.scene;
+      const groups = new Map();
+      const metal = this.pbr('orbital-metal','#b9cbd8',.62,.35,'metal');
+      const dark = this.pbr('orbital-dark','#294357',.6,.43,'metal');
+      const cyan = this.mat('city-cyan', '#66e4ff', { emissive: 1.7, unlit: true });
+      const violet = this.mat('city-violet', '#c894ff', { emissive: 1.2, unlit: true });
+      const gold = this.mat('city-gold', '#ffe4a4', { emissive: 1.1, unlit: true });
+      const add = (m, mat) => {
+        m.material = mat; m.isPickable = false;
+        if (!groups.has(mat)) groups.set(mat, []);
+        groups.get(mat).push(m);
+        return m;
+      };
+      const block = (name, x, y, z, w, h, d, mat) => {
+        const m = B.MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, s);
+        m.position.set(x, y, z); return add(m, mat);
+      };
+      const ring = (name, x, y, z, diameter, thickness, mat, rx = 0, rz = 0) => {
+        const m = B.MeshBuilder.CreateTorus(name, { diameter, thickness, tessellation: QUALITY === 'low' ? 64 : 112 }, s);
+        m.position.set(x, y, z); m.rotation.x = rx; m.rotation.z = rz;
+        return add(m, mat);
+      };
+      let seed = 7291;
+      const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+      // 空中 도시: 여러 높이의 독립 플랫폼과 작은 창문, 첨탑, 광학 레일.
+      [[-24, 27, 76, 20], [9, 34, 91, 27], [45, 24, 72, 18]].forEach(([x, y, z, size], city) => {
+        const disk = B.MeshBuilder.CreateCylinder(`orbit-deck-${city}`, { height: 1.8, diameterTop: size, diameterBottom: size * 0.67, tessellation: 8 }, s);
+        disk.position.set(x, y, z); add(disk, dark);
+        ring(`orbit-deck-rim-${city}`, x, y + 0.9, z, size - 0.6, 0.24, cyan);
+        for (let i = 0; i < 7; i++) {
+          const angle = i * Math.PI * 2 / 7;
+          const bx = x + Math.cos(angle) * size * 0.28, bz = z + Math.sin(angle) * size * 0.28;
+          const h = 5 + rnd() * 13;
+          block(`city-tower-${city}-${i}`, bx, y + h / 2 + 1, bz, 2.5 + rnd(), h, 2.7, i % 3 ? metal : dark);
+          block(`city-light-${city}-${i}`, bx, y + h / 2 + 1, bz - 1.4, 0.18, h * 0.8, 0.14, i % 2 ? cyan : violet);
+          for (let k = 0; k < 3; k++) block(`city-window-${city}-${i}-${k}`, bx + 0.7, y + 3 + k * 2.5, bz - 1.42, 0.45, 0.6, 0.08, gold);
+          const spike = B.MeshBuilder.CreateCylinder(`city-spire-${city}-${i}`, { height: 4, diameterBottom: 1.3, diameterTop: 0, tessellation: 4 }, s);
+          spike.position.set(bx, y + h + 3, bz); add(spike, cyan);
+        }
+        const exhaust = B.MeshBuilder.CreateCylinder(`city-thruster-${city}`, { height: 6, diameterTop: size * 0.35, diameterBottom: 0.2, tessellation: 8 }, s);
+        exhaust.position.set(x, y - 3.7, z); add(exhaust, cyan);
+      });
+      ring('great-orbit-dark', 12, 48, 108, 78, 2.1, dark, 1.18, -0.23);
+      ring('great-orbit-light', 12, 48, 108, 79.8, 0.3, cyan, 1.18, -0.23);
+      ring('great-orbit-inner', 12, 48, 108, 72, 0.15, violet, 1.18, -0.23);
+      // 透視 가능한 공중 도로. 하나의 경로가 이어지는 철도처럼 보인다.
+      const rail = B.MeshBuilder.CreateTube('sky-rail', { path: [new B.Vector3(-58, 31, 83), new B.Vector3(-24, 32, 76), new B.Vector3(9, 39, 91), new B.Vector3(45, 29, 72), new B.Vector3(67, 34, 108)], radius: 0.22, tessellation: 6 }, s);
+      add(rail, cyan);
+      // 별빛 행성: 텍스처나 외부 아트 없이 직접 조형.
+      const planet = B.MeshBuilder.CreateSphere('distant-planet', { diameter: 47, segments: 32 }, s);
+      planet.position.set(-119, 79, 139); add(planet, this.mat('planet', '#8f8dd4', { emissive: 0.35 }));
+      ring('planet-ring-outer', -119, 79, 139, 77, 1.5, this.mat('planet-ring', '#e1bff7', { emissive: 0.7, alpha: 0.65, unlit: true }), 0.3, 0.36);
+      ring('planet-ring-inner', -119, 79, 139, 69, 0.8, violet, 0.3, 0.36);
+      const moon = B.MeshBuilder.CreateSphere('small-moon', { diameter: 11, segments: 16 }, s);
+      moon.position.set(117, 64, 158); add(moon, this.mat('moon', '#d9f2ee', { emissive: 0.65 }));
+      // 먼 부유 초원: 낮은 수의 큼직한 복셀을 재질별 병합한다.
+      [[-79, 4, 51, 10], [83, 9, 28, 9], [-70, 21, 111, 6], [82, 31, 130, 7]].forEach(([x, y, z, r], i) => {
+        for (let dx = -r; dx <= r; dx += 2) for (let dz = -r; dz <= r; dz += 2) {
+          if (dx * dx + dz * dz > r * r) continue;
+          const depth = 2 + Math.floor((1 - Math.hypot(dx, dz) / r) * 4);
+          block(`satellite-soil-${i}`, x + dx, y - depth / 2, z + dz, 2, depth, 2, dark);
+          block(`satellite-grass-${i}`, x + dx, y + 0.2, z + dz, 2, 0.4, 2, this.mat('satellite-green', '#63b98d'));
+        }
+      });
+      // 모든 고정 조형은 material별 합친 뒤 원본 geometry를 해제한다.
+      groups.forEach((meshes) => {
+        const merged = B.Mesh.MergeMeshes(meshes, true, true, undefined, false, false);
+        if (merged) { merged.isPickable = false; merged.freezeWorldMatrix(); }
+      });
+      // 적은 수의 움직이는 비행선. reduced motion에서는 정지한다.
+      this.airships = [];
+      for (let i = 0; i < (QUALITY === 'low' ? 2 : 4); i++) {
+        const root = new B.TransformNode(`shuttle-${i}`, s);
+        const hull = B.MeshBuilder.CreateBox(`shuttle-hull-${i}`, { width: 3.8, height: 0.65, depth: 1.1 }, s);
+        hull.material = metal; hull.parent = root; hull.isPickable = false;
+        const cockpit = B.MeshBuilder.CreateBox(`shuttle-glass-${i}`, { width: 1.7, height: 0.5, depth: 0.85 }, s);
+        cockpit.position.set(0.4, 0.45, 0); cockpit.material = cyan; cockpit.parent = root; cockpit.isPickable = false;
+        const trail = B.MeshBuilder.CreateBox(`shuttle-trail-${i}`, { width: 3.2, height: 0.15, depth: 0.3 }, s);
+        trail.position.x = -3.3; trail.material = violet; trail.parent = root; trail.isPickable = false;
+        root.position.set(Math.sin(i*1.65)*65,28+i*5,72+Math.cos(i*1.65)*26);
+        this.airships.push({ root, phase: i * 1.65, height: 28 + i * 5 });
+      }
+      // 오로라는 단일 리본 두 개로 구성하며 실시간 변형을 하지 않는다.
+      for (let band = 0; band < (QUALITY === 'low' ? 1 : 2); band++) {
+        const lower = [], upper = [];
+        for (let i = 0; i <= 36; i++) {
+          const x = -170 + i * 10, z = 195 + Math.sin(i * 0.18) * 18;
+          const y = 85 + band * 17 + Math.sin(i * 0.35 + band) * 13;
+          lower.push(new B.Vector3(x, y, z)); upper.push(new B.Vector3(x, y + 17 + Math.sin(i * 0.21) * 7, z));
+        }
+        const ribbon = B.MeshBuilder.CreateRibbon(`aurora-${band}`, { pathArray: [lower, upper], sideOrientation: B.Mesh.DOUBLESIDE }, s);
+        ribbon.material = this.mat('aurora', band ? '#a88cff' : '#5affd5', { emissive: 0.9, alpha: 0.14, unlit: true }); ribbon.isPickable = false;
+      }
+    },
+
+
+    // 지상과 공중 팀 대지는 별개의 높이/충돌층이다. 1,600m 지상은 블록 인스턴스로 구성한다.
+
+    groundRoadHeight(x, z, margin = 0) {
+      const dz=z+46,r=Math.hypot(x,dz);let height=null;
+      if(r<=19.5+margin)height=-82.625;
+      for(const ring of [105,235])if(Math.abs(r-ring)<=12.5+margin)height=Math.max(height??-Infinity,-82.81);
+      for(const a of [-Math.PI/2,-Math.PI/6,Math.PI/6,Math.PI/2,Math.PI*5/6,Math.PI*7/6]){
+        const along=x*Math.cos(a)+dz*Math.sin(a),side=Math.abs(x*Math.sin(a)-dz*Math.cos(a));
+        if(along>=16-margin&&along<=414+margin&&side<=13.5+margin)height=Math.max(height??-Infinity,side<=9?-82.71:-82.82);
+      }
+      return height;
+    },
+
+    meadowHeight(x, z) {
+      const cell = this.meadowCell || 8;
+      const cx = Math.floor((x + 800) / cell) * cell - 796;
+      const cz = Math.floor((z + 800) / cell) * cell - 796;
+      if(this.groundRoadHeight(cx,cz,12)!==null)return -83;
+      const blend = Math.max(0, Math.min(1, (Math.hypot(cx, cz + 46) - 320) / 180));
+      return -83 + Math.floor((2 * Math.sin(cx * 0.008) * Math.cos(cz * 0.009) + Math.sin(cz * 0.014) * 0.8) * blend);
+    },
+
+    buildMeadow() {
+      const scene = this.scene;
+      const T = this.blockTextures();
+      const blocks = this.blockMesh('mainland-grass', T.grass, 3, [1, 1, 1, 1, 0, 2]);
+      const matrices = [];
+      const cell = QUALITY === 'low' ? 16 : 8;
+      this.meadowCell = cell;
+      for (let x = -800; x < 800; x += cell) for (let z = -800; z < 800; z += cell) {
+        const y = this.meadowHeight(x + cell / 2, z + cell / 2);
+        matrices.push(B.Matrix.Compose(new B.Vector3(cell, 8, cell), B.Quaternion.Identity(), new B.Vector3(x + cell / 2, y - 4, z + cell / 2)));
+      }
+      const buffer = new Float32Array(matrices.length * 16);
+      matrices.forEach((m, i) => m.copyToArray(buffer, i * 16));
+      blocks.thinInstanceSetBuffer('matrix', buffer, 16, true); blocks.freezeWorldMatrix(); blocks.isPickable = false;
+      // 지상 끝을 공중섬으로 보이게 하지 않도록 연무 속 지평선까지 육지를 연결한다.
+      const horizon = B.MeshBuilder.CreateGround('mainland-horizon', { width: 9000, height: 9000 }, scene);
+      horizon.position.y = -91; horizon.material = this.mat('horizon-meadow', '#4b8859'); horizon.isPickable = false;
+      // 초원의 숲도 소수의 thin-instance 배치로 표현한다.
+      const trunks = this.blockMesh('mainland-trunks', T.trunk, 2, [0, 0, 0, 0, 1, 1]);
+      const leaves = this.blockMesh('mainland-leaves', T.leaves, 1, [0, 0, 0, 0, 0, 0]);
+      const tb = [], lb = [];
+      let seed = 431;
+      const rnd = () => { seed = seed * 16807 % 2147483647; return seed / 2147483647; };
+      for (let i = 0; i < (QUALITY === 'low' ? 180 : 480); i++) {
+        const x = (rnd() - 0.5) * 1500, z = (rnd() - 0.5) * 1500;
+        if (Math.hypot(x, z + 46) < 350) continue;
+        const y = this.meadowHeight(x, z), h = 4 + rnd() * 4;
+        tb.push(B.Matrix.Compose(new B.Vector3(1.2, h, 1.2), B.Quaternion.Identity(), new B.Vector3(x, y + h / 2, z)));
+        lb.push(B.Matrix.Compose(new B.Vector3(5, 4, 5), B.Quaternion.Identity(), new B.Vector3(x, y + h, z)));
+        lb.push(B.Matrix.Compose(new B.Vector3(3, 2, 3), B.Quaternion.Identity(), new B.Vector3(x, y + h + 3, z)));
+      }
+      [[trunks, tb], [leaves, lb]].forEach(([mesh, items]) => {
+        const b = new Float32Array(items.length * 16); items.forEach((m, i) => m.copyToArray(b, i * 16));
+        mesh.thinInstanceSetBuffer('matrix', b, 16, true); mesh.freezeWorldMatrix(); mesh.isPickable = false;
+      });
+      this.mainland = { width: 1600, base: -85, mesh: blocks };
+      this.portals = { office: new B.Vector3(0, 0, -46), meadow: new B.Vector3(0, this.meadowHeight(0, -46), -46) };
+      Object.entries(this.portals).forEach(([layer, pos]) => {
+        const gate = B.MeshBuilder.CreateTorus(`transfer-gate-${layer}`, { diameter: 5.2, thickness: 0.45, tessellation: 48 }, scene);
+        gate.position.copyFrom(pos.add(new B.Vector3(0, 3, 0))); gate.rotation.x = Math.PI / 2;
+        gate.material = this.mat('transfer-gate', '#5bf5df', { emissive: 1.5, unlit: true });
+        gate.metadata = { portal: layer === 'office' ? 'meadow' : 'office' };
+        const base = B.MeshBuilder.CreateCylinder(`transfer-base-${layer}`, { height: 0.3, diameter: 8, tessellation: 8 }, scene);
+        base.position.copyFrom(pos); base.material = this.mat('transfer-base', '#2b5470'); base.metadata = gate.metadata;
+      });
+      const campusRing = B.MeshBuilder.CreateTorus('team-land-rim', { diameter: 137, thickness: 0.5, tessellation: 112 }, scene);
+      campusRing.position.y = -3; campusRing.material = this.mat('team-land-rim', '#72e5ff', { emissive: 0.8, unlit: true }); campusRing.isPickable = false;
+      const liftBeam = B.MeshBuilder.CreateCylinder('team-lift-axis', { height: 82, diameterTop: 6, diameterBottom: 6, tessellation: 12 }, scene);
+      liftBeam.position.set(0, -41, -46); liftBeam.material = this.mat('team-lift-axis', '#82f3ff', { emissive: 0.8, alpha: 0.14, unlit: true }); liftBeam.metadata = { elevator: true };
+      for (const x of [-3, 3]) for (const z of [-49, -43]) {
+        const rail = this.box('orbital-lift-rail', 0.28, 83, 0.28, '#52718e'); rail.position.set(x, -40.5, z); rail.isPickable = false;
+      }
+    },
+
+
+    // 도로→광장→기능 지구 순서로 배치한다. 외부 아트 없이 재질별 병합한 독립 건축이다.
+    buildGroundCity() {
+      const scene = this.scene, groups = new Map(), Y = -82.85, CZ = -46, obstacles=[];
+      const M = {
+        road: this.pbr('city-asphalt','#243647',.08,.94,'stone'), walk: this.pbr('city-paving','#b7c3c6',.03,.88,'stone'),
+        pearl: this.pbr('city-pearl','#c8d5dc',.16,.56,'stone'), navy: this.pbr('city-navy','#294459',.65,.39,'metal'),
+        glass: this.pbr('city-glass','#327d91',.32,.18),
+        teal: this.mat('city-trace', '#7be8dd', { emissive: 0.75, unlit: true }),
+        violet: this.mat('city-violet-trim', '#aaa0e8', { emissive: 0.55, unlit: true }),
+        warm: this.mat('city-windows', '#ffe1a6', { emissive: 0.65, unlit: true }),
+        green: this.mat('city-garden', '#497b65'), water: this.pbr('city-water','#397f9b',.22,.16),
+        solar: this.pbr('city-solar','#214f69',.4,.25),
+      };
+      const add = (m, mat) => { m.material = mat; m.isPickable = false; if (!groups.has(mat)) groups.set(mat, []); groups.get(mat).push(m); return m; };
+      const box = (n,x,y,z,w,h,d,mat,rot=0) => { const m=B.MeshBuilder.CreateBox(n,{width:w,height:h,depth:d},scene);m.position.set(x,y,z);m.rotation.y=rot;return add(m,mat); };
+      const cyl = (n,x,y,z,d,h,mat,vertices=12,top=d) => {const m=B.MeshBuilder.CreateCylinder(n,{diameterBottom:d,diameterTop:top,height:h,tessellation:vertices},scene);m.position.set(x,y,z);return add(m,mat);};
+      const annulus = (n,r,w,y,mat,cx=0,cz=CZ) => {
+        const inner=[],outer=[];for(let i=0;i<=96;i++){const a=i*Math.PI/48;inner.push(new B.Vector3(cx+Math.cos(a)*(r-w/2),y,cz+Math.sin(a)*(r-w/2)));outer.push(new B.Vector3(cx+Math.cos(a)*(r+w/2),y,cz+Math.sin(a)*(r+w/2)));}
+        return add(B.MeshBuilder.CreateRibbon(n,{pathArray:[inner,outer],sideOrientation:B.Mesh.DOUBLESIDE},scene),mat);
+      };
+      // 길은 실제 교차하고, 차도 바깥에 별도 보행로와 식재 띠가 이어진다.
+      [105,235].forEach((r,i)=>{
+        annulus(`ring-walk-${i}`,r,25,Y,M.walk);annulus(`ring-road-${i}`,r,17,Y+.04,M.road);
+        annulus(`ring-median-${i}`,r,.32,Y+.08,M.teal);annulus(`ring-edge-${i}`,r+8.1,.22,Y+.09,M.warm);
+      });
+      const avenues = [-Math.PI/2, -Math.PI/6, Math.PI/6, Math.PI/2, Math.PI*5/6, Math.PI*7/6];
+      avenues.forEach((a,i)=>{
+        const mid=215,rot=Math.PI/2-a,x=Math.cos(a)*mid,z=CZ+Math.sin(a)*mid;
+        box(`avenue-walk-${i}`,x,Y-.06,z,27,.18,398,M.walk,rot);
+        box(`avenue-road-${i}`,x,Y+.06,z,18,.16,398,M.road,rot);
+        box(`avenue-median-${i}`,x,Y+.17,z,.3,.035,398,M.teal,rot);
+        for(let t=38;t<410;t+=20)for(const side of [-1,1]){
+          const dx=Math.cos(a)*t+Math.sin(a)*side*4.3,dz=CZ+Math.sin(a)*t-Math.cos(a)*side*4.3;
+          box(`lane-mark-${i}`,dx,Y+.16,dz,.18,.03,6,M.walk,rot);
+        }
+        for(let t=54;t<390;t+=52)for(const side of [-1,1]){
+          const lx=Math.cos(a)*t+Math.sin(a)*side*12,dz=CZ+Math.sin(a)*t-Math.cos(a)*side*12;
+          box(`street-lamp-${i}`,lx,Y+3.7,dz,.22,7.4,.22,M.navy);
+          box(`street-light-${i}`,lx,Y+7.4,dz,2.2,.2,.8,M.warm,rot);
+        }
+      });
+      cyl('arrival-plaza',0,Y+.1,CZ,39,.25,M.pearl,32);
+      annulus('arrival-halo',17,.45,Y+.25,M.teal);
+      // 4종 건물 문법. 지구마다 다른 실루엣을 묶고 중앙 승강/기억 시야축은 비운다.
+      const building=(x,z,w,h,type)=>{
+        obstacles.push({x,z,w:w+8,d:w+6});
+        const y=-83;
+        box('district-podium',x,y+.6,z,w+8,1.2,w+6,M.walk);
+        if(type===0){ // 연구: 유리 팔각 타워와 수직 구조 리브
+          cyl('research-glass',x,y+h/2+1,z,w,h,M.glass,8,w*.75);
+          for(let k=0;k<8;k++){const a=k*Math.PI/4;box('research-rib',x+Math.cos(a)*w*.43,y+h/2+1,z+Math.sin(a)*w*.43,.55,h,.55,M.pearl);}
+          for(let t=5;t<h;t+=7){annulus('research-floor',w*.44,.45,y+t,M.pearl,x,z);annulus('research-recess',w*.435,.3,y+t-.5,M.navy,x,z);}
+          cyl('research-crown',x,y+h+1.3,z,w*.85,1.2,M.navy,8);
+          annulus('research-crown-light',w*.38,.3,y+h+2,M.teal,x,z);
+        }else if(type===1){ // 제작: 계단식 테라스, 긴 작업동과 채광 밴드
+          for(let k=0;k<3;k++){
+            const ww=w*(1-k*.19),hh=h/3;
+            box('studio-terrace',x+k*1.6,y+hh*(k+.5)+1,z+k*1.5,ww,hh,w*(.8-k*.12),k%2?M.navy:M.pearl);
+            box('studio-window',x+k*1.6,y+hh*(k+.5)+1,z-w*(.8-k*.12)/2+k*1.5-.1,ww*.88,hh*.47,.2,M.glass);
+            box('studio-warm',x+k*1.6,y+hh*(k+.5)-.8,z-w*(.8-k*.12)/2+k*1.5-.24,ww*.75,.35,.1,M.warm);
+            box('studio-roof-garden',x+k*1.6,y+hh*(k+1)+1.1,z+k*1.5,ww*.94,.2,w*(.74-k*.12),M.green);
+            box('studio-terrace-sill',x+k*1.6,y+hh*(k+1)+1.25,z-w*(.8-k*.12)/2+k*1.5-.2,ww+.6,.28,.65,M.navy);
+            box('studio-balustrade',x+k*1.6,y+hh*(k+1)+1.7,z-w*(.8-k*.12)/2+k*1.5-.15,ww*.94,.65,.14,M.glass);
+          }
+        }else if(type===2){ // 커뮤니티: 아치형 유리 돔과 개방 포디움
+          cyl('commons-base',x,y+2,z,w+3,4,M.pearl,24);
+          const dome=B.MeshBuilder.CreateSphere('commons-dome',{diameter:w,segments:20},scene);
+          dome.scaling.y=.52;dome.position.set(x,y+4,z);add(dome,M.glass);
+          annulus('commons-ring',w*.49,.7,y+4,M.pearl,x,z);
+          for(let k=0;k<8;k++){const a=k*Math.PI/4;box('commons-portico',x+Math.cos(a)*w*.41,y+3,z+Math.sin(a)*w*.41,.6,6,.6,M.pearl);}
+          box('commons-entry',x,y+2,z-w*.54,w*.32,3,.7,M.navy);
+        }else{ // 주거/협업: 두 날개를 잇는 스카이브리지
+          for(const side of [-1,1]){
+            box('collab-wing',x+side*w*.3,y+h/2+1,z,w*.36,h,w*.7,M.pearl);
+            box('collab-facade',x+side*w*.3,y+h/2+1,z-w*.36,w*.27,h*.84,.25,M.glass);
+            for(let t=5;t<h;t+=6)box('collab-window',x+side*w*.3,y+t,z-w*.37,w*.29,.7,.12,M.warm);
+          }
+          box('collab-skybridge',x,y+h*.7,z,w*.7,2.6,w*.32,M.navy);
+          box('collab-bridge-trim',x,y+h*.7+1.4,z-w*.17,w*.7,.18,.18,M.teal);
+        }
+      };
+      // 東側 연구, 西側 제작, 北側 커뮤니티. 정면은 낮은 환승/에너지 공원이다.
+      const plans=[
+        [150,-46,24,59,0],[183,-12,18,41,0],[185,-82,21,47,3],[145,0,21,25,1],[285,-46,24,30,1],[318,-14,22,48,0],
+        [-150,-46,31,24,1],[-183,-12,26,18,1],[-185,-82,28,29,1],[-145,0,20,38,3],[-285,-46,27,22,1],
+        [80,92,26,15,2],[111,98,20,34,3],[60,126,22,22,1],[147,208,32,15,2],[-147,208,25,34,3],[-80,92,29,15,2],
+        [-147,-300,25,20,1],[147,-300,24,31,3],[-200,-330,24,26,0],[200,-330,31,14,2],
+        [-280,35,27,43,3],[280,35,23,54,0],[-215,220,25,24,1],[215,220,24,31,3],
+      ];
+      plans.forEach((v)=>building(...v));
+      // 區域 지선: 대로와 건물 현관을 연결해 떠 있는 박스 집합을 피한다.
+      [[155,-75],[-153,-75],[0,148],[-141,-241],[139,-240]].forEach(([x,z],i)=>{
+        const end=new B.Vector3(x,Y+.15,z),start=new B.Vector3(x*.55,Y+.15,CZ+(z-CZ)*.55),v=end.subtract(start),mid=B.Vector3.Center(start,end);
+        box(`district-link-${i}`,mid.x,Y+.13,mid.z,7,.1,v.length(),M.walk,Math.atan2(v.x,v.z));
+      });
+      // 고가 트램: 두 순환선에 접속하는 정류장, 기둥, 구간 경계가 읽힌다.
+      const railPath=[];for(let i=0;i<=72;i++){const a=i*Math.PI/36;railPath.push(new B.Vector3(Math.cos(a)*90,-69,CZ+Math.sin(a)*90));}
+      add(B.MeshBuilder.CreateTube('civic-tram-guide',{path:railPath,radius:.42,tessellation:6},scene),M.teal);
+      add(B.MeshBuilder.CreateTube('civic-tram-deck',{path:railPath.map(v=>v.add(new B.Vector3(0,-.6,0))),radius:1.3,tessellation:6},scene),M.navy);
+      for(let i=0;i<18;i++){const a=i*Math.PI/9;cyl('tram-pier',Math.cos(a)*90,-76,CZ+Math.sin(a)*90,1,14,M.pearl,6);}
+      [[90,CZ],[-90,CZ],[0,CZ+90],[0,CZ-90]].forEach(([x,z],i)=>{
+        box(`station-base-${i}`,x,-68.8,z,22,.8,9,M.pearl);
+        box(`station-glass-${i}`,x,-65.8,z+2,18,5,.35,M.glass);
+        box(`station-canopy-${i}`,x,-62.8,z,25,.6,12,M.pearl);
+        for(const side of [-1,1])box(`station-post-${i}`,x+side*10,-65.8,z,.45,6,.45,M.navy);
+        box(`station-sign-${i}`,x,-63.8,z-4,11,.45,.3,M.warm);
+      });
+      // 랜드마크는 중심 팀 대지 좌우 끝에만 세워 실제 실무 패널/동료의 시야를 비운다.
+      obstacles.push({x:-257,z:55,r:14});
+      cyl('civic-spire-foot',-257,-80,55,27,6,M.pearl,12);
+      cyl('civic-spire',-257,-25,55,15,105,M.glass,8,5);
+      for(let k=0;k<4;k++)annulus('spire-observation',12-k*1.5,1,-58+k*22,M.pearl,-257,55);
+      const tip=B.MeshBuilder.CreateCylinder('spire-tip',{diameterBottom:4,diameterTop:0,height:27,tessellation:8},scene);tip.position.set(-257,41,55);add(tip,M.teal);
+      // 태양광 정원: 정렬된 패널 3열과 제어 파빌리온, 도시 전력 순환을 상징한다.
+      for(let row=0;row<3;row++)for(let k=0;k<5;k++){
+        const x=-220+k*20,z=-330-row*17;
+        box('solar-leg',x,-80,z,.6,5,.6,M.pearl);
+        const panel=box('solar-canopy',x,-77,z,15,.4,10,M.solar);panel.rotation.x=-.27;
+        box('solar-lane',x,-76.7,z,13,.08,.18,M.teal);
+      }
+      building(-100,-335,23,12,2);
+      // 공원은 건물 사이의 공간을 묶는다. 수면/산책루프/군집 식재를 함께 배치한다.
+      [[35,15,14],[-35,15,14],[35,-107,14],[-35,-107,14]].forEach(([x,z,r],i)=>{
+        cyl(`park-${i}`,x,-82.7,z,r*2,.3,M.green,24);
+        annulus(`park-loop-${i}`,r*.7,2.3,-82.45,M.walk,x,z);
+        cyl(`park-water-${i}`,x,-82.38,z,r*.7,.1,M.water,24);
+        for(let k=0;k<7;k++){
+          const a=k*Math.PI*2/7,px=x+Math.cos(a)*r*.85,pz=z+Math.sin(a)*r*.85;
+          cyl('park-trunk',px,-80.5,pz,.7,4,M.navy,6);
+          const crown=B.MeshBuilder.CreateSphere('park-crown',{diameter:5,segments:6},scene);crown.position.set(px,-77.8,pz);add(crown,M.green);
+        }
+        for(const side of [-1,1])box('park-bench',x+side*r*.8,-81.7,z,4,.8,1.2,M.pearl);
+      });
+      groups.forEach((meshes)=>{const merged=B.Mesh.MergeMeshes(meshes,true,true,undefined,false,false);if(merged){merged.isPickable=false;merged.freezeWorldMatrix();}});
+      this.groundCity={districts:5,buildings:plans.length+1,roadRadii:[105,235],landmarkCount:1,obstacles};
+      const arrivalY=this.groundRoadHeight(0,-46);this.portals.meadow.y=arrivalY;
+      this.scene.getMeshByName('transfer-gate-meadow').position.y=arrivalY+3;
+      this.scene.getMeshByName('transfer-base-meadow').position.y=arrivalY+.1;
+    },
+
+
+    // 장식 교통만 움직인다. 실제 에이전트/업무 데이터와 별개인 작은 재사용 차량 풀이다.
+    buildTraffic() {
+      const scene=this.scene;
+      const metal=this.pbr('vehicle-pearl','#c6d4dc',.68,.3,'metal'),dark=this.pbr('vehicle-navy','#243a51',.62,.37,'metal'),glass=this.pbr('vehicle-window','#408f9e',.36,.16),light=this.mat('vehicle-light','#ffe2b2',{emissive:.75,unlit:true}),engine=this.mat('vehicle-engine','#78e3e8',{emissive:.75,unlit:true});
+      const master=(kind)=>{
+        const groups=new Map();
+        const add=(mesh,mat)=>{mesh.material=mat;mesh.isPickable=false;if(!groups.has(mat))groups.set(mat,[]);groups.get(mat).push(mesh);return mesh;};
+        const box=(n,x,y,z,w,h,d,mat,rz=0)=>{const m=B.MeshBuilder.CreateBox(n,{width:w,height:h,depth:d},scene);m.position.set(x,y,z);m.rotation.z=rz;return add(m,mat);};
+        if(kind==='car'||kind==='fly'){
+          const flying=kind==='fly';
+          box('hover-chassis',0,0,0,5.8,.65,2.7,metal);box('hover-belly',-.2,-.4,0,4.8,.35,2.2,dark);
+          box('hover-cabin',-.35,.62,0,2.8,.75,2.1,glass);box('hover-roof',-.6,1.05,0,2.5,.14,2.15,metal);
+          for(const side of [-1,1]){box('hover-headlight',2.94,.12,side*.92,.1,.2,.55,light);box('hover-motor',-2.9,-.15,side*.9,.15,.23,.65,engine);}
+          if(flying)for(const side of [-1,1]){box('aircar-wing',-.6,-.12,side*2.0,3.7,.18,1.4,dark);box('aircar-tip',-.6,-.18,side*2.7,2.3,.12,.15,engine);}
+        }else if(kind==='plane'){
+          box('shuttle-fuselage',0,0,0,14,1.8,2.9,metal);box('shuttle-cockpit',4.7,.7,0,3.4,1.1,2.4,glass);
+          for(const side of [-1,1]){box('shuttle-wing',-1,-.2,side*4.2,6.8,.32,6.2,metal);box('shuttle-engine',-3,-.4,side*4.7,4.5,1,1.1,dark);box('shuttle-exhaust',-5.3,-.4,side*4.7,.16,.65,.7,engine);box('shuttle-tail',-5.5,1.6,side*1.2,2.2,3,.25,dark);}
+        }else{
+          // 독자 설계의 긴 중앙 선체 + 분리된 두 현측 엔진. 특정 게임 자산을 복제하지 않는다.
+          box('cruiser-keel',0,0,0,78,5,16,dark);box('cruiser-main-deck',2,3,0,64,3,21,metal);
+          box('cruiser-prow',36,1,0,21,3.8,11,metal);box('cruiser-prow-trace',45,1.2,0,.3,1.2,8,engine);
+          for(const side of [-1,1]){
+            box('cruiser-outrigger',-13,1,side*18,52,5.5,8,metal);box('cruiser-wing',-7,1,side*10,27,2.4,14,dark);
+            box('cruiser-side-window',-8,3.1,side*22.1,29,.6,.18,light);box('cruiser-engine-pod',-40,0,side*18,14,6,9,dark);
+            box('cruiser-engine-aperture',-47.1,0,side*18,.2,3.5,6,engine);
+            box('cruiser-lower-fin',-9,-4.6,side*18,18,3,.65,dark);
+          }
+          box('cruiser-bridge',-9,8,0,14,7,10,dark);box('cruiser-command-glass',-2,8.5,0,.25,2.8,8.5,glass);
+          box('cruiser-bridge-roof',-9,12,0,17,.7,12,metal);box('cruiser-sensor',-12,14.8,0,.7,5,.7,metal);
+          for(let i=0;i<5;i++)box('cruiser-deck-panel',-22+i*10,4.65,0,6,.18,8,dark);
+        }
+        const parts=[];groups.forEach(meshes=>{const m=B.Mesh.MergeMeshes(meshes,true,true,undefined,false,false);if(m){m.isVisible=false;m.isPickable=false;parts.push(m);}});return parts;
+      };
+      const templates={car:master('car'),fly:master('fly'),plane:master('plane'),cruiser:master('cruiser')};
+      this.traffic=[];this.trafficClock=0;this.trafficPaused=REDUCED;
+      const spawn=(kind,index)=>{
+        const root=new B.TransformNode(`traffic-${kind}-${index}`,scene);
+        templates[kind].forEach((mesh,i)=>{const instance=mesh.createInstance(`${kind}-${index}-${i}`);instance.parent=root;instance.isVisible=true;instance.isPickable=false;});
+        const v={kind,index,root,phase:index*1.83};this.traffic.push(v);return v;
+      };
+      for(let i=0;i<(QUALITY==='low'?6:10);i++){const v=spawn('car',i);v.radius=(i<6?105:235)+(i%2?3.4:-3.4);v.direction=i%2?-1:1;}
+      for(let i=0;i<(QUALITY==='low'?2:4);i++)spawn('fly',i);
+      for(let i=0;i<(QUALITY==='low'?1:2);i++)spawn('plane',i);
+      spawn('cruiser',0);
+      this.stepTraffic(0);
+    },
+
+    stepTraffic(dt) {
+      if(!this.traffic)return;
+      if(!this.trafficPaused&&!REDUCED)this.trafficClock+=dt;
+      const time=this.trafficClock;
+      this.traffic.forEach(v=>{
+        let a;
+        if(v.kind==='car'){
+          a=v.phase+time*(v.direction*8/v.radius);const x=Math.cos(a)*v.radius,z=-46+Math.sin(a)*v.radius;
+          v.root.position.set(x,(this.groundRoadHeight(x,z)??-82.81)+1.4,z);v.root.rotation.y=-a-Math.PI/2+(v.direction<0?Math.PI:0);
+        }else if(v.kind==='fly'){
+          a=v.phase+time*.045;v.root.position.set(Math.cos(a)*128,12+v.index*6,25+Math.sin(a)*89);v.root.rotation.y=Math.atan2(-89*Math.cos(a),-128*Math.sin(a));
+        }else if(v.kind==='plane'){
+          a=v.phase+time*.022;v.root.position.set(Math.cos(a)*235,82+v.index*23,45+Math.sin(a)*140);v.root.rotation.y=Math.atan2(-140*Math.cos(a),-235*Math.sin(a));v.root.rotation.z=Math.sin(a)*.06;
+        }else{
+          v.root.position.set(155,43+Math.sin(time*.12)*.45,86);v.root.rotation.y=.2+Math.sin(time*.035)*.025;
+        }
+      });
+    },
+
     buildHub() {
       const s = this.scene;
       // 광장: 블록 땅 위에 놓인 밝은 돌 원판. 클릭하면 공유 기억 패널.
       const plaza = B.MeshBuilder.CreateCylinder('hub-plaza', { height: 0.14, diameter: HUB_R * 2 - 1.0, tessellation: 12 }, s);
       plaza.position.y = 0.07;
-      plaza.material = this.blockMaterial('plaza', this.blockTextures().path);
-      plaza.material.diffuseTexture.uScale = 7; plaza.material.diffuseTexture.vScale = 7;
+      plaza.material = this.mat('memory-plaza', '#d1e2e9');
       plaza.metadata = { hub: true };
       this.receiveShadow(plaza);
       [HUB_R * 2 - 2.2, HUB_R * 2 - 4.6].forEach((d, i) => {
@@ -432,69 +918,89 @@
       return null;
     },
 
+
     buildTerrain() {
-      const s = this.scene;
-      const LAND_R = ISLAND_DIST + ISLAND_D / 2 + 6;
-      const noise = (x, z) => 0.5 + 0.5 * Math.sin(x * 0.23 + Math.sin(z * 0.19) * 1.7) * Math.cos(z * 0.21 + Math.sin(x * 0.13) * 1.3);
-      const cols = new Map();
-      const key = (x, z) => `${x},${z}`;
-      const R = Math.ceil(LAND_R + 6);
-      for (let x = -R; x <= R; x++) {
-        for (let z = -R; z <= R; z++) {
-          const cx = x + 0.5, cz = z + 0.5;
-          const r = Math.hypot(cx, cz);
-          const a = Math.atan2(cz, cx);
-          const edge = LAND_R + 3.2 * Math.sin(a * 3 + 0.7) + 2.1 * Math.sin(a * 7 + 2.3) + 1.2 * Math.sin(a * 13);
-          if (r > edge) continue;
-          const zone = this.flatZone(cx, cz);
-          let level = zone ? 0 : Math.min(2, Math.floor(noise(cx, cz) * 2.6 + (r > edge - 4 ? -0.5 : 0)));
-          if (level < 0) level = 0;
-          const depth = 1 + Math.floor((1 - r / edge) * 5 + noise(cz * 0.7, cx * 0.7) * 1.5);
-          cols.set(key(x, z), { x: cx, z: cz, level, depth, zone });
-        }
+      const scene=this.scene,LAND_R=68,cols=new Map(),key=(x,z)=>`${x},${z}`,meshes=[];
+      // 공중 팀은 흙 섬이 아니라 높이 0의 평탄한 세라믹/금속 도시 데크다.
+      for(let x=-68;x<=68;x++)for(let z=-68;z<=68;z++)if(Math.hypot(x+.5,z+.5)<=66)cols.set(key(x,z),{x:x+.5,z:z+.5,level:0,depth:4,zone:this.flatZone(x+.5,z+.5)});
+      const groups=new Map();
+      const pearl=this.pbr('team-ceramic','#bacbd5',.12,.63,'stone'),navy=this.pbr('team-metal','#233d54',.65,.38,'metal'),glass=this.pbr('team-glass','#367e96',.3,.18),cyan=this.mat('team-trim','#81e6ec',{emissive:.65,unlit:true}),warm=this.mat('team-window','#ffe2ab',{emissive:.55,unlit:true});
+      const add=(m,mat)=>{m.material=mat;m.isPickable=false;if(!groups.has(mat))groups.set(mat,[]);groups.get(mat).push(m);return m;};
+      const box=(n,x,y,z,w,h,d,mat,rot=0)=>{const m=B.MeshBuilder.CreateBox(n,{width:w,height:h,depth:d},scene);m.position.set(x,y,z);m.rotation.y=rot;return add(m,mat);};
+      const disk=(n,x,y,z,diameter,h,mat,t=12,lower=diameter)=>{const m=B.MeshBuilder.CreateCylinder(n,{diameterTop:diameter,diameterBottom:lower,height:h,tessellation:t},scene);m.position.set(x,y,z);return add(m,mat);};
+      const ring=(n,r,y,thick,mat,t=96)=>{const m=B.MeshBuilder.CreateTorus(n,{diameter:r*2,thickness:thick,tessellation:t},scene);m.position.y=y;return add(m,mat);};
+      disk('team-platform-hull',0,-3.3,0,138,6,navy,12,126);
+      disk('team-platform-surface',0,-.08,0,136,.16,this.deckSurfaceMaterial(),64);
+      ring('team-upper-rim',67,.04,.22,cyan,12);ring('team-lower-rim',64,-5.7,.42,cyan,12);
+      ring('team-transit-loop',43,.035,.6,navy);ring('team-transit-trace',43,.07,.12,cyan);
+      // 5本 인계로와 외곽 교통 루프: 중심 기억과 실무 건물의 연결을 강조한다.
+      space.stages.forEach((st)=>{
+        const a=st.angle,x=Math.cos(a)*46,z=Math.sin(a)*46,rot=Math.PI/2-a;
+        box('team-outer-spoke',x,.025,z,4,.04,30,navy,rot);
+        box('team-outer-guidance',x,.055,z,.12,.04,30,cyan,rot);
+      });
+      for(let i=0;i<12;i++){
+        const a=i*Math.PI/6,x=Math.cos(a)*59,z=Math.sin(a)*59;
+        // 패널은 deckTexture에 합쳐 표면 높이 0과 깊이 안정성을 유지한다.
+        box('team-radial-rib',Math.cos(a)*64,-2.7,Math.sin(a)*64,1.2,4.5,5.8,pearl,Math.PI/2-a);
       }
-      // 블록 종류별 thin instance (픽셀 텍스처)
-      const T = this.blockTextures();
-      void s;
-      const grass = this.blockMesh('grass', T.grass, 3, [1, 1, 1, 1, 0, 2]);
-      const dirt = this.blockMesh('dirt', T.dirt, 1, [0, 0, 0, 0, 0, 0]);
-      const stone = this.blockMesh('stone', T.stone, 1, [0, 0, 0, 0, 0, 0]);
-      const path = this.blockMesh('path', T.path, 1, [0, 0, 0, 0, 0, 0]);
-      const trunk = this.blockMesh('trunk', T.trunk, 2, [0, 0, 0, 0, 1, 1]);
-      const leaf = this.blockMesh('leaf', T.leaves, 1, [0, 0, 0, 0, 0, 0]);
-      const bufs = { grass: [], dirt: [], stone: [], path: [], trunk: [], leaf: [] };
-      const put = (kind, x, y, z) => bufs[kind].push(B.Matrix.Translation(x, y, z));
-      let seed = 11;
-      const rnd = () => { seed = (seed * 48271) % 2147483647; return seed / 2147483647; };
-      cols.forEach((c) => {
-        const topKind = c.zone === 'path' ? 'path' : 'grass';
-        put(topKind, c.x, c.level - 0.5, c.z);
-        for (let y = c.level - 1; y >= -c.depth; y--) put(y <= -c.depth + 1 ? 'stone' : 'dirt', c.x, y - 0.5, c.z);
-        // 나무: 평지 밖의 일부 칸
-        if (!c.zone && rnd() < 0.018 && this.pathDistance(new B.Vector3(c.x, 0, c.z)) > 3) {
-          const h = 3 + Math.floor(rnd() * 2);
-          for (let y = 0; y < h; y++) put('trunk', c.x, c.level + y + 0.5, c.z);
-          for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (let dy = 0; dy < 2; dy++) {
-            if (Math.abs(dx) + Math.abs(dz) === 2 && dy === 1) continue;
-            put('leaf', c.x + dx, c.level + h - 1 + dy + 0.5, c.z + dz);
-          }
-          put('leaf', c.x, c.level + h + 1.5, c.z);
+
+      this.landscapeObstacles=[];
+      const green=this.pbr('team-pocket-plant','#507f6c',0,.9),soil=this.pbr('team-pocket-soil','#344f47',0,1,'stone');
+      for(let i=0;i<5;i++){
+        const a=-Math.PI/2+(i+.5)*Math.PI*2/5,x=Math.cos(a)*36,z=Math.sin(a)*36;
+        this.landscapeObstacles.push({x,z,r:5.8});
+        disk('team-planter-shell',x,.24,z,6.4,.48,navy,12);
+        disk('team-planter-bed',x,.51,z,5.8,.08,soil,12);
+        for(let j=0;j<3;j++){
+          const b=j*Math.PI*2/3,crown=B.MeshBuilder.CreateSphere('team-low-shrub',{diameter:1.75,segments:QUALITY==='low'?6:10},scene);
+          crown.position.set(x+Math.cos(b)*1.35,1.15,z+Math.sin(b)*1.35);crown.scaling.y=.7;add(crown,green);
         }
+        for(const side of [-1,1]){
+          const bx=x+Math.sin(a)*side*4.4,bz=z-Math.cos(a)*side*4.4;
+          box('team-pocket-bench',bx,.5,bz,3,.28,.9,pearl,a);
+          box('team-bench-leg',bx,.23,bz,1.8,.46,.35,navy,a);
+        }
+        box('team-pocket-waylight',x,.7,z-3.35,.18,1.4,.18,navy);
+        box('team-pocket-light',x,1.42,z-3.35,.3,.12,.3,warm);
+      }
+
+      // 下部 반중력 엔진은 실제 팀 플랫폼에 붙는다.
+      for(let i=0;i<6;i++){
+        const a=i*Math.PI/3,x=Math.cos(a)*45,z=Math.sin(a)*45;
+        disk('team-engine',x,-7,z,10,5,navy,12,6);
+        const nozzle=B.MeshBuilder.CreateTorus('team-engine-nozzle',{diameter:7.5,thickness:.45,tessellation:32},scene);nozzle.position.set(x,-9.5,z);add(nozzle,cyan);
+        disk('team-engine-core',x,-9.9,z,4.8,.3,cyan,12);
+      }
+      // 北側/左右에만 도시 스카이라인을 두어 남쪽 포털→기억→업무 시야축을 비운다.
+      [[-43,31,19],[0,55,32],[43,31,24],[-56,4,14],[56,4,17]].forEach(([x,z,h],i)=>{
+        disk(`team-tower-base-${i}`,x,.6,z,13,1.2,navy,8);
+        box(`team-tower-${i}`,x,h/2+1.2,z,7,h,7,glass);
+        for(const dx of [-3.7,3.7])box(`team-tower-frame-${i}`,x+dx,h/2+1.2,z,.55,h+1,7.8,pearl);
+        for(let t=4;t<h;t+=4)box(`team-tower-window-${i}`,x,t+1.2,z-3.6,5,.32,.14,warm);
+        disk(`team-tower-crown-${i}`,x,h+2,z,9,1.2,navy,8);
+        box(`team-tower-trace-${i}`,x,h/2+1.2,z+3.7,.2,h,.2,cyan);
       });
-      const meshes = { grass, dirt, stone, path, trunk, leaf };
-      Object.keys(bufs).forEach((k) => {
-        if (!bufs[k].length) { meshes[k].setEnabled(false); return; }
-        const arr = new Float32Array(bufs[k].length * 16);
-        bufs[k].forEach((mtx, i) => mtx.copyToArray(arr, i * 16));
-        meshes[k].thinInstanceSetBuffer('matrix', arr, 16, true);
-        meshes[k].freezeWorldMatrix();
-        this.receiveShadow(meshes[k]);
-        if (k !== 'dirt' && k !== 'stone') this.castShadow(meshes[k]);
+      // 後方 스카이브리지 두 구간. 인물 활동 영역/출입구와 겹치지 않는다.
+      [[-43,31,0,55],[0,55,43,31]].forEach(([x1,z1,x2,z2],i)=>{
+        const dx=x2-x1,dz=z2-z1,len=Math.hypot(dx,dz),rot=Math.atan2(dx,dz),x=(x1+x2)/2,z=(z1+z2)/2;
+        box(`team-skybridge-${i}`,x,10,z,3.5,.7,len,navy,rot);
+        box(`team-skybridge-light-${i}`,x,10.45,z,.18,.12,len,cyan,rot);
       });
-      this.terrain = { cols, key, meshes: Object.values(meshes), landR: LAND_R };
+      groups.forEach((parts)=>{const mesh=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);if(mesh){mesh.isPickable=false;mesh.freezeWorldMatrix();this.receiveShadow(mesh);meshes.push(mesh);}});
+      this.officeObstacles=[...[[-43,31,6.8],[0,55,6.8],[43,31,6.8],[-56,4,6.8],[56,4,6.8]].map(([x,z,r])=>({x,z,r})),...this.landscapeObstacles];
+      this.terrain={cols,key,meshes,landR:LAND_R,kind:'city-platform'};
+      this.portals.office.y=0;
+      this.scene.getMeshByName('transfer-gate-office').position.y=3;
+      this.scene.getMeshByName('transfer-base-office').position.y=.1;
     },
 
     heightAt(x, z) {
+      if (space.layer === 'meadow') {
+        if(Math.abs(x)>=780||Math.abs(z)>=780)return null;
+        const ground=this.meadowHeight(x,z),road=this.groundRoadHeight(x,z);
+        return road===null?ground:Math.max(ground,road);
+      }
       if (!this.terrain) return 0;
       const c = this.terrain.cols.get(this.terrain.key(Math.floor(x), Math.floor(z)));
       return c ? c.level : null;
@@ -523,17 +1029,15 @@
       const P = (mesh, x, y, z) => { mesh.parent = st.node; mesh.position.set(x, y, z); mesh.metadata = { stageId: st.id }; return mesh; };
       const deep = this.tint(st.color, '#0b1026', 0.55);   // 벽 안쪽 어두운 톤
       const soft = this.tint(st.color, '#1a2040', 0.35);   // 가구에 쓰는 단계색
-      // 바닥: 나무 판자 픽셀 텍스처
+      // 바닥: 업무 단지의 세라믹 데크
       const floor = P(B.MeshBuilder.CreateBox('floor', { width: 12.4, height: 0.16, depth: 11.4 }, s), 0, 0.08, 0);
-      floor.material = this.blockMaterial(`floor-${st.id}`, this.blockTextures().planks);
-      floor.material.diffuseTexture.uScale = 12; floor.material.diffuseTexture.vScale = 11;
-      floor.material.diffuseColor = B.Color3.FromHexString(this.tint(st.color, '#ffffff', 0.75));
+      floor.material = this.pbr(`office-floor-${st.id}`,'#b1c3ce',.08,.78,'stone');
       this.receiveShadow(floor);
       // 러그: 단계색
       P(this.box('rug', 5.2, 0.05, 4.2, soft), 2.4, 0.18, 2.4).isPickable = false;
       // 벽: 바깥은 단계색, 안쪽은 어두운 단계색 패널
-      P(this.box('wall-back', 12.6, 3.2, 0.3, st.color), 0, 1.6, -5.75);
-      P(this.box('wall-side', 0.3, 3.2, 11.6, st.color), -6.2, 1.6, 0);
+      P(this.box('wall-back', 12.6, 3.2, 0.3, '#233e56'), 0, 1.6, -5.75);
+      P(this.box('wall-side', 0.3, 3.2, 11.6, '#233e56'), -6.2, 1.6, 0);
       P(this.box('wall-back-in', 12.2, 2.9, 0.06, deep), 0, 1.55, -5.57).isPickable = false;
       P(this.box('wall-side-in', 0.06, 2.9, 11.2, deep), -6.02, 1.55, 0).isPickable = false;
       P(this.box('wall-cap', 12.9, 0.14, 0.5, this.tint(st.color, '#ffffff', 0.35)), 0, 3.27, -5.75);
@@ -548,7 +1052,7 @@
       [-3.4, 0.2, 3.8].forEach((x, i) => this.buildDesk(st, x, -3.6, 0, i));
       this.buildDesk(st, -4.0, 1.6, Math.PI / 2, 3);
       // 책장
-      const shelf = P(this.box('shelf', 1.8, 2.4, 0.5, '#3f3048'), 4.9, 1.2, -5.3);
+      const shelf = P(this.box('shelf', 1.8, 2.4, 0.5, '#354e65'), 4.9, 1.2, -5.3);
       ['#e65fb8', '#4f8df7', '#f2a444', '#2ec4a6', '#8b6cf0', '#ff7a59'].forEach((hex, i) => {
         const book = this.box(`book-${i}`, 0.22, 0.6, 0.3, hex);
         book.parent = shelf; book.position.set(-0.65 + (i % 5) * 0.3, 0.6 - Math.floor(i / 3) * 0.9, 0.05);
@@ -560,7 +1064,7 @@
       P(this.box('sofa-arm-l', 0.25, 0.4, 1.0, deep), 1.35, 0.75, 3.4).isPickable = false;
       P(this.box('sofa-arm-r', 0.25, 0.4, 1.0, deep), 3.85, 0.75, 3.4).isPickable = false;
       const table = B.MeshBuilder.CreateCylinder('table', { height: 0.45, diameter: 1.1, tessellation: 16 }, s);
-      P(table, 2.6, 0.38, 1.9).material = this.mat('table', '#6b5440');
+      P(table, 2.6, 0.38, 1.9).material = this.mat('table', '#b8cdda');
       const lampPole = B.MeshBuilder.CreateCylinder('lamp', { height: 2.2, diameter: 0.08, tessellation: 8 }, s);
       P(lampPole, 5.2, 1.2, 3.6).material = this.mat('pole', '#8d93ad');
       const bulb = B.MeshBuilder.CreateSphere('bulb', { diameter: 0.55, segments: 10 }, s);
@@ -571,6 +1075,30 @@
       this.buildPlant(st, -5.2, -4.6);
       // 입구 바닥 띠(단계색 발광)
       P(this.box('edge', 12.4, 0.08, 0.25, st.color, { emissive: 0.6, unlit: true }), 0, 0.2, 5.6).isPickable = false;
+
+      // 열린 안쪽과 낮은 유리 캐노피: 실무 동료를 가리지 않는 미래 업무 건물 외피.
+      P(this.box('office-back-glass',11.8,1.4,.12,'#4591a6',{alpha:.45}),0,4.0,-5.7).isPickable=false;
+      P(this.box('office-upper-beam',13,.23,.5,'#cedce4'),0,4.85,-5.7);
+      P(this.box('office-side-canopy',.28,.23,11.8,'#cedce4'),-6.2,4.85,0);
+      for(const x of [-6,0,6])P(this.box('office-frame',.24,4.8,.38,'#b9ceda'),x,2.4,-5.7);
+      P(this.box('office-roof-trace',12.5,.08,.1,st.color,{emissive:.65,unlit:true}),0,4.97,-5.7).isPickable=false;
+      const idx=space.data ? space.data.stages.findIndex(v=>v.id===st.id) : 0;
+      if(idx===0){
+        const dish=B.MeshBuilder.CreateSphere('news-observatory',{diameter:2.4,segments:12},s);P(dish,4.7,4.4,-4.7).material=this.mat('observatory','#70ccda',{emissive:.25});
+      }else if(idx===2){
+        const fin=P(this.box('studio-fin',2.8,2.8,.22,'#9fb7ce'),4.7,4.3,-4.8);fin.rotation.z=-.35;
+      }else if(idx===3){
+        P(this.box('delivery-docking',3.8,.3,2.1,'#203d57'),4.8,3.65,-5.5);
+        P(this.box('delivery-beacon',.3,2,.3,st.color,{emissive:.6,unlit:true}),5.7,4.7,-5.5);
+      }else if(idx===4){
+        const arc=B.MeshBuilder.CreateTorus('operations-antenna',{diameter:3,thickness:.16,tessellation:24},s);P(arc,4.6,4.5,-5).material=this.mat('operations-rim','#8ae3df',{emissive:.55,unlit:true});arc.rotation.x=Math.PI/2;
+      }
+
+      st.node.getChildMeshes().forEach(m=>{
+        if(/^(wall-back|wall-side)$/.test(m.name))m.material=this.pbr('office-shell','#2a455b',.5,.42,'metal');
+        else if(/office-frame|office-upper-beam|office-side-canopy|wall-cap|desk-top/.test(m.name))m.material=this.pbr('office-trim','#bbced9',.45,.4,'metal');
+        else if(/office-back-glass/.test(m.name))m.material=this.pbr('office-glazing','#377e95',.3,.19);
+      });
       // 방 안 모든 물체가 그림자를 드리우고 받는다
       st.node.getChildMeshes().forEach((m) => { if (m.name !== 'edge' && !/glow|screen|bulb|board-bar/.test(m.name)) this.castShadow(m); this.receiveShadow(m); });
     },
@@ -581,8 +1109,8 @@
       g.position.set(x, 0, z);
       g.rotation.y = rotY;
       const add = (mesh, px, py, pz) => { mesh.parent = g; mesh.position.set(px, py, pz); mesh.metadata = { stageId: st.id }; return mesh; };
-      add(this.box('desk-top', 2.2, 0.1, 1.0, '#6b4f3a'), 0, 0.88, 0);
-      add(this.box('desk-front', 2.2, 0.6, 0.06, '#523b2b'), 0, 0.52, -0.47);
+      add(this.box('desk-top', 2.2, 0.1, 1.0, '#b8cdda'), 0, 0.88, 0);
+      add(this.box('desk-front', 2.2, 0.6, 0.06, '#233e56'), 0, 0.52, -0.47);
       [[-1, -0.4], [1, -0.4], [-1, 0.4], [1, 0.4]].forEach(([lx, lz], i) => add(this.box(`leg-${i}`, 0.08, 0.76, 0.08, '#2b2f44'), lx, 0.48, lz));
       add(this.box('monitor', 0.95, 0.6, 0.06, '#1b2036'), 0, 1.28, -0.3);
       add(this.box('monitor-stand', 0.1, 0.25, 0.1, '#2b2f44'), 0, 1.0, -0.3);
@@ -598,7 +1126,7 @@
     },
 
     buildPlant(st, x, z) {
-      const pot = this.box('pot', 0.7, 0.6, 0.7, '#6b4a2e');
+      const pot = this.box('pot', 0.7, 0.6, 0.7, '#9db9c9');
       pot.parent = st.node; pot.position.set(x, 0.42, z); pot.metadata = { stageId: st.id };
       const leaves = this.box('leaves', 1.0, 1.0, 1.0, '#3f9f4e');
       leaves.parent = st.node; leaves.position.set(x, 1.3, z); leaves.isPickable = false;
@@ -805,8 +1333,13 @@
 
     // ---------------- 이동 가능 영역 ----------------
     // 블록 땅 위이고, 현재 높이에서 한 칸 이내로만 오르내릴 수 있다. 벽과 책상은 통과하지 않는다.
-    walkable(v, fromY) {
+    walkable(v, fromY, clearance = .4) {
+      if (space.layer === 'meadow') {
+        if(Math.abs(v.x)>=780-clearance||Math.abs(v.z)>=780-clearance)return false;
+        return !(this.groundCity?.obstacles||[]).some(o=>o.r?Math.hypot(v.x-o.x,v.z-o.z)<o.r+clearance:Math.abs(v.x-o.x)<o.w/2+clearance&&Math.abs(v.z-o.z)<o.d/2+clearance);
+      }
       const h = this.heightAt(v.x, v.z);
+      if((this.officeObstacles||[]).some(o=>Math.hypot(v.x-o.x,v.z-o.z)<o.r+clearance))return false;
       if (h === null) return false;
       if (fromY !== undefined && h - fromY > 1.01) return false;
       for (const st of space.stages) {
@@ -822,9 +1355,11 @@
     tick() {
       const dt = Math.min(0.1, this.engine.getDeltaTime() / 1000);
       this.time += dt;
+      this.stepTraffic(dt);
       if (!REDUCED) {
         this.hub.rings.forEach((r, i) => { r.rotation.y += dt * (0.08 + i * 0.05) * (i % 2 ? -1 : 1); });
-        if (this.sky) this.sky.rotation.y += dt * 0.004;
+        if (this.sky) this.sky.rotation.y += dt * 0.001;
+        (!this.trafficPaused ? this.airships || [] : []).forEach((a) => { const t = this.trafficClock * 0.045 + a.phase; a.root.position.set(Math.sin(t) * 65, a.height + Math.sin(t * 2) * 1.5, 72 + Math.cos(t) * 26); a.root.rotation.y = -t; });
         const pulse = 1 + Math.sin(this.time * 1.6) * 0.06;
         this.hub.core.scaling.set(pulse, pulse, pulse);
         this.stepAgents(dt);
@@ -832,6 +1367,7 @@
         space.agents.forEach((a) => { a.av.marker.isVisible = a.status !== 'running' || Math.sin(this.time * 5 + a.av.phase) > -0.4; });
       }
       controls.tick(dt);
+      document.body.classList.toggle('wide-overview', space.view === 'overview' && controls.overview.radius > 105);
       hud.tick();
     },
   };
@@ -839,25 +1375,56 @@
   // ======================================================================
   // controls — 카메라와 입력
   // ======================================================================
-  const OVERVIEW_HOME = { alpha: -Math.PI / 2.35, beta: 1.02, radius: 66, target: new B.Vector3(0, 1.5, 0) };
+  const OVERVIEW_HOME = { alpha: -Math.PI / 2.35, beta: 1.15, radius: 210, target: new B.Vector3(0, -18, 0) };
 
   const controls = {
     overview: null, walk: null, player: null, keys: new Set(),
     yaw: Math.PI, pitch: 0.18, vy: 0, dragging: false, lastX: 0, lastY: 0,
     focused: null,   // 확대해서 보고 있는 방 ID 또는 'hub'
+    vehicleSpeed: 0, touchWalkEnabled: false,
+
+
+
+    setVehicleSpeed(speed) {
+      if(typeof speed!=='number'||!Number.isFinite(speed)||speed<0||speed>36)return false;
+      if(speed>0&&space.layer!=='meadow')return false;
+      this.vehicleSpeed=speed;this.vy=0;this.keys.delete(' ');
+      if(this.player){this.player.grounded=true;this.player.pos.y=world.heightAt(this.player.pos.x,this.player.pos.z)??this.player.pos.y;}
+      return true;
+    },
+
+    enableTouchWalk(enabled) {
+      this.touchWalkEnabled=enabled===true;this.keys.clear();
+      if(!this.touchWalkEnabled&&isPhone()&&space.view==='walk')this.setView('overview');
+      return this.touchWalkEnabled;
+    },
+
+    setLayer(layer, walk = false) {
+      if (!['office', 'meadow'].includes(layer)) return;
+      hud.closePanel(); this.keys.clear(); this.vy = 0; this.focused = null;
+      space.layer = layer;
+      if(layer==='office')this.setVehicleSpeed(0);
+      const p = this.player, point = world.portals[layer];
+      p.pos.copyFrom(point.add(new B.Vector3(0, 0, layer === 'meadow' ? -18 : -6))); p.pos.y = world.heightAt(p.pos.x, p.pos.z) ?? point.y;
+      p.grounded = true; p.av.root.position.copyFrom(p.pos);
+      this.yaw = 0; this.pitch = 0.18;
+      this.walk.position.copyFrom(p.pos.add(new B.Vector3(0, 4, -7)));
+      this.walk.setTarget(p.pos.add(new B.Vector3(0, 1.5, 0)));
+      this.setView(walk && (!isPhone() || this.touchWalkEnabled) ? 'walk' : 'overview');
+      const home = layer === 'office' ? OVERVIEW_HOME : { alpha: -Math.PI / 2, beta: 1.15, radius: 430, target: new B.Vector3(0, -18, 0) };
+      this.animateCamera(home, 1400);
+      $('layer-label').textContent = layer === 'office' ? '공중 팀 대지 · 지상 위 약 85m' : '지상 미래도시 · 폭 1,600m';
+      $('btn-layer').textContent = layer === 'office' ? '↓ 지상 미래도시로' : '↑ 우리 팀 오피스로';
+      document.body.classList.toggle('meadow-layer', layer === 'meadow');
+    },
 
     // 관제 카메라를 부드럽게 이동
     animateCamera(to, ms = 900) {
-      const cam = this.overview;
-      const keys = ['alpha', 'beta', 'radius', 'target'];
-      if (REDUCED) { keys.forEach((k) => { if (to[k] !== undefined) cam[k] = to[k]; }); return; }
-      const ease = new B.CubicEase(); ease.setEasingMode(B.EasingFunction.EASINGMODE_EASEINOUT);
-      const frames = Math.round((ms / 1000) * 60);
-      keys.forEach((k) => {
-        if (to[k] === undefined) return;
-        const from = k === 'target' ? cam.target.clone() : cam[k];
-        B.Animation.CreateAndStartAnimation(`cam-${k}`, cam, k, 60, frames, from, to[k], B.Animation.ANIMATIONLOOPMODE_CONSTANT, ease);
-      });
+      const cam=this.overview;
+      const from={alpha:cam.alpha,beta:cam.beta,radius:cam.radius,target:cam.target.clone()};
+      const end={alpha:to.alpha??from.alpha,beta:to.beta??from.beta,radius:to.radius??from.radius,target:to.target?to.target.clone():from.target.clone()};
+      this.cameraTween={from,to:end,elapsed:0,duration:REDUCED?0:ms/1000};
+      if(REDUCED||ms===0){cam.setTarget(end.target.clone());cam.alpha=end.alpha;cam.beta=end.beta;cam.radius=end.radius;this.cameraTween=null;cam.getViewMatrix(true);}
     },
 
     // 방으로 확대: 광장 쪽에서 열린 면을 바라본다
@@ -879,12 +1446,13 @@
     resetOverview() {
       this.focused = null;
       $('btn-reset').hidden = true;
-      if (space.view === 'overview') this.animateCamera(Object.assign({}, OVERVIEW_HOME, { target: OVERVIEW_HOME.target.clone() }), 1000);
+      if (space.view === 'overview') this.animateCamera(space.layer === 'office' ? Object.assign({}, OVERVIEW_HOME, { target: OVERVIEW_HOME.target.clone() }) : { alpha: -Math.PI / 2, beta: 1.15, radius: 430, target: new B.Vector3(0, -18, 0) }, 1000);
     },
 
     // 걷기 시점으로 바꾸고 방 입구에 세운다
     enterStage(st) {
-      if (isPhone()) return;
+      if (isPhone() && !this.touchWalkEnabled) return;
+      if (space.layer !== 'office') this.setLayer('office');
       const p = this.player;
       const entrance = world.local(st, 0, 0, ISLAND_D / 2 + 1.2);
       p.pos.set(entrance.x, world.heightAt(entrance.x, entrance.z) ?? 0, entrance.z);
@@ -900,18 +1468,18 @@
 
     init() {
       const s = world.scene, canvas = world.canvas;
-      this.overview = new B.ArcRotateCamera('overview', -Math.PI / 2.35, 1.02, 66, new B.Vector3(0, 1.5, 0), s);
-      this.overview.lowerRadiusLimit = 26; this.overview.upperRadiusLimit = 120;
+      this.overview = new B.ArcRotateCamera('overview', -Math.PI / 2, 1.15, 430, new B.Vector3(0, -18, 0), s);
+      this.overview.lowerRadiusLimit = 26; this.overview.upperRadiusLimit = 800;
       this.overview.lowerBetaLimit = 0.45; this.overview.upperBetaLimit = 1.38;
       this.overview.wheelPrecision = 12; this.overview.panningSensibility = 60;
       this.overview.pinchPrecision = 60;
-      this.overview.minZ = 0.5; this.overview.maxZ = 900;
+      this.overview.minZ = 0.5; this.overview.maxZ = 4500;
       this.overview.attachControl(canvas, true);
       s.activeCamera = this.overview;
 
       this.walk = new B.UniversalCamera('walk', new B.Vector3(0, 3, -8), s);
       this.walk.inputs.clear();
-      this.walk.minZ = 0.3; this.walk.maxZ = 900;
+      this.walk.minZ = 0.3; this.walk.maxZ = 4500;
 
       if (QUALITY !== 'low') {
         // 화면 공간 주변광 차폐: 블록 틈과 가구 밑을 어둡게 (톤 매핑보다 먼저 적용되도록 먼저 만든다)
@@ -931,15 +1499,15 @@
       pipeline.fxaaEnabled = true;
       if (QUALITY !== 'low') {
         pipeline.bloomEnabled = true;
-        pipeline.bloomThreshold = 0.62;
-        pipeline.bloomWeight = 0.42;
+        pipeline.bloomThreshold = 0.85;
+        pipeline.bloomWeight = 0.18;
         pipeline.bloomKernel = 64;
         pipeline.bloomScale = 0.5;
       }
       pipeline.imageProcessingEnabled = true;
       pipeline.imageProcessing.toneMappingEnabled = true;
       pipeline.imageProcessing.toneMappingType = B.ImageProcessingConfiguration.TONEMAPPING_ACES;
-      pipeline.imageProcessing.exposure = 1.38;
+      pipeline.imageProcessing.exposure = 1.0;
       pipeline.imageProcessing.contrast = 1.12;
       pipeline.imageProcessing.vignetteEnabled = true;
       pipeline.imageProcessing.vignetteWeight = 1.6;
@@ -955,6 +1523,8 @@
 
       window.addEventListener('keydown', (e) => this.onKey(e, true));
       window.addEventListener('keyup', (e) => this.onKey(e, false));
+      window.addEventListener('blur', () => { this.keys.clear(); this.dragging=false; });
+      document.addEventListener('visibilitychange', () => { if(document.hidden){this.keys.clear();this.dragging=false;} });
       canvas.addEventListener('pointerdown', (e) => { if (space.view === 'walk') { this.dragging = true; this.lastX = e.clientX; this.lastY = e.clientY; canvas.setPointerCapture(e.pointerId); } });
       canvas.addEventListener('pointermove', (e) => {
         if (!this.dragging || space.view !== 'walk') return;
@@ -969,9 +1539,17 @@
         const pick = info.pickInfo;
         if (!pick || !pick.hit || !pick.pickedMesh) return;
         const meta = pick.pickedMesh.metadata || {};
-        if (meta.stageId) hud.openStage(meta.stageId);
+        if (meta.elevator) this.setLayer(space.layer === 'office' ? 'meadow' : 'office');
+        else if (meta.portal) this.setLayer(meta.portal);
+        else if (meta.stageId) hud.openStage(meta.stageId);
         else if (meta.hub) hud.openBrain();
       });
+      $('btn-traffic').textContent = REDUCED ? '동작 줄이기 · 교통 정지' : world.trafficPaused ? '교통 연출 재생' : '교통 연출 멈춤';
+      $('btn-traffic').disabled = REDUCED;
+      $('btn-traffic').setAttribute('aria-pressed', String(world.trafficPaused));
+      $('btn-traffic').addEventListener('click', () => { world.trafficPaused = !world.trafficPaused; $('btn-traffic').textContent = world.trafficPaused ? '교통 연출 재생' : '교통 연출 멈춤'; $('btn-traffic').setAttribute('aria-pressed', String(world.trafficPaused)); });
+      $('btn-rooms').addEventListener('click', () => { const open = $('cards').classList.toggle('mobile-open'); $('btn-rooms').setAttribute('aria-expanded', String(open)); });
+      $('btn-layer').addEventListener('click', () => this.setLayer(space.layer === 'office' ? 'meadow' : 'office', space.view === 'walk'));
       $('btn-overview').addEventListener('click', () => this.setView('overview'));
       $('btn-walk').addEventListener('click', () => this.setView('walk'));
       $('btn-reset').addEventListener('click', () => { hud.closePanel(); this.resetOverview(); });
@@ -987,8 +1565,9 @@
     },
 
     setView(view) {
-      if (view === 'walk' && isPhone()) view = 'overview';
+      if (view === 'walk' && isPhone() && !this.touchWalkEnabled) view = 'overview';
       space.view = view;
+      document.body.classList.toggle('walking-view', view === 'walk');
       const s = world.scene;
       if (view === 'walk') {
         this.overview.detachControl();
@@ -1021,7 +1600,12 @@
       }
       if (space.view !== 'walk') return;
       if (down && k === 'r') { this.yaw = this.player.av.root.rotation.y + Math.PI; this.pitch = 0.18; return; }
-      if (down && k === 'e') { hud.toggleNearestAgent(); return; }
+      if (down && k === 'e') {
+        const gate = world.portals[space.layer];
+        if (Math.hypot(this.player.pos.x - gate.x, this.player.pos.z - gate.z) < 9) this.setLayer(space.layer === 'office' ? 'meadow' : 'office', true);
+        else hud.toggleNearestAgent();
+        return;
+      }
       if ([' ', 'w', 'a', 's', 'd', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) {
         e.preventDefault();
         if (down) this.keys.add(k); else this.keys.delete(k);
@@ -1029,6 +1613,12 @@
     },
 
     tick(dt) {
+      if(this.cameraTween){
+        const t=this.cameraTween;t.elapsed+=dt;const q=Math.min(1,t.duration?t.elapsed/t.duration:1),u=q*q*(3-2*q),cam=this.overview;
+        cam.setTarget(B.Vector3.Lerp(t.from.target,t.to.target,u));
+        cam.alpha=t.from.alpha+(t.to.alpha-t.from.alpha)*u;cam.beta=t.from.beta+(t.to.beta-t.from.beta)*u;cam.radius=t.from.radius+(t.to.radius-t.from.radius)*u;
+        if(q===1)this.cameraTween=null;
+      }
       if (space.view !== 'walk') return;
       const p = this.player;
       const keys = this.keys;
@@ -1040,23 +1630,23 @@
       if (keys.has('d') || keys.has('arrowright')) move.addInPlace(right);
       if (keys.has('a') || keys.has('arrowleft')) move.subtractInPlace(right);
       const moving = move.lengthSquared() > 0;
-      const speed = keys.has('shift') ? 6.2 : 3.3;
+      const speed = this.vehicleSpeed>0 ? this.vehicleSpeed : (keys.has('shift') ? 6.2 : 3.3) * (space.layer === 'meadow' ? 3 : 1);
       const groundNow = world.heightAt(p.pos.x, p.pos.z) ?? 0;
       if (moving) {
         move.normalize().scaleInPlace(speed * dt);
-        const next = p.pos.add(move);
-        const tryMove = (cand) => { if (world.walkable(cand, groundNow)) { p.pos.x = cand.x; p.pos.z = cand.z; return true; } return false; };
-        if (!tryMove(next)) {
-          if (!tryMove(p.pos.add(new B.Vector3(move.x, 0, 0)))) tryMove(p.pos.add(new B.Vector3(0, 0, move.z)));
+        const steps=Math.max(1,Math.ceil(move.length()/.35)),sub=move.scale(1/steps),clearance=this.vehicleSpeed>0?2.2:.4;
+        const tryMove=(cand)=>{if(world.walkable(cand,groundNow,clearance)){p.pos.x=cand.x;p.pos.z=cand.z;return true;}return false;};
+        for(let i=0;i<steps;i++)if(!tryMove(p.pos.add(sub))){
+          if(!tryMove(p.pos.add(new B.Vector3(sub.x,0,0))))tryMove(p.pos.add(new B.Vector3(0,0,sub.z)));
         }
         p.av.root.rotation.y = Math.atan2(move.x, move.z);
         p.walkT += dt;
-        world.animateWalk(p.av, p.walkT, speed);
+        if(this.vehicleSpeed>0)world.setPose(p.av,'sit');else world.animateWalk(p.av,p.walkT,speed);
       } else if (p.grounded) {
-        world.setPose(p.av, 'stand');
+        world.setPose(p.av,this.vehicleSpeed>0?'sit':'stand');
       }
       const ground = world.heightAt(p.pos.x, p.pos.z) ?? groundNow;
-      if (keys.has(' ') && p.grounded) { this.vy = 6.2; p.grounded = false; }
+      if (keys.has(' ') && p.grounded && this.vehicleSpeed===0) { this.vy = 6.2; p.grounded = false; }
       if (!p.grounded) {
         this.vy -= 16 * dt;
         p.pos.y += this.vy * dt;
@@ -1066,8 +1656,8 @@
         p.pos.y += (ground - p.pos.y) * Math.min(1, dt * 14);
       }
       p.av.root.position.copyFrom(p.pos);
-      const camBack = fwd.scale(-6.8);
-      const desired = p.pos.add(camBack).add(new B.Vector3(0, 2.9 + this.pitch * 3.2, 0));
+      const camBack = fwd.scale(this.vehicleSpeed>0?-10:-6.8);
+      const desired = p.pos.add(camBack).add(new B.Vector3(0,this.vehicleSpeed>0?4.8:2.9+this.pitch*3.2,0));
       this.walk.position = B.Vector3.Lerp(this.walk.position, desired, Math.min(1, dt * 9));
       this.walk.setTarget(p.pos.add(new B.Vector3(0, 1.5, 0)));
     },
@@ -1133,6 +1723,9 @@
 
     rebuild(d) {
       $('office-name').textContent = `${d.office.name} · 오피스 월드`;
+      explorationNames.clear(); explorationNames.set('hub', '공유 기억 살펴보기');
+      space.stages.forEach((st) => explorationNames.set(st.id, `${st.name} 둘러보기`));
+      exploration();
       $('cards').querySelectorAll('.card.stage').forEach((el) => el.remove());
       this.cards.clear();
       space.stages.forEach((st) => {
@@ -1201,6 +1794,8 @@
     },
 
     openStage(id, silent) {
+      if (space.layer !== 'office') controls.setLayer('office');
+      exploration(id);
       const st = space.stages.find((s) => s.id === id);
       if (!st) return;
       if (!silent && id !== space.selectedStage) space.embedResult = null;
@@ -1215,7 +1810,7 @@
         const acts = embed.enabled ? `<div class="item-actions">${(data.source === 'live' ? it.actions : []).map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}"${space.pendingActions.has(it.id + ':' + a.id) ? ' disabled' : ''}>${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}">오피스에서 열기</button>` : ''}</div>` : '';
         return `<div class="item${space.embedFocus === it.id ? ' active' : ''}" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div><div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
       }).join('') : '<p class="panel-note">이 단계에 등록된 작업이 없습니다.</p>';
-      $('panel-foot').innerHTML = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener">오피스에서 열기</a>` : ''}<span class="panel-note">${embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.'}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
+      $('panel-foot').innerHTML = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener">${data.source === 'live' ? '오피스에서 열기' : '플레이북에서 보기'}</a>` : ''}<span class="panel-note">${embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.'}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
       panel.hidden = false;
       if (!silent) {
         this.cards.forEach((el, sid) => el.classList.toggle('active', sid === id));
@@ -1224,6 +1819,8 @@
     },
 
     openBrain() {
+      if (space.layer !== 'office') controls.setLayer('office');
+      exploration('hub');
       const b = space.data.brain;
       space.selectedStage = null;
       const panel = $('panel');
@@ -1253,13 +1850,14 @@
     hideAgentCard() { if (this.agentCard) this.agentCard.hidden = true; },
 
     tick() {
+      if (isPhone() || space.layer === 'meadow') { this.cards.forEach((el) => { el.hidden = false; }); this.brainCard.hidden = false; this.agentCard.hidden = true; if (!isPhone() && ++this.miniT % 4 === 0) this.drawMinimap(); return; }
       const w = world.canvas.clientWidth, h = world.canvas.clientHeight;
       const walk = space.view === 'walk';
       const ppos = controls.player.pos;
       space.stages.forEach((st) => {
         const el = this.cards.get(st.id);
         if (!el) return;
-        if (walk && B.Vector3.Distance(st.pos, ppos) > 30) { el.hidden = true; return; }
+        if ((space.layer === 'meadow' && walk) || (walk && B.Vector3.Distance(st.pos, ppos) > 30)) { el.hidden = true; return; }
         const pr = this.project(st.pos.add(new B.Vector3(0, 5.6, 0)));
         if (!pr.visible || pr.x < -200 || pr.x > w + 200 || pr.y < -100 || pr.y > h + 100) { el.hidden = true; return; }
         el.hidden = false;
@@ -1267,11 +1865,11 @@
         el.style.left = `${Math.max(half, Math.min(w - half, pr.x))}px`; el.style.top = `${Math.max(90, pr.y)}px`;
       });
       const bp = this.project(new B.Vector3(0, 7.4, 0));
-      this.brainCard.hidden = !bp.visible || (walk && Math.hypot(ppos.x, ppos.z) > 26);
+      this.brainCard.hidden = !bp.visible || (space.layer === 'meadow' && walk) || (walk && Math.hypot(ppos.x, ppos.z) > 26);
       this.brainCard.style.left = `${bp.x}px`; this.brainCard.style.top = `${bp.y}px`;
       if (walk) {
         // 지금 서 있는 방 이름을 나가기 버튼에 표시
-        const inside = space.stages.find((st) => { const l = world.toLocal(st, ppos); return Math.abs(l.x) <= ISLAND_W / 2 && Math.abs(l.z) <= ISLAND_D / 2; }) || null;
+        const inside = space.layer === 'office' && space.stages.find((st) => { const l = world.toLocal(st, ppos); return Math.abs(l.x) <= ISLAND_W / 2 && Math.abs(l.z) <= ISLAND_D / 2; }) || null;
         if (this.insideStage !== inside) {
           this.insideStage = inside;
           const btn = $('btn-exit');
@@ -1296,18 +1894,23 @@
 
     drawMinimap() {
       const c = this.miniCtx, W = this.mini.width, H = this.mini.height;
-      const R = ISLAND_DIST + ISLAND_D / 2 + 12;
+      const R = space.layer === 'meadow' ? 800 : world.terrain ? world.terrain.landR + 7 : 72;
       const sx = (x) => W / 2 + (x / R) * (W / 2 - 8);
       const sz = (z) => H / 2 + (z / R) * (H / 2 - 8);
       c.clearRect(0, 0, W, H);
       c.fillStyle = '#03050f'; c.fillRect(0, 0, W, H);
-      if (world.terrain) {
+      if (space.layer === 'meadow') {
+        c.fillStyle = '#458456'; c.fillRect(8, 8, W - 16, H - 16);
+        c.strokeStyle = '#5c9a6b'; c.lineWidth = 0.5;
+        for (let g = 1; g < 8; g++) { c.beginPath(); c.moveTo(g * W / 8, 8); c.lineTo(g * W / 8, H - 8); c.stroke(); c.beginPath(); c.moveTo(8, g * H / 8); c.lineTo(W - 8, g * H / 8); c.stroke(); }
+        c.fillStyle = '#b5fff0'; c.font = '11px sans-serif'; c.fillText('↑ 공중 팀 대지', sx(0) + 8, sz(0));
+      } else if (world.terrain) {
         if (!this.landLayer || this.landLayer.terrain !== world.terrain) {
           const off = document.createElement('canvas'); off.width = W; off.height = H;
           const oc = off.getContext('2d');
           const cw = (1 / R) * (W / 2 - 8), ch = (1 / R) * (H / 2 - 8);
           world.terrain.cols.forEach((col) => {
-            oc.fillStyle = col.zone === 'path' ? '#8e97b8' : col.level === 0 ? '#3f8f49' : col.level === 1 ? '#4faa58' : '#62c46a';
+            oc.fillStyle = col.zone === 'path' ? '#4e8c9e' : '#a2b9c9';
             oc.fillRect(sx(col.x) - cw / 2, sz(col.z) - ch / 2, cw + 0.6, ch + 0.6);
           });
           this.landLayer = { canvas: off, terrain: world.terrain };
@@ -1333,7 +1936,7 @@
         c.fillStyle = '#ffffff'; c.beginPath(); c.arc(sx(p.x), sz(p.z), 4, 0, Math.PI * 2); c.fill();
         $('minimap-zoom').textContent = 'WALK';
       } else {
-        $('minimap-zoom').textContent = `${Math.round((66 / controls.overview.radius) * 100)}%`;
+        $('minimap-zoom').textContent = `${Math.round((210 / controls.overview.radius) * 100)}%`;
       }
     },
   };
@@ -1432,11 +2035,19 @@
         }
       }
     });
-    data.load(true).then(() => { data.startPolling(); embed.post({ type: 'ready' }); });
+    data.load(true).then(() => {
+      if(space.data){
+        const layer=new URLSearchParams(location.search).get('layer')==='office'?'office':'meadow';
+        controls.setLayer(layer);controls.cameraTween=null;
+        const home=layer==='office'?OVERVIEW_HOME:{alpha:-Math.PI/2,beta:1.15,radius:430,target:new B.Vector3(0,-18,0)};
+        controls.animateCamera(home,0);
+      }
+      data.startPolling(); embed.post({ type: 'ready' });
+    });
 
     try {
       const saved = localStorage.getItem('office-world.view');
-      if (saved === 'walk' && !isPhone()) controls.setView('walk');
+      if (new URLSearchParams(location.search).has('resume') && saved === 'walk' && !isPhone()) controls.setView('walk');
     } catch (_) { /* 저장 불가 환경 */ }
   }
 

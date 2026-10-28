@@ -3,20 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>HeoBrain 오피스 월드</title>
-<meta name="description" content="콘텐츠 오피스의 작업 상태를 우주 위에 떠 있는 잔디 섬 마을로 보여주는 3D 관제 공간">
+<title>HeoBrain 스카이 시티 · AI 오피스</title>
+<meta name="description" content="미래도시 위 공중 AI 오피스. 동료 관측, 외계 생명체 탐사와 호버카 운전을 즐기는 3D 공간">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23070b1a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%237fe3ff'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%234f8df7' stroke-width='2'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="activities.css">
+<link rel="stylesheet" href="expedition.css">
 </head>
 <body>
 <canvas id="scene" aria-label="오피스 월드 3D 공간"></canvas>
 
 <header class="topbar">
   <div class="brand">
-    <div class="brand-name" id="office-name">HeoBrain 오피스 월드</div>
+    <div class="brand-name" id="office-name">HeoBrain 스카이 시티</div>
     <div class="brand-meta">
       <span class="source-pill" id="source-pill">예시 데이터</span>
       <span id="updated-at">갱신 —</span>
@@ -30,7 +32,16 @@
   </div>
 </header>
 
-<div class="cards" id="cards"></div>
+<details class="expedition" id="explore">
+  <summary><span>✦ 오피스 탐험</span><strong id="explore-count">0 XP · 0/6</strong></summary>
+  <p>간판을 눌러 부서의 역할을 알아보세요. 한 곳마다 탐험 XP를 얻습니다.</p>
+  <progress id="explore-progress" value="0" max="6" aria-label="오피스 탐험 진행"></progress>
+  <ul id="explore-list"></ul>
+  <small>이 브라우저에 저장되는 탐험 기록 · 업무 완료와 별개</small>
+</details>
+<nav class="layer-nav" aria-label="지상과 공중 오피스 이동"><span id="layer-label">지상 미래도시 · 폭 1,600m</span><button type="button" id="btn-layer">↑ 우리 팀 오피스로</button><button type="button" id="btn-traffic" aria-pressed="false">교통 연출 멈춤</button></nav>
+<button type="button" id="btn-rooms" class="rooms-menu" aria-expanded="false" aria-controls="cards">부서 5곳 · 공유 기억 보기</button>
+<div class="cards" id="cards" aria-label="부서와 공유 기억"></div>
 
 <aside class="panel" id="panel" hidden aria-live="polite">
   <div class="panel-head">
@@ -66,7 +77,9 @@
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/7.54.0/babylon.min.js" integrity="sha384-XWDhZlDaQiQswcIih2hJSTHcXZ+5aa7eDjhmXUjN/YuQl/fDKbGGgKmCA/ROcanP" crossorigin="anonymous"></script>
+<script src="vendor/babylon.min.js" integrity="sha384-XWDhZlDaQiQswcIih2hJSTHcXZ+5aa7eDjhmXUjN/YuQl/fDKbGGgKmCA/ROcanP" crossorigin="anonymous"></script>
 <script src="app.js"></script>
+<script type="module" src="activities.js"></script>
+<script type="module" src="expedition.js"></script>
 </body>
 </html>

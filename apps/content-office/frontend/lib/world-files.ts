@@ -21,6 +21,8 @@ export function resolveWorldFile(
   const base = posix.normalize(root.replace(/\\/g, "/"));
   const path = posix.normalize(posix.join(base, ...parts));
   if (!path.startsWith(base.endsWith("/") ? base : base + "/")) return null;
-  const type = TYPES[posix.extname(path).toLowerCase()];
+  const type = path === posix.join(base, "vendor", "LICENSE-babylon.txt")
+    ? "text/plain; charset=utf-8"
+    : TYPES[posix.extname(path).toLowerCase()];
   return type ? { path, type } : null;
 }

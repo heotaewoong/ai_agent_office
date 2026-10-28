@@ -5,6 +5,7 @@ import json
 import multiprocessing
 import os
 import signal
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -183,12 +184,13 @@ def process_identity(pid):
     try:
         if not pid or int(pid) <= 0:
             return None
-        if os.name == "nt":
+        if os.name == "nt" or sys.platform == "darwin":
             import psutil
             try:
                 process = psutil.Process(int(pid))
                 with process.oneshot():
-                    return {"pid": process.pid, "start_ticks": "windows:" + str(process.create_time()), "args": process.cmdline(), "executable": process.exe()}
+                    prefix = "darwin:" if sys.platform == "darwin" else "windows:"
+                    return {"pid": process.pid, "start_ticks": prefix + str(process.create_time()), "args": process.cmdline(), "executable": process.exe()}
             except psutil.Error:
                 return None
         root = Path("/proc") / str(int(pid))

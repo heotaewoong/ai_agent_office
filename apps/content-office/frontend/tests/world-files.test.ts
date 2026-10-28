@@ -13,3 +13,9 @@ test("상위 경로·알 수 없는 확장자는 거부", () => {
   assert.equal(resolveWorldFile(root, ["README.md"]), null);
   assert.equal(resolveWorldFile(root, ["a/../../x.html"]), null);
 });
+
+test("고정 Babylon 번들과 해당 라이선스를 앱 경로에서도 제공", () => {
+  assert.equal(resolveWorldFile(root, ["vendor", "babylon.min.js"])?.type, "text/javascript; charset=utf-8");
+  assert.equal(resolveWorldFile(root, ["vendor", "LICENSE-babylon.txt"])?.type, "text/plain; charset=utf-8");
+  assert.equal(resolveWorldFile(root, ["vendor", "other.txt"]), null);
+});

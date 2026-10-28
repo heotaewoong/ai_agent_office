@@ -1,5 +1,25 @@
 # HeoBrain AI 오피스
 
+## 메인 콘텐츠 자동화 계획서
+
+[2026-10-29 콘텐츠 파이프라인·리드마그넷 보완](reports/2026-10-29-content-pipeline.md) · [AI 자동화 무료 체험 작업표 초안](reports/2026-10-29-ai-automation-workbook.md). 학습/생산성 두 영역의 무료 자료 제작→제공→전달→선택적 후속 안내→관련 상품을 구분한 설계이며 실제 수집·발송 연결은 별도입니다.
+
+HeoBrain의 상위 사업 영역은 **학습·시험 준비**와 **개인·업무·콘텐츠 생산성**입니다. 편입·자격증·개별 자동화는 그 안의 세부 분야와 실험입니다. 첫4주 마케팅 목표는 **브랜드 신뢰·검색 유입·자료 사용**과 **기존 학습 상품 구매 전환**이며, 도메인 조사→전략→페르소나→콘텐츠→성과 회고 순서로 기획합니다. 상위 전략·발표 근거와 미확인 범위는 로컬 문서 지도에서 관리합니다. 이것이 기존 안내 웹·앱에 새 기능이나 측정 연결을 구현했다는 뜻은 아닙니다.
+
+**현재 정본: v7.5.0 · 2026-10-28 KST · Sites 판본21.** 기존 본인 전용 HTTPS에 source `20136eba96f99e867ba9bdb795cc7e0341a510b1`를 게시했고 실제 화면의 판본·TTJ 도구2개·51도구/46입력·독립 배치도 로드를 확인했습니다. [최신 Markdown](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-system-v7.md) · [현재 JSON](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.json) · [갱신 키트](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-maintenance-kit.zip). 키트 SHA256: `e276ac5178cded9f381e3eeda9b255a56002536789d9cf29a23bf0bc254695d9`.
+
+앞으로 콘텐츠 자동화는 [이 통합 플레이북](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#content-system)을 메인 계획서로 삼아 계속 업그레이드합니다. 처음에는 [짧은 실행안](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-start.html) → [메인 실행계획 M0~M5](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#cs7-master-plan) → 필요한 도구·근거 순서로 읽습니다.
+
+- 편집 정본은 **연결된 Sites 소스 저장소의 `content-system/source.json`**입니다. 이 앱 저장소의 보존 `sites/.../dist/`와 v7.1 인계본은 최신 원본이 아닙니다.
+- 같은 JSON에서 웹·Markdown·다운로드·갱신 키트를 생성합니다. 새 대화나 다른 AI도 별도 메인 계획서를 만들지 않고 기존 공정·요구에 보완 내용을 합칩니다.
+- 구현 순서: **실제 지원/배치 확인 → Hermes 요청·조회·검토 연결 → 원고1편+60초 영상 → 한 채널 전달/대사 → 뉴스레터③·관련 상품 → 한 공정씩 품질 비교**.
+- 사람 승인 ⓪·①·②·③, 원고① 뒤 독립 제작, 하나의 장부/예약 소유자, 성공 자산과 불명 결과를 보존합니다. 에이전트는 사람 승인·작업 시간·예산을 늘리지 않습니다.
+- 현재 코드는 수동 출고와 YouTube private 어댑터를 구분합니다. private 전달 코드 존재가 실제 계정 성공·공개/예약 지원을 뜻하지 않습니다. Hermes/Claude/Codex 사용자 운영 환경과 콘텐츠 앱의 연결 상태도 별도로 확인합니다.
+
+[TTJ 영상 적용과 기존 Excalidraw 보강 위치](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#cs7-ttj_benchmark): 자동자막 전체·공개 도구 UI를 확인해 수동 발견2도구, 독자 효용 선별, 빈 작업 확인, 사람이 승인한 수정 규칙을 추가했습니다. [SVG](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/ttj-pipeline-placement-v7.svg) · [편집 가능한 Excalidraw](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/ttj-pipeline-placement-v7.excalidraw)는 독립 부품도입니다. 원본 방·계정/API·앱/EC2 설정은 이번 작업에서 변경하지 않았습니다.
+
+정본 수정 → 근거/판본/변경 이유 기록 → 생성·검사 → 기존 HTTPS 갱신 → 게시 영수증·이 README·로컬 문서 지도 갱신 순서로 관리합니다. 사이트는 안내/계획이며 이 갱신이 앱·EC2 배포, 채널 게시·발송·쿠폰 실행 권한을 만들지 않습니다.
+
 [로컬 작업실](http://localhost:3110) · [GitHub 저장소](https://github.com/heotaewoong/ai_agent_office)
 
 개인용 콘텐츠 오피스의 소스 코드와 공개용으로 검토한 설계·벤치마킹 문서입니다. 실행과 검사는 [앱 안내](apps/content-office/README.md)를 따릅니다.
@@ -20,7 +40,7 @@
 
 ## 콘텐츠 자동화 설계와 제작 작업실
 
-### 현재 정본 · 콘텐츠 자동화 v7.3.3
+### 이전 검증 기록 · 콘텐츠 자동화 v7.3.3
 
 [처음 읽는 실행안](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-start.html) · [전체 도구·소스·자료 확보 상태](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.html) · [현재 정본 JSON](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-system.json) · [다른 AI용 갱신 키트](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-maintenance-kit.zip) · [키트 SHA256](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/content-maintenance-kit.sha256)
 

@@ -1,5 +1,17 @@
 # HeoBrain AI 오피스 통합 플레이북 (정적 사이트)
 
+## 메인 계획서와 갱신 원본
+
+현재 게시: **v7.5.0 / Sites21 / source `20136eba96f99e867ba9bdb795cc7e0341a510b1` / 2026-10-28 KST**. 실제 HTTPS 화면의 새 판본·TTJ 도구 카드·독립 SVG 로드를 확인했습니다. 기존 본인 전용 접근을 유지했으며 앱/EC2 배포·운영 콘텐츠 발행과는 별개입니다.
+
+이전 게시 기록: v7.4.0 / Sites20 / source `e3e37af995f16ae4c4a486dab6c50c2c796e805d`.
+
+[TTJ 적용·초보자 Excalidraw 배치 안내](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#cs7-ttj_benchmark) · [독립 SVG](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/ttj-pipeline-placement-v7.svg) · [편집 파일](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/downloads/ttj-pipeline-placement-v7.excalidraw). 두 도구는 수동 발견 후보이며 API/계정 연결 완료가 아닙니다. 원본 방은 수정하지 않았습니다. 새 갱신 키트 SHA256: `e276ac5178cded9f381e3eeda9b255a56002536789d9cf29a23bf0bc254695d9`.
+
+사용자가 지정한 [콘텐츠 자동화 메인 계획서](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#content-system)를 계속 업그레이드합니다. [처음 읽는 실행안](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-start.html)과 [메인 실행계획 M0~M5](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#cs7-master-plan)를 우선 읽습니다.
+
+현재 편집 정본은 **Sites 연결 저장소의 `content-system/source.json`**이며 이 폴더에 없는 최신 생성기/원본을 먼저 확보해야 합니다. 이 폴더의 `dist/`·이전 인계 ZIP은 보존본입니다. 변경은 정본 → 생성/검사 → 동일 HTTPS → 영수증/README/문서 지도 순서이며, 앱·EC2 실행과 안내 웹의 게시를 구분합니다.
+
 최신 통합 설계의 정본은 기존 Sites 연결 저장소의 `content-system/source.json`입니다. 이 폴더의 이전 `dist/`를 최신 원격에 덮어쓰지 마세요. 아래 인계 자료와 실제 최신 소스를 먼저 대조합니다.
 
 세 사이트(complete/#learning-expansion · source-kits/#top3 · ai-office-benchmarks-20261020), `database/` 마크다운 33개, 외부 오픈소스 129개를 합친 플레이북입니다. 빌드 과정 없이 `dist/` 폴더를 그대로 게시하면 됩니다.
