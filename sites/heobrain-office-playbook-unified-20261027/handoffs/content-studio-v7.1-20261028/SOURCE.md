@@ -6,6 +6,8 @@
 - [자료·원가·실습 작업실](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-studio/): 35세부도구·21선별출처·28아이디어·PDF 감사·가정 계산.
 - 기존 본인 전용 접근을 유지했다. URL·소스 ZIP은 새 로그인/게시 권한이 아니다.
 
+> 이 스냅샷의 숫자·기본값 표기 오류와 감사 이후 앱 변경은 [정오표](ERRATA.md)에 정리했다. 원문보다 정오표를 먼저 읽는다.
+
 ## 읽는 순서와 정본
 
 [README](README.md) → [상위 설계 스냅샷](integrated-guide.md) → [세부 제작 검토](master-guide.md) → [파이프라인 계약](pipeline-blueprint.json).

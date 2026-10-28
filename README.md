@@ -31,6 +31,6 @@ CLASS101 자료는 전부 확보 상태가 아닙니다. 최신 파일 대조와
 
 ### 보존한 이전 인계 스냅샷
 
-[통합 HTTPS 설계](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#content-system) · [자료·원가·실습](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-studio/) · [인계 README](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/README.md) · [정본·업데이트](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/SOURCE.md) · [편집 소스](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/editable-source/README.md)
+[통합 HTTPS 설계](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/#content-system) · [자료·원가·실습](https://heobrain-office-playbook-20261027.ihtwandy0528.chatgpt.site/content-studio/) · [인계 README](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/README.md) · [정본·업데이트](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/SOURCE.md) · [편집 소스](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/editable-source/README.md) · [정오표](sites/heobrain-office-playbook-unified-20261027/handoffs/content-studio-v7.1-20261028/ERRATA.md)
 
 상위 v7.2의49도구·38입력과 보조 작업실의35세부도구·21선별출처는 서로 다른 범위입니다. PDF56개·3205쪽 파일감사와10종96쪽 선택읽기, 원가 가정 계산·후반작업·이관 소스를 보강했습니다. 실제 모델 생성·유료 호출·개별 게시·회차③ 발송·상품/쿠폰/주문 쓰기는 실행하지 않았습니다. 기존 본인 전용 HTTPS 접근을 유지합니다.
