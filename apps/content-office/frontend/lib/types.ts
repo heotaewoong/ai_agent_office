@@ -194,6 +194,46 @@ export type Agent = {
   [key: string]: unknown;
 };
 export type VoiceProfile = {id?:string;name?:string;paid?:boolean;automatic_fallback?:boolean;job_cap_krw?:number;note?:string};
+export type ProviderProfile = {
+  id?: string;
+  name?: string;
+  paid?: boolean;
+  configured?: boolean;
+  model?: string | null;
+  job_cap_krw?: number;
+  max_clips_per_job?: number;
+  automatic_fallback?: boolean;
+  key_source?: string | null;
+  note?: string;
+};
+export type ProviderStatus = {
+  model?: string;
+  configured?: boolean;
+  paid_fallback?: boolean;
+  voice?: VoiceProfile;
+  image?: ProviderProfile;
+  clip?: ProviderProfile;
+  youtube?: { configured?: boolean; visibility?: string; automatic_retry?: boolean };
+};
+export type ProfileSummaries = { voice: VoiceProfile; image: ProviderProfile; clip: ProviderProfile };
+export type Delivery = {
+  id: string;
+  channel: string;
+  job_id: string;
+  state: string;
+  visibility?: string;
+  title?: string;
+  external_id?: string;
+  session_uri?: string;
+  upload_status?: string;
+  privacy_status?: string;
+  processing_status?: string;
+  reason?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  reconciled_at?: string;
+};
+export type WindowStart = { work_window: { authorized_end?: string }; services: { started: string[]; running: string[]; note: string } };
 export type Dashboard = {
   articles: Article[];
   jobs: Job[];
@@ -217,7 +257,7 @@ export type Dashboard = {
     [key: string]: unknown;
   };
   worker?: { state?: string; heartbeat?: string; owner?: string };
-  provider?: { model?: string; configured?: boolean; paid_fallback?: boolean; voice?:VoiceProfile };
+  provider?: ProviderStatus;
   tasks?: Task[];
   [key: string]: unknown;
 };

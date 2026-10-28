@@ -31,6 +31,8 @@ import {
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
+import { SettingsPanel } from "./settings-panel";
+import { YoutubePanel } from "./youtube-panel";
 import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
 import { packagingRequired } from "../lib/packaging";
@@ -44,7 +46,7 @@ import {
   type IntakeDraft,
 } from "./support-panels";
 
-type View = "news" | "studio" | "delivery" | "world" | "activity";
+type View = "news" | "studio" | "delivery" | "world" | "settings" | "activity";
 type LocalDraft = { title: string; body: string; baseHash?: string };
 const views: { id: View; title: string; icon: string; en: string }[] = [
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
@@ -56,6 +58,7 @@ const views: { id: View; title: string; icon: string; en: string }[] = [
     en: "PRODUCTION & DELIVERY",
   },
   { id: "world", title: "오피스 월드", icon: "map", en: "OFFICE WORLD" },
+  { id: "settings", title: "제작 설정", icon: "grid", en: "SETTINGS & CONNECTIONS" },
   { id: "activity", title: "운영 기록", icon: "activity", en: "OFFICE LOG" },
 ];
 const defaultSelections: Selections = {
@@ -309,11 +312,16 @@ export default function Office() {
                   : "연결 확인 필요"}
             </span>
           </div>
-          <div className="sidebar-window">
+          <button
+            type="button"
+            className="sidebar-window"
+            onClick={() => setView("settings")}
+            title="제작 설정에서 작업 시간을 엽니다"
+          >
             <Icon name="clock" size={16} />
             <span>{remainingWindow(end, now)}</span>
-            <small>남음</small>
-          </div>
+            <small>남음 · 설정</small>
+          </button>
           <div className="operator">
             <span className="avatar">H</span>
             <span>
@@ -364,7 +372,9 @@ export default function Office() {
                       ? "완성된 결과를 확인하고, 내가 승인한 버전으로 출고하세요."
                       : view === "world"
                         ? "지금 진행 중인 모든 작업을 한 공간에서 보고, 바로 이동하거나 요청하세요."
-                        : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
+                        : view === "settings"
+                          ? "음성·배경 이미지·생성 영상과 키 연결, 작업 시간을 한곳에서 정하세요."
+                          : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
               </p>
             </div>
             <div className="heading-actions">
@@ -675,6 +685,15 @@ export default function Office() {
                           }
                           action={action}
                         />
+                        {job.selections?.video && (
+                          <YoutubePanel
+                            key={`youtube-${job.id}`}
+                            job={job}
+                            youtubeConfigured={Boolean(dashboard.provider?.youtube?.configured)}
+                            busy={!!busy || !connected}
+                            action={action}
+                          />
+                        )}
                       </>
                     )}
                   </section>
@@ -702,6 +721,15 @@ export default function Office() {
                     if (ok !== true)
                       throw new Error(typeof ok === "string" ? ok : "요청을 처리하지 못했습니다.");
                   }}
+                />
+              )}
+
+              {view === "settings" && (
+                <SettingsPanel
+                  dashboard={dashboard}
+                  windowLabel={`${remainingWindow(end, now)} 남음`}
+                  busy={!!busy || !connected}
+                  action={action}
                 />
               )}
 

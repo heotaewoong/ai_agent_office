@@ -1,0 +1,152 @@
+"use client";
+
+import { useState } from "react";
+import { api } from "../lib/api";
+import type { Dashboard } from "../lib/types";
+import { PROFILE_OPTIONS, keyChips, settingsWarnings, validWindowMinutes, type ProfileKind } from "../lib/settings";
+import { Icon } from "./icons";
+
+type Action = (label: string, execute: () => Promise<unknown>, success: string) => Promise<true | string>;
+
+const GROUPS: { kind: ProfileKind; title: string; description: string }[] = [
+  { kind: "voice", title: "음성", description: "영상 내레이션을 만드는 방식" },
+  { kind: "image", title: "배경 이미지", description: "영상·카드 장면의 배경. 한국어 글자는 항상 로컬에서 얹습니다" },
+  { kind: "clip", title: "생성 영상", description: "원고에서 clip: generated로 지정한 장면만 짧은 생성 영상으로" },
+];
+
+function money(value: number | undefined) {
+  return new Intl.NumberFormat("ko-KR").format(Math.round(value ?? 0));
+}
+
+export function SettingsPanel({
+  dashboard,
+  windowLabel,
+  busy,
+  action,
+}: {
+  dashboard: Dashboard;
+  windowLabel: string;
+  busy: boolean;
+  action: Action;
+}) {
+  const provider = dashboard.provider;
+  const [minutes, setMinutes] = useState("120");
+  const [servicesNote, setServicesNote] = useState("");
+  const warnings = settingsWarnings(provider);
+  const current: Record<ProfileKind, string | undefined> = {
+    voice: provider?.voice?.id,
+    image: provider?.image?.id,
+    clip: provider?.clip?.id,
+  };
+  const parsedMinutes = validWindowMinutes(minutes);
+  const budget = dashboard.budget;
+
+  async function choose(kind: ProfileKind, id: string) {
+    const option = PROFILE_OPTIONS[kind].find((o) => o.id === id);
+    await action("제작 설정 변경", () => api.setProfile(kind, id), `${option?.label ?? id}(으)로 바꿨습니다. 새 제작 요청부터 적용됩니다.`);
+  }
+
+  async function openWindow() {
+    if (parsedMinutes == null) return;
+    let note = "";
+    const ok = await action(
+      "작업 시간 열기",
+      async () => {
+        const result = await api.startWindow(parsedMinutes);
+        const started = result.services.started.length ? `작업자 시작: ${result.services.started.join(", ")}` : "";
+        const running = result.services.running.length ? `이미 실행 중: ${result.services.running.join(", ")}` : "";
+        note = [started, running, result.services.note].filter(Boolean).join(" · ");
+      },
+      `${parsedMinutes}분 작업 시간을 열었습니다. 기존 총예산 한도는 그대로입니다.`,
+    );
+    if (ok === true) setServicesNote(note);
+  }
+
+  return (
+    <div className="settings-layout">
+      <section className="settings-card" aria-label="키 연결 상태">
+        <h2>서버 키 연결</h2>
+        <p className="settings-help">키는 EC2의 환경 파일에만 있고 화면에는 연결 여부만 보입니다. 키를 바꾸면 앱을 다시 시작해야 합니다.</p>
+        <ul className="key-chips">
+          {keyChips(provider).map((chip) => (
+            <li key={chip.label} className={chip.ok ? "ok" : "missing"}>
+              <Icon name={chip.ok ? "check" : "alert"} size={15} />
+              <strong>{chip.label}</strong>
+              <small>{chip.ok ? "연결됨" : `${chip.env} 없음`}</small>
+            </li>
+          ))}
+        </ul>
+        {warnings.length > 0 && (
+          <ul className="settings-warnings" role="status">
+            {warnings.map((warning) => (
+              <li key={warning}>
+                <Icon name="alert" size={14} />
+                {warning}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="settings-card" aria-label="제작 프로필">
+        <h2>제작 프로필</h2>
+        <p className="settings-help">선택만으로는 비용이 들지 않습니다. 유료 호출은 원고 승인① 뒤 실제 제작에서만 일어나며, 실패해도 다른 제공자로 자동 전환하지 않습니다.</p>
+        <div className="profile-groups">
+          {GROUPS.map((group) => (
+            <fieldset key={group.kind} className="profile-group" disabled={busy}>
+              <legend>
+                {group.title}
+                <small>{group.description}</small>
+              </legend>
+              {PROFILE_OPTIONS[group.kind].map((option) => (
+                <label key={option.id} className={`profile-option ${current[group.kind] === option.id ? "selected" : ""}`}>
+                  <input
+                    type="radio"
+                    name={`profile-${group.kind}`}
+                    value={option.id}
+                    checked={current[group.kind] === option.id}
+                    onChange={() => void choose(group.kind, option.id)}
+                  />
+                  <span>
+                    <strong>
+                      {option.label}
+                      {option.paid ? <em className="paid-tag">유료</em> : <em className="free-tag">무료</em>}
+                    </strong>
+                    <small>{option.hint}</small>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ))}
+        </div>
+      </section>
+
+      <section className="settings-card" aria-label="작업 시간과 예산">
+        <h2>작업 시간 · 예산</h2>
+        <p className="settings-help">기사 수집·원고 작성·제작·업로드 요청은 작업 시간이 열려 있을 때만 실행됩니다. 여는 것은 운영자의 결정이며, 시간이 끝나면 작업자는 스스로 멈춥니다.</p>
+        <div className="window-row">
+          <span className="window-now">
+            <Icon name="clock" size={16} />
+            {windowLabel}
+          </span>
+          <label>
+            열 시간(분)
+            <input inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-invalid={parsedMinutes == null} />
+          </label>
+          <button className="button primary" disabled={busy || parsedMinutes == null} onClick={() => void openWindow()}>
+            작업 시간 열기
+          </button>
+        </div>
+        {parsedMinutes == null && <p className="field-error">1~360분 사이의 정수로 입력하세요.</p>}
+        {servicesNote && <p className="settings-help">{servicesNote}</p>}
+        <dl className="budget-grid">
+          <div><dt>총 한도</dt><dd>{money(budget?.cap_krw)}원</dd></div>
+          <div><dt>사용</dt><dd>{money(budget?.spent_krw)}원</dd></div>
+          <div><dt>예약·불명</dt><dd>{money(budget?.reserved_krw)}원</dd></div>
+          <div><dt>남음</dt><dd>{money(budget?.remaining_krw)}원</dd></div>
+        </dl>
+        {budget?.fx_note && <p className="settings-help">{budget.fx_note}</p>}
+      </section>
+    </div>
+  );
+}

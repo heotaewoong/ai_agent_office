@@ -13,6 +13,9 @@ import type {
   SnapshotChannel,
   SnapshotPeriod,
   StudioCsvResult,
+  ProfileSummaries,
+  Delivery,
+  WindowStart,
 } from "./types";
 
 export class OfficeApiError extends Error {
@@ -87,6 +90,16 @@ async function request<T>(
 }
 
 export const api = {
+  setProfile: (kind: "voice" | "image" | "clip", profile: string) =>
+    request<ProfileSummaries>("/settings/profiles", "POST", { kind, profile }),
+  startWindow: (minutes: number) =>
+    request<WindowStart>("/session/window", "POST", { minutes }),
+  deliveries: (id: string) =>
+    request<{ deliveries: Delivery[]; youtube_configured: boolean }>(`/jobs/${encodeURIComponent(id)}/deliveries`),
+  deliverYoutube: (id: string) =>
+    request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/youtube`, "POST", {}),
+  reconcileDelivery: (id: string, deliveryId: string) =>
+    request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/reconcile`, "POST", {}),
   knowledge: (query = "") =>
     request<KnowledgeSearch>(`/knowledge?query=${encodeURIComponent(query)}`),
   registerEvidence: (id: string, sourceText: string, version: string | null) =>

@@ -79,6 +79,15 @@ class Review(BaseModel):
     outputs: list[Literal['blog', 'video', 'cards', 'pdf']] | None = None
 
 
+class ProfileChoice(BaseModel):
+    kind: Literal["voice", "image", "clip"]
+    profile: str
+
+
+class WindowRequest(BaseModel):
+    minutes: int
+
+
 class ThumbnailChoice(BaseModel):
     artifact_id: str
 
@@ -422,6 +431,28 @@ def create_app(store: Store | None = None):
                     raise HTTPException(409, "파일이 변경되어 재검수가 필요합니다")
                 return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream", filename=path.name, content_disposition_type="inline")
         raise HTTPException(404, "파일을 찾을 수 없습니다")
+
+    def profile_summaries():
+        from .voice_selection import profile_summary as voice_summary
+        from .image_selection import profile_summary as image_summary
+        from .video_selection import profile_summary as clip_summary
+        return {"voice": voice_summary(store), "image": image_summary(store), "clip": clip_summary(store)}
+
+    @app.post("/api/settings/profiles")
+    def choose_profile(choice: ProfileChoice):
+        # Choosing a profile is free and never calls a provider; costs happen only after approval①.
+        from . import image_selection, video_selection, voice_selection
+        module = {"voice": voice_selection, "image": image_selection, "clip": video_selection}[choice.kind]
+        module.select_profile(store, choice.profile, actor="local-operator-ui")
+        return profile_summaries()
+
+    @app.post("/api/session/window")
+    def open_work_window(request: WindowRequest):
+        # The operator's own explicit action in the UI; agents never call this.
+        from .session import start_session
+        from . import services
+        window = start_session(store, minutes=request.minutes, source="local_operator_ui")
+        return {"work_window": window, "budget": store.budget(), "services": services.start_window_services(store)}
 
     @app.get("/api/jobs/{job_id}/deliveries")
     def list_deliveries(job_id: str):

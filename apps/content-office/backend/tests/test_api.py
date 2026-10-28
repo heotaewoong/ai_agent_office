@@ -260,3 +260,31 @@ def test_public_origin_is_opt_in_https_only_and_marks_cookie_secure(tmp_path, mo
     assert created.status_code in (200, 201), created.text
     assert client.post("/api/jobs", json={"article_ids": ["one"]}, headers={**headers, "Origin": "https://attacker.example"}).status_code == 403
     assert client.post("/api/jobs", json={"article_ids": ["one"]}, headers={"Origin": public}).status_code == 403
+
+
+def test_profile_settings_route_selects_without_cost_and_rejects_unknown(context):
+    store, client, headers = context
+    before = store.budget()
+    response = client.post("/api/settings/profiles", json={"kind": "image", "profile": "openai-gpt-image"}, headers=headers)
+    assert response.status_code == 200 and response.json()["image"]["id"] == "openai-gpt-image"
+    assert client.post("/api/settings/profiles", json={"kind": "clip", "profile": "runway-gen4-turbo"}, headers=headers).json()["clip"]["id"] == "runway-gen4-turbo"
+    assert client.post("/api/settings/profiles", json={"kind": "voice", "profile": "gemini-kore"}, headers=headers).json()["voice"]["id"] == "gemini-kore"
+    assert store.budget() == before
+    assert client.post("/api/settings/profiles", json={"kind": "image", "profile": "midjourney"}, headers=headers).status_code == 409
+    assert client.post("/api/settings/profiles", json={"kind": "font", "profile": "x"}, headers=headers).status_code == 422
+    assert client.post("/api/settings/profiles", json={"kind": "image", "profile": "none"}, headers={"Origin": "http://localhost:3110"}).status_code == 403
+    selected = [e for e in store.events(limit=10) if e["kind"] == "image_profile_selected"]
+    assert selected and selected[0]["data"]["selected_by"] == "local-operator-ui"
+
+
+def test_work_window_route_opens_window_and_reports_services(context, monkeypatch):
+    store, client, headers = context
+    from office import services
+    monkeypatch.setattr(services, "start_window_services", lambda store, **kw: {"started": [], "running": [], "note": "fixture"})
+    assert client.post("/api/session/window", json={"minutes": 0}, headers=headers).status_code in (409, 422)
+    response = client.post("/api/session/window", json={"minutes": 90}, headers=headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["work_window"]["authorization_source"] == "local_operator_ui" and body["services"]["note"] == "fixture"
+    assert store.setting("work_window")["authorization_source"] == "local_operator_ui"
+    assert client.post("/api/session/window", json={"minutes": 30}, headers=headers).status_code == 409

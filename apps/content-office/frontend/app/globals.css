@@ -3767,3 +3767,49 @@ td a {
   background: transparent;
 }
 .v6-packaging .editor-fields textarea{min-height:64px;border:1px solid var(--line);padding:8px}.v6-packaging-row{display:grid;gap:6px;margin-bottom:14px}.v6-packaging .editor-fields input:not([type=radio]){width:100%}.v6-packaging .editor-fields label>input[type=radio]{margin-right:6px}
+
+/* 제작 설정 · YouTube 비공개 업로드 */
+.settings-layout{display:grid;gap:20px}
+.settings-card{border:1px solid var(--line);border-radius:8px;background:#fff;padding:22px 24px}
+.settings-card h2{font-size:16px;font-weight:650;margin-bottom:6px}
+.settings-help{font-size:12px;line-height:1.8;color:var(--muted);margin:4px 0 12px;overflow-wrap:anywhere}
+.key-chips{display:flex;flex-wrap:wrap;gap:10px;list-style:none;padding:0;margin:0}
+.key-chips li{display:flex;align-items:center;gap:6px;padding:8px 12px;border-radius:6px;border:1px solid var(--line);font-size:12px}
+.key-chips li.ok{background:#f2f6e9;border-color:#dce4d0;color:#4f6a3a}
+.key-chips li.missing{background:#fbf3ec;border-color:#efd9c6;color:#9a5a2a}
+.key-chips small{color:inherit;opacity:.8}
+.settings-warnings{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:6px}
+.settings-warnings li{display:flex;gap:6px;align-items:flex-start;font-size:12px;line-height:1.7;color:#9a5a2a}
+.profile-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.profile-group{border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:8px;margin:0}
+.profile-group legend{font-size:13px;font-weight:650;padding:0 4px;display:grid}
+.profile-group legend small{font-weight:400;color:var(--muted);font-size:11px}
+.profile-option{display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:6px;cursor:pointer;border:1px solid transparent}
+.profile-option.selected{border-color:#e2b79a;background:#fdf6f0}
+.profile-option input{margin-top:4px}
+.profile-option strong{display:flex;gap:6px;align-items:center;font-size:13px;font-weight:600}
+.profile-option small{display:block;font-size:11px;line-height:1.7;color:var(--muted);margin-top:2px}
+.paid-tag,.free-tag{font-style:normal;font-size:10px;padding:1px 6px;border-radius:4px}
+.paid-tag{background:#fbe6d8;color:#a24f1d}.free-tag{background:#e8efe0;color:#4f6a3a}
+.window-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.window-row label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.window-row input{width:110px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit}
+.window-now{display:flex;gap:6px;align-items:center;font-size:13px;padding:8px 0;margin-right:auto}
+.field-error{font-size:12px;color:#b2412a;margin-top:8px}
+.budget-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0 0}
+.budget-grid div{border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.budget-grid dt{font-size:11px;color:var(--muted)}.budget-grid dd{font-size:15px;font-weight:650;margin:2px 0 0}
+button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.youtube-panel{margin-top:24px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:18px 22px}
+.youtube-head{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap}
+.youtube-head h3{display:flex;gap:8px;align-items:center;font-size:15px;font-weight:650}
+.youtube-head p{font-size:12px;line-height:1.8;margin-top:4px;max-width:640px}
+.youtube-head p.ready{color:#4f6a3a}.youtube-head p.not-ready{color:var(--muted)}
+.delivery-list{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:8px}
+.delivery-item{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.delivery-item>div:first-child{display:grid;gap:2px;font-size:12px}
+.delivery-item strong{font-size:13px}.delivery-item small{color:var(--muted)}
+.delivery-item.state-private{border-color:#dce4d0;background:#f7faf2}
+.delivery-item.state-unknown,.delivery-item.state-needs_review{border-color:#efd9c6;background:#fdf6f0}
+.delivery-item.state-failed{border-color:#efc9c0;background:#fcf1ee}
+.delivery-actions{display:flex;gap:8px;flex-wrap:wrap}

@@ -10,7 +10,7 @@ from .runtime import AlreadyRunning, ProcessLock, aware_time, utcnow
 from .store import WorkflowError, canonical, identifier
 
 
-def start_session(store, *, minutes, current=None):
+def start_session(store, *, minutes, current=None, source='local_operator_cli'):
     if type(minutes) is not int or not 1 <= minutes <= 360:
         raise WorkflowError('작업 시간은 1~360분의 정수로 직접 지정하세요')
     current = aware_time(current or utcnow())
@@ -28,7 +28,7 @@ def start_session(store, *, minutes, current=None):
                     history.append(previous)
                 window = {'id': identifier('window'), 'authorized_start': current.isoformat(),
                           'authorized_end': (current + timedelta(minutes=minutes)).isoformat(),
-                          'status': 'active', 'user_confirmed': True, 'authorization_source': 'local_operator_cli',
+                          'status': 'active', 'user_confirmed': True, 'authorization_source': source if source in ('local_operator_cli', 'local_operator_ui') else 'local_operator_cli',
                           'scope': 'RSS, drafts, media after source approval; existing total budget retained; publication not included'}
                 db.execute("INSERT OR REPLACE INTO settings VALUES('work_window_history',?)", (canonical(history[-100:]),))
                 db.execute("INSERT OR REPLACE INTO settings VALUES('work_window',?)", (canonical(window),))
