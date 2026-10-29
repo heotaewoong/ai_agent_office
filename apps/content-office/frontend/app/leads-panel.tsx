@@ -66,7 +66,10 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
     <section className="settings-card leads-panel" aria-label="리드마그넷 동의 장부">
       <h2>리드마그넷 동의 장부</h2>
       <p className="settings-help">
-        무료 자료를 신청한 독자의 이메일과 동의 기록입니다. 이메일 원문은 서버의 장부에만 있고 화면·내보내기에는 마스킹된 값만 나옵니다. 자료 전달과 메일 발송은 오너가 직접 하며, 이 화면은 기록만 합니다. 철회는 되돌리지 않습니다.
+        무료 자료를 신청한 독자의 이메일과 동의 기록입니다. 이메일 원문은 서버의 장부에만 있고 화면·내보내기에는 마스킹된 값만 나옵니다. 자료 전달과 메일 발송은 오너가 직접 하며, 이 화면은 기록만 합니다. 철회 취소 버튼은 없습니다. 다시 신청했다면 새로운 동의를 확인한 뒤 기록하세요.
+      </p>
+      <p className="settings-help">
+        실제 전달 주소와 요청 자료는 권한이 있는 원신청 DM·메일·폼에서 확인하세요. 이 화면은 주소 복원이나 자동 전달을 제공하지 않습니다. 무료 자료 신청만으로 후속 뉴스레터·광고 수신에도 동의했다고 판단하지 마세요.
       </p>
       {summary && (
         <dl className="budget-grid">
@@ -195,8 +198,8 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
                             type="button"
                             disabled={busy}
                             onClick={() => {
-                              if (!window.confirm("동의를 철회로 기록합니다. 되돌릴 수 없습니다. 계속할까요?")) return;
-                              void run("동의 철회", () => api.withdrawLead(lead.id), "동의 철회를 기록했습니다. 다음 회차부터 수신자에서 빠집니다.");
+                              if (!window.confirm("동의를 철회로 기록합니다. 외부 메일러의 수신목록도 별도로 반영해야 합니다. 계속할까요?")) return;
+                              void run("동의 철회", () => api.withdrawLead(lead.id), "동의 철회를 기록했습니다. 회차의 최신 대상 계산에 반영됩니다. 외부 메일러 수신목록도 확인하세요.");
                             }}
                           >
                             철회

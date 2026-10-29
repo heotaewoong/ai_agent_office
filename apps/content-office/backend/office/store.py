@@ -131,17 +131,21 @@ class Store:
         from .briefs import normalise_brief
         return normalise_brief(brief)
 
-    def create_job(self, article, brief=None):
+    def _create_job(self, db, article, brief=None):
+        """기존 연결에서 작업을 만들거나 동일 기사 작업을 반환한다. 호출자가 트랜잭션을 소유한다."""
         brief = self._validated_brief(brief)
+        for row in db.execute("SELECT data FROM jobs"):
+            existing = json.loads(row[0])
+            if existing["article"]["id"] == article["id"]:
+                return existing
+        job = {"id": identifier("job"), "article": article, "title": article.get("editorial_title", article["title"]), "state": "research_ready", "error": None, "source_hash": None, "source_packet": None, "source_approval": None, "release_approval": None, "manifest": None, "selections": {"blog": True, "video": True, "pdf": False, "cards": False}, "brief": brief, "created_at": now(), "updated_at": now()}
+        db.execute("INSERT INTO jobs VALUES(?,?,?)", (job["id"], canonical(job), now()))
+        self._event(db, "job_created", {"article_id": article["id"], "role": "총괄", "brief_preset": brief["preset"]}, job["id"])
+        return job
+
+    def create_job(self, article, brief=None):
         with self.connection(transaction=True) as db:
-            for row in db.execute("SELECT data FROM jobs"):
-                existing = json.loads(row[0])
-                if existing["article"]["id"] == article["id"]:
-                    return existing
-            job = {"id": identifier("job"), "article": article, "title": article.get("editorial_title", article["title"]), "state": "research_ready", "error": None, "source_hash": None, "source_packet": None, "source_approval": None, "release_approval": None, "manifest": None, "selections": {"blog": True, "video": True, "pdf": False, "cards": False}, "brief": brief, "created_at": now(), "updated_at": now()}
-            db.execute("INSERT INTO jobs VALUES(?,?,?)", (job["id"], canonical(job), now()))
-            self._event(db, "job_created", {"article_id": article["id"], "role": "총괄", "brief_preset": brief["preset"]}, job["id"])
-            return job
+            return self._create_job(db, article, brief)
 
     def set_brief(self, job_id, brief, actor, *, expected_hash=_UNSET):
         """작업의 독자 브리프를 바꾼다. 승인은 건드리지 않으며 다음 원고 생성·검수부터 적용된다."""

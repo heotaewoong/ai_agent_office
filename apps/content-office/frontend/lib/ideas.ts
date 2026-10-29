@@ -1,4 +1,4 @@
-import type { IdeaInput } from "./types";
+import type { Idea, IdeaInput, IdeaSourcesInput } from "./types";
 import { briefOverridesFromForm } from "./briefs.ts";
 
 type Form = Record<string, string | boolean>;
@@ -68,4 +68,35 @@ export function ideaInputFromForm(form: Form): { input: IdeaInput } | { error: s
       ...(Object.keys(brief.overrides).length > 0 ? { brief: brief.overrides } : {}),
     },
   };
+}
+
+export type IdeaSourcesDraft = { text: string; baseText: string; baseHash: string; confirmed: boolean; dirty: boolean };
+
+export function ideaSourcesDraft(idea: Idea): IdeaSourcesDraft {
+  const text = (idea.source_urls ?? (idea.source_url ? [idea.source_url] : [])).join("\n");
+  return { text, baseText: text, baseHash: idea.edit_hash ?? "", confirmed: false, dirty: false };
+}
+
+export function changeIdeaSourcesDraft(draft: IdeaSourcesDraft, text: string): IdeaSourcesDraft {
+  return { ...draft, text, confirmed: false, dirty: text !== draft.baseText };
+}
+
+export function syncIdeaSourcesDraft(draft: IdeaSourcesDraft, idea: Idea): IdeaSourcesDraft {
+  return draft.dirty ? draft : ideaSourcesDraft(idea);
+}
+
+export function ideaSourcesInput(draft: IdeaSourcesDraft): { input: IdeaSourcesInput } | { error: string } {
+  if (!/^[a-f0-9]{64}$/.test(draft.baseHash)) return { error: "기획 판본을 다시 불러온 뒤 저장하세요." };
+  if (!draft.confirmed) return { error: "각 출처의 본문과 기획 관련성을 직접 확인한 뒤 체크하세요." };
+  const urls = draft.text.split(/\r?\n/).map((url) => url.trim()).filter(Boolean);
+  if (urls.length < 1 || urls.length > 10) return { error: "공개 HTTPS 원출처 주소를 한 줄에 하나씩, 1~10개 입력하세요." };
+  for (const value of urls) {
+    try {
+      const url = new URL(value);
+      if (value.length > 2000 || url.protocol !== "https:" || !url.hostname || url.username || url.password || (url.port && url.port !== "443")) throw new Error();
+    } catch {
+      return { error: "출처는 계정 정보가 없는 공개 https:// 주소로 입력하세요." };
+    }
+  }
+  return { input: { source_urls: urls, operator_verified: true, expected_hash: draft.baseHash } };
 }

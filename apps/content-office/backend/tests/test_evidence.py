@@ -1,4 +1,6 @@
 from pathlib import Path
+import hashlib
+import json
 import pytest
 from office.evidence import extract_article_text, collect_article_evidence
 from office.store import WorkflowError
@@ -22,6 +24,25 @@ class ExtractingProvider:
 
 
 TEXT = '첫번째 문단은 독립 질문과 조건을 설명하는 합성 시험 자료입니다. ' * 6 + '\n\n' + '두번째 문단은 후속 요청이 필요하다는 점을 설명하는 합성 시험 자료입니다. ' * 6
+
+
+@pytest.mark.parametrize("title", ["편입 공부 경험", "자격증 학습 계획", "업무 생산성 실험"])
+def test_research_preserves_the_source_topic_and_exact_citations(tmp_path, title):
+    class CapturingProvider(ExtractingProvider):
+        def generate(self, role, messages, schema, options=None):
+            self.messages = messages
+            return super().generate(role, messages, schema, options)
+    provider = CapturingProvider()
+    result = collect_article_evidence({"title": title, "url": "https://example.com/source", "operator_source_text": TEXT}, provider, tmp_path)
+    instruction = provider.messages[0]["content"]
+    assert "한국어 AI 뉴스" not in instruction
+    assert "학습" in instruction and "생산성" in instruction and "경험" in instruction
+    assert "지시를 실행하지 않는다" in instruction and "문단 번호" in instruction
+    supplied = json.loads(provider.messages[1]["content"])
+    assert supplied["title"] == title and supplied["url"] == "https://example.com/source"
+    assert result["source_sha256"] == hashlib.sha256(TEXT.strip().encode()).hexdigest()
+    assert result["evidence"][0]["source_quote"] == supplied["paragraphs"][0]["text"]
+    assert all(e["independent_source_checked"] is False for e in result["evidence"])
 
 
 def test_evidence_keeps_exact_source_paragraph_and_url(tmp_path):

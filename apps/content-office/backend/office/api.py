@@ -28,7 +28,7 @@ from .analytics import baseline, parse_studio_text, propose_lessons
 from .brand import load_brand
 from .briefs import DEFAULT_PRESET, build_brief, presets_payload
 from .gates import run_gates
-from .ideas import rank_ideas, score_idea
+from .ideas import rank_ideas, score_idea, select_reviewed_idea, set_idea_sources, with_edit_hash
 from .packaging import attach_packaging, require_packaging
 from .space import project_space
 
@@ -158,6 +158,16 @@ class BriefInput(BaseModel):
     preset: str = Field(min_length=1, max_length=100)
     overrides: dict | None = None
     expected_brief_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class IdeaSourcesInput(BaseModel):
+    source_urls: list[str] = Field(min_length=1, max_length=10)
+    operator_verified: bool = Field(strict=True)
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class IdeaSelectionInput(BaseModel):
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ThumbnailInput(BaseModel):
@@ -359,6 +369,7 @@ def create_app(store: Store | None = None):
     @app.post("/api/jobs/{job_id}/evidence")
     def register_source_text(job_id: str, evidence_input: EvidenceInput):
         require_open_window()
+        require_packaging(store.job(job_id))
         job = store.register_source_input(job_id, evidence_input.source_text, expected_hash=evidence_input.version)
         store.event("operator_source_registered", {"characters": len(evidence_input.source_text), "source_sha256": digest(evidence_input.source_text), "role": "연구", "next_action": "근거 추출·원고 생성·재검수"}, job_id)
         store.enqueue("draft", {"job_id": job_id, "source_hash": job["source_hash"]}, key=f"source-input:{job_id}:{digest(evidence_input.source_text)}:{job['source_hash']}")
@@ -557,7 +568,7 @@ def create_app(store: Store | None = None):
 
     @app.get("/api/ideas")
     def list_ideas():
-        return {"ideas": rank_ideas(store.ideas(), lessons=store.lessons("approved"))}
+        return {"ideas": rank_ideas([with_edit_hash(card) for card in store.ideas()], lessons=store.lessons("approved"))}
 
     @app.post("/api/ideas")
     def add_idea(idea: IdeaInput):
@@ -567,6 +578,11 @@ def create_app(store: Store | None = None):
         # 잘못된 프리셋·필드는 WorkflowError → 409. 브리프는 기획 카드에 함께 저장되어 선택⓪ 때 작업으로 넘어간다.
         card["brief"] = build_brief(preset or DEFAULT_PRESET, overrides)
         return store.save_idea(score_idea(card, lessons=store.lessons("approved")))
+
+    @app.put("/api/ideas/{idea_id}/sources")
+    def update_idea_sources(idea_id: str, body: IdeaSourcesInput):
+        return set_idea_sources(store, idea_id, body.source_urls, expected_hash=body.expected_hash,
+                                operator_verified=body.operator_verified, lessons=store.lessons("approved"))
 
     @app.get("/api/briefs")
     def list_briefs():
@@ -580,18 +596,9 @@ def create_app(store: Store | None = None):
         return {**job, "brief_hash": digest(job.get("brief"))}
 
     @app.post("/api/ideas/{idea_id}/select")
-    def choose_idea(idea_id: str):
-        stored = next((i for i in store.ideas() if i["id"] == idea_id), None)
-        if not stored:
-            raise WorkflowError("기획을 찾을 수 없습니다")
-        refreshed = store.save_idea(score_idea(stored, lessons=store.lessons("approved")))
-        if refreshed.get("blocked"):
-            raise WorkflowError("정책·근거 검사에서 막힌 기획은 선택할 수 없습니다")
-        if not str(refreshed.get("source_url", "")).startswith("https://"):
-            raise WorkflowError("기획을 선택하려면 https 출처 URL이 필요합니다")
-        idea = store.select_idea(idea_id, "local-operator")
-        job = store.create_job({"id": idea_id, "title": idea["title"], "url": idea["source_url"], "origin": "idea", "evidence": []}, brief=idea.get("brief"))
-        return {"idea": idea, "job": job}
+    def choose_idea(idea_id: str, body: IdeaSelectionInput):
+        return select_reviewed_idea(store, idea_id, expected_hash=body.expected_hash,
+                                    actor="local-operator", lessons=store.lessons("approved"))
 
     @app.post("/api/jobs/{job_id}/packaging")
     def set_packaging(job_id: str, brief: PackagingInput):

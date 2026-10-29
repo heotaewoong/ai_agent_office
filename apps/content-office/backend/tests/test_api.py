@@ -218,6 +218,21 @@ def test_public_source_text_is_registered_without_forging_evidence_or_approval(c
     assert store.tasks(job["id"])[0]["kind"] == "draft"
 
 
+def test_idea_source_text_requires_packaging_before_any_mutation(context):
+    from office.packaging import attach_packaging
+    store, client, headers = context
+    job = store.create_job({"id": "idea-fixture", "title": "편입 준비", "url": "https://example.edu/transfer", "origin": "idea", "evidence": []})
+    snapshot, events, tasks = store.job(job["id"]), store.events(), store.tasks()
+    body = {"source_text": "운영자가 확인한 공개 모집 요강 본문입니다. " * 20}
+    response = client.post(f"/api/jobs/{job['id']}/evidence", json=body, headers=headers)
+    assert response.status_code == 409 and "패키징" in response.json()["detail"]
+    assert store.job(job["id"]) == snapshot and store.events() == events and store.tasks() == tasks
+    attach_packaging(store, job["id"], {"titles": ["편입 준비 첫걸음", "편입 준비 순서", "편입 준비 체크"], "thumbnails": [{"text": "편입 준비", "visual": "직접 제작한 도형"}] * 3, "hook": "편입 준비를 시작할 때 모집 요강부터 확인해요.", "logline": "모집 요강을 읽는 순서", "reasons": ["독자 질문", "공식 요강"]}, "fixture-operator")
+    assert client.post(f"/api/jobs/{job['id']}/evidence", json=body, headers=headers).status_code == 200
+    assert store.job(job["id"])["source_approval"] is None
+    assert store.tasks(job["id"])[0]["kind"] == "draft"
+
+
 def test_retry_superseded_failed_draft_does_not_regenerate_current_source(context):
     store, client, headers = context
     job = store.create_job(store.article("one"))

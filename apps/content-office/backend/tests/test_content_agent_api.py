@@ -12,11 +12,15 @@ def context(tmp_path):
     return store, client, {"Origin": "http://localhost:3110", "X-Office-CSRF": token}
 
 
+def read_idea(client, idea_id):
+    return {"expected_hash": next(card["edit_hash"] for card in client.get("/api/ideas").json()["ideas"] if card["id"] == idea_id)}
+
+
 def test_idea_to_packaged_job(context):
     store, client, headers = context
     saved = client.post("/api/ideas", json={"title": "Claude 팀 블로그 자동화", "source_url": "https://example.com/claude-team", "primary_sources": 2, "demand": 70, "fit": 0.9}, headers=headers).json()
     assert saved["score"] > 0 and saved["blocked"] == []
-    chosen = client.post(f"/api/ideas/{saved['id']}/select", json={}, headers=headers).json()
+    chosen = client.post(f"/api/ideas/{saved['id']}/select", json=read_idea(client, saved["id"]), headers=headers).json()
     job_id = chosen["job"]["id"]
     assert chosen["job"]["article"]["origin"] == "idea"
     bad = client.post(f"/api/jobs/{job_id}/packaging", json={"titles": ["하나"], "thumbnails": [], "hook": "", "logline": "", "reasons": []}, headers=headers)
@@ -31,14 +35,14 @@ def test_blocked_idea_cannot_be_selected(context):
     _, client, headers = context
     saved = client.post("/api/ideas", json={"title": "출처 없는 소문"}, headers=headers).json()
     assert saved["blocked"] == ["1차 출처 없음"]
-    assert client.post(f"/api/ideas/{saved['id']}/select", json={}, headers=headers).status_code == 409
+    assert client.post(f"/api/ideas/{saved['id']}/select", json=read_idea(client, saved["id"]), headers=headers).status_code == 409
 
 
 def test_idea_without_https_source_url_cannot_be_selected(context):
     _, client, headers = context
     saved = client.post("/api/ideas", json={"title": "URL 없는 기획", "primary_sources": 2, "demand": 70, "fit": 0.9}, headers=headers).json()
     assert saved["blocked"] == []
-    assert client.post(f"/api/ideas/{saved['id']}/select", json={}, headers=headers).status_code == 409
+    assert client.post(f"/api/ideas/{saved['id']}/select", json=read_idea(client, saved["id"]), headers=headers).status_code == 409
 
 
 def test_snapshot_creates_lesson_that_needs_review(context):
@@ -54,7 +58,7 @@ def test_snapshot_creates_lesson_that_needs_review(context):
 
 def packaged_idea_job(store, client, headers):
     saved = client.post("/api/ideas", json={"title": "Claude 팀 블로그 자동화", "source_url": "https://example.com/claude-team", "primary_sources": 2, "demand": 70, "fit": 0.9}, headers=headers).json()
-    return client.post(f"/api/ideas/{saved['id']}/select", json={}, headers=headers).json()["job"]["id"]
+    return client.post(f"/api/ideas/{saved['id']}/select", json=read_idea(client, saved["id"]), headers=headers).json()["job"]["id"]
 
 
 GOOD_PACKAGING = {"titles": ["Claude 팀으로 블로그 자동화", "AI 팀 블로그", "자동화 3단계"], "thumbnails": [{"text": "AI 팀", "visual": "화면"}] * 3,
@@ -115,7 +119,7 @@ def test_studio_csv_without_rows_is_409(context):
 def test_packaging_with_blank_titles_is_409(context):
     store, client, headers = context
     saved = client.post("/api/ideas", json={"title": "빈 제목 기획", "source_url": "https://example.com/blank", "primary_sources": 2, "demand": 70, "fit": 0.9}, headers=headers).json()
-    job_id = client.post(f"/api/ideas/{saved['id']}/select", json={}, headers=headers).json()["job"]["id"]
+    job_id = client.post(f"/api/ideas/{saved['id']}/select", json=read_idea(client, saved["id"]), headers=headers).json()["job"]["id"]
     body = {"titles": ["", "", ""], "thumbnails": [{"text": "AI 팀", "visual": "화면"}] * 3, "hook": "블로그를 끝낸 결과", "logline": "한 줄", "reasons": ["수요", "화면"]}
     assert client.post(f"/api/jobs/{job_id}/packaging", json=body, headers=headers).status_code == 409
 

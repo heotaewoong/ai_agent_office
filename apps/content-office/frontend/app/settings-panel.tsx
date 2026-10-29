@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import type { Dashboard } from "../lib/types";
-import { PROFILE_OPTIONS, keyChips, settingsWarnings, validWindowMinutes, type ProfileKind } from "../lib/settings";
+import { PROFILE_COST_GUIDANCE, PROFILE_OPTIONS, keyChips, settingsWarnings, validWindowMinutes, type ProfileKind } from "../lib/settings";
 import { Icon } from "./icons";
 import { ChannelsPanel } from "./channels-panel";
 import { LeadsPanel } from "./leads-panel";
@@ -70,7 +70,7 @@ export function SettingsPanel({
     <div className="settings-layout">
       <section className="settings-card" aria-label="키 연결 상태">
         <h2>서버 키 연결</h2>
-        <p className="settings-help">키는 EC2의 환경 파일에만 있고 화면에는 연결 여부만 보입니다. 키를 바꾸면 앱을 다시 시작해야 합니다.</p>
+        <p className="settings-help">키는 EC2의 환경 파일에만 있고 화면에는 연결 여부만 보입니다. 선택한 제공자와 기능에 필요한 키를 확인하세요. 키를 바꾸면 앱을 다시 시작해야 합니다.</p>
         <ul className="key-chips">
           {keyChips(provider).map((chip) => (
             <li key={chip.label} className={chip.ok ? "ok" : "missing"}>
@@ -94,7 +94,7 @@ export function SettingsPanel({
 
       <section className="settings-card" aria-label="제작 프로필">
         <h2>제작 프로필</h2>
-        <p className="settings-help">선택만으로는 비용이 들지 않습니다. 유료 호출은 원고 승인① 뒤 실제 제작에서만 일어나며, 실패해도 다른 제공자로 자동 전환하지 않습니다.</p>
+        {PROFILE_COST_GUIDANCE.map((note) => <p className="settings-help" key={note}>{note}</p>)}
         <div className="profile-groups">
           {GROUPS.map((group) => (
             <fieldset key={group.kind} className="profile-group" disabled={busy}>

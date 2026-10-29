@@ -7,7 +7,7 @@ export type ProfileOption = { id: string; label: string; paid: boolean; hint: st
 export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
   text: [
     { id: "gpt-5.4-mini", label: "OpenAI gpt-5.4-mini", paid: true, hint: "원고·검수·퀴즈·카드 문구. 입력 $0.75 · 출력 $4.50 / 100만 토큰" },
-    { id: "gpt-5.5", label: "OpenAI gpt-5.5 · 최상급", paid: true, hint: "입력 $5 · 출력 $30 / 100만 토큰. 원고 1편에 수천 원까지" },
+    { id: "gpt-5.5", label: "OpenAI gpt-5.5 · 고비용", paid: true, hint: "입력 $5 · 출력 $30 / 100만 토큰. 원고 1편에 수천 원까지" },
     { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", paid: true, hint: "입력 $0.75 · 출력 $3.75 / 100만 토큰. 수요 폭주 시 503으로 멈출 수 있음" },
     { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite · 가벼움", paid: true, hint: "입력 $0.30 · 출력 $2.50 / 100만 토큰" },
   ],
@@ -27,16 +27,31 @@ export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
   ],
 };
 
+export const PROFILE_COST_GUIDANCE = [
+  "프로필 선택만으로는 유료 API를 호출하지 않습니다. 실패해도 다른 제공자로 자동 전환하지 않습니다.",
+  "원고 승인① 전에도 근거 요약·원고 생성·비평·평가·국어 검수의 글 모델 API 호출에는 비용이 발생할 수 있습니다. 작업 시간과 예산 조건을 확인하세요.",
+  "원고 승인① 후에는 선택 제작에서 사용하는 유료 음성·배경 이미지·생성 영상에 별도 비용이 발생할 수 있습니다. 승인 자체는 제작이나 유료 호출을 시작하지 않습니다.",
+];
+
+export function textProfileConnection(provider: ProviderStatus | undefined) {
+  const p = provider ?? {};
+  const model = p.text?.id ?? p.text?.model ?? p.model ?? "gemini-3.8-flash";
+  const env = model.startsWith("gpt-") ? "OPENAI_API_KEY" : model.startsWith("gemini-") ? "GEMINI_API_KEY" : null;
+  const openai = p.image?.openai_configured ?? (p.image?.id === "codex-subscription" ? undefined : p.image?.configured);
+  const configured = env ? p.text?.configured ?? (env === "OPENAI_API_KEY" ? openai : p.configured) : undefined;
+  return { model, env, configured };
+}
+
 export function settingsWarnings(provider: ProviderStatus | undefined): string[] {
   const p = provider ?? {};
   const warnings: string[] = [];
-  const textModel = p.text?.id ?? p.model ?? "gemini-3.8-flash";
-  const textIsOpenAI = textModel.startsWith("gpt-");
-  if (textIsOpenAI && p.text && !p.text.configured)
-    warnings.push("글 모델을 OpenAI로 골랐지만 OPENAI_API_KEY가 서버에 없어 원고 작성이 동작하지 않습니다.");
-  if (!textIsOpenAI && !p.configured)
-    warnings.push("GEMINI_API_KEY가 서버에 없어 원고 작성이 동작하지 않습니다.");
-  if (p.voice?.id === "gemini-kore" && !p.configured)
+  const text = textProfileConnection(p);
+  const geminiConfigured = text.env === "GEMINI_API_KEY" ? text.configured ?? p.configured : p.configured;
+  if (!text.env || text.configured === undefined)
+    warnings.push(`선택 글 모델(${text.model})의 연결 여부를 확인하지 못했습니다. 설정 상태를 다시 조회하세요.`);
+  else if (!text.configured)
+    warnings.push(`선택 글 모델(${text.model})에 필요한 ${text.env} 연결이 없습니다. 글 모델을 사용하는 근거 요약·원고·비평·평가·국어 검수 요청을 시작할 수 없습니다.`);
+  if (p.voice?.id === "gemini-kore" && !geminiConfigured)
     warnings.push("Gemini 음성을 골랐지만 GEMINI_API_KEY가 없어 영상 음성을 만들 수 없습니다.");
   if (p.image?.id === "codex-subscription" && !p.image.configured)
     warnings.push("Codex 구독 배경을 골랐지만 서버의 앱 계정에 codex 설치·로그인이 없습니다. 영상·카드 제작이 실패합니다.");
@@ -53,9 +68,10 @@ export function settingsWarnings(provider: ProviderStatus | undefined): string[]
 
 export function keyChips(provider: ProviderStatus | undefined): { label: string; env: string; ok: boolean }[] {
   const p = provider ?? {};
+  const text = textProfileConnection(p);
   return [
-    { label: "Gemini", env: "GEMINI_API_KEY", ok: Boolean(p.configured) },
-    { label: "OpenAI", env: "OPENAI_API_KEY", ok: Boolean(p.image?.openai_configured ?? p.image?.configured) },
+    { label: "Gemini", env: "GEMINI_API_KEY", ok: Boolean(text.env === "GEMINI_API_KEY" ? text.configured : p.configured) },
+    { label: "OpenAI", env: "OPENAI_API_KEY", ok: Boolean(text.env === "OPENAI_API_KEY" ? text.configured : p.image?.openai_configured ?? (p.image?.id === "codex-subscription" ? false : p.image?.configured)) },
     { label: "Runway", env: "RUNWAYML_API_SECRET", ok: Boolean(p.clip?.configured) },
     { label: "YouTube", env: "YOUTUBE_CLIENT_ID 등", ok: Boolean(p.youtube?.configured) },
   ];

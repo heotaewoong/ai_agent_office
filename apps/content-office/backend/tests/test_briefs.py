@@ -98,7 +98,8 @@ def test_api_accepts_brief_on_idea_and_on_job(tmp_path):
             "brief_preset": "exam-opic", "brief": {"reader": "오픽 IM2 취준생", "problem": "단어는 외웠는데 말이 안 나옴", "cta": "무료 문법 PDF 받기"}}
     idea = client.post("/api/ideas", json=body, headers=headers).json()
     assert idea["brief"]["preset"] == "exam-opic" and idea["brief"]["problem"] == "단어는 외웠는데 말이 안 나옴"
-    selected = client.post(f"/api/ideas/{idea['id']}/select", headers=headers).json()
+    read = next(card for card in client.get("/api/ideas").json()["ideas"] if card["id"] == idea["id"])
+    selected = client.post(f"/api/ideas/{idea['id']}/select", json={"expected_hash": read["edit_hash"]}, headers=headers).json()
     assert selected["job"]["brief"]["preset"] == "exam-opic" and selected["job"]["brief"]["cta"] == "무료 문법 PDF 받기"
     viewed = client.get(f"/api/jobs/{selected['job']['id']}").json()
     changed = client.put(f"/api/jobs/{selected['job']['id']}/brief", json={"preset": "productivity-automation", "overrides": {"problem": "같은 정리를 매주 반복"}, "expected_brief_hash": viewed["brief_hash"]}, headers=headers)

@@ -11,6 +11,7 @@ import type {
   PackagingBrief,
   GateReport,
   IdeaInput,
+  IdeaSourcesInput,
   SnapshotChannel,
   SnapshotPeriod,
   StudioCsvResult,
@@ -179,17 +180,19 @@ export const api = {
     }),
   ideas: () => request<{ ideas: Idea[] }>("/ideas"),
   addIdea: (input: IdeaInput) => request<Idea>("/ideas", "POST", input),
+  updateIdeaSources: (id: string, input: IdeaSourcesInput) =>
+    request<Idea>(`/ideas/${encodeURIComponent(id)}/sources`, "PUT", input),
   uploadStudioCsv: (body: {
     channel: SnapshotChannel;
     period: SnapshotPeriod;
     csv: string;
     job_id?: string;
   }) => request<StudioCsvResult>("/analytics/studio-csv", "POST", body),
-  selectIdea: (id: string) =>
+  selectIdea: (id: string, expectedHash: string) =>
     request<{ idea: Idea; job: Job }>(
       `/ideas/${encodeURIComponent(id)}/select`,
       "POST",
-      {},
+      { expected_hash: expectedHash },
     ),
   setPackaging: (jobId: string, brief: PackagingBrief) =>
     request(`/jobs/${encodeURIComponent(jobId)}/packaging`, "POST", brief),

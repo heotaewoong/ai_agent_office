@@ -4,9 +4,12 @@ demand는 요청마다 최대값을 100으로 맞춘 상대값(네이버 데이�
 """
 from __future__ import annotations
 
+import json
 import math
 
 from .calendar import enrich_idea
+from .evidence import reference_url
+from .store import WorkflowError, canonical, digest, now
 
 # timeliness는 기본 다섯 요소를 100점으로 정규화한 뒤 가산점(최대 10점, 합계 100점 상한)으로 더한다.
 # 캘린더가 있는 프리셋(brief.preset)의 카드만 0보다 큰 값을 받으므로 기존 카드 점수는 그대로다.
@@ -81,3 +84,68 @@ def score_idea(card, weights=None, lessons=(), today=None, calendar=None):
 def rank_ideas(cards, weights=None, lessons=(), today=None, calendar=None):
     scored = [score_idea(card, weights, lessons, today, calendar) for card in cards]
     return sorted(scored, key=lambda c: (not c["blocked"], c["score"]), reverse=True)
+
+
+def with_edit_hash(card):
+    """읽은 저장 판본의 토큰. 시간에 따라 재계산하는 점수와 구분하고 DB에는 넣지 않는다."""
+    return {**card, "edit_hash": digest(card)}
+
+
+def set_idea_sources(store, idea_id, source_urls, *, expected_hash, operator_verified, lessons=()):
+    """선택 전 출처를 운영자 확인으로 보완한다. 본문 열람·독립 검증·기획 선택은 수행하지 않는다."""
+    if operator_verified is not True:
+        raise WorkflowError("각 출처의 본문과 기획 관련성을 직접 확인한 뒤 체크하세요")
+    if not isinstance(source_urls, list) or not 1 <= len(source_urls) <= 10:
+        raise WorkflowError("출처 URL을 1~10개 입력하세요")
+    urls = []
+    for raw in source_urls:
+        if not isinstance(raw, str) or not raw.strip() or len(raw) > 2000:
+            raise WorkflowError("출처 URL은 2000자 이내의 공개 HTTPS 주소여야 합니다")
+        try:
+            url = reference_url(raw.strip())
+        except ValueError as error:
+            raise WorkflowError("공개 HTTPS 원출처 주소를 확인하세요") from error
+        if url not in urls:
+            urls.append(url)
+    with store.connection(transaction=True) as db:
+        row = db.execute("SELECT state,data FROM ideas WHERE id=?", (idea_id,)).fetchone()
+        if not row:
+            raise WorkflowError("기획을 찾을 수 없습니다")
+        stored = json.loads(row["data"])
+        if row["state"] != "candidate" or stored.get("state") != "candidate":
+            raise WorkflowError("이미 선택한 기획의 출처는 바꿀 수 없습니다")
+        if digest(stored) != expected_hash:
+            raise WorkflowError("기획이 변경되었습니다. 현재 기획을 다시 불러온 뒤 출처를 확인하세요")
+        updated = score_idea({**stored, "source_url": urls[0], "source_urls": urls,
+                              "primary_sources": len(urls), "operator_verified_sources": len(urls)}, lessons=lessons)
+        key = store._idea_key(updated)
+        if db.execute("SELECT id FROM ideas WHERE dedup_key=? AND id<>?", (key, idea_id)).fetchone():
+            raise WorkflowError("같은 제목과 대표 출처의 기획이 이미 있습니다. 기존 기획을 확인하세요")
+        db.execute("UPDATE ideas SET dedup_key=?,data=?,updated_at=? WHERE id=?", (key, canonical(updated), now(), idea_id))
+        store._event(db, "idea_sources_updated", {"idea_id": idea_id, "operator_verified_sources": len(urls), "source_urls_hash": digest(urls)})
+    return with_edit_hash(updated)
+
+
+def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=()):
+    """읽은 기획 판본의 선택과 작업 생성을 한 번에 저장한다. 출처 편집과 같은 DB 잠금을 쓴다."""
+    with store.connection(transaction=True) as db:
+        row = db.execute("SELECT state,data FROM ideas WHERE id=?", (idea_id,)).fetchone()
+        if not row:
+            raise WorkflowError("기획을 찾을 수 없습니다")
+        stored = json.loads(row["data"])
+        if row["state"] != "candidate" or stored.get("state") != "candidate":
+            raise WorkflowError("이미 선택한 기획입니다. 기존 작업을 확인하세요")
+        if digest(stored) != expected_hash:
+            raise WorkflowError("기획이 변경되었습니다. 출처와 내용을 다시 확인한 뒤 선택하세요")
+        refreshed = score_idea(stored, lessons=lessons)
+        if refreshed.get("blocked"):
+            raise WorkflowError("정책·근거 검사에서 막힌 기획은 선택할 수 없습니다")
+        try:
+            reference_url(refreshed.get("source_url") or "")
+        except ValueError as error:
+            raise WorkflowError("기획을 선택하려면 공개 https 출처 URL이 필요합니다") from error
+        selected = {**refreshed, "state": "selected", "selected_by": actor, "selected_at": now()}
+        db.execute("UPDATE ideas SET state='selected',data=?,updated_at=? WHERE id=?", (canonical(selected), now(), idea_id))
+        store._event(db, "idea_selected", {"idea_id": idea_id, "actor": actor})
+        job = store._create_job(db, {"id": idea_id, "title": selected["title"], "url": selected["source_url"], "origin": "idea", "evidence": []}, brief=selected.get("brief"))
+    return {"idea": selected, "job": job}

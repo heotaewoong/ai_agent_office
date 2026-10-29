@@ -53,3 +53,32 @@ test("브리프 저장은 편집을 시작한 판본 토큰을 보낸다", async
   };
   await api.setJobBrief("job a", "ai-agent", { reader: "새 독자" }, expected);
 });
+
+test("출처 보완은 같은 기획 ID에 URL·운영자 확인·판본으로 PUT하고 선택을 호출하지 않는다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const expected = "d".repeat(64);
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    assert.equal(String(input), "/api/ideas/idea%20a%2F1/sources");
+    assert.equal(init?.method, "PUT");
+    assert.deepEqual(JSON.parse(String(init?.body)), { source_urls: ["https://example.edu/source"], operator_verified: true, expected_hash: expected });
+    return Response.json({ id: "idea a/1", edit_hash: "e".repeat(64) });
+  };
+  const saved = await api.updateIdeaSources("idea a/1", { source_urls: ["https://example.edu/source"], operator_verified: true, expected_hash: expected });
+  assert.equal(saved.id, "idea a/1");
+});
+
+test("기획 선택⓪도 화면에서 확인한 기획 판본을 보낸다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const expected = "f".repeat(64);
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    assert.equal(String(input), "/api/ideas/idea%20read/select");
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), { expected_hash: expected });
+    return Response.json({ idea: { id: "idea read" }, job: { id: "job-one" } });
+  };
+  assert.equal((await api.selectIdea("idea read", expected)).job.id, "job-one");
+});

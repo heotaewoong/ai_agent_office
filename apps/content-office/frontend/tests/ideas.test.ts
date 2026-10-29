@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ideaInputFromForm } from "../lib/ideas.ts";
+import { ideaInputFromForm, ideaSourcesDraft, changeIdeaSourcesDraft, syncIdeaSourcesDraft, ideaSourcesInput } from "../lib/ideas.ts";
+import type { Idea } from "../lib/types.ts";
 
 test("제목과 https 출처가 있으면 숫자 필드를 변환한다", () => {
   const r = ideaInputFromForm({ title: " Claude 팀 ", source_url: "https://ex.com/a", views: "12,000", channel_avg_views: "3000", demand: "70", primary_sources: "2", fit: "0.9", covered_before: false, policy_flags: "ymyl, 실존인물" });
@@ -40,4 +41,28 @@ test("브리프 프리셋과 덮어쓰기는 비어 있지 않은 값만 보낸�
   assert.deepEqual(withBrief.input.brief, { reader: "편입 준비생", cta: "무료 체크리스트", language: "en" });
   const badLang = ideaInputFromForm({ ...base, brief_language: "fr" });
   assert.ok("error" in badLang && badLang.error.includes("언어"));
+});
+
+const idea = { id: "idea-one", title: "편입 준비", state: "candidate", score: 0, outlier_band: "unknown", reasons: [], blocked: ["1차 출처 없음"], edit_hash: "a".repeat(64) } as Idea;
+
+test("질문 출처 보완은 실제 URL 목록·확인·읽은 판본만 보내고 숫자를 만들어 보내지 않는다", () => {
+  let draft = changeIdeaSourcesDraft(ideaSourcesDraft(idea), " https://example.edu/transfer \nhttps://example.edu/english ");
+  assert.ok("error" in ideaSourcesInput(draft));
+  draft = { ...draft, confirmed: true };
+  assert.deepEqual(ideaSourcesInput(draft), { input: { source_urls: ["https://example.edu/transfer", "https://example.edu/english"], operator_verified: true, expected_hash: idea.edit_hash } });
+  assert.ok("error" in ideaSourcesInput({ ...draft, text: "http://example.edu/a" }));
+  assert.ok("error" in ideaSourcesInput({ ...draft, text: "https://user:pass@example.edu/a" }));
+  assert.ok("error" in ideaSourcesInput({ ...draft, baseHash: "" }));
+  assert.equal(changeIdeaSourcesDraft(draft, "https://example.edu/new").confirmed, false);
+});
+
+test("미편집 출처는 최신 카드로 동기화하고 편집 중 외부 갱신은 입력과 예전 판본을 보존한다", () => {
+  const original = ideaSourcesDraft(idea);
+  const next = { ...idea, source_urls: ["https://example.edu/remote"], edit_hash: "b".repeat(64) };
+  const clean = syncIdeaSourcesDraft(original, next);
+  assert.equal(clean.text, next.source_urls[0]); assert.equal(clean.baseHash, next.edit_hash); assert.equal(clean.dirty, false);
+  const edited = changeIdeaSourcesDraft(original, "https://example.edu/mine");
+  assert.deepEqual(syncIdeaSourcesDraft(edited, next), edited);
+  const saved = ideaSourcesDraft({ ...next, source_urls: [edited.text] });
+  assert.equal(saved.dirty, false); assert.equal(saved.text, edited.text);
 });

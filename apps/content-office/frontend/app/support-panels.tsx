@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import type { Action, Idea, Job, KnowledgeSearch, Task, OutputKind } from "../lib/types";
 import {
@@ -12,6 +12,9 @@ import {
 import { dDayLabel, timelinessPercent } from "../lib/calendar";
 import { Icon } from "./icons";
 import { IdeaIntake } from "./idea-intake";
+import { IdeaSourcesPanel } from "./idea-sources-panel";
+import type { IdeaSourcesDraft } from "../lib/ideas";
+import { packagingRequired } from "../lib/packaging";
 
 export type IntakeDraft = {
   text: string;
@@ -26,6 +29,7 @@ export function EvidenceIntake({
   model,
   draft,
   onChange,
+  onPackaging,
   action,
 }: {
   job: Job;
@@ -34,12 +38,14 @@ export function EvidenceIntake({
   model?: string;
   draft?: IntakeDraft;
   onChange: (value: IntakeDraft | null) => void;
+  onPackaging: () => void;
   action: Action;
 }) {
   const text = draft?.text ?? "";
   const version = draft ? draft.version : (job.source_hash ?? null);
   const stale = Boolean(text && version !== (job.source_hash ?? null));
   if (!evidenceInputAllowed(job)) return null;
+  const needsPackaging = packagingRequired(job);
   const locked =
     busy ||
     dirty ||
@@ -63,7 +69,7 @@ export function EvidenceIntake({
         </summary>
         <div className="intake-body">
           <p>
-            이 기사에서 직접 확인한 공개 원문만 입력하세요. 등록하면 현재 승인과
+            이 출처에서 직접 확인한 공개 원문만 입력하세요. 등록하면 현재 승인과
             파생 파일을 해제하고 근거 추출·새 원고·검수를 요청합니다.
           </p>
           <a
@@ -76,7 +82,7 @@ export function EvidenceIntake({
             <Icon name="external" size={12} />
           </a>
           <p className="intake-disclosure">
-            입력한 텍스트는 현재 설정된 Gemini{model ? ` (${model})` : ""}로
+            입력한 텍스트는 현재 설정된 원고 모델{model ? ` (${model})` : ""}로
             전송됩니다. 개인 문서나 비공개 자료는 붙여넣지 마세요.
           </p>
           <label htmlFor={`source-${job.id}`}>공개 원문 텍스트</label>
@@ -110,7 +116,7 @@ export function EvidenceIntake({
                 onChange({ text, version, acknowledged: event.target.checked })
               }
             />
-            <span>이 기사의 공개 원문이며 재사용할 권한을 확인했습니다.</span>
+            <span>이 출처의 공개 원문이며 재사용할 권한을 확인했습니다.</span>
           </label>
           {stale && (
             <p className="intake-error" role="alert">
@@ -123,10 +129,20 @@ export function EvidenceIntake({
               편집 중인 원고를 먼저 저장하거나 정리하세요.
             </p>
           )}
+          {needsPackaging && (
+            <div className="notice" id={`source-packaging-${job.id}`}>
+              <p>제목·썸네일·후크를 먼저 확정하세요. 입력한 원문과 동의는 그대로 유지됩니다.</p>
+              <button type="button" className="button text" onClick={onPackaging}>
+                제목·썸네일·후크 정하러 가기
+              </button>
+            </div>
+          )}
           <button
             className="button secondary"
-            disabled={locked || !valid}
-            onClick={() =>
+            disabled={locked || !valid || needsPackaging}
+            aria-describedby={needsPackaging ? `source-packaging-${job.id}` : undefined}
+            onClick={() => {
+              if (locked || !valid || needsPackaging) return;
               void action(
                 "공개 원문 근거 등록",
                 async () => {
@@ -134,8 +150,8 @@ export function EvidenceIntake({
                   onChange(null);
                 },
                 "공개 원문을 등록하고 근거 추출·새 원고 작업을 요청했습니다. 생성 완료와 승인은 별도입니다.",
-              )
-            }
+              );
+            }}
           >
             근거 등록하고 새 원고 만들기
             <Icon name="arrow" size={16} />
@@ -544,30 +560,57 @@ export function OutputChoices({
 }
 
 /** 기획 은행. refreshKey가 바뀌면(독자 질문 → 기획 전환 등) 목록을 다시 읽습니다. */
-export function IdeaBank({ onSelected, refreshKey = 0 }: { onSelected?: (job: Job) => void; refreshKey?: number }) {
+export function IdeaBank({ onSelected, refreshKey = 0, drafts = {}, onDraftChange }: {
+  onSelected?: (job: Job) => void;
+  refreshKey?: number;
+  drafts?: Record<string, IdeaSourcesDraft>;
+  onDraftChange?: (id: string, draft: IdeaSourcesDraft | null) => void;
+}) {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [editingSources, setEditingSources] = useState<Record<string, boolean>>({});
+  const readTicket = useRef(0);
+  const choosing = useRef(false);
+  const sourceEditing = useCallback((id: string, pending: boolean) => {
+    setEditingSources((previous) => {
+      if (Boolean(previous[id]) === pending) return previous;
+      const next = { ...previous };
+      if (pending) next[id] = true;
+      else delete next[id];
+      return next;
+    });
+  }, []);
   async function load() {
+    const ticket = ++readTicket.current;
     try {
-      setIdeas((await api.ideas()).ideas);
+      const result = await api.ideas();
+      if (ticket !== readTicket.current) return;
+      setIdeas(result.ideas);
       setError("");
     } catch (cause) {
+      if (ticket !== readTicket.current) return;
       setError(cause instanceof Error ? cause.message : "기획 은행을 읽지 못했습니다.");
     }
   }
   useEffect(() => {
     void load();
+    return () => { readTicket.current++; };
   }, [refreshKey]);
-  async function choose(id: string) {
-    setBusy(id);
+  async function choose(idea: Idea) {
+    if (choosing.current || editingSources[idea.id] || drafts[idea.id]?.dirty || !/^[a-f0-9]{64}$/.test(idea.edit_hash ?? "")) return;
+    choosing.current = true;
+    readTicket.current++;
+    setBusy(idea.id);
+    setError("");
     try {
-      const result = await api.selectIdea(id);
+      const result = await api.selectIdea(idea.id, idea.edit_hash!);
       onSelected?.(result.job);
       await load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "기획을 선택하지 못했습니다.");
     } finally {
+      choosing.current = false;
       setBusy(null);
     }
   }
@@ -597,11 +640,23 @@ export function IdeaBank({ onSelected, refreshKey = 0 }: { onSelected?: (job: Jo
               </div>
             )}
             {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
+            <IdeaSourcesPanel
+              idea={idea}
+              cached={drafts[idea.id]}
+              onDraftChange={onDraftChange}
+              onEditingChange={sourceEditing}
+              onSaved={(saved) => {
+                readTicket.current++;
+                setIdeas((cards) => cards.map((card) => card.id === saved.id ? saved : card));
+                void load();
+              }}
+            />
+            {editingSources[idea.id] && <p role="status">출처를 저장하거나 입력을 정리한 뒤 기획을 선택하세요.</p>}
             <button
               className="button secondary"
               type="button"
-              disabled={idea.blocked.length > 0 || idea.state === "selected" || busy === idea.id}
-              onClick={() => void choose(idea.id)}
+              disabled={idea.blocked.length > 0 || idea.state !== "candidate" || busy !== null || editingSources[idea.id] || drafts[idea.id]?.dirty || !/^[a-f0-9]{64}$/.test(idea.edit_hash ?? "")}
+              onClick={() => void choose(idea)}
             >
               {idea.state === "selected" ? "선택됨" : "이 기획으로 작업 만들기"}
             </button>

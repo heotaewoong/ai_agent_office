@@ -37,6 +37,7 @@ import { ArchitectureView } from "./architecture-view";
 import { YoutubePanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
 import { updateBriefDrafts, type BriefDraft, type BriefDraftUpdate } from "../lib/briefs";
+import type { IdeaSourcesDraft } from "../lib/ideas";
 import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
 import { QuizPanel } from "./quiz-panel";
@@ -118,11 +119,22 @@ export default function Office() {
     {},
   );
   const [briefDrafts, setBriefDrafts] = useState<Record<string, BriefDraft>>({});
+  const [ideaSourcesDrafts, setIdeaSourcesDrafts] = useState<Record<string, IdeaSourcesDraft>>({});
+  const updateIdeaSourcesDraft = useCallback((id: string, draft: IdeaSourcesDraft | null) => {
+    setIdeaSourcesDrafts((previous) => {
+      if (!draft && !previous[id]) return previous;
+      if (draft === previous[id]) return previous;
+      const next = { ...previous };
+      if (draft) next[id] = draft;
+      else delete next[id];
+      return next;
+    });
+  }, []);
   const updateBriefDraft = useCallback((job: Job, update: BriefDraftUpdate) => {
     setBriefDrafts((current) => updateBriefDrafts(current, job, update));
   }, []);
   const hasUnsavedDrafts =
-    Object.keys(localDrafts).length > 0 || Object.keys(intakeDrafts).length > 0 || Object.keys(briefDrafts).length > 0;
+    Object.keys(localDrafts).length > 0 || Object.keys(intakeDrafts).length > 0 || Object.keys(briefDrafts).length > 0 || Object.keys(ideaSourcesDrafts).length > 0;
   useEffect(() => {
     if (!hasUnsavedDrafts) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -407,7 +419,7 @@ export default function Office() {
               </h1>
               <p className="page-description">
                 {view === "news"
-                  ? "좋은 콘텐츠는, 믿을 수 있는 소식에서 시작됩니다."
+                  ? "독자의 질문과 확인한 근거에서 콘텐츠를 시작하세요."
                   : view === "studio"
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
                     : view === "delivery"
@@ -464,6 +476,12 @@ export default function Office() {
               </button>
             </div>
           )}
+          {view !== "news" && Object.keys(ideaSourcesDrafts).length > 0 && (
+            <div className="notice" role="status">
+              <span>기획 출처 입력 {Object.keys(ideaSourcesDrafts).length}건을 이 탭에 임시 보관 중입니다. 새로고침 전에 저장하세요.</span>
+              <button className="button text" onClick={() => setView("news")}>기획 은행으로 돌아가기</button>
+            </div>
+          )}
           {busy && (
             <div className="busy-line" role="status">
               <span className="spinner" />
@@ -499,12 +517,12 @@ export default function Office() {
                         노트
                       </span>
                       <h2>
-                        흩어진 AI 소식이
+                        흩어진 질문과 소식이
                         <br />
                         <span>나만의 콘텐츠가 되는 곳.</span>
                       </h2>
                       <p>
-                        공식 출처를 읽고, 한국 독자에게 전할 뉴스를 골라 보세요.
+                        공식 소식을 고르거나, 학습·편입·생산성 질문을 기획으로 옮겨 보세요.
                         <br className="desktop-break" /> 원고와 제작의 결정은
                         언제나 내 손에 있습니다.
                       </p>
@@ -537,6 +555,8 @@ export default function Office() {
                   </section>
                   <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
+                    drafts={ideaSourcesDrafts}
+                    onDraftChange={updateIdeaSourcesDraft}
                     refreshKey={ideaRefresh}
                     onSelected={(j) => {
                       selectJob(j.id);
@@ -650,6 +670,9 @@ export default function Office() {
                         >
                           오늘의 뉴스 고르기 →
                         </button>
+                        <button className="inline-button" onClick={() => setView("news")}>
+                          질문·직접 기획으로 시작하기 →
+                        </button>
                       </div>
                     ) : (
                       jobs.map((item) => (
@@ -676,8 +699,11 @@ export default function Office() {
                   <section className="job-content">
                     {!activeId ? (
                       <Empty title="첫 콘텐츠를 만들어 보세요" icon="pen">
-                        오늘의 뉴스에서 기사를 선택하면 근거와 원고가 이곳에
-                        모입니다.
+                        뉴스 기사, 독자 질문, 직접 등록한 기획에서 시작할 수 있어요.
+                        오늘의 뉴스 화면 위쪽의 질문·기획 은행에 편입 경험이나 학습·생산성 소재를 넣어 보세요.
+                        <button className="button secondary" onClick={() => setView("news")}>
+                          질문·기획 은행 열기
+                        </button>
                       </Empty>
                     ) : !job ? (
                       <div className="loading-panel" role="status">
@@ -1059,6 +1085,7 @@ function Studio({
     "write",
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
+  const packagingPanel = useRef<HTMLDivElement>(null);
   const stale = baseHash !== job.source_hash && dirty;
   useEffect(() => {
     if (!dirty) {
@@ -1146,18 +1173,24 @@ function Studio({
       )}
       <BriefPanel key={`brief-${job.id}`} job={job} busy={locked} action={action} cached={cachedBrief} onDraftChange={onBriefDraftChange} />
       {job.article?.origin === "idea" && (
-        <PackagingPanel
-          key={job.packaging?.packaging_hash ?? "new"}
-          job={job}
-          busy={locked}
-          action={action}
-        />
+        <div ref={packagingPanel} tabIndex={-1} aria-label="제목·썸네일·후크 기획">
+          <PackagingPanel
+            key={job.packaging?.packaging_hash ?? "new"}
+            job={job}
+            busy={locked}
+            action={action}
+          />
+        </div>
       )}
       <EvidenceIntake
         job={job}
         model={model}
         draft={intake}
         onChange={onIntakeChange}
+        onPackaging={() => {
+          packagingPanel.current?.focus();
+          packagingPanel.current?.scrollIntoView({ block: "start" });
+        }}
         busy={busy}
         dirty={dirty}
         action={action}

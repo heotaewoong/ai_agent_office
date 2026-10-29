@@ -330,7 +330,10 @@ export type KnowledgeSearch = {
 export type Idea = {
   id: string;
   title: string;
-  source_url?: string;
+  source_url?: string | null;
+  source_urls?: string[];
+  operator_verified_sources?: number;
+  edit_hash?: string;
   state: "candidate" | "selected";
   score: number;
   outlier_band: string;
@@ -377,6 +380,7 @@ export type IdeaInput = {
   brief_preset?: string;
   brief?: BriefOverrides;
 };
+export type IdeaSourcesInput = { source_urls: string[]; operator_verified: true; expected_hash: string };
 export type BriefLanguage = "ko" | "en";
 export type BriefAxis = "A" | "B";
 export type BriefPreset = {

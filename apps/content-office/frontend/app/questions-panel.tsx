@@ -177,6 +177,7 @@ export function QuestionsPanel({ onConverted }: { onConverted: () => void }) {
                     {done ? " · 기획 전환됨" : ""}
                   </small>
                 </div>
+                {done && <a href="#idea-bank-heading" className="button text small">기획에서 출처 보완</a>}
                 {!done &&
                   (converting === group.group_key ? (
                     <div className="question-convert">
