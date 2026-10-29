@@ -188,3 +188,24 @@ def test_openai_usage_missing_keeps_reservation(tmp_path, monkeypatch):
     with pytest.raises(WorkflowError, match="사용량"):
         provider.generate("gen", [{"role": "user", "content": "c"}], SCHEMA)
     assert store.budget()["reserved_krw"] > 0
+
+
+def test_openai_request_spells_out_array_counts_and_enums_the_json_schema_mode_ignores(tmp_path, monkeypatch):
+    from office.providers import schema_constraints
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-placeholder")
+    schema = {"type": "object", "properties": {"title": {"type": "string", "maxLength": 45}, "video": {"type": "object", "properties": {"thumbnails": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"type": "object"}}, "scenes": {"type": "array", "minItems": 3, "items": {"type": "object"}}, "kind": {"type": "string", "enum": ["long", "short"]}}}, "corrections": {"type": "array", "maxItems": 40, "items": {"type": "string"}}}, "required": ["title"]}
+    lines = schema_constraints(schema)
+    assert any("video.thumbnails" in l and "정확히 5개" in l for l in lines)
+    assert any("video.scenes" in l and "3개 이상" in l for l in lines)
+    assert any("corrections" in l and "40개 이하" in l for l in lines)
+    assert any("video.kind" in l and "long" in l and "short" in l for l in lines)
+    assert any("title" in l and "45자 이하" in l for l in lines)
+    calls = []
+
+    def transport(url, **kwargs):
+        calls.append(kwargs["json"])
+        return OpenAIResponse('{"title":"t"}')
+    Provider(Store(tmp_path), model="gpt-5.4-mini", transport=transport).generate("gen", [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}], schema)
+    systems = [m["content"] for m in calls[0]["messages"] if m["role"] == "system"]
+    assert systems[0] == "SYS" and any("정확히 5개" in s and "thumbnails" in s for s in systems)
+    assert calls[0]["messages"][-1]["role"] == "user"

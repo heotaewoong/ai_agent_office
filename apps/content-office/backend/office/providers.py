@@ -43,6 +43,36 @@ def price_for(model):
     return OPENAI_PRICES.get(model) or PRICES.get(model)
 
 
+def schema_constraints(schema, path=""):
+    """Array counts, enums and lengths as sentences. OpenAI's json_schema mode (non-strict) does not
+    enforce minItems/maxItems/enum/maxLength, so the model is told them explicitly."""
+    lines = []
+    if not isinstance(schema, dict):
+        return lines
+    kind = schema.get("type")
+    label = path or "(root)"
+    if kind == "array":
+        low, high = schema.get("minItems"), schema.get("maxItems")
+        if low is not None and high is not None and low == high:
+            lines.append(f"{label}: 정확히 {low}개")
+        elif low is not None and high is not None:
+            lines.append(f"{label}: {low}~{high}개")
+        elif low is not None:
+            lines.append(f"{label}: {low}개 이상")
+        elif high is not None:
+            lines.append(f"{label}: {high}개 이하")
+        lines.extend(schema_constraints(schema.get("items"), path + "[]"))
+    elif kind == "string":
+        if schema.get("enum"):
+            lines.append(f"{label}: 다음 중 하나 {schema['enum']}")
+        elif schema.get("maxLength") is not None:
+            lines.append(f"{label}: {schema['maxLength']}자 이하")
+    elif kind == "object":
+        for name, sub in (schema.get("properties") or {}).items():
+            lines.extend(schema_constraints(sub, f"{path}.{name}" if path else name))
+    return lines
+
+
 def cache_key(provider, model, messages, schema, options):
     return digest({"provider": provider, "model": model, "actual_messages": messages, "schema": schema, "actual_options": options, "contract": "heobrain-model-v1"})
 
@@ -165,8 +195,14 @@ class Provider:
     def _openai_request(self, api_key, messages, schema, options):
         # gpt-5 family: temperature is fixed by the API, output limit is max_completion_tokens,
         # and reasoning effort stays low so Korean drafting is fast and the reasoning tokens stay small.
+        chat = [{"role": m["role"], "content": m["content"]} for m in messages]
+        constraints = schema_constraints(schema)
+        if constraints:
+            # Keep the operator's own system prompt first; insert the schema facts before the first non-system message.
+            first_user = next((i for i, m in enumerate(chat) if m["role"] != "system"), len(chat))
+            chat.insert(first_user, {"role": "system", "content": "출력 JSON 형식 제약(반드시 지킬 것):" + chr(10) + "- " + (chr(10) + "- ").join(constraints)})
         payload = {"model": self.model,
-                   "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+                   "messages": chat,
                    "response_format": {"type": "json_schema", "json_schema": {"name": "office_result", "schema": schema}},
                    "max_completion_tokens": options["max_tokens"],
                    "reasoning_effort": options.get("reasoning_effort", "low")}
