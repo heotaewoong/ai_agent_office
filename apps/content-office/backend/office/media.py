@@ -154,13 +154,14 @@ def wrap_text(draw, text, font, width):
     return lines
 
 
-def text_box(draw, text, box, size=56, fill='#ffffff', *, minimum_size=20, truncate=False):
+def text_box(draw, text, box, size=56, fill='#ffffff', *, minimum_size=20, truncate=False, font_path=None, line_gap=None):
     x, y, width, height = box
+    face = str(font_path or korean_font())
     def fitted(value):
         for font_size in range(size, minimum_size - 1, -2):
-            font = ImageFont.truetype(str(korean_font()), font_size)
+            font = ImageFont.truetype(face, font_size)
             lines = wrap_text(draw, value, font, width)
-            line_height = font_size + max(8, font_size // 4)
+            line_height = font_size + (line_gap if line_gap is not None else max(8, font_size // 4))
             if len(lines) * line_height <= height:
                 return font, lines, line_height, font_size
         return None

@@ -17,7 +17,24 @@ FONT_CANDIDATES = ("C:/Windows/Fonts/malgun.ttf",
                    "/usr/share/fonts/truetype/noto/NotoSansKR-Regular.ttf")
 
 
-def korean_font() -> Path:
+BOLD_FONT_CANDIDATES = ("C:/Windows/Fonts/malgunbd.ttf",
+                        "/usr/share/fonts/truetype/nanum/NanumSquareNeo-cBd.ttf",
+                        "/usr/share/fonts/truetype/nanum/NanumSquareB.ttf",
+                        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
+                        "/usr/share/fonts/truetype/nanum/NanumBarunGothicBold.ttf",
+                        "/usr/share/fonts/truetype/noto/NotoSansKR-Bold.ttf")
+
+
+def korean_font(weight: str = "regular") -> Path:
+    """Korean TTF for PDF and image text. weight="bold" prefers a bold face and falls back to the regular one."""
+    if weight == "bold":
+        explicit = os.environ.get("CONTENT_OFFICE_FONT_BOLD")
+        if explicit and Path(explicit).suffix.lower() == ".ttf" and Path(explicit).is_file():
+            return Path(explicit)
+        for candidate in BOLD_FONT_CANDIDATES:
+            if Path(candidate).is_file():
+                return Path(candidate)
+        return korean_font()
     explicit = os.environ.get("CONTENT_OFFICE_FONT")
     if explicit:
         path = Path(explicit)
