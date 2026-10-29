@@ -11,6 +11,7 @@ import { LeadsPanel } from "./leads-panel";
 type Action = (label: string, execute: () => Promise<unknown>, success: string) => Promise<true | string>;
 
 const GROUPS: { kind: ProfileKind; title: string; description: string }[] = [
+  { kind: "text", title: "글 모델", description: "원고 생성·비평·평가·국어 검수·퀴즈·카드뉴스 문구를 쓰는 모델. 실패해도 다른 제공자로 자동 전환하지 않습니다" },
   { kind: "voice", title: "음성", description: "영상 내레이션을 만드는 방식" },
   { kind: "image", title: "배경 이미지", description: "영상·카드 장면의 배경. 한국어 글자는 항상 로컬에서 얹습니다" },
   { kind: "clip", title: "생성 영상", description: "원고에서 clip: generated로 지정한 장면만 짧은 생성 영상으로" },
@@ -36,6 +37,7 @@ export function SettingsPanel({
   const [servicesNote, setServicesNote] = useState("");
   const warnings = settingsWarnings(provider);
   const current: Record<ProfileKind, string | undefined> = {
+    text: provider?.text?.id ?? provider?.model,
     voice: provider?.voice?.id,
     image: provider?.image?.id,
     clip: provider?.clip?.id,

@@ -81,7 +81,7 @@ class Review(BaseModel):
 
 
 class ProfileChoice(BaseModel):
-    kind: Literal["voice", "image", "clip"]
+    kind: Literal["voice", "image", "clip", "text"]
     profile: str
 
 
@@ -238,6 +238,7 @@ def create_app(store: Store | None = None):
         from .voice_selection import profile_summary
         from .image_selection import profile_summary as image_profile_summary
         from .video_selection import profile_summary as clip_profile_summary
+        from .text_selection import profile_summary as text_profile_summary
         from .youtube_delivery import configured as youtube_configured
         from .channels import configured_youtube_channels
         from .api_leads_newsletter import dashboard_counts
@@ -245,7 +246,7 @@ def create_app(store: Store | None = None):
         current_ids = {article["id"] for article in rank_articles(store.articles_list())}
         active_ids = set(feed_report.get("active_article_ids", current_ids))
         articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
-        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
+        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
 
     @app.get("/api/space")
     def space():
@@ -450,13 +451,14 @@ def create_app(store: Store | None = None):
         from .voice_selection import profile_summary as voice_summary
         from .image_selection import profile_summary as image_summary
         from .video_selection import profile_summary as clip_summary
-        return {"voice": voice_summary(store), "image": image_summary(store), "clip": clip_summary(store)}
+        from .text_selection import profile_summary as text_summary
+        return {"voice": voice_summary(store), "image": image_summary(store), "clip": clip_summary(store), "text": text_summary(store)}
 
     @app.post("/api/settings/profiles")
     def choose_profile(choice: ProfileChoice):
         # Choosing a profile is free and never calls a provider; costs happen only after approval①.
-        from . import image_selection, video_selection, voice_selection
-        module = {"voice": voice_selection, "image": image_selection, "clip": video_selection}[choice.kind]
+        from . import image_selection, text_selection, video_selection, voice_selection
+        module = {"voice": voice_selection, "image": image_selection, "clip": video_selection, "text": text_selection}[choice.kind]
         module.select_profile(store, choice.profile, actor="local-operator-ui")
         return profile_summaries()
 

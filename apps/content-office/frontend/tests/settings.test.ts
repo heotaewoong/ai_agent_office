@@ -75,3 +75,15 @@ test("Studio 링크는 안전한 영상 ID만", () => {
   assert.equal(studioUrl("../evil"), null);
   assert.equal(studioUrl(undefined), null);
 });
+
+
+test("text model profile options and warnings follow the chosen provider", () => {
+  assert.ok(PROFILE_OPTIONS.text.some((o) => o.id === "gpt-5.4-mini" && o.paid));
+  assert.ok(PROFILE_OPTIONS.text.some((o) => o.id === "gemini-3.8-flash"));
+  const openaiWithoutKey = settingsWarnings({ configured: true, text: { id: "gpt-5.4-mini", configured: false } });
+  assert.ok(openaiWithoutKey.some((w) => w.includes("OPENAI_API_KEY")));
+  const openaiNoGemini = settingsWarnings({ configured: false, text: { id: "gpt-5.4-mini", configured: true } });
+  assert.ok(!openaiNoGemini.some((w) => w.includes("원고 작성이 동작하지")));
+  const geminiNoKey = settingsWarnings({ configured: false, text: { id: "gemini-3.8-flash", configured: false } });
+  assert.ok(geminiNoKey.some((w) => w.includes("GEMINI_API_KEY")));
+});

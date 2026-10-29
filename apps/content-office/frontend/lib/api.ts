@@ -106,7 +106,7 @@ async function request<T>(
 }
 
 export const api = {
-  setProfile: (kind: "voice" | "image" | "clip", profile: string) =>
+  setProfile: (kind: "text" | "voice" | "image" | "clip", profile: string) =>
     request<ProfileSummaries>("/settings/profiles", "POST", { kind, profile }),
   startWindow: (minutes: number) =>
     request<WindowStart>("/session/window", "POST", { minutes }),

@@ -1,10 +1,16 @@
 import type { Delivery, Job, ProviderStatus } from "./types";
 
-export type ProfileKind = "voice" | "image" | "clip";
+export type ProfileKind = "text" | "voice" | "image" | "clip";
 export type ProfileOption = { id: string; label: string; paid: boolean; hint: string };
 
-// Must match the server registries: voice_selection.PROFILES, image_selection.PROFILES, video_selection.PROFILES.
+// Must match the server registries: text_selection.PROFILES, voice_selection.PROFILES, image_selection.PROFILES, video_selection.PROFILES.
 export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
+  text: [
+    { id: "gpt-5.4-mini", label: "OpenAI gpt-5.4-mini", paid: true, hint: "원고·검수·퀴즈·카드 문구. 입력 $0.75 · 출력 $4.50 / 100만 토큰" },
+    { id: "gpt-5.5", label: "OpenAI gpt-5.5 · 최상급", paid: true, hint: "입력 $5 · 출력 $30 / 100만 토큰. 원고 1편에 수천 원까지" },
+    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash", paid: true, hint: "입력 $0.75 · 출력 $3.75 / 100만 토큰. 수요 폭주 시 503으로 멈출 수 있음" },
+    { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite · 가벼움", paid: true, hint: "입력 $0.30 · 출력 $2.50 / 100만 토큰" },
+  ],
   voice: [
     { id: "windows-heami", label: "Windows Heami · 로컬", paid: false, hint: "Windows PC에서만 생성됩니다. EC2(Linux)에서는 Gemini 음성을 고르세요." },
     { id: "gemini-kore", label: "Gemini Flash TTS · Kore", paid: true, hint: "원고 승인① 뒤 승인 장면 대본만 합성 · 원고당 1,000원 상한" },
@@ -23,7 +29,11 @@ export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
 export function settingsWarnings(provider: ProviderStatus | undefined): string[] {
   const p = provider ?? {};
   const warnings: string[] = [];
-  if (!p.configured)
+  const textModel = p.text?.id ?? p.model ?? "gemini-3.8-flash";
+  const textIsOpenAI = textModel.startsWith("gpt-");
+  if (textIsOpenAI && p.text && !p.text.configured)
+    warnings.push("글 모델을 OpenAI로 골랐지만 OPENAI_API_KEY가 서버에 없어 원고 작성이 동작하지 않습니다.");
+  if (!textIsOpenAI && !p.configured)
     warnings.push("GEMINI_API_KEY가 서버에 없어 원고 작성이 동작하지 않습니다.");
   if (p.voice?.id === "gemini-kore" && !p.configured)
     warnings.push("Gemini 음성을 골랐지만 GEMINI_API_KEY가 없어 영상 음성을 만들 수 없습니다.");

@@ -236,9 +236,10 @@ export type ProviderStatus = {
   voice?: VoiceProfile;
   image?: ProviderProfile;
   clip?: ProviderProfile;
+  text?: ProviderProfile;
   youtube?: { configured?: boolean; visibility?: string; automatic_retry?: boolean; channels?: string[] };
 };
-export type ProfileSummaries = { voice: VoiceProfile; image: ProviderProfile; clip: ProviderProfile };
+export type ProfileSummaries = { voice: VoiceProfile; image: ProviderProfile; clip: ProviderProfile; text?: ProviderProfile };
 export type Delivery = {
   id: string;
   channel: string;
