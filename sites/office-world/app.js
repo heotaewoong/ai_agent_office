@@ -38,6 +38,7 @@
     view: 'overview',      // 'overview' | 'walk'
     rosterOpen: false,
     buildingOpen: false,
+    resultsOpen: false,
     selectedStage: null,
     embedFocus: null,
     embedResult: null,
@@ -413,7 +414,7 @@
     },
 
     syncRendering() {
-      const paused = document.hidden || space.rosterOpen;
+      const paused = document.hidden || space.rosterOpen || space.resultsOpen;
       if (!this.renderFrame || this.renderPaused === paused) return;
       this.renderPaused = paused;
       if (paused) this.engine.stopRenderLoop(this.renderFrame);
@@ -1772,7 +1773,7 @@
     onKey(e, down) {
       const k = e.key.toLowerCase();
       if (!down) this.keys.delete(k);
-      if (space.rosterOpen || space.buildingOpen) return;
+      if (space.rosterOpen || space.buildingOpen || space.resultsOpen) return;
       if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       if (k === ' ' && e.target?.closest?.('button')) return;
       if (down && k === 'm') { this.setView(space.view === 'walk' ? 'overview' : 'walk'); return; }
@@ -1940,7 +1941,7 @@
       pill.textContent = data.source === 'live' ? '실시간' : data.source === 'sample-fallback' ? '예시 데이터 (실시간 실패)' : '예시 데이터';
       pill.title = data.error || '';
       $('updated-at').textContent = d.generatedAt ? `갱신 ${fmtTime(d.generatedAt)}` : '갱신 시각 없음';
-      if (space.selectedStage) this.openStage(space.selectedStage, true);
+      if (!results.opened&&space.selectedStage) this.openStage(space.selectedStage, true);
       this.pushEvents(d.events);
     },
 
@@ -1976,6 +1977,7 @@
     },
 
     openStage(id, silent) {
+      if(results.opened)results.close();
       if (space.layer !== 'office') controls.setLayer('office');
       exploration(id);
       const st = space.stages.find((s) => s.id === id);
@@ -2001,6 +2003,7 @@
     },
 
     openBrain() {
+      if(results.opened)results.close();
       if (space.layer !== 'office') controls.setLayer('office');
       exploration('hub');
       const b = space.data.brain;
@@ -2017,6 +2020,7 @@
     },
 
     closePanel() {
+      if(results.opened)results.close();
       $('panel').hidden = true;
       space.selectedStage = null;
       this.cards.forEach((el) => el.classList.remove('active'));
@@ -2337,6 +2341,138 @@
     },
   };
 
+  const results = {
+    opened:false,loading:false,error:'',jobs:[],current:null,selectedId:null,listAt:null,detailAt:null,serial:0,controller:null,
+
+    safeId(value) { return typeof value==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(value); },
+    text(value,max=200) { return typeof value==='string'?value.slice(0,max):''; },
+    hash(value) { return typeof value==='string'&&/^[a-f0-9]{64}$/i.test(value)?value.toLowerCase():null; },
+
+    endpoint(kind,id,child) {
+      try{
+        if(!data.apiUrl)return null;
+        const base=new URL(data.apiUrl,location.href);
+        if(base.origin!==location.origin||base.username||base.password||base.pathname!=='/api/space'||!['http:','https:'].includes(base.protocol))return null;
+        const paths={list:'/api/dashboard'};
+        if(kind==='list')return base.origin+paths.list;
+        if(!this.safeId(id))return null;
+        if(kind==='job')return base.origin+'/api/jobs/'+encodeURIComponent(id);
+        if(kind==='deliveries')return base.origin+'/api/jobs/'+encodeURIComponent(id)+'/deliveries';
+        if(kind==='draft'&&this.safeId(child))return base.origin+'/api/jobs/'+encodeURIComponent(id)+'/drafts/'+encodeURIComponent(child)+'/preview';
+      }catch(_){ /* 연결 주소가 확인될 때만 조회한다. */ }
+      return null;
+    },
+
+    summary(job) {
+      if(!job||!this.safeId(job.id))return null;
+      const approval=(record,release=false)=>{
+        if(!record||typeof record!=='object')return null;
+        return {id:release?null:(this.safeId(record.id)?record.id:null),version:this.hash(record.version),decision:this.text(record.decision,40),createdAt:this.text(record.created_at,60),outputs:release&&Array.isArray(record.outputs)?record.outputs.filter(v=>typeof v==='string').slice(0,20).map(v=>v.slice(0,60)):[]};
+      };
+      const manifest=job.manifest&&typeof job.manifest==='object'?job.manifest:{};
+      return {id:job.id,title:this.text(job.title)||job.id,state:this.text(job.state,60)||'unknown',sourceHash:this.hash(job.source_hash),manifestHash:this.hash(manifest.hash),manifestSourceHash:this.hash(manifest.source_hash),sourceApproval:approval(job.source_approval),releaseApproval:approval(job.release_approval,true),
+        files:(Array.isArray(manifest.files)?manifest.files:[]).slice(0,80).map(f=>({id:this.safeId(f?.id)?f.id:null,kind:this.text(f?.kind,60)||'형식 미제공',sha256:this.hash(f?.sha256),outputs:Array.isArray(f?.outputs)?f.outputs.filter(v=>typeof v==='string').slice(0,20).map(v=>v.slice(0,60)):[]}))};
+    },
+
+    detail(raw,ledger) {
+      const job=this.summary(raw);
+      if(!job)throw new Error('작업 기록 형식을 확인하지 못했습니다.');
+      const tasks=(Array.isArray(raw.tasks)?raw.tasks:[]).filter(t=>this.safeId(t?.id)).slice(0,100).map(t=>({id:t.id,kind:this.text(t.kind,60),state:this.text(t.state,60)||'unknown',createdAt:this.text(t.created_at,60),updatedAt:this.text(t.updated_at,60)}));
+      const drafts=(Array.isArray(raw.drafts)?raw.drafts:[]).filter(d=>this.safeId(d?.id)).slice(0,30).map(d=>({id:d.id,title:this.text(d.title),version:Number.isInteger(d.version)&&d.version>=0?d.version:null,createdAt:this.text(d.created_at,60)}));
+      const deliveries=(Array.isArray(ledger?.deliveries)?ledger.deliveries:[]).slice(0,30).map(d=>({state:this.text(d?.state,60)||'unknown',visibility:this.text(d?.visibility,40),privacyStatus:this.text(d?.privacy_status,40),updatedAt:this.text(d?.updated_at,60)}));
+      return {job,tasks,drafts,deliveries,deliveryError:!Array.isArray(ledger?.deliveries)};
+    },
+
+    async read(url,signal) {
+      const response=await fetch(url,{method:'GET',credentials:'same-origin',cache:'no-store',redirect:'error',signal});
+      if(!response.ok)throw new Error('조회 실패 · HTTP '+response.status);
+      if(!response.headers.get('content-type')?.includes('application/json'))throw new Error('조회 데이터 형식을 확인하지 못했습니다.');
+      try{return await response.json();}catch(_){throw new Error('조회 데이터 형식을 확인하지 못했습니다.');}
+    },
+
+    async load(kind='list',id=null) {
+      if(!['list','job'].includes(kind)){this.error='지원하지 않는 조회입니다.';this.render();return false;}
+      const url=this.endpoint(kind,id);
+      if(!url){this.error='실제 결과 연결이 없습니다. 같은 주소의 오피스 앱에서 월드를 열어 주세요.';this.render();return false;}
+      this.controller?.abort();const token=++this.serial,controller=new AbortController();this.controller=controller;
+      this.loading=true;this.error='';
+      if(kind==='job'){this.selectedId=id;this.current=null;this.detailAt=null;}else{this.selectedId=null;this.current=null;}
+      this.render();const timeout=setTimeout(()=>controller.abort(),12000);
+      try{
+        let value;
+        if(kind==='list'){
+          const raw=await this.read(url,controller.signal);
+          if(!Array.isArray(raw.jobs))throw new Error('작업 목록 형식을 확인하지 못했습니다.');
+          const seen=new Set();value=raw.jobs.slice(0,80).map(j=>this.summary(j)).filter(j=>j&&!seen.has(j.id)&&seen.add(j.id));
+        }else{
+          const [job,ledger]=await Promise.allSettled([this.read(url,controller.signal),this.read(this.endpoint('deliveries',id),controller.signal)]);
+          if(job.status!=='fulfilled')throw job.reason;
+          value=this.detail(job.value,ledger.status==='fulfilled'?ledger.value:null);
+          if(value.job.id!==id)throw new Error('요청한 작업과 결과 식별자가 다릅니다.');
+        }
+        if(!this.opened||token!==this.serial)return false;
+        if(kind==='list'){this.jobs=value;this.listAt=new Date().toISOString();}else{this.current=value;this.detailAt=new Date().toISOString();}
+        return true;
+      }catch(error){
+        if(this.opened&&token===this.serial)this.error=controller.signal.aborted?'조회 시간이 초과됐습니다. 다시 조회해 주세요.':this.text(error?.message)||'조회하지 못했습니다.';
+        return false;
+      }finally{
+        clearTimeout(timeout);
+        if(this.opened&&token===this.serial){this.loading=false;this.controller=null;this.render();}
+      }
+    },
+
+    match(a,b) { return a&&b?(a===b?'기록 버전 일치':'기록 버전 다름'):'버전 미제공'; },
+
+    render() {
+      if(!this.opened)return;
+      const body=$('panel-body'),stamp=this.listAt?new Date(this.listAt).toLocaleString('ko-KR'):'아직 조회하지 않음';
+      $('panel-title').textContent='내 작업 결과 전시장';$('panel-sub').textContent='읽기 전용 · 목록 조회 '+stamp;
+      const row=(label,value)=>'<div class="result-meta"><dt>'+esc(label)+'</dt><dd>'+esc(value||'미제공')+'</dd></div>';
+      const approval=(label,record,currentHash)=>'<section class="result-block"><h3>'+label+'</h3><dl>'+row('기록된 판정',record?.decision||'기록 미제공')+row('기록 ID',record?.id)+row('승인 대상 버전',record?.version)+row('버전 비교',this.match(record?.version,currentHash))+row('기록 시각',record?.createdAt)+(record?.outputs?.length?row('대상 출력',record.outputs.join(', ')):'')+'</dl></section>';
+      const options=this.jobs.map(j=>'<option value="'+esc(j.id)+'"'+(j.id===this.selectedId?' selected':'')+'>'+esc(j.title.slice(0,70))+' · '+esc(j.state)+'</option>').join('');
+      let html='<p class="results-source" role="status">'+(this.error?esc(this.error)+(this.listAt?' · 목록은 마지막 조회 기록입니다.':''):this.loading?'원본 기록을 조회하고 있습니다.':this.listAt?'연결된 오피스의 조회 기록 · 예시 결과로 대체하지 않습니다.':'제작·승인·게시 요청을 보내지 않는 조회 화면입니다.')+'</p>';
+      html+='<label class="result-picker">확인할 작업<select id="result-job"'+(this.loading?' disabled':'')+'><option value="">작업을 선택하세요</option>'+options+'</select></label>';
+      if(this.current){
+        const d=this.current,j=d.job;
+        html+='<article class="result-detail"><h3>'+esc(j.title)+'</h3><dl>'+row('원본 작업 ID',j.id)+row('작업 상태',j.state)+row('상세 조회 시각',this.detailAt)+row('현재 원고 버전',j.sourceHash)+row('산출물 묶음 버전',j.manifestHash)+row('묶음의 원고 버전',j.manifestSourceHash)+row('원고/묶음 비교',this.match(j.sourceHash,j.manifestSourceHash))+'</dl>';
+        html+=approval('① 원고 승인 기록',j.sourceApproval,j.sourceHash)+approval('② 출력 승인 기록',j.releaseApproval,j.manifestHash);
+        html+='<p class="result-caution">기록 판정과 버전 비교만 표시합니다. 선택값·출력별 승인 유효성, 실파일 해시 검증은 검토 앱에서 확인하세요.</p>';
+        html+='<section class="result-block"><h3>원고 미리보기</h3>'+(d.drafts.length?d.drafts.map(v=>'<div class="result-entry"><strong>'+esc(v.title||'원고')+'</strong><span>'+esc(v.id)+' · 버전 '+esc(v.version===null?'미제공':String(v.version))+'</span><a class="item-link" target="_blank" rel="noopener" href="'+esc(this.endpoint('draft',j.id,v.id))+'">원고 읽기</a></div>').join(''):'<p>이 조회에서 원고를 받지 못했습니다.</p>')+'</section>';
+        html+='<section class="result-block"><h3>산출물 파일 · '+j.files.length+'개 조회</h3>'+(j.files.length?j.files.map(f=>'<dl class="result-entry">'+row('파일 ID',f.id)+row('형식',f.kind)+row('기록된 SHA-256',f.sha256)+row('대상 출력',f.outputs.join(', '))+'</dl>').join(''):'<p>이 조회에서 산출물 파일을 받지 못했습니다.</p>')+'<p class="result-caution">파일 내용은 자동으로 열지 않습니다. 파일 저장·전체 검토는 오피스 앱에서 진행하세요.</p></section>';
+        html+='<section class="result-block"><h3>조회된 실행 기록 · '+d.tasks.length+'건</h3><p class="result-caution">원본 task ID입니다. 별도 run/attempt ID는 미제공입니다. 최근 조회 범위이므로 전체 이력 수가 아닙니다.</p>'+d.tasks.map(t=>'<dl class="result-entry">'+row('task ID',t.id)+row('종류 / 상태',t.kind+' / '+t.state)+row('생성 / 갱신',t.createdAt+' / '+t.updatedAt)+'</dl>').join('')+(d.tasks.length?'':'<p>이 조회 범위에 실행 기록이 없습니다.</p>')+'</section>';
+        html+='<section class="result-block"><h3>YouTube 전송 원장</h3>'+(d.deliveryError?'<p>전송 원장을 조회하지 못했습니다. 미게시로 판단하지 않습니다.</p>':d.deliveries.length?d.deliveries.map(v=>'<dl class="result-entry">'+row('전송 상태',v.state)+row('공개 설정',v.privacyStatus||v.visibility||'미제공')+row('갱신 시각',v.updatedAt)+'</dl>').join(''):'<p>이 조회에 YouTube 전송 기록이 없습니다. 다른 채널의 게시 여부는 확인하지 않습니다.</p>')+'</section></article>';
+      }else if(!this.selectedId&&!this.loading){
+        html+=this.jobs.length?'<p class="result-caution">조회된 작업 '+this.jobs.length+'건(최대80건). 완료 상태만으로 산출물·승인·공개 게시를 추정하지 않습니다.</p><div class="result-grid">'+this.jobs.slice(0,6).map(j=>'<button type="button" class="result-card" data-result-job="'+esc(j.id)+'"><strong>'+esc(j.title)+'</strong><span>'+esc(j.state)+'</span><small>'+esc(j.id)+'</small></button>').join('')+'</div>':'<p class="result-empty">표시할 작업이 없습니다. 연결된 오피스에서 작업 기록을 만든 뒤 다시 조회하세요.</p>';
+      }
+      body.innerHTML=html;
+      $('result-job').onchange=e=>{if(e.target.value)this.load('job',e.target.value);else{this.selectedId=null;this.current=null;this.render();}};
+      body.querySelectorAll('[data-result-job]').forEach(button=>button.onclick=()=>this.load('job',button.dataset.resultJob));
+      $('panel-foot').innerHTML='<button type="button" class="item-link" id="results-refresh"'+(this.loading?' disabled':'')+'>다시 조회</button>'+(this.endpoint('list')?'<a class="item-link" href="'+esc(location.origin+'/')+'" target="_blank" rel="noopener">오피스 검토 앱 열기</a>':'')+'<span class="panel-note">승인·제작·게시·재시도·ZIP 생성은 이 화면에서 실행하지 않습니다.</span>';
+      $('results-refresh').onclick=()=>this.load(this.selectedId?'job':'list',this.selectedId);
+    },
+
+    open() {
+      if(workshop.opened)workshop.setOpen(false);workbench.setRoster(false);hud.closePanel();
+      controls.keys.clear();controls.dragging=false;controls.setVehicleSpeed(0);controls.setView('overview');
+      this.opened=true;space.resultsOpen=true;document.body.classList.add('results-view');
+      $('btn-results').setAttribute('aria-pressed','true');$('btn-results').textContent='결과 닫기';$('panel').hidden=false;
+      this.render();world.syncRendering();this.load();
+    },
+
+    close() {
+      if(!this.opened)return;
+      this.opened=false;space.resultsOpen=false;this.serial++;this.controller?.abort();this.controller=null;this.loading=false;
+      document.body.classList.remove('results-view');$('panel').hidden=true;$('btn-results').setAttribute('aria-pressed','false');$('btn-results').textContent='결과';
+      controls.keys.clear();controls.dragging=false;world.syncRendering();
+    },
+
+    init() {
+      $('btn-results').onclick=()=>this.opened?hud.closePanel():this.open();
+      document.addEventListener('keydown',e=>{if(this.opened&&e.key==='Escape'){e.preventDefault();e.stopPropagation();hud.closePanel();$('btn-results').focus();}});
+    },
+  };
+
   const workbench = {
     attentionId: null,
 
@@ -2361,6 +2497,7 @@
     },
 
     setRoster(open) {
+      if(open&&space.resultsOpen)hud.closePanel();
       space.rosterOpen = open === true;
       controls.keys.clear(); controls.dragging = false;
       $('roster-panel').hidden = !space.rosterOpen;
@@ -2505,6 +2642,7 @@
     embed.init();
     workbench.init();
     workshop.init();
+    results.init();
 
     let simTimer = null;
     data.onChange((d) => {

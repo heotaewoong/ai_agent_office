@@ -16,8 +16,8 @@ test('low quality bounds render density while high quality retains a two-pixel c
   assert.equal(high(1.5), 1 / 1.5); assert.equal(high(3), .5); assert.equal(high(NaN), 1);
 });
 
-test('render suspension handles list view and hidden tabs without duplicate loops', () => {
-  const document = { hidden: false }, space = { rosterOpen: false }, calls = [];
+test('render suspension handles list view, result gallery and hidden tabs without duplicate loops', () => {
+  const document = { hidden: false }, space = { rosterOpen: false, resultsOpen: false }, calls = [];
   const sync = method('world', 'syncRendering', { document, space });
   const frame = () => {};
   const world = { renderFrame: frame, renderPaused: true, engine: {
@@ -30,6 +30,12 @@ test('render suspension handles list view and hidden tabs without duplicate loop
   assert.deepEqual(calls, ['resize', 'run', 'stop']);
   document.hidden = false; sync.call(world); sync.call(world);
   assert.deepEqual(calls, ['resize', 'run', 'stop', 'resize', 'run']);
+  space.resultsOpen = true; sync.call(world); sync.call(world);
+  assert.deepEqual(calls, ['resize', 'run', 'stop', 'resize', 'run', 'stop']);
+  space.rosterOpen = true; space.resultsOpen = false; sync.call(world);
+  assert.deepEqual(calls, ['resize', 'run', 'stop', 'resize', 'run', 'stop']);
+  space.rosterOpen = false; sync.call(world); sync.call(world);
+  assert.deepEqual(calls, ['resize', 'run', 'stop', 'resize', 'run', 'stop', 'resize', 'run']);
 });
 
 test('attention filtering is explicit and sorting does not mutate source observations', () => {
