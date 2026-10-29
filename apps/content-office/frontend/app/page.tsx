@@ -36,6 +36,12 @@ import { YoutubePanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
 import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
+import { QuizPanel } from "./quiz-panel";
+import { CardsPanel } from "./cards-panel";
+import { OfferPanel } from "./offer-panel";
+import { QuestionsPanel } from "./questions-panel";
+import { NewsletterPanel } from "./newsletter-panel";
+import { sourceApproved } from "../lib/workflow";
 import { packagingRequired } from "../lib/packaging";
 import {
   EvidenceIntake,
@@ -130,6 +136,7 @@ export default function Office() {
   const [showAll, setShowAll] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [lastLoaded, setLastLoaded] = useState<string>();
+  const [ideaRefresh, setIdeaRefresh] = useState(0);
   const alive = useRef(true);
 
   const loadDashboard = useCallback(async () => {
@@ -350,6 +357,16 @@ export default function Office() {
                 weekday: "short",
               }).format(now)}
             </span>
+            {dashboard?.leads?.consented != null && (
+              <span className="local-chip summary-chip" title="리드마그넷 동의 장부 · 동의 유지">
+                리드 동의 {dashboard.leads.consented}
+              </span>
+            )}
+            {dashboard?.newsletters && (
+              <span className="local-chip summary-chip" title="뉴스레터 회차 · 초안과 ③ 승인">
+                뉴스레터 초안 {dashboard.newsletters.draft ?? 0} · ③ {dashboard.newsletters.approved ?? 0}
+              </span>
+            )}
             <span className="local-chip">LOCAL</span>
           </div>
         </header>
@@ -492,7 +509,9 @@ export default function Office() {
                       </div>
                     </div>
                   </section>
+                  <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
+                    refreshKey={ideaRefresh}
                     onSelected={(j) => {
                       setActiveId(j.id);
                       setView("studio");
@@ -695,6 +714,12 @@ export default function Office() {
                             action={action}
                           />
                         )}
+                        <NewsletterPanel
+                          key={`newsletter-${job.id}`}
+                          job={job}
+                          busy={!!busy || !connected}
+                          action={action}
+                        />
                       </>
                     )}
                   </section>
@@ -778,7 +803,13 @@ function ArticleCard({
   disabled: boolean;
   onToggle: () => void;
 }) {
-  const reasons = article.score_reasons ?? [];
+  const card = article.card_ko;
+  const reasons = [
+    ...(card?.why ? [card.why] : []),
+    ...(article.score_reasons ?? []),
+  ];
+  const headline = article.editorial_title || card?.headline || article.title;
+  const issues = card?.check?.issues ?? [];
   return (
     <article className={`article-card ${checked ? "selected" : ""}`}>
       <div className="card-top">
@@ -796,7 +827,7 @@ function ArticleCard({
             checked={checked}
             disabled={disabled}
             onChange={onToggle}
-            aria-label={`${article.editorial_title || article.title} 선택`}
+            aria-label={`${headline} 선택`}
           />
           <span>
             <Icon name="check" size={13} />
@@ -811,11 +842,36 @@ function ArticleCard({
           {formatDate(article.published_at)}
         </time>
       </div>
-      <h3>{article.editorial_title || article.title}</h3>
-      <p className="article-summary">
-        {article.summary ||
-          "원문과 선정 근거를 확인한 뒤 한국어 콘텐츠로 다듬을 수 있습니다."}
-      </p>
+      <h3>{headline}</h3>
+      {headline !== article.title && (
+        <p className="article-original" title={article.title}>
+          {article.title}
+        </p>
+      )}
+      {card?.summary ? (
+        <p className="article-summary ko">{card.summary}</p>
+      ) : (
+        <p className="article-summary pending">
+          한국어 요약을 아직 만들지 않았어요. 아래에서 원문 설명을 볼 수
+          있어요.
+        </p>
+      )}
+      {card && (
+        <span
+          className={`ko-check ${card.check?.passed ? "ok" : "warn"}`}
+          title={issues.join("\n")}
+        >
+          {card.check?.passed
+            ? "국어 검수 통과"
+            : `국어 확인 필요 ${issues.length}건`}
+        </span>
+      )}
+      {article.summary && (
+        <details className="article-raw">
+          <summary>원문 설명 보기 (영어)</summary>
+          <p>{article.summary}</p>
+        </details>
+      )}
       <div className="why-picked">
         <span className="why-label">선정 이유</span>
         {reasons.length ? (
@@ -1440,6 +1496,21 @@ function Studio({
           )}
         </>
       )}
+      <OfferPanel
+        key={`offer-${job.id}-${job.offer?.captured_at ?? "none"}`}
+        job={job}
+        busy={locked}
+        action={action}
+      />
+      {sourceApproved(job.state) && (
+        <p className="derived-note" role="status">
+          <Icon name="check" size={14} />
+          원고 승인①이 끝났습니다. 퀴즈·카드뉴스는 제작 시 자동 생성됩니다. 아래에서
+          바로 만들거나 다시 만들 수도 있어요.
+        </p>
+      )}
+      <QuizPanel job={job} busy={locked} action={action} />
+      <CardsPanel job={job} busy={locked} action={action} />
       <TaskProgress job={job} busy={busy} action={action} />
     </>
   );
@@ -1592,7 +1663,9 @@ function QualityPanel({ job }: { job: Job }) {
                     ? "CRITIQUE · 비평"
                     : review.role === "eval"
                       ? "EVAL · 평가"
-                      : review.role}
+                      : review.role === "korean"
+                        ? "KOREAN · 국어 검수"
+                        : review.role}
                 </span>
                 {review.score != null && (
                   <strong>
@@ -1619,6 +1692,21 @@ function QualityPanel({ job }: { job: Job }) {
                   <ul>
                     {review.minor_issues.map((issue, i) => (
                       <li key={i}>{issue}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+              {review.corrections?.length ? (
+                <details open={!review.passed}>
+                  <summary>교정 제안 {review.corrections.length}개</summary>
+                  <ul className="korean-fixes">
+                    {review.corrections.map((fix, i) => (
+                      <li key={i}>
+                        <del>{fix.original}</del>
+                        <br />→ <ins>{fix.revised}</ins>
+                        <br />
+                        <small>{fix.reason}</small>
+                      </li>
                     ))}
                   </ul>
                 </details>

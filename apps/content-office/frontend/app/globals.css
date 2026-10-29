@@ -711,6 +711,68 @@ h1 {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.article-summary.ko {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #2d3428;
+  -webkit-line-clamp: 3;
+  word-break: keep-all;
+}
+.article-summary.pending {
+  font-size: 11px;
+  color: #8a9180;
+}
+.article-original {
+  margin: -4px 0 8px;
+  font-size: 10px;
+  color: #8a9180;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ko-check {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.ko-check.ok {
+  background: #e7f3e2;
+  color: #2f6b27;
+}
+.ko-check.warn {
+  background: #fdf0e1;
+  color: #9a5a12;
+  cursor: help;
+}
+.article-raw {
+  margin-top: 8px;
+  font-size: 10px;
+  color: #6b7462;
+}
+.article-raw summary {
+  cursor: pointer;
+}
+.article-raw p {
+  margin-top: 4px;
+  line-height: 1.7;
+  max-height: 9em;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.korean-fixes li {
+  margin-bottom: 6px;
+}
+.korean-fixes del {
+  color: #9a5a12;
+}
+.korean-fixes ins {
+  color: #2f6b27;
+  text-decoration: none;
+  font-weight: 600;
+}
 .why-picked {
   margin-top: 20px;
   margin-bottom: 19px;
@@ -3843,3 +3905,59 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .channel-toggle{display:flex;gap:6px;align-items:center;white-space:nowrap;cursor:pointer}
 .cred{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
 .cred.ok{color:#4f6a3a}.cred.missing{color:#9a5a2a}
+
+/* 퀴즈 · 카드뉴스 · 오퍼 · 독자 질문 · 뉴스레터 ③ · 리드 장부 */
+.derived-panel{padding:22px;margin-top:20px}
+.derived-panel details{margin-top:12px}
+.derived-panel details>summary{cursor:pointer;font-size:12px;color:#5e6853}
+.derived-panel .editor-fields{padding:12px 0}
+.derived-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.derived-meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:10px}
+.derived-issues{margin:10px 0 0;padding:10px 14px 10px 28px;border:1px solid #efd9c6;background:#fdf6f0;border-radius:6px;font-size:12px;line-height:1.8;color:#94603b}
+.derived-toggle{display:flex;gap:6px;align-items:center;font-size:12px;margin-top:12px;cursor:pointer}
+.derived-note{display:flex;gap:6px;align-items:center;font-size:12px;color:#4f6a3a;background:#f2f6e9;border:1px solid #dce4d0;border-radius:6px;padding:8px 12px;margin-top:20px}
+.quiz-list{margin:12px 0 0;padding-left:22px;display:grid;gap:14px;font-size:13px;line-height:1.7}
+.quiz-choices{margin:6px 0 0;padding-left:22px;display:grid;gap:3px}
+.quiz-choices li.answer{font-weight:650}
+.quiz-choices .badge{margin-left:6px}
+.quiz-explanation{font-size:12px;color:var(--muted);margin-top:6px}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:14px}
+.card-slide{border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:6px;font-size:12px;background:#fff}
+.card-slide-image{aspect-ratio:1/1;border-radius:6px;overflow:hidden;background:#f3f4ef;display:flex;align-items:center;justify-content:center}
+.card-slide-image img{width:100%;height:100%;object-fit:cover;display:block}
+.card-slide h4{font-size:13px;font-weight:650}
+.card-slide p{color:var(--muted);line-height:1.7;overflow-wrap:anywhere}
+.card-slide a{display:inline-flex;gap:4px;align-items:center;font-size:11px}
+.questions-panel details{margin-top:8px}
+.questions-panel details>summary{cursor:pointer;font-size:12px;color:#5e6853}
+.questions-panel .editor-fields{padding:12px 0}
+.questions-panel select,.question-convert select,.question-convert input{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;background:#fff}
+.question-groups{list-style:none;padding:0;margin:14px 0 0;display:grid;gap:8px}
+.question-groups li{display:flex;gap:12px;justify-content:space-between;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:6px;padding:10px 12px;background:#fff}
+.question-groups li.converted{opacity:.7}
+.question-groups li>div:first-child{display:grid;gap:2px;font-size:12px;min-width:0;flex:1}
+.question-groups strong{font-size:13px;overflow-wrap:anywhere}.question-groups small{color:var(--muted)}
+.question-convert{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.question-convert input{min-width:200px}
+.idea-dday{display:inline-flex;gap:6px;align-items:center;margin-left:8px;font-size:10px;padding:3px 7px;border-radius:4px;background:#faeddf;color:#94603b;white-space:nowrap}
+.idea-timeliness{display:flex;gap:8px;align-items:center;font-size:11px;color:var(--muted);margin:4px 0 6px;max-width:320px}
+.idea-timeliness .progress-track{flex:1}
+.newsletter-build{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-top:12px}
+.newsletter-build label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
+.newsletter-build input{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;min-width:160px}
+.newsletter-build input[aria-invalid="true"]{border-color:#b2412a}
+.newsletter-item{align-items:flex-start}
+.newsletter-item>div:first-child{flex:1;min-width:240px}
+.newsletter-item .badge{margin-right:6px}
+.newsletter-item details{margin-top:6px}
+.newsletter-item details>summary{cursor:pointer;color:#5e6853}
+.newsletter-markdown{white-space:pre-wrap;font-size:11px;line-height:1.7;max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:10px;background:#fafaf7;margin-top:6px}
+.newsletter-actions{display:grid;gap:8px;min-width:240px}
+.newsletter-review textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px}
+.leads-panel details{margin-top:12px}
+.leads-panel details>summary{cursor:pointer;font-size:12px;color:#5e6853}
+.leads-panel .editor-fields{padding:12px 0}
+.leads-panel select{padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;background:#fff}
+.leads-panel .channel-table tr.withdrawn td{color:var(--muted)}
+.leads-panel code{font-size:12px}
+.summary-chip{margin-right:8px}

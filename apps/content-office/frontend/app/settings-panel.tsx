@@ -6,6 +6,7 @@ import type { Dashboard } from "../lib/types";
 import { PROFILE_OPTIONS, keyChips, settingsWarnings, validWindowMinutes, type ProfileKind } from "../lib/settings";
 import { Icon } from "./icons";
 import { ChannelsPanel } from "./channels-panel";
+import { LeadsPanel } from "./leads-panel";
 
 type Action = (label: string, execute: () => Promise<unknown>, success: string) => Promise<true | string>;
 
@@ -150,6 +151,7 @@ export function SettingsPanel({
       </section>
 
       <ChannelsPanel busy={busy} action={action} />
+      <LeadsPanel busy={busy} action={action} />
     </div>
   );
 }

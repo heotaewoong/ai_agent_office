@@ -1,0 +1,191 @@
+"""뉴스레터 회차(③). 출고 승인②를 받은 원고 한 편에서 회차 마크다운을 만들고, 사람이 승인③한 뒤 오너가 자기 메일러로 보낸다.
+
+- 회차는 `newsletter_issues` 표에 산다. 수신자는 건수와 정렬한 ID 해시만 스냅샷으로 남기고 이메일은 절대 넣지 않는다.
+- `hash`는 내용(제목·마크다운·원고/출고 버전)의 해시다. 승인③은 이 해시에 붙는다. 수신자 스냅샷은 "발송 직전 최신 동의"
+  규칙대로 rebuild·sent 때마다 현재 동의로 다시 계산하며, 수신자만 바뀐 경우 승인③은 유지한다.
+- 승인③은 오직 사람(actor)이 만든다. 승인·거절·발송 기록 어디에서도 메일을 보내지 않는다.
+"""
+from __future__ import annotations
+
+import json
+import re
+
+from .briefs import brief_for_job
+from .exports import blog_markdown
+from .leads import consent_snapshot
+from .store import WorkflowError, canonical, digest, identifier, now
+
+ISSUE_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+MAX_SUBJECT = 150
+UNSUBSCRIBE_LINE = "이 메일은 자료 신청 때 수신에 동의한 분께만 보내요. 더 받고 싶지 않으면 [수신거부 링크]를 눌러 주세요."
+TABLE_SQL = "CREATE TABLE IF NOT EXISTS newsletter_issues(id TEXT PRIMARY KEY, issue_key TEXT UNIQUE NOT NULL, job_id TEXT NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+
+
+def _ensure(db):
+    db.execute(TABLE_SQL)
+
+
+def _released_job(db, store, job_id):
+    """youtube_delivery._released_video와 같은 출고 승인② 검사. 영상 파일 조건만 뺐다."""
+    job = store._job(db, job_id)
+    manifest = job.get("manifest") or {}
+    release = job.get("release_approval") or {}
+    if release.get("decision") != "approved" or release.get("version") != manifest.get("hash") or manifest.get("source_hash") != job.get("source_hash"):
+        raise WorkflowError("현재 제작물의 출고 승인②가 필요합니다. 뉴스레터 회차는 만들지 않았습니다")
+    return job, release
+
+
+def _offer_footer(offer):
+    if not offer:
+        return ""
+    parts = [str(offer.get("product", "")).strip()]
+    if offer.get("price_krw") is not None:
+        parts.append(f"{int(offer['price_krw']):,}원")
+    if offer.get("url"):
+        parts.append(str(offer["url"]))
+    lines = ["## 안내", "", " · ".join(part for part in parts if part)]
+    if offer.get("note"):
+        lines += ["", str(offer["note"]).strip()]
+    return "\n".join(lines) + "\n\n"
+
+
+def build_markdown(job, subject):
+    packet = job["source_packet"]
+    brief = brief_for_job(job)
+    text = f"# {subject}\n\n" + blog_markdown(packet).strip() + "\n\n"
+    text += "## 오늘 할 일\n\n" + brief["outcome"].strip() + "\n\n**" + brief["cta"].strip() + "**\n\n"
+    text += _offer_footer(job.get("offer"))
+    return text + "---\n\n" + UNSUBSCRIBE_LINE + "\n"
+
+
+def _content(job, release, subject):
+    markdown = build_markdown(job, subject)
+    content = {"subject": subject, "markdown": markdown, "source_hash": job["source_hash"], "release_version": release["version"]}
+    return {**content, "hash": digest(content)}
+
+
+def _issue(row):
+    return {"id": row["id"], "issue_key": row["issue_key"], "job_id": row["job_id"], "state": row["state"], **json.loads(row["data"]), "created_at": row["created_at"], "updated_at": row["updated_at"]}
+
+
+def _load(db, issue_id):
+    _ensure(db)
+    row = db.execute("SELECT * FROM newsletter_issues WHERE id=?", (issue_id,)).fetchone()
+    if not row:
+        raise WorkflowError("뉴스레터 회차를 찾을 수 없습니다")
+    return _issue(row)
+
+
+def _write(db, issue):
+    data = {key: value for key, value in issue.items() if key not in ("id", "issue_key", "job_id", "state", "created_at", "updated_at")}
+    db.execute("UPDATE newsletter_issues SET state=?, data=?, updated_at=? WHERE id=?", (issue["state"], canonical(data), now(), issue["id"]))
+    return _load(db, issue["id"])
+
+
+def _subject(job, subject):
+    value = str(subject or "").strip() or str(job.get("source_packet", {}).get("title") or job.get("title") or "").strip()
+    if not value or len(value) > MAX_SUBJECT:
+        raise WorkflowError(f"회차 제목은 1~{MAX_SUBJECT}자여야 합니다")
+    return value
+
+
+def build_issue(store, job_id, *, issue_key, subject, actor, auto=False):
+    key = str(issue_key or "").strip()
+    if not ISSUE_KEY_PATTERN.match(key):
+        raise WorkflowError("회차 키는 영문·숫자·점·밑줄·하이픈 64자 이내여야 합니다 (예: 2026-11-w1)")
+    recipients = consent_snapshot(store)
+    with store.connection(transaction=True) as db:
+        _ensure(db)
+        if db.execute("SELECT 1 FROM newsletter_issues WHERE issue_key=?", (key,)).fetchone():
+            raise WorkflowError(f"회차 키 '{key}'는 이미 있습니다. 다른 회차 키를 쓰거나 기존 회차를 다시 만드세요")
+        job, release = _released_job(db, store, job_id)
+        content = _content(job, release, _subject(job, subject))
+        issue_id = identifier("issue")
+        data = {**content, **recipients, "built_at": now(), "approval": None, "sent_at": None}
+        db.execute("INSERT INTO newsletter_issues VALUES(?,?,?,?,?,?,?)", (issue_id, key, job_id, "draft", canonical(data), now(), now()))
+        store._event(db, "newsletter_built", {"issue_id": issue_id, "issue_key": key, "hash": content["hash"], "recipient_count": recipients["recipient_count"], "actor": actor, "auto": bool(auto), "next_action": "회차를 읽고 승인③한 뒤 오너가 메일러에서 직접 보냅니다"}, job_id)
+        return _load(db, issue_id)
+
+
+def auto_build_issue(store, job_id, *, actor):
+    """출고 승인②가 기록된 직후 파이프라인이 부른다. 초안(draft)만 만들며 승인③은 만들지 않는다.
+
+    작업에는 포맷 선택(formats.plan_formats)이 저장되지 않으므로 출고된 모든 작업을 대상으로 본다.
+    같은 출고 버전의 미발송 회차가 이미 있으면 다시 만들지 않는다. 실패는 승인②를 막지 않고 이벤트로만 남긴다.
+    """
+    try:
+        job = store.job(job_id)
+        release_version = (job.get("release_approval") or {}).get("version")
+        existing = [i for i in issues(store) if i["job_id"] == job_id]
+        if any(i["release_version"] == release_version and i["state"] != "sent_manual" for i in existing):
+            return None
+        used = {i["issue_key"] for i in issues(store)}
+        n = len(existing) + 1
+        while f"{job_id}-v{n}" in used:
+            n += 1
+        return build_issue(store, job_id, issue_key=f"{job_id}-v{n}", subject=None, actor=actor, auto=True)
+    except WorkflowError as error:
+        store.event("newsletter_auto_build_skipped", {"reason": str(error), "actor": actor}, job_id)
+        return None
+
+
+def issues(store):
+    with store.connection() as db:
+        _ensure(db)
+        return [_issue(row) for row in db.execute("SELECT * FROM newsletter_issues ORDER BY created_at DESC, id DESC")]
+
+
+def issue(store, issue_id):
+    with store.connection() as db:
+        return _load(db, issue_id)
+
+
+def review_issue(store, issue_id, decision, *, actor, note=None):
+    """승인③. 사람 검토자가 기록하며 아무것도 보내지 않는다."""
+    if decision not in ("approve", "reject") or not str(actor or "").strip():
+        raise WorkflowError("유효한 회차 판정(approve·reject)과 검토자가 필요합니다")
+    note_text = str(note).strip()[:500] if note else None
+    with store.connection(transaction=True) as db:
+        current = _load(db, issue_id)
+        if current["state"] == "approved":
+            raise WorkflowError("이미 승인③한 회차입니다. 내용을 바꾸려면 다시 만든(rebuild) 뒤 검토하세요")
+        if current["state"] == "sent_manual":
+            raise WorkflowError("이미 발송 기록이 남은 회차는 다시 검토하지 않습니다")
+        _released_job(db, store, current["job_id"])
+        state = "approved" if decision == "approve" else "rejected"
+        record = {"stage": "③", "decision": state, "actor": actor, "at": now(), "note": note_text, "version": current["hash"]}
+        db.execute("INSERT INTO approvals VALUES(?,?,?,?,?,?,?,?)", (identifier("approval"), current["job_id"], "newsletter", current["hash"], state, actor, canonical({**record, "issue_id": issue_id}), now()))
+        current.update(state=state, approval=record)
+        store._event(db, "newsletter_reviewed", {"issue_id": issue_id, "issue_key": current["issue_key"], "decision": state, "actor": actor, "note": note_text, "hash": current["hash"], "sent": False}, current["job_id"])
+        return _write(db, current)
+
+
+def rebuild_issue(store, issue_id, *, actor):
+    """마크다운과 수신자 스냅샷을 현재 원고·동의로 다시 계산한다. 내용 해시가 바뀌면 승인③을 지운다."""
+    recipients = consent_snapshot(store)
+    with store.connection(transaction=True) as db:
+        current = _load(db, issue_id)
+        if current["state"] == "sent_manual":
+            raise WorkflowError("발송 기록이 남은 회차는 다시 만들지 않습니다. 새 회차 키로 만드세요")
+        job, release = _released_job(db, store, current["job_id"])
+        content = _content(job, release, current["subject"])
+        changed = content["hash"] != current["hash"]
+        current.update(**content, **recipients, built_at=now())
+        if changed:
+            current.update(state="draft", approval=None)
+        store._event(db, "newsletter_rebuilt", {"issue_id": issue_id, "issue_key": current["issue_key"], "content_changed": changed, "recipient_count": recipients["recipient_count"], "actor": actor}, current["job_id"])
+        return _write(db, current)
+
+
+def mark_sent(store, issue_id, *, actor):
+    """오너가 메일러에서 보냈다고 기록한다. 발송 직전 동의를 다시 세어 스냅샷을 갱신한다."""
+    if not str(actor or "").strip():
+        raise WorkflowError("발송을 확인한 담당자가 필요합니다")
+    recipients = consent_snapshot(store)
+    with store.connection(transaction=True) as db:
+        current = _load(db, issue_id)
+        if current["state"] != "approved":
+            raise WorkflowError("승인③한 회차만 발송 기록을 남길 수 있습니다")
+        current.update(**recipients, state="sent_manual", sent_at=now())
+        store._event(db, "newsletter_sent_manual", {"issue_id": issue_id, "issue_key": current["issue_key"], "recipient_count": recipients["recipient_count"], "recipients_hash": recipients["recipients_hash"], "hash": current["hash"], "actor": actor}, current["job_id"])
+        return _write(db, current)

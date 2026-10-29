@@ -20,6 +20,18 @@ import type {
   BriefOverrides,
   Channel,
   ChannelPatch,
+  Quiz,
+  Cards,
+  TaskAccepted,
+  Calendar,
+  ReaderQuestion,
+  QuestionGroup,
+  QuestionSource,
+  Lead,
+  LeadInput,
+  LeadSummary,
+  NewsletterIssue,
+  OfferInput,
 } from "./types";
 
 export class OfficeApiError extends Error {
@@ -186,4 +198,48 @@ export const api = {
     request<Lesson>(`/lessons/${encodeURIComponent(id)}/review`, "POST", {
       decision,
     }),
+  // 퀴즈 · 카드뉴스: ① 원고 승인 뒤 요청(202 수락), 결과는 GET으로 확인
+  requestQuiz: (id: string) =>
+    request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/quiz`, "POST", {}),
+  quiz: (id: string) =>
+    request<{ quiz: Quiz | null }>(`/jobs/${encodeURIComponent(id)}/quiz`),
+  requestCards: (id: string) =>
+    request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/cards`, "POST", {}),
+  cards: (id: string) =>
+    request<{ cards: Cards | null }>(`/jobs/${encodeURIComponent(id)}/cards`),
+  // 시험 일정 · 시의성
+  calendar: (preset: string) =>
+    request<Calendar>(`/calendar?preset=${encodeURIComponent(preset)}`),
+  // 독자 질문
+  questions: () =>
+    request<{ questions: ReaderQuestion[]; groups: QuestionGroup[] }>("/questions"),
+  addQuestion: (body: { source: QuestionSource; text: string; channel_key: string | null }) =>
+    request<{ question: ReaderQuestion }>("/questions", "POST", body),
+  questionToIdea: (id: string, body: { brief_preset: string | null; title: string | null }) =>
+    request<{ idea: Idea }>(`/questions/${encodeURIComponent(id)}/idea`, "POST", body),
+  // 리드마그넷 동의 장부 (이메일은 서버가 마스킹해 돌려줌)
+  leads: () => request<{ leads: Lead[] }>("/leads"),
+  leadSummary: () => request<LeadSummary>("/leads/summary"),
+  addLead: (input: LeadInput) => request<{ lead: Lead }>("/leads", "POST", input),
+  withdrawLead: (id: string) =>
+    request<unknown>(`/leads/${encodeURIComponent(id)}/withdraw`, "POST", {}),
+  markLeadSent: (id: string) =>
+    request<unknown>(`/leads/${encodeURIComponent(id)}/sent`, "POST", {}),
+  // 뉴스레터 ③: 승인은 발송이 아니며 발송은 오너 메일러에서 수동
+  buildNewsletter: (jobId: string, body: { issue_key: string; subject: string }) =>
+    request<NewsletterIssue>(`/jobs/${encodeURIComponent(jobId)}/newsletter`, "POST", body),
+  newsletters: () => request<{ issues: NewsletterIssue[] }>("/newsletters"),
+  newsletterExportUrl: (id: string) =>
+    `/api/newsletters/${encodeURIComponent(id)}/export`,
+  reviewNewsletter: (id: string, decision: "approve" | "reject", note: string) =>
+    request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/review`, "POST", { decision, note }),
+  rebuildNewsletter: (id: string) =>
+    request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/rebuild`, "POST", {}),
+  markNewsletterSent: (id: string) =>
+    request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/sent`, "POST", {}),
+  // 오퍼 스냅샷
+  setOffer: (jobId: string, offer: OfferInput) =>
+    request<Job>(`/jobs/${encodeURIComponent(jobId)}/offer`, "PUT", offer),
+  deleteOffer: (jobId: string) =>
+    request<Job>(`/jobs/${encodeURIComponent(jobId)}/offer`, "DELETE"),
 };

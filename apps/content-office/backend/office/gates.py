@@ -68,8 +68,22 @@ def ymyl_persona(packet, assets):
     return []
 
 
+def korean_grammar(packet):
+    """출고 직전 국어 확인. 사람이 원고를 고친 뒤에도 현재 문장을 다시 검사한다. 막지 않고 경고로 보인다."""
+    from .korean import check_texts
+    video = packet.get("video") or {}
+    texts = [packet.get("title"), packet.get("body"), video.get("title"), video.get("description")]
+    texts += [s.get(k) for s in (video.get("scenes") or []) if isinstance(s, dict) for k in ("narration", "caption")]
+    texts += [t.get(k) for t in (video.get("thumbnails") or []) if isinstance(t, dict) for k in ("title", "subtitle")]
+    items = [{"level": "warn", "rule": "korean_grammar", "message": f"국어 규칙: {issue}"} for issue in check_texts([t or "" for t in texts])[:12]]
+    korean = (packet.get("quality") or {}).get("korean")
+    if korean and not korean.get("passed"):
+        items.append({"level": "warn", "rule": "korean_review", "message": f"국어 검수 미통과: 교정 제안 {len(korean.get('corrections') or [])}건을 원고 화면에서 확인하세요"})
+    return items
+
+
 def run_gates(packet, previous_packets=(), assets=(), brand=None):
-    items = metadata_fact_check(packet) + inauthentic_risk(packet, previous_packets) + ymyl_persona(packet, assets)
+    items = metadata_fact_check(packet) + inauthentic_risk(packet, previous_packets) + ymyl_persona(packet, assets) + korean_grammar(packet)
     if brand:
         video = packet.get("video") or {}
         thumbs = [t for t in (video.get("thumbnails") or []) if isinstance(t, dict)]

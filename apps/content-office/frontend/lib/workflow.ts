@@ -254,3 +254,15 @@ export function approvalIsCurrent(
 ): boolean {
   return Boolean(expected && expected === current);
 }
+
+/** ① 원고 승인이 끝난 상태. 퀴즈·카드뉴스·뉴스레터처럼 승인 원고에서 파생하는 산출물의 조건. */
+export function sourceApproved(state: string | undefined): boolean {
+  return [
+    "source_approved",
+    "production_queued",
+    "producing",
+    "release_review",
+    "partial_release_review",
+    "release_approved",
+  ].includes(state ?? "");
+}

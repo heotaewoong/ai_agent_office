@@ -6,6 +6,7 @@ import re
 
 from .brand import brand_system_prompt, load_brand
 from .gates import run_gates
+from .korean import CORRECTION_SCHEMA, KOREAN_REVIEW_PROMPT, check_texts
 from .packaging import require_packaging
 from .providers import Provider
 from .briefs import DEFAULT_PRESET, PRESETS, brief_for_job, build_brief
@@ -18,6 +19,10 @@ RUBRIC = {"version": "heobrain-news-2026-10-26-v2-reader-value", "critical": ["�
 SCENE_SCHEMA = {"type": "object", "properties": {"narration": {"type": "string"}, "caption": {"type": "string"}, "visual": {"type": "string"}}, "required": ["narration", "caption", "visual"], "additionalProperties": False}
 DRAFT_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string"}, "video": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "scenes": {"type": "array", "items": SCENE_SCHEMA}}, "required": ["title", "description", "tags", "scenes"], "additionalProperties": False}}, "required": ["title", "body", "video"], "additionalProperties": False}
 REVIEW_SCHEMA = {"type": "object", "properties": {"role": {"type": "string"}, "score": {"type": "number"}, "passed": {"type": "boolean"}, "critical_issues": {"type": "array", "items": {"type": "string"}}, "minor_issues": {"type": "array", "items": {"type": "string"}}, "summary": {"type": "string"}}, "required": ["role", "score", "passed", "critical_issues", "minor_issues", "summary"], "additionalProperties": False}
+KOREAN_REVIEW_SCHEMA = copy.deepcopy(REVIEW_SCHEMA)
+KOREAN_REVIEW_SCHEMA["properties"]["corrections"] = {"type": "array", "maxItems": 40, "items": CORRECTION_SCHEMA}
+KOREAN_REVIEW_SCHEMA["required"] = [*REVIEW_SCHEMA["required"], "corrections"]
+REVIEW_ROLES = ("critique", "eval", "korean")
 THUMBNAIL_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}, "subtitle": {"type": "string"}, "angle": {"type": "string"}}, "required": ["title", "subtitle", "angle"], "additionalProperties": False}
 DRAFT_SCHEMA["properties"]["video"]["properties"]["thumbnails"] = {"type": "array", "minItems": 5, "maxItems": 5, "items": THUMBNAIL_SCHEMA}
 DRAFT_SCHEMA["properties"]["video"]["required"].append("thumbnails")
@@ -37,9 +42,16 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
     for round_no in range(3):
         payload = canonical({"packet": content_context(packet), "audience": brief, "rubric": RUBRIC})
         reviews = []
-        for role in ("critique", "eval"):
+        for role in REVIEW_ROLES:
             if event:
                 event("editorial_role", {"role": role, "round": round_no, "packet_hash": digest(content_context(packet))})
+            if role == "korean":
+                # 국어 검수: 사실 판단과 분리한 세 번째 독립 호출. 다른 검토자의 답을 보지 않는다.
+                review = provider.generate(role, [{"role": "system", "content": BASE + KOREAN_REVIEW_PROMPT}, {"role": "user", "content": payload}], KOREAN_REVIEW_SCHEMA, {"max_tokens": 4096, "temperature": 0.1})
+                review["role"] = role
+                review.setdefault("corrections", [])
+                reviews.append(review)
+                continue
             role_prompt = "독자가 글을 읽고 사례의 입력·판단·다음 행동을 설명할 수 있는지 비평하라. 예시를 언급만 하고 실제 입력과 판단 결과를 보여주지 않거나, 영상이 여러 뉴스 항목을 나열하며 첫 질문을 끝내지 못하면 passed=false로 하라. 가상 사례는 가상으로 명시해야 한다. 비교가 필요한 수치를 문장으로만 반복하는지, 제작용 라벨이나 발음용 문장을 시청자 화면에 노출하는지, 같은 문구를 제목·도해·자막에서 중복하는지도 지적하라. 사실 검토와 별개로 독자 가치가 부족한 원고를 통과시키지 말라. 외국어 문자가 무관하게 섞이거나 한 문단으로 길게 이어지면 지적하라." if role == "critique" else "블로그뿐 아니라 영상의 caption/narration과 썸네일을 문장별로 원자화해 근거와 비교하라. 숫자가 같아도 지표명·분모·대상·누적/현재가 바뀌면 중대 오류다. 특히 평균 시도 성공, 20회 전부 성공, 20회 중 한번 이상 성공을 혼동하지 말라. 광고주 수와 캠페인 수/횟수도 다르다. 비평자의 답을 보지 않는 독립 호출이다."
             review = provider.generate(role, [{"role": "system", "content": BASE + role_prompt + " 총점과 관계없이 중대 오류가 하나라도 있으면 passed=false로 하라."}, {"role": "user", "content": payload}], REVIEW_SCHEMA, {"max_tokens": 4096, "temperature": 0.2})
             review["role"] = role
@@ -49,14 +61,16 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
         critical = any(bool(r.get("critical_issues")) for r in reviews) or not checks["passed"]
         passed = not critical and all(r.get("passed") and float(r.get("score", 0)) >= 80 for r in reviews)
         if passed or round_no == 2:
-            packet["quality"] = {"status": "passed" if passed else "blocked", "critical": critical, "reviews": reviews, "history": history, "refine_count": round_no, "rubric_version": RUBRIC["version"], "deterministic_checks": checks, "note": "모델 검수 결과이며 사람 승인·독립 사실성 증명이 아닙니다"}
+            korean = next((r for r in reviews if r.get("role") == "korean"), {})
+            korean_rule_issues = [issue for issue in checks.get("issues", []) if issue in check_texts(packet_texts(packet))]
+            packet["quality"] = {"status": "passed" if passed else "blocked", "critical": critical, "reviews": reviews, "history": history, "refine_count": round_no, "rubric_version": RUBRIC["version"], "deterministic_checks": checks, "korean": {"passed": bool(korean.get("passed")) and not korean.get("critical_issues") and not korean_rule_issues, "score": korean.get("score"), "corrections": korean.get("corrections", []), "rule_issues": korean_rule_issues, "note": "주어·서술어 호응, 목적어·조사, 어미, 띄어쓰기, 번역투, 문장 길이 검수. 모델과 코드 규칙의 결과이며 사람 검토를 대신하지 않습니다"}, "note": "모델 검수 결과이며 사람 승인·독립 사실성 증명이 아닙니다"}
             return packet
         if event:
             event("editorial_role", {"role": "refine", "round": round_no + 1})
         refine_context = {"packet": content_context(packet), "feedback": reviews, "deterministic_feedback": checks, "audience": brief, "rubric": RUBRIC}
         if packaging is not None:
             refine_context["packaging"] = packaging
-        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. body는 1,200자 이상의 완성된 전체 원고이며 수정 요약이 아니다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
+        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. korean 검토의 corrections는 original 문장을 revised로 고치는 국어 교정이니 뜻과 근거 ID를 유지하며 반영하라. body는 1,200자 이상의 완성된 전체 원고이며 수정 요약이 아니다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
         for key in ("title", "body", "video"):
             packet[key] = refined[key]
     raise AssertionError("unreachable")
@@ -142,7 +156,8 @@ def deterministic_checks(packet):
     if sum(len(s.get("narration", "")) for s in scenes) > 360:
         issues.append("숏폼 내레이션이 너무 길어 실제 음성 검사가 필요합니다")
     issues.extend(style_issues(packet))
-    return {"passed": not issues, "issues": issues, "checks": ["본문 길이·구조", "한국어 문장", "출처 URL", "근거 ID 연결", "지표·단위 경고 규칙", "장면 수", "내레이션 길이", "문체 규칙"]}
+    issues.extend(check_texts(packet_texts(packet)))
+    return {"passed": not issues, "issues": issues, "checks": ["본문 길이·구조", "한국어 문장", "출처 URL", "근거 ID 연결", "지표·단위 경고 규칙", "장면 수", "내레이션 길이", "문체 규칙", "국어 규칙(조사 받침·이중 피동·번역투·반복·긴 문장)"]}
 
 
 def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):

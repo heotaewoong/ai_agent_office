@@ -33,8 +33,19 @@ def process_task(store, task):
         if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips)['hash']:
             raise WorkflowError('대기 중 제작 설정이 변경되었습니다. 현재 설정으로 제작을 다시 요청하세요')
         store.update_job(job_id, state="producing", error=None)
+        # 제작과 함께 같은 원고의 퀴즈·카드뉴스를 자동으로 줄 세운다. 이미 현재 버전 결과가 있으면 건너뛴다.
+        from .quiz import enqueue_missing_outputs
+        queued_outputs = enqueue_missing_outputs(store, current)
         manifest = produce(store, job_id, voice_renderer=renderer, background_renderer=background, clip_renderer=clips)
-        return {"job_id": job_id, "manifest_hash": manifest["hash"], 'partial': any(status.get('state') != 'completed' for status in manifest.get('output_status', {}).values()), 'completed_outputs': manifest.get('completed_outputs')}
+        return {"job_id": job_id, "manifest_hash": manifest["hash"], 'partial': any(status.get('state') != 'completed' for status in manifest.get('output_status', {}).values()), 'completed_outputs': manifest.get('completed_outputs'), 'queued_outputs': queued_outputs}
+    if task["kind"] in ("quiz", "cards"):
+        from .quiz import generate_quiz
+        from .cards import plan_cards
+        current = store.require_source_approval(job_id)
+        if payload.get("source_hash") != current["source_hash"]:
+            raise WorkflowError("대기 중인 퀴즈·카드 작업의 원고 버전이 변경되었습니다")
+        result = generate_quiz(store, job_id) if task["kind"] == "quiz" else plan_cards(store, job_id)
+        return {"job_id": job_id, "source_hash": current["source_hash"], "version": result["version"], "passed": result["checks"]["passed"], "issues": len(result["checks"]["issues"])}
     raise WorkflowError("등록되지 않은 작업입니다")
 
 
@@ -62,7 +73,8 @@ def run_once(store, owner):
         uncertain = "예약을 유지" in message or "확인하지 못" in message
         store.finish_task(task["id"], owner, {"error": message, "automatic_retry": False}, state="unknown" if uncertain else "failed")
         job_id = task["payload"].get("job_id")
-        if job_id:
+        # 퀴즈·카드뉴스는 부가 산출물이라 실패해도 작업 상태(출고 흐름)를 막지 않는다. 실패 기록은 작업·이벤트에 남는다.
+        if job_id and task["kind"] not in ("quiz", "cards"):
             with store.connection(transaction=True) as db:
                 current = store._job(db, job_id)
                 if current.get("source_hash") == task["payload"].get("_source_hash_at_claim"):

@@ -17,6 +17,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 import requests
 
 from .store import now
+from .korean import clean_feed_summary
 
 MAX_BYTES = 3_000_000
 DEFAULT_FEEDS = [
@@ -124,7 +125,7 @@ def parse_feed(xml: str | bytes, feed: dict, current: datetime | None = None) ->
         canonical_url = normalize_url(link)
         date = parse_date(fields.get("pubDate") or fields.get("published") or fields.get("date") or fields.get("updated"))
         status = "unknown" if date is None else "future" if date > current + timedelta(minutes=5) else "valid"
-        articles.append({"id": hashlib.sha256(canonical_url.encode()).hexdigest()[:24], "title": clean_text(fields["title"]), "url": canonical_url, "feed_id": feed["id"], "feed_name": feed["name"], "published_at": date.isoformat() if date else None, "date_status": status, "summary": clean_text(fields.get("description") or fields.get("summary") or fields.get("content") or "")[:700], "retrieved_at": now()})
+        articles.append({"id": hashlib.sha256(canonical_url.encode()).hexdigest()[:24], "title": clean_text(fields["title"]), "url": canonical_url, "feed_id": feed["id"], "feed_name": feed["name"], "published_at": date.isoformat() if date else None, "date_status": status, "summary": clean_feed_summary(clean_text(fields.get("description") or fields.get("summary") or fields.get("content") or ""))[:700], "retrieved_at": now()})
     return articles
 
 

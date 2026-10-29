@@ -1,0 +1,136 @@
+"""퀴즈(4지선다 5문항)·카드뉴스(6~8장) 라우트. api.create_app이 register(app, store)로 붙인다.
+
+인증·CSRF는 api.py의 공통 미들웨어가 처리하고, WorkflowError는 409로 돌아간다.
+퀴즈·카드 파일은 제작 manifest가 아니라 job["quiz"]·job["cards"]에 기록되므로
+/api/artifacts/{id} 서빙은 이 모듈이 manifest 파일과 함께 맡는다(api.py의 같은 경로 라우트보다 먼저 등록해야 한다).
+"""
+from __future__ import annotations
+
+import hashlib
+import mimetypes
+
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+
+from .quiz import enqueue_output
+from .runtime import window_open
+from .store import WorkflowError, canonical
+
+QUIZ_KEYS = ("version", "generated_at", "source_hash", "questions", "checks", "artifact_id")
+SLIDE_KEYS = ("index", "title", "body", "artifact_id")
+
+
+def quiz_payload(job):
+    quiz = job.get("quiz")
+    return {key: quiz.get(key) for key in QUIZ_KEYS} if quiz else None
+
+
+def cards_payload(job):
+    cards = job.get("cards")
+    if not cards:
+        return None
+    return {"version": cards.get("version"), "generated_at": cards.get("generated_at"), "source_hash": cards.get("source_hash"), "slides": [{key: slide.get(key) for key in SLIDE_KEYS} for slide in cards.get("slides", [])], "checks": cards.get("checks")}
+
+
+def artifact_records(job):
+    """제작 manifest 파일 + 현재 원고의 퀴즈 JSON + 카드 PNG."""
+    yield from (job.get("manifest") or {}).get("files", [])
+    for output in ("quiz", "cards"):
+        record = job.get(output) or {}
+        if record.get("source_hash") != job.get("source_hash"):
+            continue
+        if output == "quiz" and record.get("artifact"):
+            yield record["artifact"]
+        for slide in record.get("slides", []) or []:
+            if slide.get("artifact"):
+                yield slide["artifact"]
+
+
+def _verified_path(store, file):
+    path = (store.artifacts / file["path"]).resolve()
+    if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file():
+        raise HTTPException(404, "파일을 찾을 수 없습니다")
+    if hashlib.sha256(path.read_bytes()).hexdigest() != file["sha256"]:
+        raise HTTPException(409, "파일이 변경되어 재검수가 필요합니다")
+    return path
+
+
+def package_extras(store, job):
+    """출고 패키지 ZIP에 넣을 (경로, 바이트) 목록: quiz/quiz-vN.json, cards/card-NN.png, cards/cards.json."""
+    extras = []
+    for output, folder in (("quiz", "quiz"), ("cards", "cards")):
+        record = job.get(output) or {}
+        if record.get("source_hash") != job.get("source_hash"):
+            continue
+        artifacts = [record["artifact"]] if output == "quiz" and record.get("artifact") else [s["artifact"] for s in record.get("slides", []) if s.get("artifact")]
+        for artifact in artifacts:
+            path = (store.artifacts / artifact["path"]).resolve()
+            data = path.read_bytes() if path.is_relative_to(store.artifacts.resolve()) and path.is_file() else None
+            if data is None or hashlib.sha256(data).hexdigest() != artifact["sha256"]:
+                raise WorkflowError(f"{'퀴즈' if output == 'quiz' else '카드'} 파일이 변경되어 다시 만들어야 합니다")
+            extras.append((f"{folder}/{artifact['name']}", data))
+        if output == "cards" and artifacts:
+            summary = {"version": record.get("version"), "generated_at": record.get("generated_at"), "source_hash": record.get("source_hash"), "slides": [{k: s.get(k) for k in SLIDE_KEYS} for s in record.get("slides", [])], "checks": record.get("checks")}
+            extras.append(("cards/cards.json", canonical(summary).encode("utf-8")))
+    return extras
+
+
+def output_warnings(job):
+    """출고② 전에 사람이 볼 비차단 경고. 퀴즈·카드 검사 문제점을 게이트 항목 형식으로 돌려준다."""
+    items = []
+    for output, label in (("quiz", "퀴즈"), ("cards", "카드뉴스")):
+        record = job.get(output) or {}
+        if record.get("source_hash") != job.get("source_hash"):
+            continue
+        for issue in (record.get("checks") or {}).get("issues", []):
+            items.append({"level": "warn", "rule": f"{output}_check", "message": f"{label} v{record.get('version')}: {issue}"})
+    return items
+
+
+def with_output_warnings(report, job):
+    items = output_warnings(job)
+    if not items:
+        return report
+    merged = {**report, "items": [*report.get("items", []), *items]}
+    merged["status"] = "warn" if merged.get("status") == "pass" else merged.get("status", "warn")
+    return merged
+
+
+def register(app, store):
+    def require_open_window():
+        if not window_open(store):
+            raise WorkflowError("허용된 작업 시간이 종료됐습니다. 새 작업 세션을 시작한 뒤 요청하세요")
+
+    def enqueue(job_id, kind):
+        require_open_window()
+        job = store.require_source_approval(job_id)
+        task = enqueue_output(store, job, kind)
+        return {"task_id": task["id"], "state": task["state"]}
+
+    @app.post("/api/jobs/{job_id}/quiz", status_code=202)
+    def request_quiz(job_id: str):
+        return enqueue(job_id, "quiz")
+
+    @app.get("/api/jobs/{job_id}/quiz")
+    def get_quiz(job_id: str):
+        return {"quiz": quiz_payload(store.job(job_id))}
+
+    @app.post("/api/jobs/{job_id}/cards", status_code=202)
+    def request_cards(job_id: str):
+        return enqueue(job_id, "cards")
+
+    @app.get("/api/jobs/{job_id}/cards")
+    def get_cards(job_id: str):
+        return {"cards": cards_payload(store.job(job_id))}
+
+    @app.get("/api/artifacts/{artifact_id}")
+    def artifact(artifact_id: str):
+        # api.py의 manifest 전용 라우트와 같은 규칙에 퀴즈·카드 파일을 더한 것. 먼저 등록된 이 라우트가 응답한다.
+        if not artifact_id.startswith("asset_") or len(artifact_id) > 80:
+            raise HTTPException(404, "파일을 찾을 수 없습니다")
+        for job in store.jobs():
+            for file in artifact_records(job):
+                if file.get("id") == artifact_id:
+                    path = _verified_path(store, file)
+                    return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream", filename=path.name, content_disposition_type="inline")
+        raise HTTPException(404, "파일을 찾을 수 없습니다")

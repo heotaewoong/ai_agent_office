@@ -8,6 +8,8 @@ from pathlib import Path
 from .store import WorkflowError, digest
 
 DEFAULT_DIR = Path(__file__).resolve().parents[1] / "config" / "brand"
+EXAMPLE_CHARS = 1500
+EXAMPLE_COUNT = 2
 
 
 def _json(path, default):
@@ -36,16 +38,39 @@ def load_brand(directory=DEFAULT_DIR):
         "terms": glossary.get("terms", {}),
         "pronunciation": glossary.get("pronunciation", {}),
         "banned": banned,
+        "examples": _examples(directory / "examples"),
     }
     return {**brand, "hash": digest(brand)}
 
 
+def _examples(folder):
+    """config/brand/examples/*.md: 오너가 직접 쓴 글(문체 예시). 앞머리(---) 안의 title·source_url을 읽고 본문은 1500자까지만 쓴다."""
+    if not folder.is_dir():
+        return []
+    examples = []
+    for path in sorted(folder.glob("*.md")):
+        if path.name.lower() == "readme.md":
+            continue
+        meta, body = {}, path.read_text(encoding="utf-8")
+        match = re.match(r"\A---\s*\n(.*?)\n---\s*\n?", body, flags=re.S)
+        if match:
+            meta = dict((k.strip(), v.strip()) for k, _, v in (line.partition(":") for line in match.group(1).splitlines()) if k.strip())
+            body = body[match.end():]
+        examples.append({"title": meta.get("title") or path.stem, "source_url": meta.get("source_url", ""), "text": body.strip()[:EXAMPLE_CHARS]})
+    return examples
+
+
 def brand_system_prompt(base, brand):
-    if not (brand["voice"] or brand["terms"] or brand["banned"]):
+    examples = brand.get("examples") or []
+    if not (brand["voice"] or brand["terms"] or brand["banned"] or examples):
         return base
     terms = "\n".join(f"- {written}: {fixed}" for written, fixed in brand["terms"].items())
     banned = "\n".join(f"- {claim}" for claim in brand["banned"])
-    return f"{base}\n\n[브랜드 목소리 {brand['hash'][:12]}]\n{brand['voice']}\n\n[표기 고정]\n{terms}\n\n[쓰지 않는 주장]\n{banned}"
+    prompt = f"{base}\n\n[브랜드 목소리 {brand['hash'][:12]}]\n{brand['voice']}\n\n[표기 고정]\n{terms}\n\n[쓰지 않는 주장]\n{banned}"
+    if examples:
+        shown = "\n\n".join(f"### {e['title']}\n{e['text']}" for e in examples[:EXAMPLE_COUNT])
+        prompt += f"\n\n[문체 예시]\n오너가 직접 쓴 글이에요. 리듬·호흡·비유 방식만 참고하고, 어미·금지 표현은 위 브랜드 목소리 규칙을 우선해요. 내용을 베끼지 않아요.\n\n{shown}"
+    return prompt
 
 
 def banned_claim_hits(text, brand):

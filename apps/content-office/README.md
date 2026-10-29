@@ -281,6 +281,62 @@ YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 
 # API: GET /api/channels · PUT /api/channels/{key} ({"external_account_id"?, "publication_enabled"?, "public_url"?})
 ```
 
+### 퀴즈 JSON
+
+① 원고 승인을 받은 원고에서 4지선다 5문항을 JSON으로 만듭니다. 문제만 만들고 풀기·채점은 스토어의 기존 퀴즈 도구가 합니다. 작업실의 "퀴즈 JSON" 카드에서 "퀴즈 생성"을 누르면 요청이 202로 수락되고, 작업자가 저장하면 화면이 4초마다 읽어 표시합니다(제작 시작 뒤에는 자동 생성). 문항마다 정답 번호·해설·근거 ID(`E1`)가 붙고, 결정적 검사 결과(`checks.passed`, `issues`)를 함께 보여줍니다. 만든 퀴즈의 `source_hash`가 현재 원고와 다르면 이전 버전 경고가 뜹니다. JSON은 복사·다운로드할 수 있고, 저장된 파일은 `GET /api/artifacts/{artifact_id}`입니다.
+
+```bash
+# API: POST /api/jobs/{id}/quiz → 202 {"task_id"} · GET /api/jobs/{id}/quiz → {"quiz": null | {version, generated_at, source_hash, questions[], checks, artifact_id}}
+```
+
+### 카드뉴스
+
+같은 조건(① 승인 원고)에서 6~8장의 카드를 만듭니다. 작업실 "카드뉴스" 카드에서 생성·새로고침하며, 장마다 제목·본문·이미지(`artifact_id`)가 미리보기 격자로 보입니다. 글자 넘침·오탈자·장수 범위는 `checks.issues`로 돌아오고 6~8장이 아니면 장수 배지가 주황색입니다. 배경은 제작 설정의 배경 이미지 프로필을 따르고 한국어 글자는 로컬에서 얹습니다.
+
+```bash
+# API: POST /api/jobs/{id}/cards → 202 {"task_id"} · GET /api/jobs/{id}/cards → {"cards": null | {version, generated_at, source_hash, slides[{index, title, body, artifact_id}], checks}}
+```
+
+### 시험 일정 · 시의성
+
+프리셋별 공식 시험 일정(이름·날짜·종류·출처 URL·검증 여부)에서 다음 시험과 시의성 점수(0~1)를 계산합니다. 기획 은행의 각 기획에는 `next_exam`·`timeliness`가 붙어 "정보처리기사 필기 D-32" 배지와 시의성 막대로 보입니다. 날짜는 출처 URL로 직접 확인한 것만 `verified: true`입니다.
+
+```bash
+# API: GET /api/calendar?preset=exam-opic → {preset, exams[{name, date, kind, source_url, verified}], next: null | {name, date, kind, days_left}, timeliness}
+```
+
+### 독자 질문
+
+홈페이지·댓글·DM·이메일에서 받은 질문을 "오늘의 뉴스 → 독자 질문"에서 기록합니다. 같은 질문은 `group_key`로 묶어 건수를 세고, 묶음의 "기획으로 보내기"에서 독자 브리프 프리셋과 제목을 골라 ⓪ 기획 은행에 넣습니다. 기획 선택은 여전히 사람이 합니다. 질문 본문에 이름·이메일 같은 개인정보를 적지 않습니다.
+
+```bash
+# API: POST /api/questions ({"source": "homepage|comment|dm|email|other", "text", "channel_key": null|키}) · GET /api/questions → {questions[], groups[{group_key, sample_text, count, question_ids}]} · POST /api/questions/{id}/idea ({"brief_preset": null|프리셋, "title": null|제목})
+```
+
+### 리드마그넷 동의 장부
+
+무료 자료(예: 시험 D-30 복습 플래너)를 신청한 독자의 이메일과 동의 기록입니다. 개인정보 위치: 이메일 원문은 서버의 리드 장부에만 있고, API와 화면·내보내기에는 마스킹된 값(`email_masked`)만 나옵니다. 화면 "제작 설정 → 리드마그넷 동의 장부"에서 전체·동의 유지·철회·자료별·출처별 수를 보고, 오프라인으로 받은 신청을 수동 등록(이메일 형식만 화면에서 검사)하며, 동의 철회와 "전달 완료"(자료를 직접 보낸 뒤 표시)를 기록합니다. 철회는 되돌리지 않고, 다음 뉴스레터 회차의 수신자에서 빠집니다. 동의 문구와 버전은 독자가 본 그대로 저장합니다.
+
+```bash
+# API: POST /api/leads ({email, magnet_key, source, consent_version, consent_text}) · GET /api/leads · GET /api/leads/summary · POST /api/leads/{id}/withdraw · POST /api/leads/{id}/sent
+```
+
+### 뉴스레터 ③
+
+③ 회차 승인은 회차 내용(제목·본문·수신자 묶음)에 대한 승인이지 발송이 아닙니다. 이 앱은 메일을 보내지 않으며, 발송은 오너가 승인된 회차를 내보내(`export`, Markdown) 자기 메일러에서 수동으로 합니다. 보낸 뒤 "발송 완료로 표시"를 눌러 기록합니다(승인된 회차에만 버튼이 보입니다). 흐름: 제작·출고함의 "뉴스레터 회차 · ③"에서 회차 키(`YYYY-MM-wN`, 서울 날짜 기준 1~7일 w1 … 29~31일 w5)와 제목으로 회차를 만들면 ① 승인 원고와 동의 유지 리드로 초안이 생깁니다(② 출고 승인 뒤 서버가 자동으로 만든 초안이 있으면 그대로 보입니다). 초안·반려 상태에서 메모와 함께 ③ 승인·반려를 결정하고, 철회가 생겼으면 "최신 동의로 다시 만들기"로 수신자 묶음을 갱신한 뒤 다시 승인합니다. 회차의 `hash`와 `recipients_hash`가 승인 대상 버전입니다.
+
+```bash
+# API: POST /api/jobs/{id}/newsletter ({"issue_key", "subject"}) · GET /api/newsletters · GET /api/newsletters/{id}/export (text/markdown) · POST /api/newsletters/{id}/review ({"decision": "approve|reject", "note"}) · POST /api/newsletters/{id}/rebuild · POST /api/newsletters/{id}/sent
+```
+
+### 오퍼 스냅샷
+
+콘텐츠가 가리키는 상품(이름·가격·https URL·메모)을 작업에 기록합니다. 작업실의 "오퍼 스냅샷" 카드에서 저장·삭제하며 기록 시각과 행위자가 남습니다. 기록일 뿐이며 스토어의 가격·쿠폰·다운로드 권한은 바꾸지 않습니다.
+
+```bash
+# API: PUT /api/jobs/{id}/offer ({product, price_krw, url, note}) → job(offer{..., captured_at, actor}) · DELETE /api/jobs/{id}/offer → job
+```
+
 ## 검사와 증거
 
 ```bash

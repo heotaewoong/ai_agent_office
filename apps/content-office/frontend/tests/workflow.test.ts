@@ -11,6 +11,7 @@ import {
   safeArtifactUrl,
   remainingWindow,
   approvalIsCurrent,
+  sourceApproved,
 } from "../lib/workflow.ts";
 
 test("근거 입력은 준비·실패 또는 실제 근거가 없는 작업에만 나타난다", () => {
@@ -196,4 +197,10 @@ test("승인 확인을 연 뒤 버전이 바뀌면 새 원고나 파일을 묵�
   assert.equal(approvalIsCurrent("reviewed-v1", "new-v2"), false);
   assert.equal(approvalIsCurrent(undefined, undefined), false);
   assert.equal(approvalIsCurrent("", ""), false);
+});
+
+test("① 원고 승인 이후 상태만 승인 원고 파생물을 만들 수 있다", () => {
+  for (const state of ["source_approved", "production_queued", "producing", "release_review", "partial_release_review", "release_approved"])
+    assert.equal(sourceApproved(state), true, state);
+  for (const state of ["draft", "source_review", "source_rejected", "blocked", "failed", ""]) assert.equal(sourceApproved(state), false, state);
 });

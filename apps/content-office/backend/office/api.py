@@ -240,11 +240,12 @@ def create_app(store: Store | None = None):
         from .video_selection import profile_summary as clip_profile_summary
         from .youtube_delivery import configured as youtube_configured
         from .channels import configured_youtube_channels
+        from .api_leads_newsletter import dashboard_counts
         feed_report = store.setting("feed_report", {})
         current_ids = {article["id"] for article in rank_articles(store.articles_list())}
         active_ids = set(feed_report.get("active_article_ids", current_ids))
         articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
-        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff"}
+        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
 
     @app.get("/api/space")
     def space():
@@ -409,7 +410,11 @@ def create_app(store: Store | None = None):
                     if hashlib.sha256(data).hexdigest() != record['sha256']:
                         raise WorkflowError('출고 파일이 변경되어 재검수가 필요합니다')
                     archive.writestr(record['name'], data)
-                archive.writestr("handoff.json", canonical({"source_hash": job["source_hash"], "manifest": {**manifest, 'files': records, 'exported_outputs': sorted(outputs), 'thumbnail_candidates': manifest.get('thumbnail_candidates', []) if 'video' in outputs else [], 'media': manifest.get('media', {}) if 'video' in outputs else {}}, "release": approval, "next_action": "계정·일정·대상을 확인하고 각 플랫폼에서 직접 게시", "external_published": False}))
+                from .api_quiz_cards import package_extras  # 현재 원고의 quiz/quiz-vN.json, cards/card-NN.png, cards/cards.json
+                extras = package_extras(store, job)
+                for name, data in extras:
+                    archive.writestr(name, data)
+                archive.writestr("handoff.json", canonical({"source_hash": job["source_hash"], "manifest": {**manifest, 'files': records, 'exported_outputs': sorted(outputs), 'thumbnail_candidates': manifest.get('thumbnail_candidates', []) if 'video' in outputs else [], 'media': manifest.get('media', {}) if 'video' in outputs else {}}, "release": approval, "extras": [name for name, _ in extras], "next_action": "계정·일정·대상을 확인하고 각 플랫폼에서 직접 게시", "external_published": False}))
             os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
@@ -439,21 +444,7 @@ def create_app(store: Store | None = None):
         return HTMLResponse(html, headers={'Cache-Control': 'no-store',
             'Content-Security-Policy': "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"})
 
-    @app.get("/api/artifacts/{artifact_id}")
-    def artifact(artifact_id: str):
-        if not artifact_id.startswith("asset_") or len(artifact_id) > 80:
-            raise HTTPException(404, "파일을 찾을 수 없습니다")
-        for job in store.jobs():
-            for file in (job.get("manifest") or {}).get("files", []):
-                if file["id"] != artifact_id:
-                    continue
-                path = (store.artifacts / file["path"]).resolve()
-                if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file():
-                    raise HTTPException(404, "파일을 찾을 수 없습니다")
-                if hashlib.sha256(path.read_bytes()).hexdigest() != file["sha256"]:
-                    raise HTTPException(409, "파일이 변경되어 재검수가 필요합니다")
-                return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream", filename=path.name, content_disposition_type="inline")
-        raise HTTPException(404, "파일을 찾을 수 없습니다")
+    from .api_quiz_cards import register as register_quiz_cards; register_quiz_cards(app, store)  # 퀴즈·카드뉴스 라우트와 /api/artifacts/{id}(manifest 파일 + 퀴즈 JSON + 카드 PNG) 서빙
 
     def profile_summaries():
         from .voice_selection import profile_summary as voice_summary
@@ -564,7 +555,8 @@ def create_app(store: Store | None = None):
     def job_gates(job_id: str):
         packet = store.job(job_id).get("source_packet") or {}
         previous = [j["source_packet"] for j in store.jobs() if j["id"] != job_id and j.get("source_packet")]
-        return run_gates(packet, previous, packet.get("assets", []), load_brand())
+        from .api_quiz_cards import with_output_warnings  # 퀴즈·카드 검사 문제점은 출고② 전 비차단 경고로 덧붙인다
+        return with_output_warnings(run_gates(packet, previous, packet.get("assets", []), load_brand()), store.job(job_id))
 
     @app.post("/api/analytics/snapshots")
     def add_snapshot(snapshot: SnapshotInput):
@@ -598,6 +590,8 @@ def create_app(store: Store | None = None):
     def review_lesson(lesson_id: str, review: LessonReview):
         return store.review_lesson(lesson_id, review.decision, "local-operator")
 
+    from .api_leads_newsletter import register as register_leads_newsletter; register_leads_newsletter(app, store)  # 리드 동의 장부·뉴스레터③·오퍼
+    from .api_calendar_questions import register as register_calendar_questions; register_calendar_questions(app, store)  # 시험 일정·시의성, 독자 질문 수집
     return app
 
 

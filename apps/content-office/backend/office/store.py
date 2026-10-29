@@ -55,6 +55,7 @@ class Store:
                 CREATE TABLE IF NOT EXISTS ideas(id TEXT PRIMARY KEY, dedup_key TEXT UNIQUE NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS snapshots(id TEXT PRIMARY KEY, channel TEXT NOT NULL, external_id TEXT NOT NULL, period TEXT NOT NULL, job_id TEXT, data TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(channel, external_id, period));
                 CREATE TABLE IF NOT EXISTS lessons(id TEXT PRIMARY KEY, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS questions(id TEXT PRIMARY KEY, group_key TEXT NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
             """)
             db.execute("INSERT OR IGNORE INTO settings VALUES('budget_cap',?)", (str(budget_krw),))
 
@@ -316,7 +317,12 @@ class Store:
             db.execute("INSERT INTO approvals VALUES(?,?,?,?,?,?,?,?)", (identifier("approval"), job_id, "release", manifest_hash, decision, actor, canonical(record), now()))
             self._event(db, "release_" + decision, record, job_id)
             job.update(release_approval=record, state="release_approved" if decision == "approved" else "release_review")
-            return self._write_job(db, job)
+            job = self._write_job(db, job)
+        if decision == "approved":
+            # 승인② 기록이 확정된 뒤(트랜잭션 밖) 뉴스레터 초안 회차를 자동으로 만든다. 초안일 뿐 승인③은 사람이 한다.
+            from .newsletter import auto_build_issue
+            auto_build_issue(self, job_id, actor=actor)
+        return job
 
     def enqueue(self, kind, payload, key):
         with self.connection(transaction=True) as db:
@@ -413,6 +419,36 @@ class Store:
             db.execute("UPDATE ideas SET state='selected', data=?, updated_at=? WHERE id=?", (canonical(idea), now(), idea_id))
             self._event(db, "idea_selected", {"idea_id": idea_id, "actor": actor})
             return idea
+
+    # --- 독자 질문 수집(개인정보 없이 출처·채널 키·본문만). 묶음 수는 읽을 때 센다.
+    @staticmethod
+    def _question_rows(db):
+        rows = db.execute("SELECT data FROM questions ORDER BY created_at DESC, rowid DESC").fetchall()
+        items = [json.loads(r[0]) for r in rows]
+        counts = {}
+        for item in items:
+            counts[item["group_key"]] = counts.get(item["group_key"], 0) + 1
+        return [{**item, "count": counts[item["group_key"]]} for item in items]
+
+    def save_question(self, row):
+        question = {"id": identifier("q"), "source": row["source"], "text": row["text"], "channel_key": row.get("channel_key"), "created_at": now(), "group_key": row["group_key"], "state": "new"}
+        with self.connection(transaction=True) as db:
+            db.execute("INSERT INTO questions VALUES(?,?,?,?,?)", (question["id"], question["group_key"], "new", canonical(question), question["created_at"]))
+            return next(q for q in self._question_rows(db) if q["id"] == question["id"])
+
+    def questions(self):
+        with self.connection() as db:
+            return self._question_rows(db)
+
+    def question(self, question_id):
+        with self.connection() as db:
+            return next((q for q in self._question_rows(db) if q["id"] == question_id), None)
+
+    def mark_questions_converted(self, group_key, idea_id):
+        with self.connection(transaction=True) as db:
+            for row in db.execute("SELECT data FROM questions WHERE group_key=?", (group_key,)).fetchall():
+                question = {**json.loads(row[0]), "state": "converted", "idea_id": idea_id}
+                db.execute("UPDATE questions SET state='converted', data=? WHERE id=?", (canonical(question), question["id"]))
 
     @staticmethod
     def _snapshot(row):
@@ -515,3 +551,32 @@ class Store:
     def cache_put(self, key, value):
         with self.connection() as db:
             db.execute("INSERT OR REPLACE INTO cache VALUES(?,?,?)", (key, canonical(value), now()))
+
+    # --- 상품 오퍼 스냅샷 (뉴스레터 꼬리말용). 승인①②③과 스토어·쿠폰 API를 건드리지 않는다.
+    def set_offer(self, job_id, offer, actor):
+        if not str(actor or "").strip():
+            raise WorkflowError("오퍼를 기록한 담당자가 필요합니다")
+        product = str((offer or {}).get("product") or "").strip()
+        if not product or len(product) > 200:
+            raise WorkflowError("상품 이름은 1~200자여야 합니다")
+        price = (offer or {}).get("price_krw")
+        if price is not None and (isinstance(price, bool) or not isinstance(price, int) or price < 0 or price > 10**9):
+            raise WorkflowError("가격은 0 이상의 정수(원) 또는 비워 둡니다")
+        url = str((offer or {}).get("url") or "").strip() or None
+        if url and (not url.startswith("https://") or len(url) > 500 or any(ch.isspace() for ch in url)):
+            raise WorkflowError("상품 주소는 https:// 로 시작하는 주소여야 합니다")
+        note = str((offer or {}).get("note") or "").strip() or None
+        if note and len(note) > 500:
+            raise WorkflowError("오퍼 메모는 500자 이하여야 합니다")
+        with self.connection(transaction=True) as db:
+            job = self._job(db, job_id)
+            job["offer"] = {"product": product, "price_krw": price, "url": url, "note": note, "captured_at": now(), "actor": actor}
+            self._event(db, "offer_set", {"product": product, "price_krw": price, "url": url, "actor": actor, "role": "마케팅"}, job_id)
+            return self._write_job(db, job)
+
+    def clear_offer(self, job_id, actor):
+        with self.connection(transaction=True) as db:
+            job = self._job(db, job_id)
+            if job.pop("offer", None) is not None:
+                self._event(db, "offer_cleared", {"actor": actor, "role": "마케팅"}, job_id)
+            return self._write_job(db, job)

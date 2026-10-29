@@ -27,9 +27,10 @@ def test_critique_and_eval_never_receive_each_others_answers():
     packet = {"title": "원고", "body": "본문", "evidence": [{"claim": "사실"}]}
     result = review_until_ready(packet, provider)
     assert result["quality"]["status"] == "passed"
-    assert [x[0] for x in provider.calls] == ["critique", "eval"]
-    assert provider.calls[0][1][-1]["content"] == provider.calls[1][1][-1]["content"]
+    assert [x[0] for x in provider.calls] == ["critique", "eval", "korean"]
+    assert provider.calls[0][1][-1]["content"] == provider.calls[1][1][-1]["content"] == provider.calls[2][1][-1]["content"]
     assert "근거 오류" not in provider.calls[1][1][-1]["content"]
+    assert "주어" in provider.calls[2][1][0]["content"] and "조사" in provider.calls[2][1][0]["content"]
 
 
 def test_refine_is_limited_to_two_and_critical_errors_block():

@@ -13,6 +13,19 @@ export type Article = {
   evidence?: Evidence[];
   limitations?: string[];
   origin?: string;
+  card_ko?: KoreanCard;
+};
+export type KoreanCard = {
+  headline: string;
+  summary: string;
+  why: string;
+  check?: { passed: boolean; issues?: string[]; fixed_once?: boolean };
+};
+export type KoreanCorrection = {
+  field: string;
+  original: string;
+  revised: string;
+  reason: string;
 };
 export type Review = {
   role: string;
@@ -21,6 +34,7 @@ export type Review = {
   critical_issues?: string[];
   minor_issues?: string[];
   summary?: string;
+  corrections?: KoreanCorrection[];
 };
 export type Evidence = {
   id?: string;
@@ -50,6 +64,13 @@ export type SourcePacket = {
       passed?: boolean;
       issues?: string[];
       checks?: string[];
+    };
+    korean?: {
+      passed: boolean;
+      score?: number;
+      corrections?: KoreanCorrection[];
+      rule_issues?: string[];
+      note?: string;
     };
   };
   video?: {
@@ -168,6 +189,7 @@ export type Job = {
     decision?: string;
   };
   brief?: Brief | null;
+  offer?: Offer | null;
 };
 export type Feed = {
   id?: string;
@@ -262,6 +284,8 @@ export type Dashboard = {
   worker?: { state?: string; heartbeat?: string; owner?: string };
   provider?: ProviderStatus;
   tasks?: Task[];
+  leads?: { consented?: number; total?: number; withdrawn?: number };
+  newsletters?: { draft?: number; approved?: number; sent_manual?: number };
   [key: string]: unknown;
 };
 
@@ -305,6 +329,8 @@ export type Idea = {
   reasons: string[];
   blocked: string[];
   brief?: Brief | null;
+  timeliness?: number;
+  next_exam?: NextExam | null;
 };
 export type Lesson = {
   id: string;
@@ -412,3 +438,80 @@ export type Action = (
   execute: () => Promise<unknown>,
   success: string,
 ) => Promise<void | boolean | string>;
+
+/* 퀴즈 · 카드뉴스 · 시험 일정 · 독자 질문 · 리드 · 뉴스레터 · 오퍼 */
+export type QuizQuestion = {
+  id: string;
+  question: string;
+  choices: string[];
+  answer: number;
+  explanation: string;
+  evidence: string[];
+};
+export type Checks = { passed: boolean; issues: string[] };
+export type Quiz = {
+  version: string;
+  generated_at: string;
+  source_hash: string;
+  questions: QuizQuestion[];
+  checks: Checks;
+  artifact_id: string | null;
+};
+export type CardSlide = { index: number; title: string; body: string; artifact_id: string | null };
+export type Cards = {
+  version: string;
+  generated_at: string;
+  source_hash: string;
+  slides: CardSlide[];
+  checks: Checks;
+};
+export type TaskAccepted = { task_id: string };
+export type ExamEntry = { name: string; date: string; kind: string; source_url: string; verified: boolean };
+export type NextExam = { name: string; date: string; kind?: string; days_left: number };
+export type Calendar = { preset: string; exams: ExamEntry[]; next: NextExam | null; timeliness: number };
+export type QuestionSource = "homepage" | "comment" | "dm" | "email" | "other";
+export type ReaderQuestion = {
+  id: string;
+  source: QuestionSource;
+  text: string;
+  channel_key: string | null;
+  created_at: string;
+  group_key: string;
+  count: number;
+  state: "new" | "converted";
+};
+export type QuestionGroup = { group_key: string; sample_text: string; count: number; question_ids: string[] };
+export type Lead = {
+  id: string;
+  created_at: string;
+  email_masked: string;
+  magnet_key: string;
+  source: string;
+  consent: { version: string; granted_at: string; withdrawn_at: string | null };
+  delivery: { state: "pending" | "sent_manual"; sent_at: string | null };
+};
+export type LeadInput = { email: string; magnet_key: string; source: string; consent_version: string; consent_text: string };
+export type LeadSummary = {
+  total: number;
+  consented: number;
+  withdrawn: number;
+  by_magnet: Record<string, number>;
+  by_source: Record<string, number>;
+};
+export type NewsletterState = "draft" | "approved" | "rejected" | "sent_manual";
+export type NewsletterIssue = {
+  id: string;
+  issue_key: string;
+  job_id: string;
+  state: NewsletterState;
+  subject: string;
+  markdown: string;
+  recipient_count: number;
+  recipients_hash: string;
+  built_at: string;
+  hash: string;
+  approval: null | { stage: string; decision: string; actor: string; at: string; note: string };
+  sent_at: string | null;
+};
+export type OfferInput = { product: string; price_krw: number; url: string; note: string };
+export type Offer = OfferInput & { captured_at: string; actor: string };

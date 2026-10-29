@@ -48,7 +48,10 @@ def test_synthetic_http_worker_download_and_source_invalidation(tmp_path, monkey
         assert client.post(f"/api/jobs/{job_id}/produce", json={}, headers=headers).status_code == 202
         assert [task["kind"] for task in store.tasks(job_id)] == ["produce"]
         assert run_once(store, "synthetic-test-worker")
-        assert store.tasks(job_id)[0]["state"] == "completed", store.tasks(job_id)
+        tasks_by_kind = {task["kind"]: task for task in store.tasks(job_id)}
+        assert tasks_by_kind["produce"]["state"] == "completed", store.tasks(job_id)
+        # 제작과 함께 같은 원고의 퀴즈·카드뉴스가 자동으로 줄을 선다(모델 호출은 아직 없음)
+        assert {tasks_by_kind["quiz"]["state"], tasks_by_kind["cards"]["state"]} == {"queued"}
         produced = client.get(f"/api/jobs/{job_id}").json()
         manifest = produced["manifest"]
         assert produced["state"] == "release_review"

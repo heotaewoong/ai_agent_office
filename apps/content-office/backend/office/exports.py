@@ -109,16 +109,31 @@ def reference_lines(packet: dict) -> list[str]:
     return [f"[{e.get('id', index)}] {e.get('claim', '')}\n{e['url']}" for index, e in enumerate(packet.get("evidence", []), 1) if isinstance(e, dict) and re.match(r"^https?://", str(e.get("url", "")))]
 
 
-def blog_markdown(packet: dict) -> str:
+def offer_line(offer) -> str:
+    """작업에 오퍼 스냅샷이 있을 때만 붙는 '함께 보기' 한 줄. 없으면 빈 문자열."""
+    if not offer or not str(offer.get("product", "")).strip():
+        return ""
+    parts = [str(offer["product"]).strip()]
+    if offer.get("price_krw") is not None:
+        parts.append(f"{int(offer['price_krw']):,}원")
+    if offer.get("url"):
+        parts.append(str(offer["url"]).strip())
+    return "함께 보기: " + " · ".join(parts)
+
+
+def blog_markdown(packet: dict, offer: dict | None = None) -> str:
     body = packet["body"]
     refs = reference_lines(packet)
     if refs:
         body += "\n\n## 출처와 확인 범위\n\n" + "\n\n".join(refs)
+    line = offer_line(offer)
+    if line:
+        body += "\n\n" + line
     return body
 
 
-def write_blog_exports(packet: dict, folder: Path) -> list[Path]:
-    body = blog_markdown(packet)
+def write_blog_exports(packet: dict, folder: Path, offer: dict | None = None) -> list[Path]:
+    body = blog_markdown(packet, offer)
     return [write_text(folder, "tistory.md", body + "\n"),
             write_text(folder, "tistory.html", safe_fragment(body)),
             write_text(folder, "naver.txt", packet["title"] + "\n\n" + plain_text(body) + "\n")]

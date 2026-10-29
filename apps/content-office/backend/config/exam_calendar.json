@@ -1,0 +1,28 @@
+{
+  "_comment": "시험 일정 캘린더. 프리셋 ID → {baseline, note, exams[]}. verified가 false인 항목은 통상 연간 패턴으로 넣은 추정값이며 오너가 공식 공고(Q-Net 등)로 확인한 뒤 verified를 true로 바꾸고 source_url을 공고 주소로 고친다. 2026-10-29 기준 Q-Net 일정 페이지는 스크립트 리다이렉트만 돌려줘 자동 확인에 실패했다.",
+  "exam-opic": {
+    "baseline": 0.6,
+    "note": "OPIc는 거의 매주 상시 시행되는 시험이라 특정 날짜 대신 항상 '다소 시의성 있음'(0.6)으로 둔다. 특정 회차를 겨냥할 때만 exams에 항목을 추가한다.",
+    "exams": []
+  },
+  "exam-info-processing": {
+    "note": "정보처리기사 정기 기사 일정. 아래 날짜는 예년 패턴(1회 2~4월, 2회 5~7월, 3회 7~11월)에 맞춘 추정값이다. 오너가 Q-Net 공고로 확인.",
+    "exams": [
+      {"name": "2026년 정기 기사 3회 실기시험", "date": "2026-11-07", "kind": "실기", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"},
+      {"name": "2026년 정기 기사 3회 최종 합격자 발표", "date": "2026-12-16", "kind": "발표", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"},
+      {"name": "2027년 정기 기사 1회 필기 원서접수", "date": "2027-01-18", "kind": "원서접수", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"},
+      {"name": "2027년 정기 기사 1회 필기시험", "date": "2027-02-20", "kind": "필기", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"},
+      {"name": "2027년 정기 기사 1회 필기 합격자 발표", "date": "2027-03-10", "kind": "발표", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"},
+      {"name": "2027년 정기 기사 1회 실기 원서접수", "date": "2027-03-29", "kind": "원서접수", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"},
+      {"name": "2027년 정기 기사 1회 실기시험", "date": "2027-04-24", "kind": "실기", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"},
+      {"name": "2027년 정기 기사 1회 최종 합격자 발표", "date": "2027-06-09", "kind": "발표", "source_url": "https://www.q-net.or.kr/crf005.do?id=crf00503&gSite=Q&gId=", "verified": false, "note": "오너가 Q-Net 공고로 확인"}
+    ]
+  },
+  "transfer-admission": {
+    "note": "대학 편입(일반편입) 일정은 대학마다 다르다. 통상 원서접수 12월 말~1월 초, 필기(편입영어 등) 1월 중순 패턴의 추정값이다. 오너가 지원 대학 모집요강으로 확인.",
+    "exams": [
+      {"name": "2027학년도 일반편입 원서접수(통상 시작일)", "date": "2026-12-28", "kind": "원서접수", "source_url": "", "verified": false, "note": "오너가 지원 대학 모집요강으로 확인"},
+      {"name": "2027학년도 일반편입 필기·면접(통상 시기)", "date": "2027-01-09", "kind": "응시", "source_url": "", "verified": false, "note": "오너가 지원 대학 모집요강으로 확인"}
+    ]
+  }
+}

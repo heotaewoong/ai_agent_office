@@ -9,6 +9,7 @@ import {
   retryBlockedReason,
   formatDate,
 } from "../lib/workflow";
+import { dDayLabel, timelinessPercent } from "../lib/calendar";
 import { Icon } from "./icons";
 import { IdeaIntake } from "./idea-intake";
 
@@ -542,7 +543,8 @@ export function OutputChoices({
   );
 }
 
-export function IdeaBank({ onSelected }: { onSelected?: (job: Job) => void }) {
+/** 기획 은행. refreshKey가 바뀌면(독자 질문 → 기획 전환 등) 목록을 다시 읽습니다. */
+export function IdeaBank({ onSelected, refreshKey = 0 }: { onSelected?: (job: Job) => void; refreshKey?: number }) {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -556,7 +558,7 @@ export function IdeaBank({ onSelected }: { onSelected?: (job: Job) => void }) {
   }
   useEffect(() => {
     void load();
-  }, []);
+  }, [refreshKey]);
   async function choose(id: string) {
     setBusy(id);
     try {
@@ -584,6 +586,16 @@ export function IdeaBank({ onSelected }: { onSelected?: (job: Job) => void }) {
         {ideas.map((idea) => (
           <li key={idea.id}>
             <strong>{idea.title}</strong> · {idea.score}점 · 이상치 {idea.outlier_band}
+            {idea.next_exam && <span className="idea-dday">{dDayLabel(idea.next_exam)}</span>}
+            {typeof idea.timeliness === "number" && (
+              <div className="idea-timeliness" aria-label={`시의성 ${timelinessPercent(idea.timeliness)}%`}>
+                <span>시의성</span>
+                <div className="progress-track">
+                  <span style={{ width: `${timelinessPercent(idea.timeliness)}%` }} />
+                </div>
+                <span>{timelinessPercent(idea.timeliness)}%</span>
+              </div>
+            )}
             {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
             <button
               className="button secondary"

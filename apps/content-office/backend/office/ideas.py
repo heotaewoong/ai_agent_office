@@ -6,7 +6,12 @@ from __future__ import annotations
 
 import math
 
-WEIGHTS = {"outlier": 30, "demand": 20, "evidence": 20, "fit": 20, "novelty": 10}
+from .calendar import enrich_idea
+
+# timeliness는 기본 다섯 요소를 100점으로 정규화한 뒤 가산점(최대 10점, 합계 100점 상한)으로 더한다.
+# 캘린더가 있는 프리셋(brief.preset)의 카드만 0보다 큰 값을 받으므로 기존 카드 점수는 그대로다.
+WEIGHTS = {"outlier": 30, "demand": 20, "evidence": 20, "fit": 20, "novelty": 10, "timeliness": 10}
+BASE_FACTORS = ("outlier", "demand", "evidence", "fit", "novelty")
 BAND_POINTS = {"10x+": 1.0, "5-10x": 0.8, "2-5x": 0.55, "under-2x": 0.2, "unknown": 0.0}
 BLOCKING_FLAGS = {
     "ai_persona_real_person_ymyl": "실존 인물 AI 페르소나의 금융·법률·건강 발언(YouTube 2026-07 수익화 제외 유형)",
@@ -50,8 +55,9 @@ def effective_weights(weights=None, lessons=()):
     return result
 
 
-def score_idea(card, weights=None, lessons=()):
+def score_idea(card, weights=None, lessons=(), today=None, calendar=None):
     w = effective_weights(weights, lessons)
+    card = enrich_idea(card, today, calendar)
     band = outlier_band(outlier_ratio(card.get("views"), card.get("channel_avg_views")))
     sources = int(_number(card.get("primary_sources")))
     parts = {
@@ -60,8 +66,10 @@ def score_idea(card, weights=None, lessons=()):
         "evidence": min(sources, 3) / 3,
         "fit": min(max(_number(card.get("fit")), 0.0), 1.0),
         "novelty": 0.0 if card.get("covered_before") else 1.0,
+        "timeliness": min(max(_number(card.get("timeliness")), 0.0), 1.0),
     }
-    score = round(100 * sum(w[k] * parts[k] for k in parts) / (sum(w.values()) or 1), 1)
+    base = 100 * sum(w[k] * parts[k] for k in BASE_FACTORS) / (sum(w[k] for k in BASE_FACTORS) or 1)
+    score = round(min(100.0, base + w.get("timeliness", 0) * parts["timeliness"]), 1)
     raw_flags = card.get("policy_flags")
     raw_flags = raw_flags if isinstance(raw_flags, (list, tuple, set)) else []
     flags = [f for f in raw_flags if f in BLOCKING_FLAGS] + ([] if sources else ["no_primary_source"])
@@ -70,6 +78,6 @@ def score_idea(card, weights=None, lessons=()):
     return {**card, "score": 0.0 if blocked else score, "outlier_band": band, "parts": parts, "reasons": reasons, "blocked": blocked}
 
 
-def rank_ideas(cards, weights=None, lessons=()):
-    scored = [score_idea(card, weights, lessons) for card in cards]
+def rank_ideas(cards, weights=None, lessons=(), today=None, calendar=None):
+    scored = [score_idea(card, weights, lessons, today, calendar) for card in cards]
     return sorted(scored, key=lambda c: (not c["blocked"], c["score"]), reverse=True)

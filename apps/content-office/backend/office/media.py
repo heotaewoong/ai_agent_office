@@ -781,7 +781,7 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 backgrounds = backgrounds or drawn
                 return paths
 
-            run_output('blog', lambda: write_blog_exports(packet, folder))
+            run_output('blog', lambda: write_blog_exports(packet, folder, job.get('offer')))
             run_output('video', video_output)
             run_output('cards', card_output)
             run_output('pdf', lambda: [write_reference_pdf(packet, folder)])

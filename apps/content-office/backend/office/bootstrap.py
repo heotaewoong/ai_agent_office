@@ -35,11 +35,43 @@ def enrich(articles):
     return articles
 
 
-def refresh(store):
+def korean_cards(store, articles, provider=None, limit=None):
+    """화면 앞쪽 기사부터 한국어 카드(제목·두 문장 요약·읽을 이유)를 만든다.
+
+    원문이 같으면 이전 카드를 재사용한다. 키·예산·작업 시간 때문에 호출할 수 없으면 멈추고 기록만 남긴다.
+    """
+    from .korean import card_source_hash, korean_card
+    from .store import WorkflowError
+    limit = int(os.environ.get("OFFICE_CARD_KO_LIMIT", "9")) if limit is None else limit
+    previous = {article["id"]: article.get("card_ko") for article in store.articles_list()}
+    for article in articles:
+        old = previous.get(article["id"])
+        if old and old.get("source_hash") == card_source_hash(article):
+            article["card_ko"] = old
+    ordered = sorted(articles, key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
+    pending = [a for a in ordered[:limit] if not a.get("card_ko")]
+    made, stopped = 0, None
+    if pending:
+        if provider is None:
+            from .providers import Provider
+            provider = Provider(store)
+        for article in pending:
+            try:
+                article["card_ko"] = korean_card(article, provider)
+                made += 1
+            except WorkflowError as error:
+                stopped = str(error)
+                break
+    store.event("korean_cards", {"role": "국어 검수", "made": made, "pending": len(pending), "stopped": stopped, "passed": sum(1 for a in articles if (a.get("card_ko") or {}).get("check", {}).get("passed"))})
+    return articles
+
+
+def refresh(store, provider=None):
     report = collect_feeds(store.root)
     articles = deduplicate_events(enrich(report.pop("articles")))
     report["active_article_ids"] = [article["id"] for article in articles]
     report["eligible_items"] = len(articles)
+    articles = korean_cards(store, articles, provider=provider)
     store.save_articles(articles)
     store.set_setting("feed_report", report)
     store.event("rss_refreshed", {"role": "RSS 연구", "total_items": report["total_items"], "eligible_items": report["eligible_items"], "failed_feeds": [f["name"] for f in report["feeds"] if f["state"] != "ok"]})
