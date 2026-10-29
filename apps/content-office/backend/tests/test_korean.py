@@ -159,3 +159,38 @@ def test_card_prompt_separates_feed_from_actor_and_handles_empty_description():
     from office.korean import CARD_PROMPT
     assert "feed는 글이 올라온 곳일 뿐 발표 주체가 아니다" in CARD_PROMPT
     assert "제목만 보고 정리했어요" in CARD_PROMPT
+
+
+class BusyProvider(CardProvider):
+    def __init__(self, fail_titles):
+        super().__init__()
+        self.fail_titles = fail_titles
+
+    def generate(self, role, messages, schema, options=None):
+        if any(f'"title": "{t}"' in messages[-1]["content"] for t in self.fail_titles):
+            raise WorkflowError("모델 제공자가 HTTP 503를 반환했습니다. 자동 재시도 없이 확인이 필요합니다")
+        return super().generate(role, messages, schema, options)
+
+
+def test_busy_provider_skips_article_and_stops_after_three_in_a_row(tmp_path):
+    store = Store(tmp_path)
+    arts = [article(id=f"a{i}", title=f"t{i}", score=100 - i) for i in range(6)]
+    result = {a["id"]: a for a in korean_cards(store, arts, provider=BusyProvider({"t0", "t2"}), limit=4)}
+    assert "card_ko" not in result["a0"] and result["a1"]["card_ko"] and "card_ko" not in result["a2"] and result["a3"]["card_ko"] and result["a4"]["card_ko"]
+    event = [e for e in store.events(limit=5) if e["kind"] == "korean_cards"][0]
+    assert event["data"]["skipped_unknown"] == ["a0", "a2"] and event["data"]["stopped"] is None
+    store2 = Store(tmp_path / "b")
+    fresh = [article(id=f"a{i}", title=f"t{i}", score=100 - i) for i in range(6)]
+    result2 = {a["id"]: a for a in korean_cards(store2, fresh, provider=BusyProvider({"t0", "t1", "t2", "t3"}), limit=4)}
+    assert not any(result2[f"a{i}"].get("card_ko") for i in range(4))
+    event2 = [e for e in store2.events(limit=5) if e["kind"] == "korean_cards"][0]
+    assert "503" in event2["data"]["stopped"] and event2["data"]["skipped_unknown"] == ["a0", "a1", "a2"]
+
+
+def test_seed_headlines_pass_korean_rules():
+    import json
+    from pathlib import Path
+    seed = json.loads((Path(__file__).resolve().parents[1] / "config/editorial-seed.json").read_text(encoding="utf-8"))
+    for item in seed["selected"]:
+        assert check_texts([item["headline_ko"], item["hook_ko"], item["reader_value_ko"], item["blog_angle_ko"]]) == [], item["headline_ko"]
+        assert ":" not in item["headline_ko"] and not item["headline_ko"].endswith(".")

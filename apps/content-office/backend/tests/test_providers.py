@@ -87,3 +87,35 @@ def test_invalid_usage_counter_types_keep_reservation(tmp_path, monkeypatch, fie
         provider.generate('eval', [{'role': 'user', 'content': 'test'}], SCHEMA)
     assert store.budget()['reserved_krw'] > 0
     assert store.budget()['spent_krw'] == 0
+
+
+class ErrorResponse:
+    def __init__(self, status_code, body):
+        self.status_code = status_code
+        self._body = body
+
+    def json(self):
+        return self._body
+
+
+def test_503_unavailable_is_settled_as_unbilled_and_retryable(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
+    store = Store(tmp_path)
+    busy = ErrorResponse(503, {"error": {"code": 503, "status": "UNAVAILABLE", "message": "high demand"}})
+    provider = Provider(store, transport=lambda *a, **kw: busy)
+    with pytest.raises(WorkflowError, match="503") as info:
+        provider.generate("card_ko", [{"role": "user", "content": "a"}], SCHEMA)
+    assert "예약을 유지" not in str(info.value)
+    assert store.budget()["reserved_krw"] == 0 and store.budget()["spent_krw"] == 0
+    # 같은 호출을 다시 시도할 수 있다(결과 불명으로 막히지 않는다)
+    with pytest.raises(WorkflowError, match="503"):
+        provider.generate("card_ko", [{"role": "user", "content": "a"}], SCHEMA)
+
+
+def test_other_5xx_keeps_reservation_unknown(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
+    store = Store(tmp_path)
+    provider = Provider(store, transport=lambda *a, **kw: ErrorResponse(500, {"error": {"status": "INTERNAL"}}))
+    with pytest.raises(WorkflowError, match="예약을 유지"):
+        provider.generate("card_ko", [{"role": "user", "content": "b"}], SCHEMA)
+    assert store.budget()["reserved_krw"] > 0

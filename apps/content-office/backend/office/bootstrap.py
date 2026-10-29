@@ -53,7 +53,7 @@ def korean_cards(store, articles, provider=None, limit=None):
     pending = [a for a in ordered[:limit] if not a.get("card_ko")]
     # 결과 불명으로 막힌 기사를 건너뛸 때 채울 예비 기사
     spare = [a for a in ordered[limit:limit + 5] if not a.get("card_ko")]
-    made, stopped, skipped = 0, None, []
+    made, stopped, skipped, busy = 0, None, [], 0
     if pending:
         if provider is None:
             from .providers import Provider
@@ -64,14 +64,21 @@ def korean_cards(store, articles, provider=None, limit=None):
                 break
             try:
                 article["card_ko"] = korean_card(article, provider)
-                made += 1
+                made, busy = made + 1, 0
             except WorkflowError as error:
+                message = str(error)
                 # 같은 호출이 결과 불명으로 막힌 경우는 유료 호출이 나가지 않았으므로 그 기사만 건너뛴다.
-                # 제공자 오류·예산·키·작업 시간 문제는 다음 호출도 같을 수 있어 즉시 멈춘다.
-                if "결과 불명" in str(error):
+                if "결과 불명" in message:
                     skipped.append(article["id"])
                     continue
-                stopped = str(error)
+                # 수요 폭주(503)는 과금 없이 거절된 것이라 다음 기사를 이어 시도하되, 세 번 연속이면 멈춘다.
+                if "HTTP 503" in message and "예약을 유지" not in message:
+                    busy += 1
+                    skipped.append(article["id"])
+                    if busy < 3:
+                        continue
+                # 예산·키·작업 시간·그 밖의 제공자 오류는 다음 호출도 같을 수 있어 즉시 멈춘다.
+                stopped = message
                 break
     store.event("korean_cards", {"role": "국어 검수", "made": made, "pending": len(pending), "skipped_unknown": skipped, "stopped": stopped, "passed": sum(1 for a in articles if (a.get("card_ko") or {}).get("check", {}).get("passed"))})
     return articles

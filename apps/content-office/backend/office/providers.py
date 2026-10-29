@@ -28,6 +28,14 @@ class Provider:
         self.model = model or store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash")
         self.transport = transport or requests.post
 
+    @staticmethod
+    def _error_status(response):
+        try:
+            data = response.json()
+            return data["error"]["status"] if isinstance(data, dict) else None
+        except (ValueError, KeyError, TypeError):
+            return None
+
     def generate(self, role, messages, schema, options=None):
         options = {"max_tokens": 8192, "temperature": 0.5, **(options or {})}
         if self.model not in PRICES:
@@ -65,11 +73,14 @@ class Provider:
             self.store.unknown_cost(reservation["id"], "network_result_unknown")
             raise WorkflowError("모델 응답을 확인하지 못했습니다. 비용 예약을 유지하며 자동 재호출하지 않습니다") from None
         if response.status_code >= 400:
-            if 400 <= response.status_code < 500:
+            # 제공자가 명시적으로 '처리하지 않았다'고 알린 503 UNAVAILABLE(수요 폭주)은 과금이 없으므로 예약을 0원으로 정산한다.
+            # 그 밖의 5xx는 처리 여부를 알 수 없어 예약을 유지한다.
+            rejected = 400 <= response.status_code < 500 or (response.status_code == 503 and self._error_status(response) == "UNAVAILABLE")
+            if rejected:
                 self.store.settle_cost(reservation["id"], 0, {"http_status": response.status_code, "accepted": False})
             else:
                 self.store.unknown_cost(reservation["id"], "provider_server_error")
-            uncertainty = " 비용 예약을 유지합니다." if response.status_code >= 500 else ""
+            uncertainty = "" if rejected else " 비용 예약을 유지합니다."
             raise WorkflowError(f"모델 제공자가 HTTP {response.status_code}를 반환했습니다.{uncertainty} 자동 재시도 없이 확인이 필요합니다")
         try:
             data = response.json()
