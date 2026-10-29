@@ -96,10 +96,10 @@ def test_rebuild_refreshes_consent_and_resets_approval_when_content_changes(tmp_
     rebuilt = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
     assert rebuilt["recipient_count"] == 1 and rebuilt["recipients_hash"] != issue["recipients_hash"]
     assert rebuilt["hash"] == issue["hash"] and rebuilt["state"] == "approved" and rebuilt["approval"]["stage"] == "③"
-    client.put(f"/api/jobs/{job_id}/offer", json={"product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.store/planner", "note": None}, headers=headers)
+    client.put(f"/api/jobs/{job_id}/offer", json={"product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.kr/planner", "note": None}, headers=headers)
     changed = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
     assert changed["hash"] != issue["hash"] and changed["state"] == "draft" and changed["approval"] is None
-    assert "D-30 플래너" in changed["markdown"] and "9,900원" in changed["markdown"] and "https://heobrain.store/planner" in changed["markdown"]
+    assert "D-30 플래너" in changed["markdown"] and "9,900원" in changed["markdown"] and "https://heobrain.kr/planner" in changed["markdown"]
     assert "newsletter_rebuilt" in [e["kind"] for e in store.events(job_id)]
     assert client.post(f"/api/newsletters/{issue['id']}/sent", json={}, headers=headers).status_code == 409
     store.update_job(job_id, release_approval=None)

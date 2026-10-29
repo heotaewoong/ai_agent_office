@@ -286,7 +286,7 @@ OpenAI는 Chat Completions + JSON schema 응답 형식, `reasoning_effort: low`�
 | `threads_main` · `x_main` · `linkedin_personal` | Threads · X · LinkedIn 개인 | ko | 수동 |
 | `tistory_main` · `naver_blog_main` | 블로그 | ko | 수동(HTML/MD/TXT 묶음) |
 | `slack_internal` · `discord_contact` | 내부 알림 | ko | 검토 알림만 |
-| `store` | heobrain.store | ko | 스토어 서버가 판정, 오피스는 가격을 바꾸지 않음 |
+| `store` | heobrain.kr | ko | 스토어 서버가 판정, 오피스는 가격을 바꾸지 않음 |
 
 YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 키별 `YOUTUBE_<KEY>_REFRESH_TOKEN`(예: `YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`)으로 전달합니다. 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. 화면 "제작 설정 → 채널"에서는 공개 주소 링크, YouTube 채널 ID(`UC`로 시작하는 24자, 화면에서 형식 검사), 발행 허용, 토큰 연결 여부만 보이고 토큰 값은 표시하거나 입력받지 않습니다. 업로드 패널은 YouTube 채널을 고르며 브리프 언어와 채널 언어가 다르면 보내기 전에 막고, 응답 `channelId`가 등록값과 다르면 업로드 기록을 `needs_review`로 둡니다. 업로드 기록에는 `channel_key`와 `locale`이 함께 남습니다.
 

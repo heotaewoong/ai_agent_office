@@ -52,7 +52,7 @@ Notion에서 가져온 핵심: 두 축과 첫 3일 목표(①신뢰·유입·자
 | tistory_main / naver_blog_main | 블로그 | ko | HTML/MD/TXT 묶음, 수동 게시 | 두 플랫폼 모두 글쓰기 API 종료 |
 | x_main | X | ko | 짧은 글 초안, 수동 | 계정 주소는 오너 확인 후 등록 |
 | slack_internal / discord_contact | 내부 알림 | - | 검토 알림만 | 프로필·워크스페이스 URL만으로 발송하지 않음 |
-| store | heobrain.store | - | 상품·결제·쿠폰은 스토어 서버가 판정 | 오피스는 가격을 바꾸지 않음 |
+| store | heobrain.kr | - | 상품·결제·쿠폰은 스토어 서버가 판정 | 오피스는 가격을 바꾸지 않음 |
 
 ## 5. 현재 구현 상태 (2026-10-29, main 11dcf0e)
 
