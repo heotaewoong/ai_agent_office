@@ -57,7 +57,8 @@ def korean_cards(store, articles, provider=None, limit=None):
     if pending:
         if provider is None:
             from .providers import Provider
-            provider = Provider(store)
+            # 두 문장 카드는 가벼운 모델로 충분하다. 원고 작성·검수 모델과 분리해 정한다.
+            provider = Provider(store, model=os.environ.get("OFFICE_CARD_MODEL", "gemini-3.5-flash-lite"))
         for article in pending + spare:
             if have + made >= limit:
                 break
