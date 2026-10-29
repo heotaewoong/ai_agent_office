@@ -222,8 +222,9 @@ def _card_renderer(store, job_id, images, background_renderer, notes):
     if background_renderer is not None:
         return background_renderer
     if images is None:
-        from .image_selection import profile_summary
-        images = profile_summary(store).get("id") != "none"
+        # 카드뉴스는 주제 이미지가 기본이다. OpenAI 키가 있으면 만들고, 화면에서 끈 경우(False)만 그라데이션.
+        import os
+        images = bool(os.environ.get("OPENAI_API_KEY"))
     if not images:
         return None
     from .image_provider import make_openai_card_image_renderer
@@ -243,20 +244,24 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
     provider = provider or Provider(store)
     system = brand_system_prompt(BASE, brand)
     context = {"packet": packet_context(packet), "audience": brief, "instructions": INSTRUCTIONS}
-    options = {"max_tokens": 4096, "temperature": 0.5, "reasoning_effort": "medium"}
+    options = {"max_tokens": 12000, "temperature": 0.5, "reasoning_effort": "low"}
     plan = provider.generate("cards", [{"role": "system", "content": system}, {"role": "user", "content": canonical(context)}], CARDS_SCHEMA, options)
     checks = card_checks(plan, brand)
-    review = provider.generate("cards_review", [{"role": "system", "content": system}, {"role": "user", "content": canonical({"cards": plan.get("slides"), "audience": brief, "instructions": REVIEW_INSTRUCTIONS})}], REVIEW_SCHEMA, {"max_tokens": 2048, "temperature": 0.2, "reasoning_effort": "medium"})
+    review = provider.generate("cards_review", [{"role": "system", "content": system}, {"role": "user", "content": canonical({"cards": plan.get("slides"), "audience": brief, "instructions": REVIEW_INSTRUCTIONS})}], REVIEW_SCHEMA, {"max_tokens": 6000, "temperature": 0.2, "reasoning_effort": "low"})
     issues = [*checks["issues"], *review_issues(review)]
     refined = False
+    notes = []
     if issues:
         refine_context = {**context, "previous": plan, "issues": issues, "instructions": INSTRUCTIONS + " 아래 issues를 모두 해결한 전체 카드 목록을 다시 작성한다. 지적된 카드만이 아니라 전체 흐름이 자연스럽게 이어지도록 고친다."}
-        plan = provider.generate("cards", [{"role": "system", "content": system}, {"role": "user", "content": canonical(refine_context)}], CARDS_SCHEMA, {**options, "temperature": 0.3})
-        checks = card_checks(plan, brand)
-        refined = True
+        try:
+            revised = provider.generate("cards", [{"role": "system", "content": system}, {"role": "user", "content": canonical(refine_context)}], CARDS_SCHEMA, {**options, "temperature": 0.3})
+            plan, checks, refined = revised, card_checks(revised, brand), True
+        except WorkflowError as error:
+            # 수정 단계가 실패해도 이미 비용을 낸 첫 결과로 카드를 만든다. 검토 지적은 이슈로 남긴다.
+            notes.append(f"수정 단계 실패로 첫 결과를 썼어요: {error}")
+            checks = {"passed": False, "issues": issues}
     version = int((job.get("cards") or {}).get("version", 0)) + 1
     root, folder = output_folder(store, job, f"cards-v{version}")
-    notes = []
     renderer = _card_renderer(store, job_id, images, background_renderer, notes)
     raw = [s for s in (plan.get("slides") or []) if isinstance(s, dict)]
     slides, image_meta = [], []

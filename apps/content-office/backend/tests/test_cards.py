@@ -229,10 +229,28 @@ def test_plan_cards_puts_a_topic_image_behind_every_card_but_the_last(tmp_path):
     assert any("주제 이미지 없이" in note for note in again["notes"])
 
 
-def test_images_false_or_profile_none_never_builds_a_paid_renderer(tmp_path, monkeypatch):
+def test_images_false_or_no_openai_key_never_builds_a_paid_renderer(tmp_path, monkeypatch):
     import office.image_provider as image_provider
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(image_provider, "make_openai_card_image_renderer", lambda *a, **k: (_ for _ in ()).throw(AssertionError("paid renderer built")))
     store = Store(tmp_path)
     job = approved_job(store)
     assert plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]), images=False)["visual_source"] == "first_party_gradient_and_text"
     assert plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))["visual_source"] == "first_party_gradient_and_text"
+
+
+def test_failed_refine_keeps_the_first_plan_instead_of_failing(tmp_path):
+    store = Store(tmp_path)
+    job = approved_job(store)
+
+    class Provider(FakeCardsProvider):
+        def generate(self, role, messages, schema, options=None):
+            if role == "cards" and any(c["role"] == "cards_review" for c in self.calls):
+                self.calls.append({"role": role})
+                raise WorkflowError("모델 출력이 길이 제한에서 잘렸습니다")
+            return super().generate(role, messages, schema, options)
+    review = {"cards": [{"index": 2, "ok": False, "problems": ["주어가 없어요"]}]}
+    result = plan_cards(store, job["id"], provider=Provider([good_slides(), review]), images=False)
+    assert result["refined"] is False and len(result["slides"]) == 6 and all(s["artifact_id"] for s in result["slides"])
+    assert result["checks"]["passed"] is False and any("주어가 없어요" in i for i in result["checks"]["issues"])
+    assert any("수정 단계 실패" in n for n in result["notes"])

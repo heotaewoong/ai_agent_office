@@ -209,3 +209,17 @@ def test_openai_request_spells_out_array_counts_and_enums_the_json_schema_mode_i
     systems = [m["content"] for m in calls[0]["messages"] if m["role"] == "system"]
     assert systems[0] == "SYS" and any("정확히 5개" in s and "thumbnails" in s for s in systems)
     assert calls[0]["messages"][-1]["role"] == "user"
+
+
+def test_openai_truncated_output_says_so(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-placeholder")
+
+    class Cut(OpenAIResponse):
+        def json(self):
+            data = super().json()
+            data["choices"][0]["finish_reason"] = "length"
+            return data
+    store = Store(tmp_path)
+    with pytest.raises(WorkflowError, match="길이 제한"):
+        Provider(store, model="gpt-5.4-mini", transport=lambda *a, **kw: Cut('{"passed":tr')).generate("gen", [{"role": "user", "content": "x"}], SCHEMA)
+    assert store.budget()["spent_krw"] > 0 and store.budget()["reserved_krw"] == 0

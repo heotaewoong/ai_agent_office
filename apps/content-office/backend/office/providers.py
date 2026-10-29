@@ -31,6 +31,10 @@ OPENAI_PRICE_CHECKED = "2026-10-30"
 FX_RESERVATION_KRW = 2000
 
 
+class OutputTruncated(ValueError):
+    """OpenAI finish_reason == "length": the JSON was cut off."""
+
+
 def provider_for(model):
     if model in OPENAI_PRICES:
         return "openai"
@@ -160,6 +164,8 @@ class Provider:
             if not isinstance(result, dict):
                 raise ValueError("Object required")
             Draft202012Validator(schema).validate(result)
+        except OutputTruncated:
+            raise WorkflowError("모델 출력이 길이 제한에서 잘렸습니다(비용은 정산됨). 출력 한도를 늘리거나 요청을 줄여야 합니다") from None
         except ValidationError:
             raise WorkflowError("모델 결과 형식이 요청한 schema와 다릅니다. 성공으로 저장하지 않습니다") from None
         except (ValueError, KeyError, TypeError, IndexError):
@@ -222,6 +228,8 @@ class Provider:
 
     @staticmethod
     def _openai_text(data):
+        if data["choices"][0].get("finish_reason") == "length":
+            raise OutputTruncated()
         message = data["choices"][0]["message"]
         if message.get("refusal"):
             raise ValueError("Refusal")
