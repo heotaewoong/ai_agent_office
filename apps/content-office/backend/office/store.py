@@ -233,17 +233,24 @@ class Store:
             self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "role": "연구"}, job_id)
             return self._write_job(db, job)
 
-    def add_draft(self, job_id, draft):
+    def add_draft(self, job_id, draft, *, expected_hash=_UNSET):
         """Keep an editorial draft beside the job. It never changes source, approvals or outputs."""
         if not draft.get("title") or not draft.get("body"):
             raise WorkflowError("초안 제목과 본문이 필요합니다")
-        draft_id = "draft_" + digest({"job_id": job_id, "title": draft["title"], "body": draft["body"], "video": draft.get("video")})[:16]
+        identity = {"job_id": job_id, "title": draft["title"], "body": draft["body"], "video": draft.get("video")}
+        if expected_hash is not _UNSET:
+            identity["based_on_source_hash"] = expected_hash
+        draft_id = "draft_" + digest(identity)[:16]
         with self.connection(transaction=True) as db:
-            self._job(db, job_id)
+            job = self._job(db, job_id)
+            if expected_hash is not _UNSET and job["source_hash"] != expected_hash:
+                raise WorkflowError("원고 판본이 변경되어 옛 초안을 등록하지 않았습니다. 현재 원고를 확인하세요")
             row = db.execute("SELECT data FROM drafts WHERE id=?", (draft_id,)).fetchone()
             if row:
                 return json.loads(row[0])
             record = {**draft, "id": draft_id, "job_id": job_id, "status": "unapproved_draft", "created_at": now()}
+            if expected_hash is not _UNSET:
+                record["based_on_source_hash"] = expected_hash
             db.execute("INSERT INTO drafts VALUES(?,?,?,?)", (draft_id, job_id, canonical(record), now()))
             self._event(db, "draft_registered", {"draft_id": draft_id, "title": draft["title"], "role": "편집", "next_action": "초안을 읽고 편집기로 불러와 저장하면 새 원고 버전으로 재검수합니다"}, job_id)
             return record

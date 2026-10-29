@@ -407,6 +407,19 @@ POST /api/newsletters/{id}/sent
 # API: PUT /api/jobs/{id}/offer ({product, price_krw, url, note}) → job(offer{..., captured_at, actor}) · DELETE /api/jobs/{id}/offer → job
 ```
 
+### 외부 원고를 미승인 초안으로 가져오기
+
+`article.md`와 선택적인 `script.md`가 있는 폴더를 기존 작업에 가져올 수 있습니다. 외부 비서에게 초안을 맡기는 경우, **작성 시작 때의** 작업 ID와 `source_hash`를 기록하고 결과를 받을 때 함께 전달합니다.
+
+```bash
+cd apps/content-office/backend
+.venv/bin/python -m office.drafts /path/to/draft --job <job_id> --source-hash <작성시작때_source_hash>
+```
+
+현재 원고 판본이 달라졌으면 등록을 거부하며, 기존 초안·원고·승인·제작물은 보존합니다. 판본이 같으면 미승인 초안으로 등록하고 `based_on_source_hash`를 남깁니다. 같은 판본·내용의 재등록은 같은 초안 ID를 반환합니다. 내용이 같아도 입력 판본이 바뀌면 별도 초안으로 구분합니다. 파일 해시나 Hermes 모델 이름을 `source_hash`로 대신 넣지 않습니다.
+
+`--source-hash`를 생략한 기존 수동 가져오기는 유지되며 입력 판본을 검사하지 않습니다. 판본 검사가 Hermes의 실제 실행이나 내용의 정확성을 증명하지는 않습니다. Hermes 자동 업무 전달·실행 번호 회수는 별도 연결이 필요하고, 초안 등록은 승인①·제작·게시를 수행하지 않습니다.
+
 ## 검사와 증거
 
 ```bash

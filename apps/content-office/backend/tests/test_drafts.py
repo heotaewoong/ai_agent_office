@@ -119,6 +119,72 @@ def test_unmatched_draft_is_refused(tmp_path, context):
         register_folder(store, folder)
 
 
+def test_bound_draft_preserves_job_and_deduplicates_within_its_source(context):
+    store, job_id, folder = context
+    before = copy.deepcopy(store.job(job_id))
+    legacy = register_folder(store, folder, job_id)
+    record = register_folder(store, folder, job_id, expected_source_hash=before['source_hash'])
+    assert record['based_on_source_hash'] == before['source_hash']
+    assert record['status'] == 'unapproved_draft' and record['id'] != legacy['id']
+    assert register_folder(store, folder, job_id, expected_source_hash=before['source_hash']) == record
+    assert register_folder(store, folder, job_id) == legacy
+    assert store.job(job_id) == before
+    assert len(store.drafts(job_id)) == 2
+
+
+def test_bound_draft_rejects_old_version_even_if_already_registered(context):
+    store, job_id, folder = context
+    old_hash = store.job(job_id)['source_hash']
+    register_folder(store, folder, job_id, expected_source_hash=old_hash)
+    packet = {**store.job(job_id)['source_packet'], 'body': '새로 수정한 원고 [DC1]'}
+    current = store.save_source(job_id, packet)
+    before_events = store.events(job_id)
+    before_drafts = store.drafts(job_id)
+    with pytest.raises(WorkflowError, match='원고 판본이 변경'):
+        register_folder(store, folder, job_id, expected_source_hash=old_hash)
+    assert store.drafts(job_id) == before_drafts
+    assert store.events(job_id) == before_events
+    assert store.job(job_id) == current
+    new = register_folder(store, folder, job_id, expected_source_hash=current['source_hash'])
+    assert new['id'] != before_drafts[0]['id']
+    assert new['based_on_source_hash'] == current['source_hash']
+
+
+def test_bound_draft_checks_version_at_write_after_intake_read(context, monkeypatch):
+    store, job_id, folder = context
+    old_hash = store.job(job_id)['source_hash']
+    add_draft = store.add_draft
+    after_change = {}
+
+    def change_source_then_insert(*args, **kwargs):
+        packet = {**store.job(job_id)['source_packet'], 'body': '초안 읽기 후 바뀐 원고 [DC1]'}
+        after_change['job'] = store.save_source(job_id, packet)
+        after_change['events'] = store.events(job_id)
+        return add_draft(*args, **kwargs)
+
+    monkeypatch.setattr(store, 'add_draft', change_source_then_insert)
+    with pytest.raises(WorkflowError, match='원고 판본이 변경'):
+        register_folder(store, folder, job_id, expected_source_hash=old_hash)
+    assert store.drafts(job_id) == []
+    assert store.events(job_id) == after_change['events']
+    assert store.job(job_id) == after_change['job']
+
+
+def test_bound_intake_requires_explicit_job_before_reading_files(context):
+    store, job_id, folder = context
+    with pytest.raises(WorkflowError, match='--job'):
+        register_folder(store, folder / 'missing', expected_source_hash=store.job(job_id)['source_hash'])
+
+
+def test_bound_intake_cli_refuses_missing_job_before_opening_store(monkeypatch):
+    from office.drafts import main
+    monkeypatch.setattr('office.bootstrap.default_store', lambda: pytest.fail('운영 작업 장부를 열면 안 됩니다'))
+    monkeypatch.setattr('sys.argv', ['office.drafts', 'unused', '--source-hash', 'a' * 64])
+    with pytest.raises(SystemExit) as error:
+        main()
+    assert error.value.code == 2
+
+
 def test_blog_quote_renders_as_blockquote_without_raw_marker():
     html = safe_fragment('## 예시\n\n> 가상 설명: <b>72mm</b>')
     assert '<blockquote' in html and '&gt; 가상' not in html and '&lt;b&gt;' in html

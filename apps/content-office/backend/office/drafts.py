@@ -86,12 +86,16 @@ def match_job(store, draft):
     return matches[0]["id"]
 
 
-def register_folder(store, folder, job_id=None):
+def register_folder(store, folder, job_id=None, *, expected_source_hash=None):
+    if expected_source_hash is not None and not job_id:
+        raise WorkflowError("원고 판본을 확인하려면 --job으로 작업을 지정하세요")
     draft = load_folder(folder)
     job_id = job_id or match_job(store, draft)
     known = {e.get("id") for e in store.job(job_id)["article"].get("evidence", [])}
     draft["evidence_ids_cited"] = sorted(set(re.findall(r"\[([A-Z]+\d+)\]", draft["body"])))
     draft["evidence_ids_missing"] = sorted(known - set(draft["evidence_ids_cited"]))
+    if expected_source_hash is not None:
+        return store.add_draft(job_id, draft, expected_hash=expected_source_hash)
     return store.add_draft(job_id, draft)
 
 
@@ -99,14 +103,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("folders", nargs="+", help="article.md와 script.md가 있는 초안 폴더")
     parser.add_argument("--job", help="자동 매칭 대신 지정할 작업 ID (폴더 하나일 때)")
+    parser.add_argument("--source-hash", help="초안 작성 시작 때의 source_hash. 현재 판본과 비교하며 --job이 필요합니다")
     args = parser.parse_args()
     if args.job and len(args.folders) != 1:
         parser.error("--job은 폴더 하나에만 사용할 수 있습니다")
+    if args.source_hash is not None and not args.job:
+        parser.error("--source-hash에는 --job이 필요합니다")
     from .bootstrap import default_store
     store = default_store()
     try:
         for folder in args.folders:
-            record = register_folder(store, folder, args.job)
+            record = register_folder(store, folder, args.job, expected_source_hash=args.source_hash)
             print(canonical({"folder": folder, "job_id": record["job_id"], "draft_id": record["id"], "title": record["title"], "body_chars": len(record["body"]), "scenes": len((record.get("video") or {}).get("scenes", [])), "evidence_ids_missing": record["evidence_ids_missing"]}))
     except WorkflowError as error:
         parser.exit(1, str(error) + "\n")
