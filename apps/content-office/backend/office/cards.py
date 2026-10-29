@@ -236,6 +236,15 @@ def _card_renderer(store, job_id, images, background_renderer, notes):
     """카드 이미지를 만들 함수. 운영자가 고르지 않았으면 None(그라데이션)."""
     if background_renderer is not None:
         return background_renderer
+    if images is not False:
+        from .image_selection import profile_summary
+        if profile_summary(store)["id"] == "codex-subscription":
+            from .codex_image_provider import make_codex_card_image_renderer
+            try:
+                return make_codex_card_image_renderer(store, job_id=job_id)
+            except WorkflowError as error:
+                notes.append(f"주제 이미지 없이 만들었어요: {error}")
+                return None
     if images is None:
         # 카드뉴스는 주제 이미지가 기본이다. OpenAI 키가 있으면 만들고, 화면에서 끈 경우(False)만 그라데이션.
         import os

@@ -50,6 +50,24 @@ def test_openai_factory_requires_approval_and_visual_selection(tmp_path, monkeyp
     assert store.budget()['spent_krw'] == store.budget()['reserved_krw'] == 0
 
 
+def test_codex_profile_is_free_capped_and_reports_login_not_api_key(tmp_path, monkeypatch):
+    from office.codex_image_provider import CodexImageProvider, DAILY_CAP
+    from office.image_selection import select_profile, background_renderer_for_job, profile_summary
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-placeholder')
+    monkeypatch.setenv('CODEX_HOME', str(tmp_path / 'no-codex-login'))
+    store = Store(tmp_path)
+    job = fixture(store)
+    summary = select_profile(store, 'codex-subscription', actor='test-operator')
+    assert summary['paid'] is False and summary['job_cap_krw'] == 0 and summary['automatic_fallback'] is False
+    assert summary['configured'] is False and summary['openai_configured'] is True
+    assert summary['daily_cap_images'] == DAILY_CAP and summary['used_today'] == 0 and 'API 키 사용 안 함' in summary['key_source']
+    store.review_source(job['id'], job['source_hash'], 'approved', 'fixture-operator', {'video': True})
+    renderer = background_renderer_for_job(store, store.job(job['id']))
+    assert isinstance(renderer.image_provider, CodexImageProvider) and renderer.image_provider.config['reservation_krw'] == 0
+    assert store.budget()['spent_krw'] == store.budget()['reserved_krw'] == 0
+    assert profile_summary(store)['id'] == 'codex-subscription'
+
+
 def test_summary_reports_key_presence_without_exposing_it(tmp_path, monkeypatch):
     from office.image_selection import profile_summary
     store = Store(tmp_path)

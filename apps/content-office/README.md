@@ -174,6 +174,7 @@ npm run build
 | `GEMINI_API_KEY` | 기존 Gemini 연결. 환경으로만 전달하며 UI·ZIP·저장소에 넣지 않습니다 |
 | `OPENAI_API_KEY` | 배경 이미지 프로필 `openai-gpt-image`를 고른 경우에만 필요합니다. 실행하는 운영자가 자신의 키를 환경 파일에 넣으며, 영수증·UI·ZIP·저장소에 기록하지 않습니다 |
 | `RUNWAYML_API_SECRET` | 생성 영상 프로필 `runway-*`를 고른 경우에만 필요합니다. 같은 규칙으로 환경으로만 전달합니다 |
+| `CODEX_HOME` · `CONTENT_OFFICE_CODEX_BIN` | 배경 이미지 프로필 `codex-subscription`용. 기본은 실행 계정의 `~/.codex`와 PATH의 `codex`입니다. 키가 아니라 ChatGPT 로그인을 쓰므로 환경 파일에 비밀값을 넣지 않습니다 |
 | `YOUTUBE_CLIENT_ID` · `YOUTUBE_CLIENT_SECRET` · `YOUTUBE_<채널키>_REFRESH_TOKEN` | YouTube 비공개 업로드를 요청할 때만 필요한 채널 소유자의 OAuth 자격입니다. refresh token은 채널 키마다 따로 둡니다(`YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`). 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. 장부·이벤트·ZIP에 기록하지 않습니다 |
 | `OFFICE_STATE_DIR` | DB·자산·캐시 위치. 기본 `~/.local/state/heobrain-content-office` |
 | `OFFICE_MODEL` | 새 장부의 명시적 모델 선택. 현재 실제 작성에 검증한 모델은 `gemini-3.5-flash-lite`이며 저장된 모델 설정이 우선합니다 |
@@ -200,7 +201,17 @@ cd "<저장소 경로>/apps/content-office/backend"
 .venv/bin/python -m office.image_selection status
 # 선택 자체는 유료 호출을 하지 않습니다. 키 존재 여부만 configured로 표시합니다.
 .venv/bin/python -m office.image_selection set --profile openai-gpt-image
+.venv/bin/python -m office.image_selection set --profile codex-subscription
 .venv/bin/python -m office.image_selection set --profile none
+```
+
+`codex-subscription`은 API 키 대신 운영자의 Codex 구독(ChatGPT 로그인)으로 같은 장면 배경과 카드 이미지를 만듭니다. 이미지 한 장마다 `codex exec`를 읽기 전용 샌드박스·빈 임시 폴더에서 한 번 실행하고, Codex가 `$CODEX_HOME/generated_images/<실행 ID>/`에 저장한 PNG 한 장만 가져옵니다(가져온 뒤 Codex 쪽 사본은 지웁니다). 실행 환경에서 `OPENAI_API_KEY`·`CODEX_API_KEY`를 빼서 API 요금으로 넘어가지 않게 합니다. 추가 요금은 0원이라 비용 장부에 예약하지 않지만, 운영자의 Codex 사용 한도(개발 작업과 공유)에서 차감되므로 하루(한국 시간) 20장까지만 시도합니다. 실패·시간 초과(300초)도 1장으로 셉니다. 크기는 프롬프트로 요청하므로 실제 크기를 메타데이터의 `size`에 남깁니다. 실패하면 해당 출력만 실패로 남기고 OpenAI API로 자동 전환하지 않습니다. 앱을 실행하는 계정(EC2는 `ubuntu`)에 Codex CLI가 있고 그 계정으로 로그인해 두어야 `configured`가 참이 됩니다. 로그인 파일(`auth.json`)은 비밀번호처럼 다루며 앱은 존재 여부만 확인합니다.
+
+```bash
+# 앱 실행 계정에서 한 번만. 기기 코드가 나오면 운영자가 브라우저에서 승인합니다.
+npm install -g @openai/codex
+codex login --device-auth
+codex login status
 ```
 
 생성 영상 프로필은 세 번째 선택입니다. 기본값 `none`은 모든 장면을 정지 화면에 줌 효과로 만듭니다. `runway-gen4-turbo`(5초 25크레딧, 500원 예약) 또는 `runway-gen4.5`(5초 60크레딧, 1,200원 예약)를 고르면, 승인 원고의 장면 중 `"clip": "generated"`로 지정한 장면만 Runway image-to-video로 5초 720×1280 클립을 받습니다. 선택 사항인 `"motion"` 필드로 카메라 움직임을 지시할 수 있습니다. 입력 프레임은 그 장면의 생성 배경이므로 배경 이미지 프로필이 함께 켜져 있어야 하며, 없으면 유료 호출 전에 거부합니다. 글자는 투명한 로컬 레이어로 클립 위에 얹고 FFmpeg가 음성 길이만큼 반복·자릅니다. 한 업무에 최대 3개 장면, 업무당 3,000원 하위한도입니다. 작업이 제한 시간 안에 끝나지 않으면 결과 불명으로 남기고 영수증의 `task_id`로 나중에 대사합니다. 제공자 산출물 URL은 24~48시간 뒤 만료되므로 받은 파일을 상태 폴더에 보관합니다. 환경변수는 `RUNWAYML_API_SECRET`입니다.

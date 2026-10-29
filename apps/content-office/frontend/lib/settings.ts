@@ -18,6 +18,7 @@ export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
   image: [
     { id: "none", label: "생성 배경 없음 · 글자 카드", paid: false, hint: "지금처럼 로컬에서 글자 카드만 그립니다." },
     { id: "openai-gpt-image", label: "OpenAI gpt-image-2.5 배경", paid: true, hint: "장면마다 배경 한 장 · 장당 200원 예약 · 업무당 2,000원" },
+    { id: "codex-subscription", label: "Codex 구독 배경 · ChatGPT 로그인", paid: false, hint: "장면·카드마다 한 장 · 추가 요금 0원 · Codex 사용 한도에서 차감 · 하루 20장 · 장당 약 1분" },
   ],
   clip: [
     { id: "none", label: "생성 영상 없음 · 정지 장면", paid: false, hint: "모든 장면을 정지 화면 줌으로 만듭니다." },
@@ -37,7 +38,9 @@ export function settingsWarnings(provider: ProviderStatus | undefined): string[]
     warnings.push("GEMINI_API_KEY가 서버에 없어 원고 작성이 동작하지 않습니다.");
   if (p.voice?.id === "gemini-kore" && !p.configured)
     warnings.push("Gemini 음성을 골랐지만 GEMINI_API_KEY가 없어 영상 음성을 만들 수 없습니다.");
-  if (p.image?.id && p.image.id !== "none" && !p.image.configured)
+  if (p.image?.id === "codex-subscription" && !p.image.configured)
+    warnings.push("Codex 구독 배경을 골랐지만 서버의 앱 계정에 codex 설치·로그인이 없습니다. 영상·카드 제작이 실패합니다.");
+  else if (p.image?.id && p.image.id !== "none" && !p.image.configured)
     warnings.push("배경 이미지를 켰지만 OPENAI_API_KEY가 서버에 없습니다. 영상·카드 제작이 실패합니다.");
   if (p.clip?.id && p.clip.id !== "none") {
     if (!p.clip.configured)
@@ -52,7 +55,7 @@ export function keyChips(provider: ProviderStatus | undefined): { label: string;
   const p = provider ?? {};
   return [
     { label: "Gemini", env: "GEMINI_API_KEY", ok: Boolean(p.configured) },
-    { label: "OpenAI", env: "OPENAI_API_KEY", ok: Boolean(p.image?.configured) },
+    { label: "OpenAI", env: "OPENAI_API_KEY", ok: Boolean(p.image?.openai_configured ?? p.image?.configured) },
     { label: "Runway", env: "RUNWAYML_API_SECRET", ok: Boolean(p.clip?.configured) },
     { label: "YouTube", env: "YOUTUBE_CLIENT_ID 등", ok: Boolean(p.youtube?.configured) },
   ];
