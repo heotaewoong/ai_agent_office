@@ -1,6 +1,7 @@
 """시험 일정 캘린더와 시의성 점수.
 
-config/exam_calendar.json에 프리셋별 시험 사건을 둔다. 시험형 사건(필기·실기·응시·원서접수)이 45일 안이면 1.0,
+config/exam_calendar.json에 프리셋별 시험 사건을 둔다. 가장 가까운 시험형 사건(필기·실기·응시·원서접수)이
+운영자 확인과 공개 HTTPS 출처를 갖춘 경우에만 시의성에 반영한다. 45일 안이면 1.0,
 120일에서 0.2까지 선형으로 내려가고 그 뒤는 0.2 바닥값이다. 발표는 시의성 계산에서 제외한다. 지난 사건은 무시한다.
 캘린더가 없는 프리셋은 0.0, 항목 없이 baseline만 있는 프리셋(OPIc 상시 시험)은 baseline을 쓴다.
 verified가 false인 날짜는 추정값이며 오너가 공식 공고로 확인해야 한다.
@@ -49,7 +50,7 @@ def load_calendar(path=CONFIG_PATH):
                 "date": str(exam["date"]),
                 "kind": exam["kind"],
                 "source_url": str(exam.get("source_url") or ""),
-                "verified": bool(exam.get("verified", False)),
+                "verified": exam.get("verified") is True,
                 **({"note": str(exam["note"])} if exam.get("note") else {}),
             })
         calendar[preset] = {"baseline": float(entry.get("baseline") or 0.0), "note": str(entry.get("note") or ""), "exams": sorted(exams, key=lambda e: e["date"])}
@@ -83,13 +84,28 @@ def _curve(days):
     return round(1.0 - (1.0 - FLOOR) * (days - FULL_DAYS) / (FADE_DAYS - FULL_DAYS), 3)
 
 
+def _verified_source(exam):
+    from .evidence import reference_url
+    url = exam.get("source_url")
+    if exam.get("verified") is not True or not isinstance(url, str) or any(char.isspace() for char in url):
+        return False
+    try:
+        reference_url(url)
+    except ValueError:
+        return False
+    return True
+
+
 def next_exam(preset, today=None, calendar=None):
     today = today or date.today()
-    rows = _upcoming(_entry(preset, calendar), today)
+    entry = _entry(preset, calendar)
+    rows = _upcoming(entry, today)
     if not rows:
         return None
     first = rows[0]
-    return {"name": first["name"], "date": first["date"], "kind": first["kind"], "days_left": first["days_left"]}
+    return {"name": first["name"], "date": first["date"], "kind": first["kind"], "days_left": first["days_left"],
+            "verified": first.get("verified") is True, "source_url": str(first.get("source_url") or ""),
+            "note": str(first.get("note") or entry.get("note") or "")}
 
 
 def timeliness(preset, today=None, calendar=None):
@@ -97,7 +113,7 @@ def timeliness(preset, today=None, calendar=None):
     entry = _entry(preset, calendar)
     rows = _upcoming(entry, today)
     if rows:
-        return _curve(rows[0]["days_left"])
+        return _curve(rows[0]["days_left"]) if _verified_source(rows[0]) else 0.0
     return min(max(entry["baseline"], 0.0), 1.0) if not entry["exams"] else 0.0
 
 
@@ -115,10 +131,10 @@ def idea_preset(card):
 
 
 def enrich_idea(card, today=None, calendar=None):
-    """기획 카드에 timeliness(0..1)와 next_exam(null | {name, date, days_left})을 붙인다. 캘린더 없는 프리셋은 0·null."""
+    """기획 카드에 시의성과 다음 참고 일정을 붙인다. 미확인 날짜는 명시하되 점수에는 가산하지 않는다."""
     preset = idea_preset(card)
     if not preset or preset not in PRESETS:
         return {**card, "timeliness": 0.0, "next_exam": None}
     today = today or date.today()
     nxt = next_exam(preset, today, calendar)
-    return {**card, "timeliness": timeliness(preset, today, calendar), "next_exam": {"name": nxt["name"], "date": nxt["date"], "days_left": nxt["days_left"]} if nxt else None}
+    return {**card, "timeliness": timeliness(preset, today, calendar), "next_exam": nxt}

@@ -490,7 +490,7 @@ export type Cards = {
 };
 export type TaskAccepted = { task_id: string };
 export type ExamEntry = { name: string; date: string; kind: string; source_url: string; verified: boolean };
-export type NextExam = { name: string; date: string; kind?: string; days_left: number };
+export type NextExam = { name: string; date: string; kind?: string; days_left: number; verified?: boolean; source_url?: string; note?: string };
 export type Calendar = { preset: string; exams: ExamEntry[]; next: NextExam | null; timeliness: number };
 export type QuestionSource = "homepage" | "comment" | "dm" | "email" | "other";
 export type ReaderQuestion = {

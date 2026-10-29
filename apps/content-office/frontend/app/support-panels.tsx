@@ -9,7 +9,7 @@ import {
   retryBlockedReason,
   formatDate,
 } from "../lib/workflow";
-import { dDayLabel, timelinessPercent } from "../lib/calendar";
+import { calendarSourceUrl, calendarTimeliness, dDayLabel, isVerifiedExam, timelinessPercent } from "../lib/calendar";
 import { Icon } from "./icons";
 import { IdeaIntake } from "./idea-intake";
 import { IdeaSourcesPanel } from "./idea-sources-panel";
@@ -633,16 +633,23 @@ export function IdeaBank({ onSelected, refreshKey = 0, drafts = {}, onDraftChang
         {ideas.map((idea) => (
           <li key={idea.id}>
             <strong>{idea.title}</strong> · {idea.score}점 · 이상치 {idea.outlier_band}
-            {idea.next_exam && <span className="idea-dday">{dDayLabel(idea.next_exam)}</span>}
-            {typeof idea.timeliness === "number" && (
-              <div className="idea-timeliness" aria-label={`시의성 ${timelinessPercent(idea.timeliness)}%`}>
-                <span>시의성</span>
+            {idea.next_exam && <>
+              {isVerifiedExam(idea.next_exam) ? <span className="idea-dday" style={{ whiteSpace: "normal", maxWidth: "100%", overflowWrap: "anywhere" }}>{dDayLabel(idea.next_exam)}</span> : <p className="muted" style={{ overflowWrap: "anywhere" }}>{dDayLabel(idea.next_exam)}</p>}
+              <p className="muted" style={{ overflowWrap: "anywhere" }}>
+                {idea.next_exam.note && <>{idea.next_exam.note} · </>}
+                {calendarSourceUrl(idea.next_exam) ? <a href={calendarSourceUrl(idea.next_exam)!} target="_blank" rel="noopener noreferrer">달력에 기록된 출처 열기 ↗</a> : "공개 HTTPS 출처가 기록되지 않았습니다."}
+                {isVerifiedExam(idea.next_exam) && " · 저장된 확인 기록 기준이며 오늘의 공식 일정 재검증은 아닙니다."}
+              </p>
+            </>}
+            {calendarTimeliness(idea.next_exam, idea.timeliness) !== null ? (
+              <div className="idea-timeliness" aria-label={`확인 기록 기준 시의성 ${calendarTimeliness(idea.next_exam, idea.timeliness)}%`}>
+                <span>확인 기록 기준 시의성</span>
                 <div className="progress-track">
-                  <span style={{ width: `${timelinessPercent(idea.timeliness)}%` }} />
+                  <span style={{ width: `${calendarTimeliness(idea.next_exam, idea.timeliness)}%` }} />
                 </div>
-                <span>{timelinessPercent(idea.timeliness)}%</span>
+                <span>{calendarTimeliness(idea.next_exam, idea.timeliness)}%</span>
               </div>
-            )}
+            ) : !idea.next_exam && typeof idea.timeliness === "number" && Number.isFinite(idea.timeliness) && idea.timeliness > 0 ? <p className="muted">저장된 편집 참고값 {timelinessPercent(idea.timeliness)}% · 특정 시험일을 확인한 점수는 아닙니다.</p> : <p className="muted">시의성 미확인 · 확정 일정에 따른 가산을 표시하지 않습니다.</p>}
             {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
             <IdeaSourcesPanel
               idea={idea}
