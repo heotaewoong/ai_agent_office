@@ -76,7 +76,7 @@ def test_gates_warn_on_korean_rules_after_human_edit_without_blocking():
 class CardProvider:
     def __init__(self, first=None, second=None, fail=False):
         self.calls = []
-        self.first = first or {"headline": "구글이 빠른 판단용 Decisions API를 공개했다", "summary": "구글이 짧은 판단을 빠르게 내리는 API를 공개했어요. 분류처럼 경계가 분명한 일에 맞춰 비용을 낮췄어요.", "why": "고객 문의 분류를 자동화하려는 팀이 볼 만해요."}
+        self.first = first or {"headline": "구글, 빠른 판단용 Decisions API 공개", "summary": "구글이 짧은 판단을 빠르게 내리는 API를 공개했어요. 분류처럼 경계가 분명한 일에 맞춰 비용을 낮췄어요.", "why": "고객 문의 분류를 자동화하려는 팀이 볼 만해요."}
         self.second = second
         self.fail = fail
 
@@ -100,8 +100,8 @@ def test_card_is_generated_and_checked():
 
 
 def test_card_with_grammar_error_is_fixed_once_with_issue_list():
-    bad = {"headline": "구글이 API을 공개했어요", "summary": "구글이 모델를 공개했어요. 서울으로 확대해요.", "why": "볼 만해요."}
-    good = {"headline": "구글이 판단용 API를 공개했다", "summary": "구글이 새 모델을 공개했어요. 서울로 확대해요.", "why": "자동화 팀이 볼 만해요."}
+    bad = {"headline": "구글, API을 공개", "summary": "구글이 모델를 공개했어요. 서울으로 확대해요.", "why": "볼 만해요."}
+    good = {"headline": "구글, 판단용 API 공개", "summary": "구글이 새 모델을 공개했어요. 서울로 확대해요.", "why": "자동화 팀이 볼 만해요."}
     provider = CardProvider(first=bad, second=good)
     card = korean_card(article(), provider)
     assert [c[0] for c in provider.calls] == ["card_ko", "card_ko_fix"]
@@ -148,10 +148,13 @@ def test_card_style_mixed_endings_and_template_reason_are_flagged():
     from office.korean import card_style_issues
     bad = {"headline": "연구진이 벤치마크를 공개했어요.", "summary": "연구진이 시험을 만들었다. 에이전트가 직접 구현해야 해요.", "why": "능력을 확인할 수 있기 때문이에요."}
     joined = " / ".join(card_style_issues(bad))
-    assert "마침표 없이" in joined and "해요체" in joined and "때문이에요" in joined
-    fragment = {"headline": "연구진이 시험을 만들었다", "summary": "연구진이 시험을 만들었어요. 직접 구현해야 해요.", "why": "보안성을 파악할 수 있어서."}
+    assert "기사 제목체" in joined and "해요체" in joined and "때문이에요" in joined
+    body_style = {"headline": "연구진이 앱의 반응 속도를 높이는 Decisions API를 내놓았다", "summary": "연구진이 API를 내놓았어요. 앱이 빨라져요.", "why": "앱을 빠르게 만들 방법이 생겨요."}
+    joined2 = " / ".join(card_style_issues(body_style))
+    assert "기사 제목체" in joined2 and "막연한 주어" in joined2
+    fragment = {"headline": "에이전트 인프라 개발 능력 재는 시험 등장", "summary": "연구진이 시험을 만들었어요. 직접 구현해야 해요.", "why": "보안성을 파악할 수 있어서."}
     assert any("완결 문장" in issue for issue in card_style_issues(fragment))
-    good = {"headline": "연구진이 시험을 만들었다", "summary": "연구진이 시험을 만들었어요. 직접 구현해야 해요.", "why": "맡겨도 될지 가늠할 기준이 생겨요."}
+    good = {"headline": "에이전트 인프라 개발 능력 재는 시험 등장", "summary": "연구진이 시험을 만들었어요. 직접 구현해야 해요.", "why": "맡겨도 될지 가늠할 기준이 생겨요."}
     assert card_style_issues(good) == []
 
 
@@ -193,4 +196,5 @@ def test_seed_headlines_pass_korean_rules():
     seed = json.loads((Path(__file__).resolve().parents[1] / "config/editorial-seed.json").read_text(encoding="utf-8"))
     for item in seed["selected"]:
         assert check_texts([item["headline_ko"], item["hook_ko"], item["reader_value_ko"], item["blog_angle_ko"]]) == [], item["headline_ko"]
-        assert ":" not in item["headline_ko"] and not item["headline_ko"].endswith(".")
+        assert ":" not in item["headline_ko"] and not item["headline_ko"].endswith((".", "다"))
+        assert not item["headline_ko"].startswith("연구진")
