@@ -3972,3 +3972,5 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .task-status-failed .task-status-dot, .task-status-unknown .task-status-dot { background: #d64541; }
 .task-status-detail { color: var(--muted, #666); }
 @keyframes task-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.card-image-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted, #666); margin-right: 8px; }

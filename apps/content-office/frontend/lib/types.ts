@@ -460,7 +460,7 @@ export type Quiz = {
   checks: Checks;
   artifact_id: string | null;
 };
-export type CardSlide = { index: number; title: string; body: string; artifact_id: string | null };
+export type CardSlide = { index: number; title: string; body: string; artifact_id: string | null; visual?: string; template?: string | null; background?: string | null };
 export type Cards = {
   version: string;
   generated_at: string;

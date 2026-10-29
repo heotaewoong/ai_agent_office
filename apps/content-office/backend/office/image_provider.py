@@ -33,6 +33,12 @@ JOB_CAP_KRW = 2000
 MAX_IMAGE_BYTES = 12_000_000
 PRICING = {"text_input_usd_million": 5.0, "image_input_usd_million": 8.0, "image_output_usd_million": 30.0,
            "fx_krw": FX_KRW, "valid_until": PRICE_VALID_UNTIL, "source": PRICE_SOURCE, "checked": PRICE_CHECKED}
+CARD_SIZE = "1024x1024"
+CARD_JOB_CAP_KRW = 3200
+CARD_STYLE = ("인스타그램 카드뉴스의 배경 이미지. 카드 주제를 한눈에 알아볼 수 있는 구체적인 사물·도구·장면을 화면 위쪽 절반에 크고 선명하게 보여 준다. "
+              "현대적인 3D 일러스트 또는 깔끔한 사진 스타일, 밝고 선명한 색, 한 화면에 한 가지 주제. 실존 인물 얼굴은 그리지 않는다. "
+              "글자·문자·숫자·로고·화면 속 UI 글씨·워터마크를 절대 넣지 않는다 (no text, no letters, no numbers). "
+              "아래쪽 40%는 글자를 얹을 수 있도록 어둡고 단순한 바닥·배경으로 둔다.")
 STYLE = ("세로 숏폼 영상의 배경 일러스트. 어두운 남색 계열의 차분한 추상 배경, 부드러운 빛과 단순한 도형. "
          "사진처럼 과장하거나 인물 얼굴을 그리지 않음. 글자·문자·숫자·로고·워터마크를 절대 넣지 않음 (no text). "
          "화면 중앙과 하단은 자막을 얹을 수 있도록 단순하게 비워 둠.")
@@ -50,6 +56,15 @@ def scene_prompt(scene):
     parts = [STYLE, "주제: " + caption]
     if visual:
         parts.append("시각 요소: " + visual)
+    return "\n".join(parts)[:4000]
+
+
+def card_prompt(slide):
+    title = str(slide.get("title", "")).strip()
+    visual = str(slide.get("visual", "")).strip()
+    parts = [CARD_STYLE, "카드 주제: " + title]
+    if visual:
+        parts.append("보여 줄 장면: " + visual)
     return "\n".join(parts)[:4000]
 
 
@@ -111,7 +126,7 @@ class ImageProvider:
             raise WorkflowError("배경 이미지 경로는 앱 상태 폴더 안의 PNG 파일이어야 합니다")
         return path
 
-    def _reserve(self, key, payload):
+    def _reserve(self, key, payload, request_kind="image", cap=None):
         if not os.environ.get("OPENAI_API_KEY"):
             raise WorkflowError("OPENAI_API_KEY가 설정되지 않았습니다. 실행 환경 파일에 운영자의 키를 넣은 뒤 다시 요청하세요")
         current = datetime.now(timezone.utc)
@@ -126,22 +141,25 @@ class ImageProvider:
                 data = json.loads(row["data"])
                 if data.get("cache_key") == key and row["state"] in ("reserved", "unknown"):
                     raise WorkflowError("같은 이미지 요청이 진행 중이거나 결과 불명입니다. 비용 예약을 먼저 확인하세요")
-                if data.get("job_id") != self.job_id or data.get("request_kind") != "image":
+                if data.get("job_id") != self.job_id or data.get("request_kind") != request_kind:
                     continue
                 if data.get("reservation_overrun") or data.get("usage", {}).get("request_contract_exceeded"):
                     raise WorkflowError("이 업무에서 이미지 제공자 사용량 초과가 발생했습니다. 비용 대사 전 추가 호출을 차단합니다")
                 committed += row["actual_krw"] if row["state"] == "settled" else row["reserved_krw"]
-        if committed + self.config["reservation_krw"] > self.config["job_cap_krw"]:
-            raise WorkflowError("배경 이미지 업무당 2,000원 한도를 초과하여 요청을 보류합니다")
+        if cap is None:
+            if committed + self.config["reservation_krw"] > self.config["job_cap_krw"]:
+                raise WorkflowError("배경 이미지 업무당 2,000원 한도를 초과하여 요청을 보류합니다")
+        elif committed + self.config["reservation_krw"] > cap:
+            raise WorkflowError(f"카드 이미지 업무당 {cap:,}원 한도를 초과하여 요청을 보류합니다")
         return self.store.reserve_cost("image", self.config["reservation_krw"], {
-            "budget_scope_id": self.config["budget_scope_id"], "request_kind": "image", "cache_key": key,
+            "budget_scope_id": self.config["budget_scope_id"], "request_kind": request_kind, "cache_key": key,
             "job_id": self.job_id, "source_hash": self.source_hash, "payload_hash": digest(payload),
             "model": payload["model"], "price_source": self.config["pricing"]["source"], "price_checked": self.config["pricing"]["checked"],
             "fx_reservation_krw": self.config["pricing"]["fx_krw"], "invoice_reconciled": False,
         })
 
-    def _post(self, key, payload):
-        reservation = self._reserve(key, payload)
+    def _post(self, key, payload, request_kind="image", cap=None):
+        reservation = self._reserve(key, payload, request_kind, cap)
         self.store.event("image_request_started", {"reservation_id": reservation["id"], "model": payload["model"], "scope": self.config["budget_scope_id"]}, self.job_id)
         try:
             response = self.transport("https://api.openai.com/v1/images/generations",
@@ -189,6 +207,30 @@ class ImageProvider:
         payload = {"model": self.config["model"], "prompt": prompt, "n": self.config["n"], "size": self.config["size"],
                    "quality": self.config["quality"], "output_format": self.config["output_format"], "moderation": self.config["moderation"]}
         key = "image:" + digest({"payload": payload, "source_hash": self.source_hash, "job_id": self.job_id})
+        return self._generate(key, payload, prompt, out_path, {"scene_index": scene_index}, lambda: self._authorized(scene_index),
+                              "image", None, self.config["size"], "OpenAI 생성 배경 이미지")
+
+    def _authorized_card(self, card_index):
+        if self.allow_paid is not True:
+            raise WorkflowError("유료 이미지 생성은 명시적으로 선택한 경우에만 호출합니다")
+        job = self.store.require_source_approval(self.job_id)
+        if job["source_hash"] != self.source_hash:
+            raise WorkflowError("원고 버전이 변경되어 카드 이미지 승인이 무효입니다")
+        if not (isinstance(card_index, int) and 0 <= card_index < 12):
+            raise WorkflowError("카드 번호가 올바르지 않습니다")
+
+    def card_image(self, card_index, slide, out_path):
+        """승인 원고에서 나온 카드 한 장의 주제 이미지(정사각형). 글자는 로컬에서 얹는다."""
+        self._authorized_card(card_index)
+        out_path = self._path(out_path)
+        prompt = card_prompt(slide)
+        payload = {"model": self.config["model"], "prompt": prompt, "n": 1, "size": CARD_SIZE,
+                   "quality": self.config["quality"], "output_format": self.config["output_format"], "moderation": self.config["moderation"]}
+        key = "image:" + digest({"payload": payload, "source_hash": self.source_hash, "job_id": self.job_id, "kind": "card"})
+        return self._generate(key, payload, prompt, out_path, {"card_index": card_index}, lambda: self._authorized_card(card_index),
+                              "card_image", CARD_JOB_CAP_KRW, CARD_SIZE, "OpenAI 생성 카드 이미지")
+
+    def _generate(self, key, payload, prompt, out_path, receipt_extra, reauthorize, request_kind, cap, size, disclosure):
         self.assets.mkdir(parents=True, exist_ok=True)
         with _lock(self.assets / (self.config["budget_scope_id"] + ".lock")):
             image_path, receipt_path = self.assets / (key[6:] + ".png"), self.assets / (key[6:] + ".json")
@@ -198,10 +240,10 @@ class ImageProvider:
                     raise WorkflowError("받은 이미지 또는 사용량이 불명 상태입니다. 비용 예약과 자산을 먼저 확인하세요")
                 if not image_path.is_file() or _hash(image_path) != receipt.get("sha256"):
                     raise WorkflowError("저장된 배경 이미지가 변경되어 자동 재생성을 보류합니다")
-                self._authorized(scene_index); out_path.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(image_path, out_path)
+                reauthorize(); out_path.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(image_path, out_path)
                 return receipt["image_metadata"]
-            reservation, data = self._post(key, payload)
-            receipt = {"status": "received", "request_hash": key, "source_hash": self.source_hash, "scene_index": scene_index,
+            reservation, data = self._post(key, payload, request_kind, cap)
+            receipt = {"status": "received", "request_hash": key, "source_hash": self.source_hash, **receipt_extra,
                        "reservation_id": reservation["id"], "created": data.get("created"), "config": self.config, "prompt": prompt}
             items = data.get("data") if isinstance(data.get("data"), list) else []
             if items and isinstance(items[-1], dict) and items[-1].get("b64_json"):
@@ -224,10 +266,10 @@ class ImageProvider:
             if not image_path.is_file() or receipt.get("asset_error"):
                 receipt["status"] = "asset_needs_review"; _json(receipt_path, receipt)
                 raise WorkflowError("받은 배경 이미지가 비어 있거나 PNG 형식이 아니어서 검토가 필요합니다")
-            metadata = {"provider": "openai", "model": self.config["model"], "size": self.config["size"], "quality": self.config["quality"],
-                        "sha256": receipt["sha256"], "disclosure": "OpenAI 생성 배경 이미지"}
+            metadata = {"provider": "openai", "model": self.config["model"], "size": size, "quality": self.config["quality"],
+                        "sha256": receipt["sha256"], "disclosure": disclosure}
             receipt.update(status="complete", image_metadata=metadata); _json(receipt_path, receipt)
-            self._authorized(scene_index); out_path.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(image_path, out_path)
+            reauthorize(); out_path.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(image_path, out_path)
             return metadata
 
 
@@ -238,5 +280,14 @@ def make_openai_background_renderer(store, *, job_id, allow_paid=False, transpor
         return provider.background(scene_index, out_path)
     render.cache_key = provider.cache_key
     render.asset_cache_key = provider.asset_cache_key
+    render.image_provider = provider
+    return render
+
+
+def make_openai_card_image_renderer(store, *, job_id, allow_paid=False, transport=None):
+    provider = ImageProvider(store, job_id=job_id, allow_paid=allow_paid, transport=transport)
+
+    def render(card_index, slide, out_path):
+        return provider.card_image(card_index, slide, out_path)
     render.image_provider = provider
     return render

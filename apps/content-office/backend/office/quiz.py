@@ -116,14 +116,18 @@ def save_job_output(store, job_id, source_hash, key, record, event_kind, event_d
         return store._write_job(db, job)
 
 
-def enqueue_output(store, job, kind):
+def enqueue_output(store, job, kind, images=None):
     """quiz/cards 작업을 넣는다. 대기·실행 중이면 같은 작업을 돌려주고, 끝난 뒤(성공·실패)나 새 버전 뒤에는 새 작업을 만든다."""
     if kind not in ("quiz", "cards"):
         raise WorkflowError("퀴즈 또는 카드 작업만 넣을 수 있습니다")
     source_hash = job["source_hash"]
     version = int((job.get(kind) or {}).get("version", 0))
     finished = sum(1 for task in store.tasks(job["id"]) if task["kind"] == kind and task["payload"].get("source_hash") == source_hash and task["state"] not in ("queued", "running"))
-    return store.enqueue(kind, {"job_id": job["id"], "source_hash": source_hash}, key=f"{kind}:{job['id']}:{source_hash}:v{version}:{finished}")
+    payload = {"job_id": job["id"], "source_hash": source_hash}
+    if kind == "cards" and images is not None:
+        payload["images"] = bool(images)
+    suffix = "" if images is None else (":img" if images else ":noimg")
+    return store.enqueue(kind, payload, key=f"{kind}:{job['id']}:{source_hash}:v{version}:{finished}{suffix}")
 
 
 def enqueue_missing_outputs(store, job):

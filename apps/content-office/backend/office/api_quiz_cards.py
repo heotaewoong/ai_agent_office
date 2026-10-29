@@ -6,6 +6,8 @@
 """
 from __future__ import annotations
 
+from pydantic import BaseModel
+
 import hashlib
 import mimetypes
 
@@ -17,7 +19,7 @@ from .runtime import window_open
 from .store import WorkflowError, canonical
 
 QUIZ_KEYS = ("version", "generated_at", "source_hash", "questions", "checks", "artifact_id")
-SLIDE_KEYS = ("index", "title", "body", "artifact_id")
+SLIDE_KEYS = ("index", "title", "body", "artifact_id", "visual", "template", "background")
 
 
 def quiz_payload(job):
@@ -96,15 +98,19 @@ def with_output_warnings(report, job):
     return merged
 
 
+class CardsRequest(BaseModel):
+    images: bool | None = None
+
+
 def register(app, store):
     def require_open_window():
         if not window_open(store):
             raise WorkflowError("허용된 작업 시간이 종료됐습니다. 새 작업 세션을 시작한 뒤 요청하세요")
 
-    def enqueue(job_id, kind):
+    def enqueue(job_id, kind, images=None):
         require_open_window()
         job = store.require_source_approval(job_id)
-        task = enqueue_output(store, job, kind)
+        task = enqueue_output(store, job, kind, images)
         return {"task_id": task["id"], "state": task["state"]}
 
     @app.post("/api/jobs/{job_id}/quiz", status_code=202)
@@ -116,8 +122,9 @@ def register(app, store):
         return {"quiz": quiz_payload(store.job(job_id))}
 
     @app.post("/api/jobs/{job_id}/cards", status_code=202)
-    def request_cards(job_id: str):
-        return enqueue(job_id, "cards")
+    def request_cards(job_id: str, body: CardsRequest | None = None):
+        # images=True: 카드마다 주제 이미지 생성(OpenAI, 유료). None이면 제작 설정의 배경 이미지 프로필을 따른다.
+        return enqueue(job_id, "cards", body.images if body else None)
 
     @app.get("/api/jobs/{job_id}/cards")
     def get_cards(job_id: str):

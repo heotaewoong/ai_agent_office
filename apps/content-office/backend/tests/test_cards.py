@@ -24,9 +24,9 @@ def approved_job(store, approve=True):
 
 
 def good_slides(count=6):
-    slides = [{"title": f"{n}. 도구 비교 기준", "body": f"{n}번째 기준은 입력과 판단 결과를 화면으로 확인하는 거예요."} for n in range(1, count + 1)]
-    slides[0] = {"title": "AI 뉴스, 왜 남지 않을까요", "body": "읽어도 내 업무에 쓸 사례가 남지 않는 문제부터 짚어요."}
-    slides[-1] = {"title": "오늘 할 일", "body": "도구 하나를 골라 직접 실행해 봐요. 무료 AI 업무 적용 점검표 받기"}
+    slides = [{"title": f"{n}. 도구 비교 기준", "body": f"{n}번째 기준은 입력과 결과를 화면으로 확인하는 거예요.", "visual": "노트북 화면 앞에서 두 도구를 나란히 비교하는 장면"} for n in range(1, count + 1)]
+    slides[0] = {"title": "AI 뉴스, 왜 안 남을까요", "body": "읽어도 내 업무에 쓸 사례가 남지 않는 문제를 짚어요.", "visual": "쌓인 뉴스 기사 더미 앞에서 고민하는 책상"}
+    slides[-1] = {"title": "오늘 할 일", "body": "도구 하나를 골라 직접 실행해 봐요.", "visual": "체크리스트와 커피잔이 놓인 책상"}
     return {"slides": slides}
 
 
@@ -48,7 +48,7 @@ class FakeCardsProvider:
 def test_cards_schema_fixes_six_to_eight_slides():
     slides = CARDS_SCHEMA["properties"]["slides"]
     assert (slides["minItems"], slides["maxItems"]) == (6, 8)
-    assert set(slides["items"]["required"]) == {"title", "body"}
+    assert set(slides["items"]["required"]) == {"title", "body", "visual"}
 
 
 def test_cards_require_source_approval(tmp_path):
@@ -80,7 +80,7 @@ def test_plan_cards_renders_square_pngs_and_registers_artifacts(tmp_path):
         with Image.open(path) as image:
             assert image.size == (1080, 1080)
     assert len({slide["artifact_id"] for slide in stored["slides"]}) == 7
-    assert result["slides"][0]["title"] == "AI 뉴스, 왜 남지 않을까요"
+    assert result["slides"][0]["title"] == "AI 뉴스, 왜 안 남을까요"
     assert any(e["kind"] == "cards_rendered" for e in store.events(job["id"]))
     plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))
     assert store.job(job["id"])["cards"]["version"] == 2 and len(store.job(job["id"])["cards"]["slides"]) == 6
@@ -92,16 +92,16 @@ def test_card_checks_catch_count_length_overflow_terms_claims_and_duplicates():
     assert any("6" in issue and "8" in issue for issue in card_checks(good_slides(5), brand)["issues"])
     assert any("6" in issue and "8" in issue for issue in card_checks(good_slides(9), brand)["issues"])
     bad = good_slides()
-    bad["slides"][1]["title"] = "가" * 23
-    bad["slides"][2]["body"] = "나" * 96
+    bad["slides"][1]["title"] = "가" * 19
+    bad["slides"][2]["body"] = "나" * 61
     bad["slides"][3]["title"] = "클로드 코드 소개"
     bad["slides"][4]["body"] = "3일 완성 — 누구나 가능"
     bad["slides"][5]["title"] = bad["slides"][0]["title"]
     result = card_checks(bad, brand)
     joined = "\n".join(result["issues"])
     assert result["passed"] is False
-    assert "2번" in joined and "22자" in joined
-    assert "3번" in joined and "95자" in joined
+    assert "2번" in joined and "18자" in joined
+    assert "3번" in joined and "60자" in joined
     assert "클로드 코드" in joined and "Claude Code" in joined
     assert "3일 완성" in joined and "줄표" in joined
     assert "6번" in joined and "중복" in joined
@@ -143,7 +143,7 @@ def test_worker_dispatches_cards_task(tmp_path, monkeypatch):
     store = Store(tmp_path)
     job = approved_job(store)
     called = []
-    monkeypatch.setattr("office.cards.plan_cards", lambda s, job_id, provider=None: called.append(job_id) or {"version": 1, "checks": {"passed": False, "issues": ["x"]}})
+    monkeypatch.setattr("office.cards.plan_cards", lambda s, job_id, provider=None, images=None: called.append(job_id) or {"version": 1, "checks": {"passed": False, "issues": ["x"]}})
     task = store.enqueue("cards", {"job_id": job["id"], "source_hash": job["source_hash"]}, key="cards-test")
     result = worker.process_task(store, task)
     assert called == [job["id"]] and result["passed"] is False
@@ -170,7 +170,7 @@ def test_cards_routes_require_approval_then_enqueue_and_serve_images(context):
     plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))
     body = client.get(f"/api/jobs/{job['id']}/cards").json()["cards"]
     assert set(body) == {"version", "generated_at", "source_hash", "slides", "checks"}
-    assert set(body["slides"][0]) == {"index", "title", "body", "artifact_id"}
+    assert set(body["slides"][0]) == {"index", "title", "body", "artifact_id", "visual", "template", "background"}
     served = client.get(f"/api/artifacts/{body['slides'][0]['artifact_id']}")
     assert served.status_code == 200 and served.headers["content-type"] == "image/png"
     assert client.get("/api/artifacts/asset_missing").status_code == 404
@@ -180,7 +180,7 @@ def test_cards_routes_require_approval_then_enqueue_and_serve_images(context):
 def test_render_templates_cover_body_cta_and_optional_background(tmp_path):
     from office.cards import render_slide
     from office.exports import korean_font
-    assert korean_font("bold").is_file()  # 굵은 글꼴이 없으면 일반 글꼴로라도 돌아온다
+    assert korean_font("bold").is_file()
     slides = good_slides(6)["slides"]
     cover = tmp_path / "c.png"; body = tmp_path / "b.png"; cta = tmp_path / "e.png"
     assert render_slide(slides[0], 1, 6, cover)["template"] == "cover"
@@ -190,35 +190,49 @@ def test_render_templates_cover_body_cta_and_optional_background(tmp_path):
     for path in (cover, body, cta):
         with Image.open(path) as image:
             assert image.size == (1080, 1080)
-    # 표지는 생성 배경이 있으면 그 위에 어둡게 깔고 글자를 얹는다
-    background = tmp_path / "bg.png"
-    Image.new("RGB", (1024, 1536), "#ff8800").save(background)
-    with_bg = render_slide(slides[0], 1, 6, tmp_path / "c2.png", background=background)
-    assert with_bg["template"] == "cover" and with_bg["background"] == "generated"
-    with Image.open(tmp_path / "c2.png") as image:
-        r, g, b = image.getpixel((540, 200))
-        assert r > b  # 주황 배경이 비쳐 보이되
-        assert r < 255  # 어둡게 눌려 글자가 읽힌다
-    plain = render_slide(slides[0], 1, 6, tmp_path / "c3.png")
-    assert plain["background"] == "gradient"
+    picture = tmp_path / "bg.png"
+    Image.new("RGB", (1024, 1024), "#ff8800").save(picture)
+    with_bg = render_slide(slides[2], 3, 6, tmp_path / "b2.png", background=picture)
+    assert with_bg["template"] == "body" and with_bg["background"] == "generated"
+    with Image.open(tmp_path / "b2.png") as image:
+        r, g, b = image.getpixel((540, 330))  # 이미지가 그대로 보이는 위쪽
+        assert r > 200 and b < 80
+        r, g, b = image.getpixel((1050, 1060))  # 글자가 놓이는 아래쪽은 짙게 어둡다
+        assert r < 60
+    assert render_slide(slides[2], 3, 6, tmp_path / "b3.png")["background"] == "gradient"
 
 
-def test_plan_cards_uses_cover_background_when_renderer_given_and_survives_its_failure(tmp_path):
+def test_plan_cards_puts_a_topic_image_behind_every_card_but_the_last(tmp_path):
     store = Store(tmp_path)
     job = approved_job(store)
     calls = []
 
-    def renderer(index, path):
-        calls.append(index)
-        Image.new("RGB", (1024, 1536), "#2244aa").save(path)
+    def renderer(index, slide, path):
+        calls.append((index, slide["visual"]))
+        Image.new("RGB", (1024, 1024), "#2244aa").save(path)
         return {"model": "gpt-image-test"}
     result = plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides(6)]), background_renderer=renderer)
-    assert calls == [0] and result["visual_source"] == "generated_cover_background_plus_first_party_text"
-    assert result["slides"][0]["background"] == "generated" and result["slides"][1]["background"] == "gradient"
-    assert result["slides"][-1]["cta"]
+    assert [c[0] for c in calls] == [0, 1, 2, 3, 4]
+    assert calls[0][1] == "쌓인 뉴스 기사 더미 앞에서 고민하는 책상"
+    assert result["visual_source"] == "generated_topic_images_plus_first_party_text"
+    assert [s["background"] for s in result["slides"]] == ["generated"] * 5 + ["solid"]
+    assert result["slides"][-1]["cta"] and len(result["images"]) == 5
 
-    def failing(index, path):
-        raise WorkflowError("예산 상한")
+    attempts = []
+
+    def failing(index, slide, path):
+        attempts.append(index)
+        raise WorkflowError("카드 이미지 업무당 3,200원 한도")
     again = plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides(6)]), background_renderer=failing)
-    assert again["checks"]["passed"] is True and again["slides"][0]["background"] == "gradient"
-    assert any("배경 이미지 없이" in note for note in again.get("notes", []))
+    assert attempts == [0]  # 한 번 실패하면 같은 실패를 비용 들여 반복하지 않는다
+    assert again["checks"]["passed"] is True and {s["background"] for s in again["slides"][:-1]} == {"gradient"}
+    assert any("주제 이미지 없이" in note for note in again["notes"])
+
+
+def test_images_false_or_profile_none_never_builds_a_paid_renderer(tmp_path, monkeypatch):
+    import office.image_provider as image_provider
+    monkeypatch.setattr(image_provider, "make_openai_card_image_renderer", lambda *a, **k: (_ for _ in ()).throw(AssertionError("paid renderer built")))
+    store = Store(tmp_path)
+    job = approved_job(store)
+    assert plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]), images=False)["visual_source"] == "first_party_gradient_and_text"
+    assert plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))["visual_source"] == "first_party_gradient_and_text"

@@ -44,7 +44,7 @@ def process_task(store, task):
         current = store.require_source_approval(job_id)
         if payload.get("source_hash") != current["source_hash"]:
             raise WorkflowError("대기 중인 퀴즈·카드 작업의 원고 버전이 변경되었습니다")
-        result = generate_quiz(store, job_id) if task["kind"] == "quiz" else plan_cards(store, job_id)
+        result = generate_quiz(store, job_id) if task["kind"] == "quiz" else plan_cards(store, job_id, images=task["payload"].get("images"))
         return {"job_id": job_id, "source_hash": current["source_hash"], "version": result["version"], "passed": result["checks"]["passed"], "issues": len(result["checks"]["issues"])}
     raise WorkflowError("등록되지 않은 작업입니다")
 

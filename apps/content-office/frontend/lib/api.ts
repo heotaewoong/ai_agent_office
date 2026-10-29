@@ -203,8 +203,8 @@ export const api = {
     request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/quiz`, "POST", {}),
   quiz: (id: string) =>
     request<{ quiz: Quiz | null }>(`/jobs/${encodeURIComponent(id)}/quiz`),
-  requestCards: (id: string) =>
-    request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/cards`, "POST", {}),
+  requestCards: (id: string, images?: boolean) =>
+    request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/cards`, "POST", images === undefined ? {} : { images }),
   cards: (id: string) =>
     request<{ cards: Cards | null }>(`/jobs/${encodeURIComponent(id)}/cards`),
   // 시험 일정 · 시의성
