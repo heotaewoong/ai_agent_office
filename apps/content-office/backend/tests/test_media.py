@@ -466,9 +466,9 @@ def test_numeric_scene_keeps_the_approved_price_with_its_currency():
 
 def test_windows_voice_temp_path_is_only_accepted_on_windows():
     from office.media import windows_local_path
-    assert windows_local_path("C:\Temp\hb-office-x\speech.wav", platform="nt") == Path("C:\Temp\hb-office-x\speech.wav")
+    assert windows_local_path(r"C:\Temp\hb-office-x\speech.wav", platform="nt") == Path(r"C:\Temp\hb-office-x\speech.wav")
     with pytest.raises(WorkflowError, match="Windows"):
-        windows_local_path("C:\Temp\hb-office-x\speech.wav", platform="posix")
+        windows_local_path(r"C:\Temp\hb-office-x\speech.wav", platform="posix")
 
 
 def background_renderer(color='#7a2e1e'):
@@ -564,7 +564,7 @@ def test_overlay_only_scene_is_transparent_outside_text_panels(tmp_path):
 def test_clip_command_loops_generated_clip_under_overlay_for_voice_duration(tmp_path):
     from office.media import clip_command
     args = [str(a) for a in clip_command(tmp_path / 'gen.mp4', tmp_path / 'overlay.png', tmp_path / 'voice.wav', 3.25, tmp_path / 'clip-02.mp4')]
-    assert args[0].endswith('ffmpeg') or args[0].endswith('ffmpeg.exe') or args[0] == 'ffmpeg'
+    assert Path(args[0]).name.lower() in {'ffmpeg', 'ffmpeg.exe'}
     assert '-stream_loop' in args and args[args.index('-stream_loop') + 1] == '-1'
     assert str(tmp_path / 'gen.mp4') in args and str(tmp_path / 'overlay.png') in args and str(tmp_path / 'voice.wav') in args
     graph = args[args.index('-filter_complex') + 1]
