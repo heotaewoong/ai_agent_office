@@ -50,7 +50,7 @@ INSTRUCTIONS = f"""승인된 원고로 인스타그램 카드뉴스 {MIN_SLIDES}
 - 마지막 장: '오늘 할 일' 하나(독자가 10분 안에 할 수 있는 행동). CTA 문구는 이미지에 따로 들어가므로 body에 쓰지 않는다.
 
 형식: title은 {TITLE_LIMIT}자 이하(마침표 없음), body는 {BODY_LIMIT}자 이하 1~2문장이며 각 문장은 끝까지 완결한다. 제목은 서로 다르게.
-visual: 그 카드 내용을 그대로 보여 주는 배경 이미지 장면을 한국어 한 문장으로 구체적으로 쓴다(사물·도구·행동·장소). 예) "책상 위 노트북 화면에서
+visual: 그 카드 내용을 그대로 보여 주는 배경 이미지 장면을 한국어 한 문장으로 구체적으로 쓴다(사물·도구·행동·장소). 화면·종이에 숫자나 글자가 보이는 장면은 쓰지 않는다. 예) "책상 위 노트북 화면에서
 서류 더미가 자동으로 분류되어 세 갈래 상자로 들어가는 장면". 글자·숫자·로고·실존 인물 얼굴은 넣지 않는다.
 원고에 없는 수치·사실을 넣지 않고 줄표(—)·과장·훈계 표현을 쓰지 않으며 표기 고정 목록을 따른다."""
 
@@ -166,12 +166,21 @@ def _pill(draw, xy, text, fill, color, size=32):
 def _outlined(draw, text, box, size, minimum, fill, stroke_width):
     """외곽선이 있는 굵은 글자. text_box로 크기·줄바꿈을 정한 뒤 같은 자리에 외곽선을 얹어 그린다."""
     gap = max(10, size // 6)
+    box = (box[0], box[1], box[2], box[3] + gap)
     metrics = text_box(ImageDraw.Draw(Image.new("RGB", SIZE)), text, box, size, minimum_size=minimum, font_path=korean_font("bold"), line_gap=gap)
     face = ImageFont.truetype(str(korean_font("bold")), metrics["font_size"])
     line_height = metrics["font_size"] + gap
     for n, line in enumerate(metrics["displayed_text"].split("\n")):
         draw.text((box[0], box[1] + n * line_height), line, font=face, fill=fill, stroke_width=stroke_width, stroke_fill=STROKE)
     return metrics
+
+
+def _fit(text, box, size, minimum):
+    """넘침 검사와 같은 규칙으로 글자 크기·줄 수를 정하고 실제 높이를 돌려준다."""
+    gap = max(10, size // 6)
+    metrics = text_box(ImageDraw.Draw(Image.new("RGB", SIZE)), text, box, size, minimum_size=minimum, font_path=korean_font("bold"), line_gap=gap)
+    line_height = metrics["font_size"] + max(10, metrics["font_size"] // 6)
+    return {**metrics, "height": metrics["lines"] * line_height - max(10, metrics["font_size"] // 6)}
 
 
 def _dots(draw, index, total, accent, y=110):
@@ -208,9 +217,15 @@ def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None
     draw = ImageDraw.Draw(image)
     _pill(draw, (72, 80), brand_label, accent, "#0b1327")
     _dots(draw, index, total, accent)
-    draw.rectangle((72, 520, 232, 532), fill=accent)
-    _outlined(draw, title, TITLE_BOX, TITLE_SIZE, TITLE_MIN, "#ffffff", 5)
-    _outlined(draw, body, BODY_BOX, BODY_SIZE, BODY_MIN, "#f1f5ff", 4)
+    # 제목+본문 묶음을 아래쪽에 붙인다(제목이 한 줄이어도 사이가 비지 않게). 크기는 넘침 검사와 같은 상자로 정한다.
+    title_m = _fit(title, TITLE_BOX, TITLE_SIZE, TITLE_MIN)
+    body_m = _fit(body, BODY_BOX, BODY_SIZE, BODY_MIN)
+    bottom = 1000 if template == "cover" else 1020
+    body_top = bottom - body_m["height"]
+    title_top = body_top - 46 - title_m["height"]
+    draw.rectangle((72, title_top - 34, 232, title_top - 22), fill=accent)
+    _outlined(draw, title, (TITLE_BOX[0], title_top, TITLE_BOX[2], title_m["height"] + 4), title_m["font_size"], title_m["font_size"], "#ffffff", 5)
+    _outlined(draw, body, (BODY_BOX[0], body_top, BODY_BOX[2], body_m["height"] + 4), body_m["font_size"], body_m["font_size"], "#f1f5ff", 4)
     if template == "cover":
         text_box(draw, "넘겨서 보기 →", (800, 1018, 220, 44), 30, accent, font_path=bold)
     image.save(path, "PNG")
