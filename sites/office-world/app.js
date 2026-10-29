@@ -948,6 +948,78 @@
     },
 
 
+    architecturePlan(kind) {
+      const parts=[],obstacles=[];
+      const box=(name,x,y,z,w,h,d,material,rotationZ=0)=>parts.push({name,position:[x,y,z],size:[w,h,d],material,rotationZ});
+      if(kind==='arrival'){
+        for(const x of [-5.8,5.8]){
+          box('footing',x,.3,-53,1.6,.6,1.6,'frame');
+          box('pier',x,3.55,-53,.8,5.9,1.05,'shell');
+          box('pier-inset',x,3.55,-53.56,.48,4.8,.12,'glass');
+          box('pier-light',x,3.55,-53.64,.08,4.2,.04,'light');
+          box('bracket',x*.88,6.05,-53,.36,1.7,.8,'frame',x<0?-.55:.55);
+          obstacles.push({x,z:-53,r:1.15});
+        }
+        box('canopy',0,6.9,-53,15,.5,6,'shell');
+        box('canopy-inset',0,6.61,-53,12.8,.08,4.8,'frame');
+        box('front-fascia',0,6.92,-56.06,13.6,.23,.1,'glass');
+        box('welcome-light',0,6.53,-55.45,10.7,.06,.1,'light');
+        box('rear-light',0,6.53,-50.55,10.7,.06,.1,'light');
+        for(const x of [-4.5,0,4.5])box('roof-panel',x,7.2,-53,3.8,.1,4.7,'glass');
+        const ribs=QUALITY==='low'?5:9;
+        for(let i=0;i<ribs;i++)box('roof-rib',-6.3+i*12.6/(ribs-1),7.34,-53,.15,.18,5.5,'frame');
+      }else if(kind==='atrium'){
+        for(const x of [-6.65,6.65]){
+          box('rear-pier',x,3.35,-6.05,.55,6.7,.65,'shell');
+          box('rear-light',x,3.5,-6.42,.08,5.8,.06,'light');
+        }
+        for(const x of [-4.4,0,4.4]){
+          box('clerestory',x,5.65,-5.85,4.05,1.7,.16,'glass');
+          box('mullion',x-2.13,5.65,-5.99,.16,1.95,.22,'frame');
+        }
+        box('crown',0,6.8,-5.85,14.4,.35,1.2,'shell');
+        box('roof',0,7.06,-5.8,14.4,.18,3.8,'frame');
+        box('crown-light',0,6.6,-6.49,13.6,.06,.06,'light');
+        for(const z of [-4.6,-1.6,1.4,4.4]){
+          box('side-fin',-6.42,2.65,z,.35,5.3,.65,'shell');
+          box('side-inset',-6.64,2.7,z,.06,4.2,.3,'glass');
+        }
+        box('side-beam',-6.4,5.45,.1,.48,.38,12.4,'frame');
+        box('front-beam',0,5.45,6.1,13.6,.38,.48,'shell');
+        box('front-light',0,5.22,6.13,12.5,.06,.12,'light');
+        const ribs=QUALITY==='low'?5:9;
+        for(let i=0;i<ribs;i++)box('roof-rib',-6.6+i*13.2/(ribs-1),7.22,-5.8,.13,.15,3.5,'shell');
+      }
+      return {parts,obstacles};
+    },
+
+    buildArchitecture(kind,parent=null) {
+      const plan=this.architecturePlan(kind),groups=new Map(),meshes=[];
+      const materials={
+        shell:this.pbr('architecture-ceramic','#d7e1e7',.2,.4,'stone'),
+        frame:this.pbr('architecture-frame','#193345',.65,.31,'metal'),
+        glass:this.pbr('architecture-glass','#2f8495',.38,.2),
+        light:this.mat('architecture-light','#b9eee5',{emissive:.45,unlit:true}),
+      };
+      // Parts stay in local coordinates until merged; parenting earlier would bake the stage transform twice.
+      for(const part of plan.parts){
+        const [width,height,depth]=part.size;
+        const mesh=B.MeshBuilder.CreateBox(part.name,{width,height,depth},this.scene);
+        mesh.position.set(...part.position);mesh.rotation.z=part.rotationZ;mesh.material=materials[part.material];
+        if(!groups.has(part.material))groups.set(part.material,[]);
+        groups.get(part.material).push(mesh);
+      }
+      for(const [material,parts] of groups){
+        const mesh=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);
+        if(!mesh)continue;
+        mesh.name='architecture-'+kind+'-'+material;mesh.parent=parent;mesh.isPickable=false;
+        if(!parent)mesh.freezeWorldMatrix();
+        if(material!=='light'){this.castShadow(mesh);this.receiveShadow(mesh);}
+        meshes.push(mesh);
+      }
+      return {meshes,obstacles:plan.obstacles};
+    },
+
     buildTerrain() {
       const scene=this.scene,LAND_R=68,cols=new Map(),key=(x,z)=>`${x},${z}`,meshes=[];
       // 공중 팀은 흙 섬이 아니라 높이 0의 평탄한 세라믹/금속 도시 데크다.
@@ -1017,7 +1089,8 @@
         box(`team-skybridge-light-${i}`,x,10.45,z,.18,.12,len,cyan,rot);
       });
       groups.forEach((parts)=>{const mesh=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);if(mesh){mesh.isPickable=false;mesh.freezeWorldMatrix();this.receiveShadow(mesh);meshes.push(mesh);}});
-      this.officeObstacles=[...[[-43,31,6.8],[0,55,6.8],[43,31,6.8],[-56,4,6.8],[56,4,6.8]].map(([x,z,r])=>({x,z,r})),...this.landscapeObstacles];
+      const arrival=this.buildArchitecture('arrival');meshes.push(...arrival.meshes);
+      this.officeObstacles=[...arrival.obstacles,...[[-43,31,6.8],[0,55,6.8],[43,31,6.8],[-56,4,6.8],[56,4,6.8]].map(([x,z,r])=>({x,z,r})),...this.landscapeObstacles];
       this.terrain={cols,key,meshes,landR:LAND_R,kind:'city-platform'};
       this.portals.office.y=0;
       this.scene.getMeshByName('transfer-gate-office').position.y=3;
@@ -1130,6 +1203,7 @@
       });
       // 방 안 모든 물체가 그림자를 드리우고 받는다
       st.node.getChildMeshes().forEach((m) => { if (m.name !== 'edge' && !/glow|screen|bulb|board-bar/.test(m.name)) this.castShadow(m); this.receiveShadow(m); });
+      if(idx===0)this.buildArchitecture('atrium',st.node);
     },
 
     buildDesk(st, x, z, rotY, slot) {
@@ -2087,9 +2161,15 @@
       document.querySelectorAll('[data-world-view]').forEach(button => {
         button.onclick = () => {
           this.setRoster(false); controls.setVehicleSpeed(0);
-          const office = button.dataset.worldView === 'office';
+          const view=button.dataset.worldView;
+          const office=['office','arrival','atrium'].includes(view);
           controls.setLayer(office ? 'office' : 'meadow');
-          if (button.dataset.worldView === 'cruiser') controls.animateCamera({ alpha: -.7, beta: 1.1, radius: 125, target: new B.Vector3(155, 46, 86) });
+          if(view==='arrival')controls.animateCamera({alpha:-1.05,beta:1.04,radius:32,target:new B.Vector3(0,3.2,-51)});
+          if(view==='atrium' && space.stages.length){
+            const st=space.stages[0];
+            controls.animateCamera({alpha:Math.atan2(Math.cos(st.rotY),Math.sin(st.rotY))-.5,beta:1.03,radius:28,target:world.local(st,0,3,0)});
+          }
+          if (view === 'cruiser') controls.animateCamera({ alpha: -.7, beta: 1.1, radius: 125, target: new B.Vector3(155, 46, 86) });
           $('world-tools').open = false;
         };
       });
