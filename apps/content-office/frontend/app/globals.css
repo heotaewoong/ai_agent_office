@@ -3961,3 +3961,14 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .leads-panel .channel-table tr.withdrawn td{color:var(--muted)}
 .leads-panel code{font-size:12px}
 .summary-chip{margin-right:8px}
+
+/* 원고 작업 상태 (버튼 옆) */
+.task-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; font-size: 13px; background: rgba(0, 0, 0, 0.04); }
+.task-status-dot { width: 9px; height: 9px; border-radius: 50%; background: #999; flex: none; }
+.task-status-queued .task-status-dot { background: #d9a400; }
+.task-status-running .task-status-dot { background: #2f80ed; animation: task-pulse 1.2s ease-in-out infinite; }
+.task-status-completed .task-status-dot { background: #27ae60; }
+.task-status-failed { background: rgba(214, 69, 65, 0.08); }
+.task-status-failed .task-status-dot, .task-status-unknown .task-status-dot { background: #d64541; }
+.task-status-detail { color: var(--muted, #666); }
+@keyframes task-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }

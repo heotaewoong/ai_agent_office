@@ -28,6 +28,7 @@ import {
   statusInfo,
   thumbnailArtifact,
   toggleArticle,
+  draftStatus,
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
@@ -965,6 +966,19 @@ function BudgetStrip({ budget }: { budget: Dashboard["budget"] }) {
   );
 }
 
+function DraftTaskStatus({ job }: { job: Job }) {
+  const status = draftStatus(job.tasks, job);
+  if (status.state === "idle") return null;
+  return (
+    <p className={`task-status task-status-${status.state}`} role="status" aria-live="polite">
+      <span className="task-status-dot" aria-hidden="true" />
+      <strong>원고 작업: {status.label}</strong>
+      {status.detail && <span className="task-status-detail">{status.detail}</span>}
+      {status.state === "failed" && <span className="task-status-detail">다시 "원고 생성 시작"을 누르면 새 작업이 들어갑니다.</span>}
+    </p>
+  );
+}
+
 function Studio({
   job,
   model,
@@ -1158,6 +1172,7 @@ function Studio({
                 원고 생성 시작
                 <Icon name="arrow" size={17} />
               </button>
+              <DraftTaskStatus job={job} />
               {packagingRequired(job) && (
                 <p className="muted">패키지(제목·썸네일·훅)를 먼저 확정하세요.</p>
               )}

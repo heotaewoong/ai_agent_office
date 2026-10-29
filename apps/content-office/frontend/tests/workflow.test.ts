@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  draftStatus,
   acceptJobRefresh,
   evidenceInputAllowed,
   retryBlockedReason,
@@ -203,4 +204,29 @@ test("① 원고 승인 이후 상태만 승인 원고 파생물을 만들 수 �
   for (const state of ["source_approved", "production_queued", "producing", "release_review", "partial_release_review", "release_approved"])
     assert.equal(sourceApproved(state), true, state);
   for (const state of ["draft", "source_review", "source_rejected", "blocked", "failed", ""]) assert.equal(sourceApproved(state), false, state);
+});
+
+test("draftStatus reports the latest draft task of this job in plain words", () => {
+  const job = { id: "job_a", source_hash: null };
+  assert.deepEqual(draftStatus([], job), { state: "idle", label: "아직 요청 전", detail: "" });
+  const tasks = [
+    { id: "t1", kind: "draft", state: "failed", created_at: "2026-10-30T00:00:00Z", payload: { job_id: "job_a", source_hash: null }, result: { error: "모델 제공자가 HTTP 503를 반환했습니다" } },
+    { id: "t2", kind: "draft", state: "queued", created_at: "2026-10-30T00:05:00Z", payload: { job_id: "job_a", source_hash: null } },
+    { id: "t9", kind: "draft", state: "running", created_at: "2026-10-30T00:06:00Z", payload: { job_id: "job_other", source_hash: null } },
+  ];
+  assert.equal(draftStatus(tasks, job).state, "queued");
+  assert.equal(draftStatus(tasks, job).label, "대기 중");
+  const running = draftStatus([{ ...tasks[1], state: "running", owner: "worker_1" }], job);
+  assert.equal(running.state, "running");
+  assert.ok(running.label.includes("진행 중"));
+  const failed = draftStatus([tasks[0]], job);
+  assert.equal(failed.state, "failed");
+  assert.equal(failed.label, "실패");
+  assert.ok(failed.detail.includes("503"));
+  const unknown = draftStatus([{ ...tasks[0], state: "unknown" }], job);
+  assert.equal(unknown.state, "unknown");
+  assert.ok(unknown.label.includes("결과 불명"));
+  const done = draftStatus([{ ...tasks[0], state: "completed", result: {} }], job);
+  assert.equal(done.state, "completed");
+  assert.equal(done.label, "완료");
 });

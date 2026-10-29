@@ -325,12 +325,16 @@ class Store:
         return job
 
     def enqueue(self, kind, payload, key):
+        """Queue work once per key. A *failed* earlier attempt does not swallow a new explicit request:
+        the operator's next click queues a fresh task (key suffixed with the attempt number). Queued,
+        running, completed and unknown attempts are returned as they are; unknown stays until reconciled."""
         with self.connection(transaction=True) as db:
-            row = db.execute("SELECT * FROM tasks WHERE dedup_key=?", (key,)).fetchone()
-            if row:
-                return self._task(row)
+            rows = db.execute("SELECT * FROM tasks WHERE dedup_key=? OR dedup_key LIKE ? ORDER BY created_at DESC, dedup_key DESC", (key, key + "#%")).fetchall()
+            if rows and rows[0]["state"] != "failed":
+                return self._task(rows[0])
+            dedup_key = key if not rows else f"{key}#{len(rows) + 1}"
             task_id = identifier("task")
-            db.execute("INSERT INTO tasks VALUES(?,?,?,'queued',?,NULL,NULL,?,?)", (task_id, kind, canonical(payload), key, now(), now()))
+            db.execute("INSERT INTO tasks VALUES(?,?,?,'queued',?,NULL,NULL,?,?)", (task_id, kind, canonical(payload), dedup_key, now(), now()))
             return self._task(db.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
 
     @staticmethod

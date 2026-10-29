@@ -266,3 +266,33 @@ export function sourceApproved(state: string | undefined): boolean {
     "release_approved",
   ].includes(state ?? "");
 }
+
+export type DraftStatus = {
+  state: "idle" | "queued" | "running" | "completed" | "failed" | "unknown";
+  label: string;
+  detail: string;
+};
+
+/** The latest draft task of this job, in words the operator can read next to the button. */
+export function draftStatus(tasks: Task[] | undefined, job: Pick<Job, "id">): DraftStatus {
+  const mine = (tasks ?? [])
+    .filter((t) => t.kind === "draft" && (t.payload?.job_id ?? null) === job.id)
+    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+  const latest = mine[0];
+  if (!latest) return { state: "idle", label: "아직 요청 전", detail: "" };
+  const error = latest.result?.error ?? latest.error ?? "";
+  switch (latest.state) {
+    case "queued":
+      return { state: "queued", label: "대기 중", detail: "작업자가 곧 가져갑니다. 작업 시간이 열려 있어야 해요." };
+    case "running":
+      return { state: "running", label: "진행 중 · 모델 호출", detail: "원고·비평·평가가 끝나면 아래에 원고가 나타나요." };
+    case "completed":
+      return { state: "completed", label: "완료", detail: "" };
+    case "unknown":
+      return { state: "unknown", label: "결과 불명 · 대사 필요", detail: error };
+    case "failed":
+      return { state: "failed", label: "실패", detail: error };
+    default:
+      return { state: "idle", label: latest.state ?? "상태 없음", detail: error };
+  }
+}

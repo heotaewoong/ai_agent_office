@@ -128,6 +128,8 @@ export type Task = {
   kind?: string;
   state?: string;
   error?: string;
+  owner?: string | null;
+  result?: { error?: string; [key: string]: unknown } | null;
   created_at?: string;
   updated_at?: string;
   payload?: {
