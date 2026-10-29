@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, OfficeApiError } from "../lib/api";
+import { createDashboardRefreshGuard } from "../lib/dashboard-refresh";
 import type {
   Action,
   Article,
   Artifact,
   Dashboard,
   Job,
+  JobMetadata,
   Selections,
   SourcePacket,
   Task,
@@ -29,14 +31,16 @@ import {
   thumbnailArtifact,
   toggleArticle,
   draftStatus,
+  workWindowBlockedReason,
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
 import { SettingsPanel } from "./settings-panel";
 import { ArchitectureView } from "./architecture-view";
-import { YoutubePanel } from "./youtube-panel";
+import { YoutubePanel, ChannelHandoffPanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
 import { updateBriefDrafts, type BriefDraft, type BriefDraftUpdate } from "../lib/briefs";
+import { updateOfferDrafts, type OfferDraft, type OfferDraftUpdate } from "../lib/offer";
 import type { IdeaSourcesDraft } from "../lib/ideas";
 import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
@@ -119,6 +123,7 @@ export default function Office() {
     {},
   );
   const [briefDrafts, setBriefDrafts] = useState<Record<string, BriefDraft>>({});
+  const [offerDrafts, setOfferDrafts] = useState<Record<string, OfferDraft>>({});
   const [ideaSourcesDrafts, setIdeaSourcesDrafts] = useState<Record<string, IdeaSourcesDraft>>({});
   const updateIdeaSourcesDraft = useCallback((id: string, draft: IdeaSourcesDraft | null) => {
     setIdeaSourcesDrafts((previous) => {
@@ -133,8 +138,11 @@ export default function Office() {
   const updateBriefDraft = useCallback((job: Job, update: BriefDraftUpdate) => {
     setBriefDrafts((current) => updateBriefDrafts(current, job, update));
   }, []);
+  const updateOfferDraft = useCallback((job: Job, update: OfferDraftUpdate) => {
+    setOfferDrafts((current) => updateOfferDrafts(current, job, update));
+  }, []);
   const hasUnsavedDrafts =
-    Object.keys(localDrafts).length > 0 || Object.keys(intakeDrafts).length > 0 || Object.keys(briefDrafts).length > 0 || Object.keys(ideaSourcesDrafts).length > 0;
+    Object.keys(localDrafts).length > 0 || Object.keys(intakeDrafts).length > 0 || Object.keys(briefDrafts).length > 0 || Object.keys(ideaSourcesDrafts).length > 0 || Object.keys(offerDrafts).length > 0;
   useEffect(() => {
     if (!hasUnsavedDrafts) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -150,6 +158,7 @@ export default function Office() {
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [dashboardError, setDashboardError] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
@@ -158,6 +167,7 @@ export default function Office() {
   const [lastLoaded, setLastLoaded] = useState<string>();
   const [ideaRefresh, setIdeaRefresh] = useState(0);
   const alive = useRef(true);
+  const dashboardRefresh = useRef(createDashboardRefreshGuard());
   const jobRefresh = useRef(createJobRefreshGuard());
   const selectJob = useCallback((id: string) => {
     if (id !== jobRefresh.current.activeId) {
@@ -167,12 +177,15 @@ export default function Office() {
     setActiveId(id);
   }, []);
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (force = false) => {
+    const ticket = dashboardRefresh.current.begin(force);
+    if (!ticket) return;
     try {
-      const data = await api.dashboard();
-      if (!alive.current) return;
+      const data = await dashboardRefresh.current.wait(ticket, api.dashboard());
+      if (!alive.current || !dashboardRefresh.current.isCurrent(ticket)) return;
       setDashboard(data);
       setConnected(true);
+      setDashboardError("");
       setLastLoaded(new Date().toISOString());
       if (!jobRefresh.current.activeId) selectJob(data.jobs?.[0]?.id || "");
       setSelected((current) =>
@@ -181,29 +194,41 @@ export default function Office() {
         ),
       );
     } catch (cause) {
-      if (alive.current) {
+      if (alive.current && dashboardRefresh.current.isCurrent(ticket)) {
         setConnected(false);
-        setError(
+        setDashboardError(
           cause instanceof Error
             ? cause.message
             : "오피스에 연결하지 못했습니다.",
         );
       }
     } finally {
-      if (alive.current) setLoading(false);
+      if (dashboardRefresh.current.settle(ticket) && alive.current) setLoading(false);
     }
   }, [selectJob]);
 
   useEffect(() => {
     alive.current = true;
+    dashboardRefresh.current.activate(!document.hidden);
     void loadDashboard();
+    const visibilityChanged = () => {
+      dashboardRefresh.current.setVisible(!document.hidden);
+      if (!document.hidden) {
+        setNow(Date.now());
+        void loadDashboard(true);
+      }
+    };
+    document.addEventListener("visibilitychange", visibilityChanged);
     const timer = setInterval(() => {
+      if (document.hidden) return;
       void loadDashboard();
       setNow(Date.now());
     }, 5_000);
     return () => {
       alive.current = false;
+      dashboardRefresh.current.deactivate();
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", visibilityChanged);
     };
   }, [loadDashboard]);
 
@@ -255,7 +280,7 @@ export default function Office() {
     try {
       await execute();
       jobRefresh.current.invalidate(targetJobId);
-      await Promise.all([loadDashboard(), loadJob()]);
+      await Promise.all([loadDashboard(true), loadJob()]);
       setNotice(success);
       return true;
     } catch (cause) {
@@ -305,6 +330,8 @@ export default function Office() {
     dashboard?.window?.end_at;
   const currentView = views.find((item) => item.id === view)!;
   const budget = dashboard?.budget;
+  const visibleError = error || dashboardError;
+  const requestBlockedReason = workWindowBlockedReason(dashboard?.window, now);
 
   return (
     <div className="office-shell">
@@ -458,11 +485,11 @@ export default function Office() {
             </div>
           </div>
 
-          {error && (
+          {visibleError && (
             <div className="notice error" role="alert">
               <Icon name="alert" size={18} />
-              <span>{error}</span>
-              <button aria-label="오류 알림 닫기" onClick={() => setError("")}>
+              <span>{visibleError}</span>
+              <button aria-label="오류 알림 닫기" onClick={() => { setError(""); setDashboardError(""); }}>
                 <Icon name="close" size={16} />
               </button>
             </div>
@@ -480,6 +507,12 @@ export default function Office() {
             <div className="notice" role="status">
               <span>기획 출처 입력 {Object.keys(ideaSourcesDrafts).length}건을 이 탭에 임시 보관 중입니다. 새로고침 전에 저장하세요.</span>
               <button className="button text" onClick={() => setView("news")}>기획 은행으로 돌아가기</button>
+            </div>
+          )}
+          {Object.keys(offerDrafts).length > 0 && (
+            <div className="notice" role="status">
+              <span>캠페인·쿠폰 입력 {Object.keys(offerDrafts).length}건을 이 탭에 임시 보관 중입니다. 현재 원고·승인에는 반영되지 않았습니다. 새로고침 전에 저장하세요.</span>
+              <button className="button text" onClick={() => { selectJob(Object.keys(offerDrafts)[0]); setView("studio"); }}>미저장 캠페인으로 돌아가기</button>
             </div>
           )}
           {busy && (
@@ -500,7 +533,7 @@ export default function Office() {
               오피스 API 주소와 연결 상태를 확인한 뒤{" "}
               <button
                 className="inline-button"
-                onClick={() => void loadDashboard()}
+                onClick={() => void loadDashboard(true)}
               >
                 다시 연결
               </button>
@@ -561,7 +594,7 @@ export default function Office() {
                     onSelected={(j) => {
                       selectJob(j.id);
                       setView("studio");
-                      void loadDashboard();
+                      void loadDashboard(true);
                     }}
                   />
                   <section
@@ -683,12 +716,11 @@ export default function Office() {
                         >
                           <Badge state={item.state} />
                           <strong>
-                            {item.title ||
-                              item.article?.editorial_title ||
-                              item.article?.title}
+                            {item.title || item.id}
                           </strong>
                           <span>
                             {briefDrafts[item.id] && "브리프 수정 중 · "}
+                            {offerDrafts[item.id] && "캠페인 수정 중 · "}
                             {formatDate(item.updated_at, true)}
                             <Icon name="chevron" size={14} />
                           </span>
@@ -715,6 +747,7 @@ export default function Office() {
                         key={job.id}
                         job={job}
                         model={dashboard.provider?.model}
+                        requestBlockedReason={requestBlockedReason}
                         intake={intakeDrafts[job.id]}
                         onIntakeChange={(value) =>
                           setIntakeDrafts((current) => {
@@ -726,7 +759,9 @@ export default function Office() {
                         }
                         cached={localDrafts[job.id]}
                         cachedBrief={briefDrafts[job.id]}
+                        cachedOffer={offerDrafts[job.id]}
                         onBriefDraftChange={updateBriefDraft}
+                        onOfferDraftChange={updateOfferDraft}
                         onDraftChange={(id, value) =>
                           setLocalDrafts((current) => {
                             const next = { ...current };
@@ -761,6 +796,7 @@ export default function Office() {
                         )}
                         <Delivery
                           voice={dashboard.provider?.voice}
+                          requestBlockedReason={requestBlockedReason}
                           key={job.id}
                           job={job}
                           busy={
@@ -768,11 +804,13 @@ export default function Office() {
                           }
                           action={action}
                         />
+                        <ChannelHandoffPanel job={job} />
                         {job.selections?.video && (
                           <YoutubePanel
                             key={`youtube-${job.id}`}
                             job={job}
                             youtubeConfigured={Boolean(dashboard.provider?.youtube?.configured)}
+                            requestBlockedReason={requestBlockedReason}
                             busy={!!busy || !connected || Boolean(localDrafts[job.id])}
                             action={action}
                           />
@@ -1046,11 +1084,14 @@ function DraftTaskStatus({ job }: { job: Job }) {
 function Studio({
   job,
   model,
+  requestBlockedReason,
   intake,
   onIntakeChange,
   cached,
   cachedBrief,
+  cachedOffer,
   onBriefDraftChange,
+  onOfferDraftChange,
   onDraftChange,
   busy,
   action,
@@ -1059,11 +1100,14 @@ function Studio({
 }: {
   job: Job;
   model?: string;
+  requestBlockedReason?: string;
   intake?: IntakeDraft;
   onIntakeChange: (value: IntakeDraft | null) => void;
   cached?: LocalDraft;
   cachedBrief?: BriefDraft;
+  cachedOffer?: OfferDraft;
   onBriefDraftChange: (job: Job, update: BriefDraftUpdate) => void;
+  onOfferDraftChange: (job: Job, update: OfferDraftUpdate) => void;
   onDraftChange: (id: string, value: LocalDraft | null) => void;
   busy: boolean;
   action: Action;
@@ -1165,6 +1209,7 @@ function Studio({
         </a>
       </div>
       <WorkflowSteps state={job.state} />
+      {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
       {job.error && (
         <div className="notice error" role="alert">
           <Icon name="alert" size={18} />
@@ -1185,6 +1230,7 @@ function Studio({
       <EvidenceIntake
         job={job}
         model={model}
+        requestBlockedReason={requestBlockedReason}
         draft={intake}
         onChange={onIntakeChange}
         onPackaging={() => {
@@ -1235,7 +1281,7 @@ function Studio({
               오기 전에는 승인할 수 없어요.
               <button
                 className="button primary"
-                disabled={locked || packagingRequired(job)}
+                disabled={locked || Boolean(requestBlockedReason) || packagingRequired(job)}
                 onClick={() =>
                   void action(
                     "원고 생성",
@@ -1362,8 +1408,8 @@ function Studio({
                   {
                     id: "blog",
                     icon: "file",
-                    title: "블로그",
-                    description: "티스토리 · 네이버",
+                    title: "블로그·소셜 검토 초안",
+                    description: "티스토리 · 네이버 · 소셜 문구 5종 (전송 없음)",
                   },
                   {
                     id: "video",
@@ -1438,7 +1484,7 @@ function Studio({
               {job.state === "source_approved" ? (
                 <button
                   className="button primary"
-                  disabled={locked || dirty || stale}
+                  disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
                   onClick={() =>
                     void action(
                       "콘텐츠 제작",
@@ -1505,7 +1551,7 @@ function Studio({
                   .map(
                     ([key]) =>
                       ({
-                        blog: "블로그",
+                        blog: "블로그·소셜 검토 초안",
                         video: "YouTube Shorts",
                         pdf: "PDF",
                         cards: "카드",
@@ -1559,7 +1605,7 @@ function Studio({
             <div className="recovery-actions">
               <button
                 className="button secondary small"
-                disabled={locked || dirty}
+                disabled={locked || dirty || Boolean(requestBlockedReason)}
                 onClick={() =>
                   void action(
                     "원고 재검수",
@@ -1572,7 +1618,7 @@ function Studio({
               </button>
               <button
                 className="button text small"
-                disabled={locked || dirty}
+                disabled={locked || dirty || Boolean(requestBlockedReason)}
                 onClick={() =>
                   void action(
                     "새 원고 생성",
@@ -1587,9 +1633,12 @@ function Studio({
           )}
         </>
       )}
+      {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 원고 읽기·기획 편집·승인은 계속할 수 있습니다.</p>}
       <OfferPanel
-        key={`offer-${job.id}-${job.offer?.captured_at ?? "none"}`}
+        key={`offer-${job.id}`}
         job={job}
+        cached={cachedOffer}
+        onDraftChange={onOfferDraftChange}
         busy={locked}
         action={action}
       />
@@ -1600,9 +1649,9 @@ function Studio({
           바로 만들거나 다시 만들 수도 있어요.
         </p>
       )}
-      <QuizPanel job={job} busy={locked} action={action} />
-      <CardsPanel job={job} busy={locked} action={action} />
-      <TaskProgress job={job} busy={busy} action={action} />
+      <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
     </>
   );
 }
@@ -1826,6 +1875,7 @@ function QualityPanel({ job }: { job: Job }) {
 }
 
 function TaskProgress({
+  requestBlockedReason,
   job,
   tasks,
   jobs,
@@ -1834,7 +1884,8 @@ function TaskProgress({
 }: {
   job?: Job;
   tasks?: Task[];
-  jobs?: Job[];
+  jobs?: JobMetadata[];
+  requestBlockedReason?: string;
   busy: boolean;
   action: Action;
 }) {
@@ -1842,6 +1893,7 @@ function TaskProgress({
     <TaskHistory
       tasks={tasks ?? job?.tasks ?? []}
       jobs={jobs ?? (job ? [job] : [])}
+      requestBlockedReason={requestBlockedReason}
       busy={busy}
       action={action}
     />
@@ -1849,11 +1901,13 @@ function TaskProgress({
 }
 
 function Delivery({
+  requestBlockedReason,
   voice,
   job,
   busy,
   action,
 }: {
+  requestBlockedReason?: string;
   voice?: VoiceProfile;
   job: Job;
   busy: boolean;
@@ -1917,6 +1971,7 @@ function Delivery({
         <span className="count-pill">{files.length} FILES</span>
       </div>
       <WorkflowSteps state={job.state} />
+      {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
       {job.error && (
         <div className="notice error" role="alert">
           <Icon name="alert" size={18} />
@@ -1938,7 +1993,7 @@ function Delivery({
           {job.state === "source_approved" && (
             <button
               className="button primary"
-              disabled={busy}
+              disabled={busy || Boolean(requestBlockedReason)}
               onClick={() =>
                 void action(
                   "콘텐츠 제작",
@@ -2223,7 +2278,7 @@ function Delivery({
           )}
         </>
       )}
-      <TaskProgress job={job} busy={busy} action={action} />
+      <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
     </>
   );
 }
@@ -2580,6 +2635,7 @@ function Activity({
         {(!activeId || job) && (
           <TaskProgress
             tasks={job?.tasks ?? dashboard.tasks ?? []}
+            requestBlockedReason={workWindowBlockedReason(dashboard.window)}
             jobs={job ? [job, ...dashboard.jobs.filter((item) => item.id !== job.id)] : dashboard.jobs}
             busy={busy}
             action={action}

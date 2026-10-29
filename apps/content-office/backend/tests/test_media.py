@@ -97,7 +97,8 @@ def test_blog_can_be_released_independently_when_selected_video_fails(tmp_path, 
     result = media.produce(store, job_id, voice_renderer=tone_renderer())
     assert result['completed_outputs'] == ['blog']
     assert result['output_status']['video']['state'] == 'failed'
-    assert {row['name'] for row in result['files']} == {'tistory.md', 'tistory.html', 'naver.txt', 'asset-rights.json'}
+    assert {row['name'] for row in result['files']} == {'tistory.md', 'tistory.html', 'naver.txt', 'asset-rights.json', 'channel-handoff.json', 'x-main.txt', 'threads-main.txt', 'linkedin-personal.txt', 'instagram-main-caption.txt', 'instagram-english-caption.txt'}
+    assert all('blog' in row['outputs'] for row in result['files'] if row['name'].endswith('-caption.txt') or row['name'] == 'channel-handoff.json')
     assert all(row.get('outputs') for row in result['files'])
     with pytest.raises(WorkflowError, match='완료.*제작물|미완료'):
         store.review_release(job_id, result['hash'], 'approved', 'fixture-operator')
@@ -598,3 +599,44 @@ def test_generated_clip_requires_background_before_any_paid_call(tmp_path):
         scene_clip(clips, tmp_path, 1, None)
     assert scene_clip(clips, tmp_path, 0, None) == (None, None)
     assert scene_clip(None, tmp_path, 1, tmp_path / 'bg.png') == (None, None)
+
+
+@requires_ffmpeg
+def test_synthetic_coupon_cta_reaches_real_mp4_subtitles_and_approved_blog_handoffs(tmp_path):
+    """Real local encoder + synthetic tone and confirmations; never a real coupon or upload."""
+    from office.offers import campaign_packet
+    from office.media import produce, probe
+    from tests.test_offer import coupon_offer
+    store, job_id = approved_job(tmp_path)
+    offer = coupon_offer()
+    offer["url"] = "https://www.heobrain.kr/synthetic-fixture-not-a-product"
+    current = store.set_offer(job_id, offer, "synthetic-test")
+    packet = campaign_packet(current["source_packet"], current["offer"])
+    packet["quality"] = {"status": "passed", "critical": False}
+    source = store.save_source(job_id, packet, expected_hash=current["source_hash"])
+    store.review_source(job_id, source["source_hash"], "approved", "synthetic-test")
+    result = produce(store, job_id, voice_renderer=tone_renderer())
+    files = {item["name"]: store.artifacts / item["path"] for item in result["files"]}
+    assert next(stream for stream in probe(files["short.mp4"])["streams"] if stream["codec_type"] == "video")["width"] == 1080
+    assert "50퍼센트" in files["captions.srt"].read_text(encoding="utf-8")
+    assert "허브레인 점 케이알" in files["captions.srt"].read_text(encoding="utf-8")
+    drawn_cta = files["scene-03.json"].read_text(encoding="utf-8")
+    assert "50%" in drawn_cta and "heobrain.kr" in drawn_cta and "FIXTURE50" in drawn_cta
+    assert "FIXTURE50" in files["description.txt"].read_text(encoding="utf-8")
+    assert "50퍼센트" in files["youtube-script.md"].read_text(encoding="utf-8")
+    handoff = json.loads(files["channel-handoff.json"].read_text(encoding="utf-8"))
+    assert handoff["source_hash"] == source["source_hash"]
+    assert result["offer_snapshot"]["coupon"]["discount_percent"] == 50
+    assert all("blog" in item["outputs"] for item in result["files"] if item["name"] in ("channel-handoff.json", "threads-main.txt"))
+
+
+def test_production_contract_only_keeps_public_fields_of_social_targets():
+    from office.media import production_contract
+    channels = [{"key": "threads_main", "platform": "threads", "locale": "ko", "public_url": "https://www.threads.com/@synthetic", "credentials_configured": True, "external_account_id": "PRIVATE_SENTINEL", "publication_enabled": True}, {"key": "slack", "platform": "slack", "public_url": "PRIVATE_WORKSPACE_SENTINEL"}]
+    contract = production_contract(None, {"blog": True}, channel_registry=channels)
+    assert "PRIVATE" not in json.dumps(contract) and "credentials_configured" not in json.dumps(contract)
+    assert contract["channel_registry"] == [{"key": "threads_main", "platform": "threads", "locale": "ko", "public_url": "https://www.threads.com/@synthetic"}]
+    changed = [{**channels[0], "credentials_configured": False}, channels[1]]
+    assert production_contract(None, {"blog": True}, channel_registry=changed)["hash"] == contract["hash"]
+    changed[0]["public_url"] = "https://www.threads.com/@other"
+    assert production_contract(None, {"blog": True}, channel_registry=changed)["hash"] != contract["hash"]

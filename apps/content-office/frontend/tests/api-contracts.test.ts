@@ -82,3 +82,17 @@ test("기획 선택⓪도 화면에서 확인한 기획 판본을 보낸다", as
   };
   assert.equal((await api.selectIdea("idea read", expected)).job.id, "job-one");
 });
+
+test("UI 목록 조회만 compact dashboard를 요청하고 상세 작업은 기존 경로를 쓴다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const paths: string[] = [];
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (input, init) => {
+    paths.push(String(input));
+    assert.equal(init?.method, "GET");
+    return Response.json({ id: "job-one", jobs: [{ id: "job-one", title: "편입", state: "source_review", has_source: true }] });
+  };
+  await api.dashboard();
+  await api.job("job-one");
+  assert.deepEqual(paths, ["/api/dashboard?compact=true", "/api/jobs/job-one"]);
+});

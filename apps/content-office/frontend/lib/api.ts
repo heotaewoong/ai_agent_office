@@ -134,7 +134,7 @@ export const api = {
     }),
   retryTask: (id: string) =>
     request(`/tasks/${encodeURIComponent(id)}/retry`, "POST", {}),
-  dashboard: () => request<Dashboard>("/dashboard"),
+  dashboard: () => request<Dashboard>("/dashboard?compact=true"),
   job: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}`),
   refresh: () => request("/refresh", "POST", {}),
   createJobs: (ids: string[]) =>
@@ -245,6 +245,6 @@ export const api = {
   // 오퍼 스냅샷
   setOffer: (jobId: string, offer: OfferInput) =>
     request<Job>(`/jobs/${encodeURIComponent(jobId)}/offer`, "PUT", offer),
-  deleteOffer: (jobId: string) =>
-    request<Job>(`/jobs/${encodeURIComponent(jobId)}/offer`, "DELETE"),
+  deleteOffer: (jobId: string, expectedHash: string | null) =>
+    request<Job>(`/jobs/${encodeURIComponent(jobId)}/offer?expected_offer_hash=${encodeURIComponent(expectedHash ?? "null")}`, "DELETE"),
 };

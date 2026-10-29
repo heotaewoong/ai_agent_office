@@ -8,6 +8,7 @@ from .brand import brand_system_prompt, load_brand
 from .gates import run_gates
 from .korean import CORRECTION_SCHEMA, KOREAN_REVIEW_PROMPT, check_texts
 from .packaging import require_packaging
+from .offers import campaign_packet, offer_snapshot, require_offer_ready
 from .providers import Provider
 from .briefs import DEFAULT_PRESET, PRESETS, brief_for_job, build_brief
 from .store import Store, WorkflowError, canonical, digest
@@ -34,12 +35,13 @@ def content_context(packet):
     return {key: value for key, value in packet.items() if key not in ("quality", "call_log", "approval")}
 
 
-def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None, brief=None):
+def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None, brief=None, offer=None):
     packet = copy.deepcopy(packet)
     # 비평·평가·수정은 생성과 같은 브리프를 받는다. 넘기지 않으면 원고에 저장된 독자 설정, 그것도 없으면 기본 프리셋.
     brief = brief if brief is not None else (packet.get("audience") or build_brief(DEFAULT_PRESET))
     history = []
     for round_no in range(3):
+        packet = campaign_packet(packet, offer)
         payload = canonical({"packet": content_context(packet), "audience": brief, "rubric": RUBRIC})
         reviews = []
         for role in REVIEW_ROLES:
@@ -67,7 +69,9 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
             return packet
         if event:
             event("editorial_role", {"role": "refine", "round": round_no + 1})
-        refine_context = {"packet": content_context(packet), "feedback": reviews, "deterministic_feedback": checks, "audience": brief, "rubric": RUBRIC}
+        # The model refines editorial scenes; the reviewed campaign CTA is added exactly once next round.
+        refine_packet = campaign_packet(packet, None) if offer else packet
+        refine_context = {"packet": content_context(refine_packet), "feedback": reviews, "deterministic_feedback": checks, "audience": brief, "rubric": RUBRIC}
         if packaging is not None:
             refine_context["packaging"] = packaging
         refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. korean 검토의 corrections는 original 문장을 revised로 고치는 국어 교정이니 뜻과 근거 ID를 유지하며 반영하라. body는 1,200자 이상의 완성된 전체 원고이며 수정 요약이 아니다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
@@ -163,6 +167,16 @@ def deterministic_checks(packet):
 def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
     job = store.job(job_id)
     require_packaging(job)
+    require_offer_ready(job.get("offer"))
+    brief = brief_for_job(job)
+    if evaluate_only:
+        packet = job.get("source_packet")
+        if not packet:
+            raise WorkflowError("검수할 원고가 없습니다")
+        audience = packet.get("audience")
+        source_language = audience.get("language") if isinstance(audience, dict) else None
+        if source_language not in ("ko", "en") or source_language != brief["language"]:
+            raise WorkflowError("기존 원고 언어가 미확인이거나 현재 브리프와 다릅니다. 언어를 바꾸려면 새 원고를 생성하세요. 재검수만으로 번역하지 않습니다")
     brand = load_brand()
     store.update_job(job_id, state="drafting", error=None)
     article = job["article"]
@@ -176,19 +190,15 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
         article = {**article, "evidence": evidence, "limitations": report["limitations"], "hook": report["hook"], "evidence_source_kind": report["source_kind"], "evidence_checked_at": report["retrieved_at"]}
         store.save_article_evidence_if_current(job_id, job['source_hash'], article)
         store.event("evidence_collected", {"role": "RSS 연구", "source_sha256": report["source_sha256"], "claims": len(evidence), "source_kind": report["source_kind"]}, job_id)
-    brief = brief_for_job(job)
     if evaluate_only:
-        packet = job.get("source_packet")
-        if not packet:
-            raise WorkflowError("검수할 원고가 없습니다")
         packet = {**packet, "audience": brief, "brief_preset": brief["preset"]}
     else:
-        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": brief, "packaging": job.get("packaging"), "rubric": RUBRIC, "instructions": "한국어 Markdown 원고 2,000~3,200자. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
+        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": brief, "packaging": job.get("packaging"), "operator_confirmed_campaign": offer_snapshot(job.get("offer")), "rubric": RUBRIC, "instructions": "한국어 Markdown 원고 2,000~3,200자. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
         packet = provider.generate("gen", [{"role": "system", "content": brand_system_prompt(BASE, brand)}, {"role": "user", "content": canonical(context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.6})
         packet.update(evidence=evidence, audience=brief, brief_preset=brief["preset"], source_article_url=article["url"], limitations=article.get("limitations", []))
         if job.get("packaging"):
             packet["packaging_hash"] = job["packaging"]["packaging_hash"]
-    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks, system=brand_system_prompt(BASE, brand), packaging=job.get("packaging"), brief=brief)
+    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks, system=brand_system_prompt(BASE, brand), packaging=job.get("packaging"), brief=brief, offer=job.get("offer"))
     checks = deterministic_checks(packet)
     packet["quality"]["deterministic_checks"] = checks
     if not checks["passed"]:
@@ -197,6 +207,6 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
     packet["quality"]["gates"] = run_gates(packet, previous, packet.get("assets", []), brand)
     if packet["quality"]["gates"]["status"] == "block":
         packet["quality"].update(status="blocked", critical=True)
-    result = store.save_source(job_id, packet, expected_hash=job["source_hash"])
+    result = store.save_source(job_id, packet, expected_hash=job["source_hash"], expected_offer_hash=job.get("offer_hash"))
     store.event("source_review_requested", {"role": "편집", "source_hash": result["source_hash"], "next_action": "현재 원고와 검수 결과를 확인하고 승인① 또는 수정"}, job_id)
     return result

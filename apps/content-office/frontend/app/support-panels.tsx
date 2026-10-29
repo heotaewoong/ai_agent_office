@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Action, Idea, Job, KnowledgeSearch, Task, OutputKind } from "../lib/types";
+import type { Action, Idea, Job, JobMetadata, KnowledgeSearch, Task, OutputKind } from "../lib/types";
 import {
   completedOutputs,
   evidenceInputAllowed,
@@ -27,6 +27,7 @@ export function EvidenceIntake({
   busy,
   dirty,
   model,
+  requestBlockedReason,
   draft,
   onChange,
   onPackaging,
@@ -36,6 +37,7 @@ export function EvidenceIntake({
   busy: boolean;
   dirty: boolean;
   model?: string;
+  requestBlockedReason?: string;
   draft?: IntakeDraft;
   onChange: (value: IntakeDraft | null) => void;
   onPackaging: () => void;
@@ -139,10 +141,10 @@ export function EvidenceIntake({
           )}
           <button
             className="button secondary"
-            disabled={locked || !valid || needsPackaging}
+            disabled={locked || !valid || needsPackaging || Boolean(requestBlockedReason)}
             aria-describedby={needsPackaging ? `source-packaging-${job.id}` : undefined}
             onClick={() => {
-              if (locked || !valid || needsPackaging) return;
+              if (locked || !valid || needsPackaging || requestBlockedReason) return;
               void action(
                 "공개 원문 근거 등록",
                 async () => {
@@ -180,10 +182,12 @@ export function TaskHistory({
   tasks,
   jobs,
   busy,
+  requestBlockedReason,
   action,
 }: {
   tasks: Task[];
-  jobs: Job[];
+  jobs: JobMetadata[];
+  requestBlockedReason?: string;
   busy: boolean;
   action: Action;
 }) {
@@ -194,7 +198,7 @@ export function TaskHistory({
       <h3>작업 진행 기록</h3>
       {tasks.map((task, index) => {
         const job = jobs.find((item) => item.id === task.payload?.job_id);
-        const reason = retryBlockedReason(task, job, tasks);
+        const reason = retryBlockedReason(task, job, tasks) || requestBlockedReason;
         const failed = ["failed", "unknown", "partial"].includes(
           task.state ?? "",
         );
@@ -475,7 +479,7 @@ export function KnowledgeDrawer() {
 }
 
 export const outputNames: Record<OutputKind, string> = {
-  blog: "블로그",
+  blog: "블로그·소셜 검토 초안",
   video: "YouTube Shorts",
   pdf: "PDF 자료",
   cards: "카드 콘텐츠",

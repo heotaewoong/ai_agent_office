@@ -99,7 +99,9 @@ def test_rebuild_refreshes_consent_and_resets_approval_when_content_changes(tmp_
     rebuilt = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
     assert rebuilt["recipient_count"] == 1 and rebuilt["recipients_hash"] != issue["recipients_hash"]
     assert rebuilt["hash"] == issue["hash"] and rebuilt["state"] == "approved" and rebuilt["approval"]["stage"] == "③"
-    client.put(f"/api/jobs/{job_id}/offer", json={"product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.kr/planner", "note": None}, headers=headers)
+    client.put(f"/api/jobs/{job_id}/offer", json={"expected_offer_hash": None, "product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.kr/planner", "note": None}, headers=headers)
+    from tests.test_offer import reapprove_campaign_fixture
+    reapprove_campaign_fixture(store, job_id)
     changed = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
     assert changed["hash"] != issue["hash"] and changed["state"] == "draft" and changed["approval"] is None
     assert "D-30 플래너" in changed["markdown"] and "9,900원" in changed["markdown"] and "https://heobrain.kr/planner" in changed["markdown"]
@@ -168,9 +170,12 @@ def test_review_rejects_stale_preview(tmp_path, change, decision):
     issue = client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "stale-preview", "subject": None}, headers=headers).json()
     viewed_hash = issue["review_hash"]
     if change == "content":
-        client.put(f"/api/jobs/{job_id}/offer", json={"product": "새 자료", "price_krw": 9900, "url": "https://heobrain.kr/new", "note": None}, headers=headers)
+        client.put(f"/api/jobs/{job_id}/offer", json={"expected_offer_hash": None, "product": "새 자료", "price_krw": 9900, "url": "https://heobrain.kr/new", "note": None}, headers=headers)
     else:
         lead(client, headers, "new-reader@example.com")
+    if change == "content":
+        from tests.test_offer import reapprove_campaign_fixture
+        reapprove_campaign_fixture(store, job_id)
     rebuilt = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
     if change == "content":
         assert rebuilt["hash"] != issue["hash"]
@@ -229,6 +234,8 @@ def test_review_compare_and_approval_remain_atomic_during_rebuild(tmp_path, monk
     store, job_id = released_fixture(tmp_path)
     issue = newsletter.issues(store)[0]
     store.set_offer(job_id, {"product": "새 자료", "price_krw": 9900, "url": "https://heobrain.kr/new", "note": None}, "op")
+    from tests.test_offer import reapprove_campaign_fixture
+    reapprove_campaign_fixture(store, job_id)
     held, release, waiting, acquired = (Event() for _ in range(4))
     original_connection, original_released = store.connection, newsletter._released_job
     errors = []

@@ -14,7 +14,7 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFont
 from .exports import korean_font, write_blog_exports, write_reference_pdf, write_rights_manifest, write_video_exports
 from .store import WorkflowError, digest
-RENDER_VERSION = 'office-media-3'
+RENDER_VERSION = 'office-media-4-campaign-handoff'
 VOICE_CACHE_VERSION = 'office-media-1'
 
 def command(args, timeout=180):
@@ -107,11 +107,14 @@ def background_identity(renderer):
     return str(getattr(renderer, 'cache_key', getattr(renderer, '__qualname__', 'injected-background-renderer')))
 
 
-def production_contract(voice_renderer, selections, image_renderer=None, clip_renderer=None):
+def production_contract(voice_renderer, selections, image_renderer=None, clip_renderer=None, channel_registry=None):
     """Bind outputs to actual code, font bytes, the selected voice, background image and generated clip configuration."""
     renderer = voice_renderer or local_voice
     visual = any(selections.get(kind) for kind in ('video', 'cards', 'pdf'))
     scenes_drawn = bool(selections.get('video') or selections.get('cards'))
+    from .channel_handoff import SOCIAL_TARGETS
+    channel_registry = [{key: row.get(key) for key in ('key', 'platform', 'locale', 'public_url')}
+                        for row in (channel_registry or []) if row.get('key') in SOCIAL_TARGETS]
     font_sha, font_status = None, 'not_required'
     if visual:
         try:
@@ -122,6 +125,9 @@ def production_contract(voice_renderer, selections, image_renderer=None, clip_re
     config = {'renderer_version': RENDER_VERSION, 'voice_cache_version': VOICE_CACHE_VERSION,
               'implementation_sha256': file_hash(Path(__file__)),
               'export_implementation_sha256': file_hash(Path(__file__).with_name('exports.py')),
+              'offer_implementation_sha256': file_hash(Path(__file__).with_name('offers.py')),
+              'channel_handoff_implementation_sha256': file_hash(Path(__file__).with_name('channel_handoff.py')),
+              'channel_registry': channel_registry if selections.get('blog') else None,
               'font_sha256': font_sha, 'font_status': font_status,
               'voice': (voice_identity(renderer) if renderer is local_voice else str(getattr(renderer, 'cache_key', voice_identity(renderer)))) if selections.get('video') else None,
               'voice_asset_key': voice_identity(renderer) if selections.get('video') else None,
@@ -696,7 +702,9 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
         raise WorkflowError('제작 경로 식별자가 유효하지 않습니다')
     root = store.artifacts.resolve()
     source_folder = root / job_id / source_hash
-    contract = production_contract(voice_renderer, selections, image_renderer=background_renderer, clip_renderer=clip_renderer)
+    from .channels import registry
+    channel_registry = registry(store) if selections.get('blog') else None
+    contract = production_contract(voice_renderer, selections, image_renderer=background_renderer, clip_renderer=clip_renderer, channel_registry=channel_registry)
     folder = source_folder / ('production-' + contract['hash'][:24])
     voice_cache_dir = root / job_id / 'voices'
     if not folder.resolve().is_relative_to(root) or not voice_cache_dir.resolve().is_relative_to(root):
@@ -757,7 +765,7 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 nonlocal media, thumbs, backgrounds, clips
                 if contract['font_status'] != 'ready':
                     raise WorkflowError('한국어 폰트를 확인한 뒤 영상 제작을 다시 요청하세요. 유료 음성은 호출하지 않았습니다')
-                exports = write_video_exports(packet, folder)
+                exports = write_video_exports(packet, folder, job.get('offer'))
                 rendered = render_short(packet['video'], folder, voice_renderer=voice_renderer, check_current=check_current, source_text=packet['body'], voice_cache_dir=voice_cache_dir, background_renderer=background_renderer, clip_renderer=clip_renderer)
                 media, thumbs = rendered['media'], rendered['thumbnails']
                 backgrounds = backgrounds or rendered['backgrounds']
@@ -782,7 +790,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 backgrounds = backgrounds or drawn
                 return paths
 
-            run_output('blog', lambda: write_blog_exports(packet, folder, job.get('offer')))
+            from .channel_handoff import write_channel_handoffs
+            run_output('blog', lambda: write_blog_exports(packet, folder, job.get('offer')) + write_channel_handoffs(packet, folder, job.get('offer'), source_hash=source_hash, language=(packet.get('audience') or {}).get('language'), channels=channel_registry))
             run_output('video', video_output)
             run_output('cards', card_output)
             run_output('pdf', lambda: [write_reference_pdf(packet, folder)])
@@ -793,7 +802,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
             shared = write_rights_manifest(packet, folder)
             files = [shared] + [path for paths in output_files.values() for path in paths]
             records = [{**artifact_record(root, path), 'outputs': ['shared'] if path == shared else [kind for kind, paths in output_files.items() if path in paths]} for path in sorted(set(files))]
-            manifest = {'source_hash': source_hash, 'production_contract': contract, 'output_status': output_status, 'completed_outputs': completed, 'files': records, 'media': media, 'thumbnail_candidates': [r for r in records if r['name'] in {p.name for p in thumbs}], 'warnings': ['게시·업로드는 실행되지 않았습니다', '완료된 제작물을 선택해 출고 승인②을 받습니다. 영상은 음성 청취와 화면 검토가 필요합니다']}
+            from .offers import offer_snapshot
+            manifest = {'source_hash': source_hash, 'offer_snapshot': offer_snapshot(job.get('offer')), 'production_contract': contract, 'output_status': output_status, 'completed_outputs': completed, 'files': records, 'media': media, 'thumbnail_candidates': [r for r in records if r['name'] in {p.name for p in thumbs}], 'warnings': ['게시·업로드는 실행되지 않았습니다', '완료된 제작물을 선택해 출고 승인②을 받습니다. 영상은 음성 청취와 화면 검토가 필요합니다']}
             if backgrounds and any(kind in completed for kind in ('video', 'cards')):
                 manifest['background'] = background_summary(backgrounds)
                 manifest['warnings'].append('배경은 생성 이미지이며 한국어 글자는 로컬 레이어입니다. 출고 전 화면 검토가 필요합니다')

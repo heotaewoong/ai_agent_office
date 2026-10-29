@@ -51,6 +51,7 @@ export type Evidence = {
 export type SourcePacket = {
   title: string;
   body: string;
+  audience?: { language?: BriefLanguage };
   packaging_hash?: string;
   evidence?: Evidence[];
   quality?: {
@@ -194,6 +195,16 @@ export type Job = {
   brief?: Brief | null;
   brief_hash?: string;
   offer?: Offer | null;
+  offer_hash?: string | null;
+};
+/** 목록과 재요청 판정에 필요한 메타데이터. 원고와 근거 본문은 개별 Job에서 읽는다. */
+export type JobMetadata = {
+  id: string;
+  title: string;
+  state: string;
+  updated_at?: string;
+  source_hash?: string | null;
+  has_source?: boolean;
 };
 export type Feed = {
   id?: string;
@@ -269,7 +280,7 @@ export type Delivery = {
 export type WindowStart = { work_window: { authorized_end?: string }; services: { started: string[]; running: string[]; note: string } };
 export type Dashboard = {
   articles: Article[];
-  jobs: Job[];
+  jobs: JobMetadata[];
   feeds: Feed[];
   budget: {
     cap_krw: number;
@@ -526,5 +537,6 @@ export type NewsletterIssue = {
   approval: null | { stage: string; decision: string; actor: string; at: string; note: string };
   sent_at: string | null;
 };
-export type OfferInput = { product: string; price_krw: number; url: string; note: string };
-export type Offer = OfferInput & { captured_at: string; actor: string };
+export type CouponSnapshot = { code: string | null; discount_percent: number | null; expires_at: string | null; terms: string | null; verified: boolean };
+export type OfferInput = { product: string; price_krw: number; url: string; note: string; coupon?: CouponSnapshot | null; expected_offer_hash: string | null };
+export type Offer = Omit<OfferInput, "expected_offer_hash"> & { captured_at: string; actor: string };

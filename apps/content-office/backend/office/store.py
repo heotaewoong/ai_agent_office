@@ -161,8 +161,12 @@ class Store:
             return self._write_job(db, job)
 
     def job(self, job_id):
+        from .offers import offer_hash
         with self.connection() as db:
-            return self._job(db, job_id)
+            job = self._job(db, job_id)
+            if job.get("offer") or "offer_hash" in job:
+                job["offer_hash"] = offer_hash(job.get("offer"))
+            return job
 
     def jobs(self, limit=None):
         with self.connection() as db:
@@ -178,28 +182,36 @@ class Store:
             job.update(values)
             return self._write_job(db, job)
 
-    def save_source(self, job_id, packet, expected_hash=_UNSET):
+    def save_source(self, job_id, packet, expected_hash=_UNSET, *, expected_offer_hash=_UNSET):
         if not packet.get("title") or not packet.get("body"):
             raise WorkflowError("원고 제목과 본문이 필요합니다")
-        version = digest(packet)
+        from .offers import offer_hash, offer_snapshot, source_version
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
+            if expected_offer_hash is not _UNSET and offer_hash(job.get("offer")) != expected_offer_hash:
+                raise WorkflowError("원고를 만드는 동안 상품·쿠폰 조건이 변경되어 옛 결과를 저장하지 않았습니다")
+            version = source_version(packet, job.get("offer"))
             if expected_hash is not _UNSET and job["source_hash"] != expected_hash:
                 raise WorkflowError("작업 도중 원고 버전이 변경되어 옛 결과를 저장하지 않았습니다")
             if job["source_hash"] == version:
                 return job
-            db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job_id, version, canonical(packet), now()))
+            recorded = {**packet, "offer_snapshot": offer_snapshot(job["offer"])} if job.get("offer") else packet
+            db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job_id, version, canonical(recorded), now()))
             job.update(source_hash=version, source_packet=packet, title=packet["title"], state="source_review", source_approval=None, release_approval=None, manifest=None, error=None)
             self._event(db, "source_saved", {"version": version, "role": "편집"}, job_id)
             return self._write_job(db, job)
 
     def review_source(self, job_id, version, decision, actor, selections=None):
+        from .offers import require_campaign_packet, require_offer_ready
         if decision not in ("approved", "rejected") or not actor.strip():
             raise WorkflowError("유효한 검토 판정과 검토자가 필요합니다")
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
             if not version or version != job["source_hash"]:
                 raise WorkflowError("원고 버전이 변경되었습니다. 현재 원고를 다시 확인하세요")
+            if decision == "approved":
+                require_offer_ready(job.get("offer"))
+                require_campaign_packet(job.get("source_packet"), job.get("offer"))
             quality = (job["source_packet"] or {}).get("quality", {})
             if decision == "approved" and (quality.get("critical") or quality.get("status") != "passed"):
                 raise WorkflowError("중대 오류 또는 미완료 검수가 있어 승인할 수 없습니다")
@@ -221,14 +233,16 @@ class Store:
             return self._write_job(db, job)
 
     def register_source_input(self, job_id, text, expected_hash):
+        from .offers import offer_snapshot, source_version
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
             if job["source_hash"] != expected_hash:
                 raise WorkflowError("원문을 등록하는 동안 원고 버전이 변경되었습니다")
             packet = {**(job.get("source_packet") or {"title": job["title"], "body": "공개 원문을 등록했습니다. 근거 정리와 새 원고 생성을 기다리고 있습니다."}), "evidence": [], "source_input_hash": digest(text), "quality": {"status": "unverified", "critical": True, "reviews": []}}
             article = {**job["article"], "operator_source_text": text, "evidence": [], "evidence_source_kind": "operator_supplied_text_pending_extraction"}
-            version = digest(packet)
-            db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job_id, version, canonical(packet), now()))
+            version = source_version(packet, job.get("offer"))
+            recorded = {**packet, "offer_snapshot": offer_snapshot(job["offer"])} if job.get("offer") else packet
+            db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job_id, version, canonical(recorded), now()))
             job.update(article=article, source_hash=version, source_packet=packet, source_approval=None, release_approval=None, manifest=None, state="research_ready", error=None)
             self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "role": "연구"}, job_id)
             return self._write_job(db, job)
@@ -253,7 +267,10 @@ class Store:
             return [json.loads(r[0]) for r in db.execute("SELECT data FROM drafts WHERE job_id=? ORDER BY created_at DESC", (job_id,))]
 
     def require_source_approval(self, job_id):
+        from .offers import require_campaign_packet, require_offer_ready
         job = self.job(job_id)
+        require_offer_ready(job.get("offer"))
+        require_campaign_packet(job.get("source_packet"), job.get("offer"))
         record = job.get("source_approval") or {}
         if record.get("decision") != "approved" or record.get("version") != job.get("source_hash") or record.get("selections") != job.get("selections"):
             raise WorkflowError("현재 원고 승인①이 필요합니다")
@@ -271,8 +288,11 @@ class Store:
             return self._write_job(db, job)
 
     def save_manifest_if_current(self, job_id, source_hash, selections, manifest):
+        from .offers import require_campaign_packet, require_offer_ready
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
+            require_offer_ready(job.get("offer"))
+            require_campaign_packet(job.get("source_packet"), job.get("offer"))
             approval = job.get("source_approval") or {}
             if job["source_hash"] != source_hash or job["selections"] != selections:
                 raise WorkflowError("제작 중 원고 버전 또는 제작 선택이 변경되었습니다")
@@ -306,10 +326,14 @@ class Store:
             return self._write_job(db, job)
 
     def review_release(self, job_id, manifest_hash, decision, actor, media_reviewed=False, outputs=None):
+        from .offers import require_campaign_packet, require_offer_ready
         if decision not in ("approved", "rejected") or not actor.strip():
             raise WorkflowError("유효한 출고 판정과 검토자가 필요합니다")
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
+            if decision == "approved":
+                require_offer_ready(job.get("offer"))
+                require_campaign_packet(job.get("source_packet"), job.get("offer"))
             manifest = job.get("manifest")
             source_approval = job.get("source_approval") or {}
             if not manifest or manifest.get("hash") != manifest_hash or manifest.get("source_hash") != job["source_hash"]:
@@ -603,31 +627,47 @@ class Store:
         with self.connection() as db:
             db.execute("INSERT OR REPLACE INTO cache VALUES(?,?,?)", (key, canonical(value), now()))
 
-    # --- 상품 오퍼 스냅샷 (뉴스레터 꼬리말용). 승인①②③과 스토어·쿠폰 API를 건드리지 않는다.
-    def set_offer(self, job_id, offer, actor):
-        if not str(actor or "").strip():
-            raise WorkflowError("오퍼를 기록한 담당자가 필요합니다")
-        product = str((offer or {}).get("product") or "").strip()
-        if not product or len(product) > 200:
-            raise WorkflowError("상품 이름은 1~200자여야 합니다")
-        price = (offer or {}).get("price_krw")
-        if price is not None and (isinstance(price, bool) or not isinstance(price, int) or price < 0 or price > 10**9):
-            raise WorkflowError("가격은 0 이상의 정수(원) 또는 비워 둡니다")
-        url = str((offer or {}).get("url") or "").strip() or None
-        if url and (not url.startswith("https://") or len(url) > 500 or any(ch.isspace() for ch in url)):
-            raise WorkflowError("상품 주소는 https:// 로 시작하는 주소여야 합니다")
-        note = str((offer or {}).get("note") or "").strip() or None
-        if note and len(note) > 500:
-            raise WorkflowError("오퍼 메모는 500자 이하여야 합니다")
-        with self.connection(transaction=True) as db:
-            job = self._job(db, job_id)
-            job["offer"] = {"product": product, "price_krw": price, "url": url, "note": note, "captured_at": now(), "actor": actor}
-            self._event(db, "offer_set", {"product": product, "price_krw": price, "url": url, "actor": actor, "role": "마케팅"}, job_id)
-            return self._write_job(db, job)
+    # Campaign edits create a new reviewed content version; they never issue a store coupon.
+    def _replace_offer(self, db, job, offer, actor):
+        from .offers import campaign_packet, offer_hash, offer_snapshot, source_version
+        if offer is None:
+            job.pop("offer", None)
+        else:
+            job["offer"] = {**offer, "captured_at": now(), "actor": actor}
+        job["offer_hash"] = offer_hash(offer)
+        packet = job.get("source_packet")
+        if packet:
+            if offer is None:
+                packet = campaign_packet(packet, None)
+            packet = {**packet, "quality": {"status": "unverified", "critical": False, "reviews": [], "refine_count": 0}}
+            version = source_version(packet, offer)
+            recorded = {**packet, "offer_snapshot": offer_snapshot(offer)}
+            db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job["id"], version, canonical(recorded), now()))
+            job.update(source_packet=packet, source_hash=version, source_approval=None, release_approval=None, manifest=None, state="source_review", error=None)
+            self._event(db, "offer_content_invalidated", {"source_hash": version, "actor": actor, "next_action": "상품·쿠폰이 바뀌었습니다. 현재 원고와 영상 CTA를 재검수하고 승인①부터 다시 진행하세요"}, job["id"])
+        self._event(db, "offer_set" if offer else "offer_cleared", {"offer_hash": job["offer_hash"], "actor": actor, "role": "마케팅", "store_changed": False}, job["id"])
+        return self._write_job(db, job)
 
-    def clear_offer(self, job_id, actor):
+    def set_offer(self, job_id, offer, actor, *, expected_hash=_UNSET):
+        from .offers import normalise_offer, offer_hash
+        validated = normalise_offer(offer, actor)
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
-            if job.pop("offer", None) is not None:
-                self._event(db, "offer_cleared", {"actor": actor, "role": "마케팅"}, job_id)
-            return self._write_job(db, job)
+            current_hash = offer_hash(job.get("offer"))
+            if expected_hash is not _UNSET and current_hash != expected_hash:
+                raise WorkflowError("다른 화면에서 상품·쿠폰이 변경되었습니다. 최신 작업을 불러온 뒤 다시 편집하세요")
+            if current_hash == offer_hash(validated):
+                return {**job, "offer_hash": current_hash}
+            return self._replace_offer(db, job, validated, actor)
+
+    def clear_offer(self, job_id, actor, *, expected_hash=_UNSET):
+        from .offers import offer_hash
+        if not str(actor or "").strip():
+            raise WorkflowError("오퍼를 바꾼 담당자가 필요합니다")
+        with self.connection(transaction=True) as db:
+            job = self._job(db, job_id)
+            if expected_hash is not _UNSET and offer_hash(job.get("offer")) != expected_hash:
+                raise WorkflowError("다른 화면에서 상품·쿠폰이 변경되었습니다. 최신 작업을 불러온 뒤 다시 편집하세요")
+            if not job.get("offer"):
+                return {**job, "offer_hash": None}
+            return self._replace_offer(db, job, None, actor)

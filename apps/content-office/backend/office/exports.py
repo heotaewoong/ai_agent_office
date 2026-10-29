@@ -127,15 +127,8 @@ def reference_lines(packet: dict) -> list[str]:
 
 
 def offer_line(offer) -> str:
-    """작업에 오퍼 스냅샷이 있을 때만 붙는 '함께 보기' 한 줄. 없으면 빈 문자열."""
-    if not offer or not str(offer.get("product", "")).strip():
-        return ""
-    parts = [str(offer["product"]).strip()]
-    if offer.get("price_krw") is not None:
-        parts.append(f"{int(offer['price_krw']):,}원")
-    if offer.get("url"):
-        parts.append(str(offer["url"]).strip())
-    return "함께 보기: " + " · ".join(parts)
+    from .offers import offer_text
+    return offer_text(offer)
 
 
 def blog_markdown(packet: dict, offer: dict | None = None) -> str:
@@ -173,12 +166,15 @@ def blog_reader_html(title: str, content: str, format: str = 'html') -> str:
 <h1>{escape(title)}</h1><p class="format-note">{labels[format]}</p></header>{body}</main></body></html>'''
 
 
-def write_video_exports(packet: dict, folder: Path) -> list[Path]:
+def write_video_exports(packet: dict, folder: Path, offer: dict | None = None) -> list[Path]:
     plan = packet["video"]
     script = "# " + plan["title"] + "\n\n"
     for index, scene in enumerate(plan["scenes"], 1):
         script += f"## 장면 {index}\n\n말하기: {scene['narration']}\n\n화면: {scene['caption']}\n\n시각 구성: {scene.get('visual', 'explanation')}\n\n"
     description = plan.get("description", "") + "\n\n" + "\n\n".join(reference_lines(packet))
+    line = offer_line(offer)
+    if line:
+        description += "\n\n" + line
     description += "\n\n이 영상의 내레이션은 합성 음성입니다. 게시 전 원문·음성·자막·대표 이미지를 확인하세요.\n"
     return [write_text(folder, "youtube-script.md", script),
             write_text(folder, "youtube-plan.json", json.dumps(plan, ensure_ascii=False, indent=2)),

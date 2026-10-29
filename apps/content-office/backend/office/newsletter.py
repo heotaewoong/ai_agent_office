@@ -14,6 +14,7 @@ import re
 from .briefs import brief_for_job
 from .exports import blog_markdown
 from .leads import consent_snapshot
+from .offers import require_campaign_packet, require_offer_ready
 from .store import WorkflowError, canonical, digest, identifier, now
 
 ISSUE_KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -29,6 +30,8 @@ def _ensure(db):
 def _released_job(db, store, job_id):
     """youtube_delivery._released_video와 같은 출고 승인② 검사. 영상 파일 조건만 뺐다."""
     job = store._job(db, job_id)
+    require_offer_ready(job.get("offer"))
+    require_campaign_packet(job.get("source_packet"), job.get("offer"))
     manifest = job.get("manifest") or {}
     release = job.get("release_approval") or {}
     if release.get("decision") != "approved" or release.get("version") != manifest.get("hash") or manifest.get("source_hash") != job.get("source_hash"):
@@ -39,14 +42,8 @@ def _released_job(db, store, job_id):
 def _offer_footer(offer):
     if not offer:
         return ""
-    parts = [str(offer.get("product", "")).strip()]
-    if offer.get("price_krw") is not None:
-        parts.append(f"{int(offer['price_krw']):,}원")
-    if offer.get("url"):
-        parts.append(str(offer["url"]))
-    lines = ["## 안내", "", " · ".join(part for part in parts if part)]
-    if offer.get("note"):
-        lines += ["", str(offer["note"]).strip()]
+    from .exports import offer_line
+    lines = ["## 안내", "", offer_line(offer)]
     return "\n".join(lines) + "\n\n"
 
 

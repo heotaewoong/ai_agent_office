@@ -92,6 +92,70 @@ def test_job_summaries_bound_metadata_and_preserve_detail_ids_with_smaller_paylo
         assert set(summary["release_approval"]) == {"decision", "version", "created_at", "outputs"}
         assert set(summary["manifest"]) == {"hash", "source_hash", "files"}
         assert set(summary["manifest"]["files"][0]) == {"id", "kind", "sha256", "outputs"}
+    compact = client.get("/api/dashboard?compact=true")
+    assert compact.status_code == 200
+    metadata = compact.json()["jobs"]
+    assert len(metadata) == 105
+    assert [item["id"] for item in metadata] == [item["id"] for item in dashboard.json()["jobs"]]
+    assert metadata[-1]["id"] == "job_000" and metadata[-1]["title"] == hostile_title
+    assert sum(item["state"] == "source_review" for item in metadata) == 105
+    assert all(item["has_source"] is True and item["source_hash"] == "a" * 64 for item in metadata)
+    assert all(set(item) == {"id", "title", "state", "source_hash", "updated_at", "has_source"} for item in metadata)
+    assert private not in compact.text
+    assert len(compact.content) < len(dashboard.content) / 5
+    assert client.get("/api/dashboard?compact=false").json()["jobs"] == dashboard.json()["jobs"]
+    assert {key: value for key, value in compact.json().items() if key != "jobs"} == {key: value for key, value in dashboard.json().items() if key != "jobs"}
+    # 80개 요약 범위 밖의 오래된 ID도 목록과 상세 조회에 계속 존재한다.
+    oldest = client.get("/api/jobs/" + metadata[-1]["id"])
+    assert oldest.status_code == 200 and private in oldest.json()["source_packet"]["body"]
+    print(f"dashboard bytes legacy={len(dashboard.content)} compact={len(compact.content)} jobs={len(metadata)}")
+
+
+def test_compact_dashboard_bounds_scalar_metadata_without_body_or_nested_values(context):
+    from office.store import canonical
+    store, client, _ = context
+    job = store.create_job(store.article("one"))
+    store.update_job(job["id"], title="t" * 250, state="s" * 90, source_hash="not-a-hash",
+                     source_packet={"body": {"private": "PRIVATE_COMPACT_NESTED"}})
+    malformed = {**store.job(job["id"]), "updated_at": {"private": "PRIVATE_COMPACT_NESTED"}}
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE jobs SET data=? WHERE id=?", (canonical(malformed), job["id"]))
+    response = client.get("/api/dashboard?compact=true")
+    assert response.status_code == 200
+    metadata = response.json()["jobs"][0]
+    assert len(metadata["title"]) == 200 and len(metadata["state"]) == 60
+    assert metadata["source_hash"] is None and metadata["has_source"] is False and metadata["updated_at"] == ""
+    assert "PRIVATE_COMPACT_NESTED" not in response.text
+
+
+def test_compact_dashboard_fails_explicitly_instead_of_silently_dropping_invalid_job_id(context):
+    from office.store import canonical
+    store, client, _ = context
+    job = store.create_job(store.article("one"))
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE jobs SET data=? WHERE id=?", (canonical({**job, "id": "../invalid"}), job["id"]))
+    assert len(client.get("/api/dashboard").json()["jobs"]) == 1
+    response = client.get("/api/dashboard?compact=true")
+    assert response.status_code == 409 and "전체 작업 목록" in response.json()["detail"]
+
+
+def test_compact_dashboard_keeps_sidebar_title_fallback_without_returning_article(context):
+    store, client, _ = context
+    article = {**store.article("one"), "editorial_title": "운영자가 정리한 제목"}
+    job = store.create_job(article)
+    store.update_job(job["id"], title="")
+    metadata = client.get("/api/dashboard?compact=true").json()["jobs"][0]
+    assert metadata["title"] == article["editorial_title"] and "article" not in metadata
+    assert metadata["has_source"] is False and metadata["source_hash"] is None
+
+
+def test_compact_dashboard_rejects_bad_flag_before_job_read_and_keeps_read_origin_gate(context, monkeypatch):
+    store, client, _ = context
+    assert client.get("/api/dashboard?compact=true", headers={"Origin": "https://attacker.example"}).status_code == 403
+    def unexpected(*args, **kwargs):
+        pytest.fail("잘못된 compact 값으로 작업 목록을 조회했습니다")
+    monkeypatch.setattr(store, "jobs", unexpected)
+    assert client.get("/api/dashboard?compact=wrong").status_code == 422
 
 
 @pytest.mark.parametrize("limit", ["0", "81", "-1", "1.5", "wrong"])

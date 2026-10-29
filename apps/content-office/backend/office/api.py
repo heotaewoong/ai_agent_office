@@ -64,7 +64,7 @@ AGENTS = [
 ]
 
 
-def _job_summary(job):
+def _job_summary(job, *, compact=False):
     """목록에는 제한된 메타데이터만 제공한다. 원고·근거·경로는 원본 상세 조회에 남긴다."""
     def text(value, limit):
         return value[:limit] if isinstance(value, str) else ""
@@ -95,7 +95,15 @@ def _job_summary(job):
         return result
 
     if not isinstance(job, dict) or not safe_id(job.get("id")):
+        if compact:
+            raise WorkflowError("작업 ID 형식을 확인할 수 없어 전체 작업 목록을 표시하지 못했습니다")
         return None
+    if compact:
+        packet = job.get("source_packet") if isinstance(job.get("source_packet"), dict) else {}
+        article = job.get("article") if isinstance(job.get("article"), dict) else {}
+        return {"id": job["id"], "title": text(job.get("title"), 200) or text(article.get("editorial_title"), 200) or text(article.get("title"), 200) or job["id"], "state": text(job.get("state"), 60) or "unknown",
+                "updated_at": text(job.get("updated_at"), 60), "source_hash": content_hash(job.get("source_hash")),
+                "has_source": isinstance(packet.get("body"), str) and bool(packet["body"])}
     manifest = job.get("manifest") if isinstance(job.get("manifest"), dict) else {}
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     return {"id": job["id"], "title": text(job.get("title"), 200) or job["id"], "state": text(job.get("state"), 60) or "unknown",
@@ -286,7 +294,7 @@ def create_app(store: Store | None = None):
         return response
 
     @app.get("/api/dashboard")
-    def dashboard():
+    def dashboard(compact: bool = False):
         from .voice_selection import profile_summary
         from .image_selection import profile_summary as image_profile_summary
         from .video_selection import profile_summary as clip_profile_summary
@@ -298,7 +306,10 @@ def create_app(store: Store | None = None):
         current_ids = {article["id"] for article in rank_articles(store.articles_list())}
         active_ids = set(feed_report.get("active_article_ids", current_ids))
         articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
-        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
+        jobs = store.jobs()
+        if compact:
+            jobs = [_job_summary(job, compact=True) for job in jobs]
+        return {"articles": articles[:80], "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
 
     @app.get("/api/space")
     def space():
@@ -387,7 +398,8 @@ def create_app(store: Store | None = None):
         from .voice_selection import renderer_for_job
         from .image_selection import background_renderer_for_job
         from .video_selection import clip_renderer_for_job
-        contract = production_contract(renderer_for_job(store, job), job['selections'], image_renderer=background_renderer_for_job(store, job), clip_renderer=clip_renderer_for_job(store, job))
+        from .channels import registry
+        contract = production_contract(renderer_for_job(store, job), job['selections'], image_renderer=background_renderer_for_job(store, job), clip_renderer=clip_renderer_for_job(store, job), channel_registry=registry(store) if job['selections'].get('blog') else None)
         task = store.enqueue("produce", {"job_id": job_id, "source_hash": job["source_hash"], "production_contract": contract['hash']}, key=f"produce:{job_id}:{job['source_hash']}:{contract['hash']}")
         if task["state"] == "queued":
             store.update_job(job_id, state="production_queued")
@@ -422,6 +434,9 @@ def create_app(store: Store | None = None):
         return [record for record in records if not record.get('outputs') or selected.intersection(record['outputs']) or 'shared' in record['outputs']]
 
     def verify_files(job, outputs=None):
+        from .offers import require_offer_ready, require_campaign_packet
+        require_offer_ready(job.get("offer"))
+        require_campaign_packet(job.get("source_packet"), job.get("offer"))
         manifest = job.get("manifest") or {}
         if manifest.get("source_hash") != job.get("source_hash"):
             raise WorkflowError("현재 원고와 제작물 버전이 다릅니다")

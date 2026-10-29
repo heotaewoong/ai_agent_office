@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import Response
+from fastapi import Query, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -37,11 +37,21 @@ class NewsletterReview(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class CouponInput(BaseModel):
+    code: str | None = Field(default=None, max_length=64)
+    discount_percent: int | None = Field(default=None, ge=1, le=100, strict=True)
+    expires_at: str | None = Field(default=None, max_length=50)
+    terms: str | None = Field(default=None, max_length=500)
+    verified: bool = Field(default=False, strict=True)
+
+
 class OfferInput(BaseModel):
+    expected_offer_hash: str | None = Field(pattern=r"^[0-9a-f]{64}$")
     product: str = Field(max_length=200)
-    price_krw: int | None = Field(default=None, ge=0, le=10**9)
+    price_krw: int | None = Field(default=None, ge=0, le=10**9, strict=True)
     url: str | None = Field(default=None, max_length=500)
     note: str | None = Field(default=None, max_length=500)
+    coupon: CouponInput | None = None
 
 
 def dashboard_counts(store):
@@ -105,8 +115,8 @@ def register(app, store):
 
     @app.put("/api/jobs/{job_id}/offer")
     def set_offer(job_id: str, body: OfferInput):
-        return store.set_offer(job_id, body.model_dump(), ACTOR)
+        return store.set_offer(job_id, body.model_dump(exclude={"expected_offer_hash"}), ACTOR, expected_hash=body.expected_offer_hash)
 
     @app.delete("/api/jobs/{job_id}/offer")
-    def clear_offer(job_id: str):
-        return store.clear_offer(job_id, ACTOR)
+    def clear_offer(job_id: str, expected_offer_hash: str = Query(pattern=r"^[0-9a-f]{64}$")):
+        return store.clear_offer(job_id, ACTOR, expected_hash=expected_offer_hash)

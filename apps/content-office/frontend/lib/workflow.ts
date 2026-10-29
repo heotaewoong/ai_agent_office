@@ -3,6 +3,7 @@ import type {
   ThumbnailCandidate,
   Task,
   Job,
+  JobMetadata,
   OutputKind,
 } from "./types";
 
@@ -52,7 +53,7 @@ export function evidenceInputAllowed(job: {
 }
 export function retryBlockedReason(
   task: Task,
-  job?: Pick<Job, "id" | "state" | "source_hash">,
+  job?: Pick<JobMetadata, "id" | "state" | "source_hash">,
   tasks: Task[] = [],
 ): string | null {
   if (
@@ -322,4 +323,14 @@ export function draftStatus(tasks: Task[] | undefined, job: Pick<Job, "id">): Dr
     default:
       return { state: "idle", label: latest.state ?? "상태 없음", detail: error };
   }
+}
+
+/** 생성 요청만 제한한다. 읽기·메타데이터 편집·사람 승인을 막지 않는다. */
+export function workWindowBlockedReason(window: { authorized_end?: string; end?: string; ends_at?: string; end_at?: string; status?: unknown } | undefined, now = Date.now()): string | undefined {
+  const end = window?.authorized_end ?? window?.end ?? window?.ends_at ?? window?.end_at;
+  if (["closed", "stopped"].includes(String(window?.status)) || (end && Number.isFinite(Date.parse(end)) && Date.parse(end) <= now))
+    return "작업 시간이 종료됐습니다. 제작 설정에서 새 작업 시간을 지정해야 생성·재시도·업로드를 요청할 수 있습니다.";
+  if (!end || !Number.isFinite(Date.parse(end)))
+    return "작업 시간을 확인하지 못했습니다. 제작 설정과 연결 상태를 확인해 주세요.";
+  return undefined;
 }

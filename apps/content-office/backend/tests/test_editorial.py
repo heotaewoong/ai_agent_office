@@ -78,3 +78,85 @@ def test_old_evidence_collection_cannot_replace_new_operator_source(tmp_path, mo
     assert store.job(job['id'])['article']['operator_source_text'].startswith('새로 교체한')
     assert store.article('source-race').get('operator_source_text') is None
     assert store.article('source-race')['evidence'] == []
+
+
+def test_refinement_gets_editorial_scenes_and_reviews_one_canonical_campaign_cta():
+    import json
+    from office.offers import campaign_packet
+    from tests.test_offer import coupon_offer
+    offer = coupon_offer()
+    original = {"title": "합성 원고", "body": "합성 본문", "video": {"title": "합성 영상", "description": "시험", "scenes": [{"narration": "본문 설명", "caption": "본문"}]}}
+    seen = []
+    class Refiner:
+        def generate(self, role, messages, schema, options=None):
+            context = json.loads(messages[-1]["content"])
+            scenes = context["packet"].get("video", {}).get("scenes", [])
+            if role == "refine":
+                assert len(scenes) == 1 and "쿠폰" not in scenes[-1]["narration"]
+                return {**original, "video": {**original["video"], "scenes": [{"narration": "수정한 본문 설명", "caption": "수정 본문"}]}}
+            seen.append(scenes)
+            return {"score": 70, "passed": False, "critical_issues": ["합성 수정 요청"], "minor_issues": [], "summary": "시험"}
+    result = review_until_ready(campaign_packet(original, offer), Refiner(), offer=offer)
+    assert len(seen) == 9 and all(len(scenes) == 2 for scenes in seen)
+    assert all("50퍼센트" in scenes[-1]["narration"] for scenes in seen)
+    assert len(result["video"]["scenes"]) == 2
+
+
+
+def _reevaluation_fixture(tmp_path, language):
+    from office.store import Store
+    from office.briefs import build_brief
+    store = Store(tmp_path)
+    job = store.create_job({"id": "language-fixture", "title": "합성 언어 검증", "url": "https://example.invalid/source", "evidence": [{"id": "E1", "claim": "합성 근거", "url": "https://example.invalid/source"}]})
+    packet = {"title": "합성 한국어 원고", "body": "한국어 합성 본문은 재검수로 번역되지 않아요.", "evidence": job["article"]["evidence"], "quality": {"status": "passed", "critical": False}, "video": {"scenes": []}}
+    if language is not None:
+        packet["audience"] = build_brief("ai-agent", {"language": language})
+    return store, store.save_source(job["id"], packet)
+
+
+def test_reevaluation_cannot_relabel_korean_source_as_english_before_any_work(tmp_path, monkeypatch):
+    import pytest
+    from office import editorial
+    from office.store import WorkflowError
+    store, job = _reevaluation_fixture(tmp_path, "ko")
+    store.set_brief(job["id"], {**job["brief"], "language": "en"}, "fixture-operator")
+    before, events = store.job(job["id"]), store.events(job["id"])
+    def forbidden(*args, **kwargs):
+        pytest.fail("Language mismatch must be blocked before state, evidence or provider work")
+    monkeypatch.setattr(editorial, "Provider", forbidden)
+    monkeypatch.setattr(editorial, "load_brand", forbidden)
+    monkeypatch.setattr("office.evidence.collect_article_evidence", forbidden)
+    with pytest.raises(WorkflowError, match="새 원고"):
+        editorial.prepare_source(store, job["id"], evaluate_only=True)
+    assert store.job(job["id"]) == before and store.events(job["id"]) == events
+    assert store.job(job["id"])["source_packet"]["audience"]["language"] == "ko"
+
+
+def test_reevaluation_of_legacy_unknown_language_requires_new_source(tmp_path, monkeypatch):
+    import pytest
+    from office import editorial
+    from office.store import WorkflowError
+    store, job = _reevaluation_fixture(tmp_path, None)
+    before, events = store.job(job["id"]), store.events(job["id"])
+    def forbidden(*args, **kwargs):
+        pytest.fail("Unknown source language must never be promoted by metadata alone")
+    monkeypatch.setattr(editorial, "Provider", forbidden)
+    monkeypatch.setattr(editorial, "load_brand", forbidden)
+    with pytest.raises(WorkflowError, match="미확인"):
+        editorial.prepare_source(store, job["id"], evaluate_only=True)
+    assert store.job(job["id"]) == before and store.events(job["id"]) == events
+
+
+def test_same_language_reader_change_can_be_reevaluated_without_translation(tmp_path, monkeypatch):
+    from office import editorial
+    store, job = _reevaluation_fixture(tmp_path, "ko")
+    store.set_brief(job["id"], {**job["brief"], "reader": "합성 시험의 새 독자"}, "fixture-operator")
+    # These stubs isolate the language/brief handoff, not model or content-quality validation.
+    monkeypatch.setattr(editorial, "deterministic_checks", lambda packet: {"passed": True, "issues": []})
+    monkeypatch.setattr(editorial, "run_gates", lambda *args: {"status": "pass"})
+    provider = ReviewingProvider()
+    result = editorial.prepare_source(store, job["id"], provider=provider, evaluate_only=True)
+    assert [role for role, _ in provider.calls] == ["critique", "eval", "korean"]
+    assert result["source_packet"]["body"] == job["source_packet"]["body"]
+    assert result["source_packet"]["audience"]["reader"] == "합성 시험의 새 독자"
+    assert result["source_packet"]["audience"]["language"] == "ko"

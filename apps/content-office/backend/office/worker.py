@@ -24,13 +24,14 @@ def process_task(store, task):
         from .voice_selection import renderer_for_job
         from .image_selection import background_renderer_for_job
         from .video_selection import clip_renderer_for_job
+        from .channels import registry
         current = store.require_source_approval(job_id)
         if payload["source_hash"] != current["source_hash"]:
             raise WorkflowError("대기 중인 제작의 원고 버전이 변경되었습니다")
         renderer = renderer_for_job(store, current)
         background = background_renderer_for_job(store, current)
         clips = clip_renderer_for_job(store, current)
-        if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips)['hash']:
+        if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips, channel_registry=registry(store) if current['selections'].get('blog') else None)['hash']:
             raise WorkflowError('대기 중 제작 설정이 변경되었습니다. 현재 설정으로 제작을 다시 요청하세요')
         store.update_job(job_id, state="producing", error=None)
         # 제작과 함께 같은 원고의 퀴즈·카드뉴스를 자동으로 줄 세운다. 이미 현재 버전 결과가 있으면 건너뛴다.

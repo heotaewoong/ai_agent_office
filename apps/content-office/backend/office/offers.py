@@ -1,0 +1,162 @@
+"""Operator-confirmed campaign snapshots, never coupon issuance or checkout verification."""
+from __future__ import annotations
+
+import copy
+from datetime import datetime, timezone
+from urllib.parse import urlsplit
+
+from .store import WorkflowError, digest
+
+
+def offer_snapshot(offer):
+    if not offer:
+        return None
+    coupon = offer.get("coupon")
+    return {"product": offer.get("product"), "price_krw": offer.get("price_krw"), "url": offer.get("url"), "note": offer.get("note"),
+            "coupon": {key: coupon.get(key) for key in ("code", "discount_percent", "expires_at", "terms", "verified")} if coupon else None}
+
+
+def offer_hash(offer):
+    return digest(offer_snapshot(offer)) if offer else None
+
+
+def require_campaign_packet(packet, offer):
+    if (packet or {}).get("campaign_offer_hash") != offer_hash(offer):
+        raise WorkflowError("상품·쿠폰 안내가 현재 원고·영상에 반영되지 않았습니다. 원고를 다시 검수하세요")
+
+
+def source_version(packet, offer):
+    return digest({"packet": packet, "offer": offer_snapshot(offer)}) if offer else digest(packet)
+
+
+def _expiry(value):
+    try:
+        expiry = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        raise WorkflowError("쿠폰 만료 시각은 시간대가 포함된 ISO 날짜여야 합니다") from None
+    if expiry.tzinfo is None:
+        raise WorkflowError("쿠폰 만료 시각에 시간대가 필요합니다")
+    return expiry
+
+
+def require_offer_ready(offer):
+    """Recheck before generation, approval and every external handoff; no remote verification."""
+    if not offer or not offer.get("coupon"):
+        return
+    coupon = offer["coupon"]
+    if coupon.get("verified") is not True:
+        raise WorkflowError("쿠폰은 아직 미확인 기획입니다. 운영자가 스토어의 발급·조건을 직접 확인한 뒤 기록하세요")
+    if not coupon.get("code") or not coupon.get("terms") or not offer.get("url"):
+        raise WorkflowError("쿠폰 코드·조건·상품 URL 확인이 필요합니다")
+    percent = coupon.get("discount_percent")
+    if isinstance(percent, bool) or not isinstance(percent, int) or not 1 <= percent <= 100:
+        raise WorkflowError("쿠폰 할인율은 1~100의 정수여야 합니다")
+    if _expiry(coupon.get("expires_at")) <= datetime.now(timezone.utc):
+        raise WorkflowError("쿠폰 사용 기간이 끝났습니다. 새 조건으로 원고·제작물과 승인을 다시 확인하세요")
+
+
+def normalise_offer(offer, actor):
+    if not str(actor or "").strip():
+        raise WorkflowError("오퍼를 기록한 담당자가 필요합니다")
+    product = str((offer or {}).get("product") or "").strip()
+    if not product or len(product) > 200:
+        raise WorkflowError("상품 이름은 1~200자여야 합니다")
+    price = (offer or {}).get("price_krw")
+    if price is not None and (isinstance(price, bool) or not isinstance(price, int) or not 0 <= price <= 10**9):
+        raise WorkflowError("가격은 0 이상의 정수(원) 또는 비워 둡니다")
+    url = str((offer or {}).get("url") or "").strip() or None
+    if url:
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            raise WorkflowError("상품 주소는 https:// 로 시작하는 주소여야 합니다") from None
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or len(url) > 500 or any(ch.isspace() for ch in url):
+            raise WorkflowError("상품 주소는 https:// 로 시작하는 주소여야 합니다")
+    note = str((offer or {}).get("note") or "").strip() or None
+    if note and len(note) > 500:
+        raise WorkflowError("오퍼 메모는 500자 이하여야 합니다")
+    coupon = (offer or {}).get("coupon")
+    if coupon is not None:
+        if not isinstance(coupon, dict):
+            raise WorkflowError("쿠폰 조건은 객체여야 합니다")
+        code = str(coupon.get("code") or "").strip() or None
+        terms = str(coupon.get("terms") or "").strip() or None
+        expires = str(coupon.get("expires_at") or "").strip() or None
+        percent = coupon.get("discount_percent")
+        verified = coupon.get("verified", False)
+        if code and (len(code) > 64 or any(ch.isspace() for ch in code)):
+            raise WorkflowError("쿠폰 코드는 공백 없이 64자 이하여야 합니다")
+        if terms and len(terms) > 500:
+            raise WorkflowError("쿠폰 조건은 500자 이하여야 합니다")
+        if percent is not None and (isinstance(percent, bool) or not isinstance(percent, int) or not 1 <= percent <= 100):
+            raise WorkflowError("쿠폰 할인율은 1~100의 정수여야 합니다")
+        if not isinstance(verified, bool):
+            raise WorkflowError("쿠폰 확인 여부는 참 또는 거짓이어야 합니다")
+        if expires:
+            expires = _expiry(expires).isoformat()
+        coupon = {"code": code, "discount_percent": percent, "expires_at": expires, "terms": terms, "verified": verified}
+    result = {"product": product, "price_krw": price, "url": url, "note": note, "coupon": coupon}
+    if coupon and coupon["verified"]:
+        require_offer_ready(result)
+    return result
+
+
+def offer_text(offer):
+    if not offer:
+        return ""
+    require_offer_ready(offer)
+    parts = [str(offer["product"]).strip()]
+    price = offer.get("price_krw")
+    if price is not None:
+        parts.append(f"기준가격 {price:,}원")
+    coupon = offer.get("coupon")
+    if coupon:
+        percent = coupon["discount_percent"]
+        parts.append(f"{percent}% 할인 쿠폰 {coupon['code']}")
+        if price is not None:
+            estimated = price - price * percent // 100
+            parts.append(f"할인 예상 {estimated:,}원(실제 결제금액은 스토어 확인)")
+        parts.append(f"사용기한 {coupon['expires_at']}")
+        parts.append(f"조건: {coupon['terms']}")
+    if offer.get("url"):
+        parts.append(offer["url"])
+    if offer.get("note"):
+        parts.append(offer["note"])
+    return "함께 보기: " + " · ".join(parts)
+
+
+def campaign_packet(packet, offer):
+    """Add an explicit CTA before critique/approval so voice and pixels use reviewed words."""
+    if not offer and not packet.get("campaign_cta_scene"):
+        return packet
+    result = copy.deepcopy(packet)
+    result["campaign_offer_hash"] = offer_hash(offer)
+    result["campaign_offer"] = offer_snapshot(offer)
+    video = result.get("video")
+    if not video:
+        return result
+    scenes = list(video.get("scenes", []))
+    # A previous campaign scene is replaced during reevaluation, never appended twice.
+    if scenes and scenes[-1].get("narration") == result.get("campaign_cta_scene"):
+        scenes.pop()
+    if not offer:
+        video["scenes"] = scenes
+        result.pop("campaign_cta_scene", None)
+        result.pop("campaign_offer_hash", None)
+        result.pop("campaign_offer", None)
+        return result
+    require_offer_ready(offer)
+    coupon = offer.get("coupon")
+    domain = urlsplit(offer.get("url") or "").hostname or ""
+    spoken_domain = "허브레인 점 케이알에서" if domain in ("heobrain.kr", "www.heobrain.kr") else "설명란의 상품 링크에서"
+    narration = f"{offer['product']}은 {spoken_domain} 확인하세요."
+    caption = offer["product"] + (" · " + domain.removeprefix("www.") if domain else "")
+    if coupon:
+        narration += f" 확인한 쿠폰은 {coupon['discount_percent']}퍼센트 할인입니다. 코드와 기간, 조건은 설명란을 확인하세요."
+        caption += f" · {coupon['discount_percent']}% 할인 · 코드 {coupon['code']}"
+    scenes.append({"narration": narration, "caption": caption, "visual": "상품 안내 · 코드와 조건은 설명란 · 실제 상품 화면을 복제하지 않은 자체 도형"})
+    video["scenes"] = scenes
+    result["campaign_cta_scene"] = narration
+    result["campaign_offer_hash"] = offer_hash(offer)
+    result["campaign_offer"] = offer_snapshot(offer)
+    return result

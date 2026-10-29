@@ -20,7 +20,7 @@ from contextlib import contextmanager
 import requests
 
 from .channels import CHANNELS, channel as channel_row, configured_youtube_channels, missing_credential_names, youtube_credentials
-from .runtime import AlreadyRunning, ProcessLock
+from .runtime import AlreadyRunning, ProcessLock, window_open
 from .store import WorkflowError, canonical, digest, now
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -56,10 +56,11 @@ def _credentials(channel_key):
 
 
 def _require_language_match(store, job, row):
-    from .briefs import brief_for_job
-    language = brief_for_job(job).get("language")
+    language = ((job.get("source_packet") or {}).get("audience") or {}).get("language")
+    if language not in ("ko", "en"):
+        raise WorkflowError("승인 원고의 언어를 확인할 수 없습니다. 브리프만 바꾸지 말고 새 원고를 검수·제작하세요")
     if language != row["locale"]:
-        raise WorkflowError(f"브리프 언어({language})와 채널 '{row['key']}' 언어({row['locale']})가 다릅니다. 업로드는 요청하지 않았습니다")
+        raise WorkflowError(f"승인 원고 언어({language})와 채널 '{row['key']}' 언어({row['locale']})가 다릅니다. 브리프 변경은 기존 영상을 번역하지 않습니다")
     return language
 
 
@@ -95,6 +96,9 @@ def _save(store, record, *, reserve=False):
 
 def _released_video(store, job_id):
     job = store.job(job_id)
+    from .offers import require_offer_ready, require_campaign_packet
+    require_offer_ready(job.get("offer"))
+    require_campaign_packet(job.get("source_packet"), job.get("offer"))
     manifest = job.get("manifest") or {}
     release = job.get("release_approval") or {}
     if (release.get("decision") != "approved" or release.get("version") != manifest.get("hash")
@@ -114,6 +118,15 @@ def _released_video(store, job_id):
             raise WorkflowError("제작물이 변경되었거나 파일 검증에 실패했습니다. 다시 제작하고 출고 승인②를 받으세요")
         paths[name] = path
     return job, manifest, release, paths
+
+
+
+def _require_current_upload(store, record):
+    if not window_open(store):
+        raise WorkflowError("작업 시간이 종료됐습니다. 영상 바이트는 전송하지 않았습니다")
+    _, manifest, _, _ = _released_video(store, record["job_id"])
+    if manifest.get("hash") != record.get("manifest_hash"):
+        raise WorkflowError("출고 판본이 변경됐습니다. 영상 바이트는 전송하지 않았습니다")
 
 
 def video_metadata(job, manifest, paths):
@@ -159,18 +172,13 @@ def _finalize(store, record, body):
     try:
         external_id = body["id"]
         status = body.get("status", {})
-        if not isinstance(external_id, str) or not external_id:
+        if not isinstance(status, dict) or not isinstance(external_id, str) or not external_id:
             raise ValueError("id")
     except (KeyError, ValueError, TypeError, AttributeError):
         record.update(state="unknown", reason="upload_response_unreadable", updated_at=now())
         _save(store, record)
         raise WorkflowError("업로드 응답을 읽지 못해 결과 불명으로 남깁니다. 대사 후 다시 확인하세요") from None
     record.update(external_id=external_id, upload_status=status.get("uploadStatus"), privacy_status=status.get("privacyStatus"), updated_at=now())
-    if status.get("privacyStatus") not in (None, "private"):
-        record.update(state="needs_review", reason="visibility_mismatch")
-        _save(store, record)
-        store.event("delivery_visibility_mismatch", {"delivery_id": record["id"], "external_id": external_id, "privacy_status": status.get("privacyStatus")}, record["job_id"])
-        raise WorkflowError("업로드 결과의 공개 범위가 private가 아닙니다. YouTube Studio에서 즉시 확인하세요")
     expected = channel_row(store, record.get("channel_key", DEFAULT_CHANNEL)).get("external_account_id")
     snippet = body.get("snippet") if isinstance(body.get("snippet"), dict) else {}
     actual = snippet.get("channelId")
@@ -179,6 +187,16 @@ def _finalize(store, record, body):
         _save(store, record)
         store.event("delivery_channel_mismatch", {"delivery_id": record["id"], "external_id": external_id, "channel_key": record.get("channel_key"), "expected_channel_id": expected, "response_channel_id": actual}, record["job_id"])
         raise WorkflowError(f"업로드된 채널 ID({actual})가 등록된 채널 '{record.get('channel_key')}'({expected})과 다릅니다. YouTube Studio에서 즉시 확인하세요")
+    if status.get("privacyStatus") is None:
+        record.update(state="unknown", reason="visibility_unconfirmed")
+        _save(store, record)
+        store.event("delivery_needs_review", {"delivery_id": record["id"], "external_id": external_id, "reason": record["reason"]}, record["job_id"])
+        raise WorkflowError("업로드 외부 ID는 받았지만 비공개 여부를 확인하지 못했습니다. 재업로드하지 말고 대사하세요")
+    if status.get("privacyStatus") != "private":
+        record.update(state="needs_review", reason="visibility_mismatch")
+        _save(store, record)
+        store.event("delivery_visibility_mismatch", {"delivery_id": record["id"], "external_id": external_id, "privacy_status": status.get("privacyStatus")}, record["job_id"])
+        raise WorkflowError("업로드 결과의 공개 범위가 private가 아닙니다. YouTube Studio에서 즉시 확인하세요")
     record.update(state="private", visibility="private", reason=None)
     _save(store, record)
     store.event("delivery_private", {"delivery_id": record["id"], "external_id": external_id, "channel": "youtube", "quota_units_estimate": QUOTA_UNITS_INSERT}, record["job_id"])
@@ -186,6 +204,8 @@ def _finalize(store, record, body):
 
 
 def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_CHANNEL):
+    if not window_open(store):
+        raise WorkflowError("허용된 작업 시간이 종료됐습니다. 업로드는 시작하지 않았습니다")
     session = session or requests
     row = _youtube_channel(store, channel_key)
     job, manifest, release, paths = _released_video(store, job_id)
@@ -220,6 +240,8 @@ def _upload_youtube(store, record, data, metadata, credentials, session):
     headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json; charset=UTF-8",
                "X-Upload-Content-Length": str(len(data)), "X-Upload-Content-Type": "video/mp4"}
     try:
+        if not window_open(store):
+            raise WorkflowError("인증을 기다리는 동안 작업 시간이 종료됐습니다. 업로드는 시작하지 않았습니다")
         _, current_manifest, _, _ = _released_video(store, job_id)
         if current_manifest["hash"] != record["manifest_hash"]:
             raise WorkflowError("인증을 기다리는 동안 출고 판본이 변경되었습니다. 현재 제작물을 확인한 뒤 다시 요청하세요")
@@ -238,6 +260,11 @@ def _upload_youtube(store, record, data, metadata, credentials, session):
         store.event("delivery_failed", {"delivery_id": record["id"], "reason": record["reason"]}, job_id)
         raise WorkflowError(f"YouTube 업로드 세션 시작 실패 HTTP {start.status_code}. 할당량·권한을 확인한 뒤 다시 요청하세요")
     record.update(state="accepted", session_uri=start.headers["Location"], updated_at=now()); _save(store, record)
+    try:
+        _require_current_upload(store, record)
+    except WorkflowError:
+        record.update(reason="conditions_changed_before_bytes", updated_at=now()); _save(store, record)
+        raise
     try:
         upload = session.put(record["session_uri"], headers={"Authorization": "Bearer " + token, "Content-Length": str(len(data)), "Content-Type": "video/mp4"}, data=data, timeout=(10, 600))
     except requests.RequestException:
@@ -258,6 +285,8 @@ def _upload_youtube(store, record, data, metadata, credentials, session):
 
 
 def reconcile_youtube(store, job_id, delivery_id, *, session=None):
+    if not window_open(store):
+        raise WorkflowError("허용된 작업 시간이 종료됐습니다. 새 작업 시간을 지정한 뒤 대사하세요")
     session = session or requests
     record = next((r for r in deliveries(store, job_id) if r["id"] == delivery_id), None)
     if not record:
@@ -275,7 +304,7 @@ def _reconcile_youtube(store, job_id, record, session):
     if not record.get("session_uri") and not record.get("external_id"):
         raise WorkflowError("대사할 세션이나 외부 ID가 없어 결과를 확정할 수 없습니다. YouTube Studio에서 직접 확인하세요. 자동 재전송하지 않습니다")
     token = _access_token(session, _credentials(record.get("channel_key", DEFAULT_CHANNEL)))
-    if record["state"] in ("accepted", "unknown") and record.get("session_uri"):
+    if record["state"] in ("accepted", "unknown") and record.get("session_uri") and not record.get("external_id"):
         _, manifest, _, paths = _released_video(store, job_id)
         data = paths["short.mp4"].read_bytes()
         if hashlib.sha256(data).hexdigest() != record["asset_sha256"]:
@@ -288,6 +317,7 @@ def _reconcile_youtube(store, job_id, record, session):
             if status.status_code == 308:
                 received = status.headers.get("Range", "")
                 first = int(received.split("-")[-1]) + 1 if received.startswith("bytes=") else 0
+                _require_current_upload(store, record)
                 resumed = session.put(record["session_uri"], headers={"Authorization": "Bearer " + token, "Content-Length": str(total - first), "Content-Type": "video/mp4", "Content-Range": f"bytes {first}-{total - 1}/{total}"}, data=data[first:], timeout=(10, 600))
                 if resumed.status_code in (200, 201):
                     return _finalize(store, record, resumed.json())
@@ -303,6 +333,8 @@ def _reconcile_youtube(store, job_id, record, session):
             raise WorkflowError(f"업로드 상태 확인 HTTP {status.status_code}. 결과 불명을 유지합니다")
         except requests.RequestException:
             raise WorkflowError("업로드 상태 확인 중 연결이 끊겼습니다. 결과 불명을 유지합니다") from None
+        except WorkflowError:
+            raise
         except (ValueError, TypeError):
             raise WorkflowError("업로드 상태 응답을 읽지 못했습니다. 결과 불명을 유지합니다") from None
     if record.get("external_id"):
@@ -318,9 +350,15 @@ def _reconcile_youtube(store, job_id, record, session):
         status = items[0].get("status", {})
         record.update(upload_status=status.get("uploadStatus"), privacy_status=status.get("privacyStatus"),
                       processing_status=items[0].get("processingDetails", {}).get("processingStatus"), reconciled_at=now(), updated_at=now())
-        if status.get("privacyStatus") not in (None, "private") and record["state"] != "needs_review":
+        privacy = status.get("privacyStatus")
+        if privacy is None and record["state"] != "needs_review":
+            record.update(state="unknown", reason="visibility_unconfirmed")
+        elif privacy != "private" and record["state"] != "needs_review":
             record.update(state="needs_review", reason="visibility_mismatch")
-            store.event("delivery_visibility_mismatch", {"delivery_id": record["id"], "external_id": record["external_id"], "privacy_status": status.get("privacyStatus")}, job_id)
+            store.event("delivery_visibility_mismatch", {"delivery_id": record["id"], "external_id": record["external_id"], "privacy_status": privacy}, job_id)
+        elif privacy == "private" and record.get("reason") == "visibility_unconfirmed":
+            record.update(state="private", visibility="private", reason=None)
+            store.event("delivery_private", {"delivery_id": record["id"], "external_id": record["external_id"], "channel": "youtube", "reconciled": True}, job_id)
         _save(store, record)
         return record
     raise WorkflowError("대사할 세션이나 외부 ID가 없는 기록입니다")

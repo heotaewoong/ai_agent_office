@@ -12,6 +12,7 @@ import {
   canApproveSource,
   safeArtifactUrl,
   remainingWindow,
+  workWindowBlockedReason,
   approvalIsCurrent,
   sourceApproved,
 } from "../lib/workflow.ts";
@@ -90,6 +91,14 @@ test("재시도는 현재 판본의 등록된 실패 작업만 허용하고 중�
     retryBlockedReason({ ...task, kind: "produce", state: "partial" }, job),
     null,
   );
+});
+
+test("목록용 작업 메타데이터만으로 재요청 판본·대사 차단을 보존한다", () => {
+  const task = { id: "task-metadata", kind: "draft", state: "failed", payload: { job_id: "job-metadata", source_hash: null } };
+  const job = { id: "job-metadata", title: "편입", state: "failed", updated_at: "2026-10-30T01:00:00Z", source_hash: null, has_source: false };
+  assert.equal(retryBlockedReason(task, job, [task]), null);
+  assert.ok(retryBlockedReason(task, { ...job, source_hash: "a".repeat(64) }, [task]));
+  assert.ok(retryBlockedReason(task, { ...job, state: "needs_reconciliation" }, [task]));
 });
 
 test("영상이 실패해도 완료된 블로그만 출고하며 빈 항목과 미완료 영상은 막는다", () => {
@@ -275,4 +284,13 @@ test("draftStatus reports the latest draft task of this job in plain words", () 
   const done = draftStatus([{ ...tasks[0], state: "completed", result: {} }], job);
   assert.equal(done.state, "completed");
   assert.equal(done.label, "완료");
+});
+
+test("생성 작업 시간은 종료·미설정·손상된 시각을 차단하고 열린 창만 허용한다", () => {
+  const now = Date.parse("2026-10-30T00:00:00Z");
+  assert.ok(workWindowBlockedReason(undefined, now));
+  assert.ok(workWindowBlockedReason({ authorized_end: "bad" }, now));
+  assert.ok(workWindowBlockedReason({ authorized_end: "2026-10-29T23:59:59Z" }, now));
+  assert.ok(workWindowBlockedReason({ authorized_end: "2026-10-30T01:00:00Z", status: "closed" }, now));
+  assert.equal(workWindowBlockedReason({ authorized_end: "2026-10-30T01:00:00Z", status: "open" }, now), undefined);
 });
