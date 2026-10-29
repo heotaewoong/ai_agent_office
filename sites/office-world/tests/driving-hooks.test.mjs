@@ -101,8 +101,16 @@ test('vehicle form controls keep keyboard navigation and keyup always releases m
   const controls = { keys: new Set(['w']), setView: view => views.push(view) };
   const onKey = method('onKey', { space, world: {}, hud: {} });
   let prevented = 0;
+  const element = tag => ({
+    closest(selector) {
+      return selector.split(',').some(part => {
+        const match = /^([a-z]+)(?:\[[^\]]+\])?$/.exec(part.trim());
+        return !!match && match[1] === tag;
+      }) ? this : null;
+    },
+  });
   const event = (key, editing) => ({
-    key, target: { closest: () => editing ? {} : null },
+    key, target: element(editing ? 'select' : 'canvas'),
     preventDefault() { prevented++; },
   });
   onKey.call(controls, event('w', true), false);
@@ -112,13 +120,14 @@ test('vehicle form controls keep keyboard navigation and keyup always releases m
   assert.deepEqual(views, []);
   assert.equal(prevented, 0);
   const buttonEvent = key => ({
-    key, target: { closest: selector => selector === 'button' ? {} : null },
+    key, target: element('button'),
     preventDefault() { prevented++; },
   });
   onKey.call(controls, buttonEvent(' '), true);
   assert.equal(controls.keys.size, 0);
   onKey.call(controls, buttonEvent('w'), true);
-  assert(controls.keys.has('w'), 'WASD still works after a walking or layer button is clicked');
+  assert.equal(controls.keys.size, 0, 'a focused button retains its key events instead of driving the world');
+  assert.equal(prevented, 0);
   onKey.call(controls, buttonEvent('w'), false);
   assert.equal(controls.keys.size, 0);
   onKey.call(controls, event('w', false), true);

@@ -11,3 +11,22 @@
 @media(max-height:600px){.free-drive{padding:8px 12px}.free-drive-heading{margin-bottom:5px}.free-drive-help{display:none}.free-drive-ready .city-activities{bottom:210px}.alien-game-panel{position:fixed;left:12px;top:82px;bottom:200px;max-height:none;width:306px;box-sizing:border-box}}
 
 .free-drive-mobile-help{display:none}@media(max-width:720px){.free-drive-desktop-help{display:none}.free-drive-mobile-help{display:inline}}
+
+/* Tourism reuses the free-drive panel and one steady scene marker. */
+.free-drive{max-height:55dvh;overflow:auto;scrollbar-width:thin}
+.drive-tour{margin-top:8px;border-top:1px solid #496578;padding-top:4px}
+.drive-tour summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px;cursor:pointer;font-weight:700;color:#f7d998}
+.drive-tour summary:focus-visible{outline:3px solid #ffd383;outline-offset:2px}
+.drive-tour summary::before{content:'▸';font-size:15px}.drive-tour[open] summary::before{content:'▾'}
+.tour-progress{font-size:11px;color:#bddedc;white-space:nowrap}.drive-tour p{font-size:12px;line-height:1.6;color:#c4d7e3}
+.tour-stops{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px;padding-left:22px;font-size:12px;color:#b7cbd8}.tour-stops .visited{color:#a2efd2}.tour-stops [aria-current=step]{color:#ffe4a6;font-weight:700}
+.tour-actions{display:flex;gap:8px;flex-wrap:wrap}.free-drive .tour-cancel{background:#223e50;color:#e1eef6;border-color:#7c9cae}.tour-note{font-size:10px!important}
+.free-drive .tour-target{color:#ffe1a1;font-size:12px;line-height:1.6;margin:7px 0 0;overflow-wrap:anywhere}.free-drive .tour-status{color:#b8eed9;font-size:11px;line-height:1.6;margin:5px 0 0}.tour-status:empty{display:none}
+.tour-panel-open .city-activities{display:none!important}
+.roster-view .alien-game-pad,.roster-view .alien-game-mobile-actions,.building-view .alien-game-pad,.building-view .alien-game-mobile-actions,.results-view .alien-game-pad,.results-view .alien-game-mobile-actions{display:none!important}
+@media(max-width:720px){
+ .alien-game-pad,.alien-game-active .alien-game-mobile-actions{bottom:calc(var(--free-drive-height,190px) + max(24px,env(safe-area-inset-bottom,0px)))}
+ .free-drive-ready .layer-nav{bottom:calc(var(--free-drive-height,190px) + 20px)}
+ .alien-game-active .layer-nav{bottom:auto}
+ .tour-stops{font-size:11px;gap:5px 14px}.free-drive .tour-target{font-size:11px}.drive-tour summary{font-size:12px}
+}

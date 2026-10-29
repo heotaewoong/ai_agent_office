@@ -68,10 +68,43 @@ export function startTestDrive(profile, office) {
   return controls.setVehicleSpeed(vehicle.speed);
 }
 
+export const TOUR_STOPS = [
+  { id: 'exit', title: '환승광장 출구', x: 0, z: -15, radius: 8 },
+  { id: 'inner', title: '빛의 순환도로', x: 0, z: 59, radius: 8 },
+  { id: 'skyline', title: '스카이라인 거리', x: 0, z: 124, radius: 8 },
+  { id: 'outer', title: '외곽 순환도로', x: 0, z: 189, radius: 8 },
+];
+export const createTour = () => ({ next: 0, previous: null });
+
+export function advanceTour(tour, context, now) {
+  if (!tour || typeof tour !== 'object') return false;
+  const stop = Number.isInteger(tour.next) && tour.next >= 0 ? TOUR_STOPS[tour.next] : null;
+  const vehicle = VEHICLES.find(v => v.id === context?.vehicleId), p = context?.position;
+  if (!stop || !vehicle || context.layer !== 'meadow' || context.view !== 'walk' ||
+      context.mounted !== true || context.grounded !== true || context.paused !== false ||
+      !p || ![p.x, p.y, p.z, context.groundY, now].every(Number.isFinite) || now < 0 ||
+      Math.abs(p.y - context.groundY) > 1.5) {
+    tour.previous = null;
+    return false;
+  }
+  const previous = tour.previous;
+  tour.previous = { x: p.x, z: p.z, at: now, vehicleId: vehicle.id };
+  if (!previous || previous.vehicleId !== vehicle.id ||
+      ![previous.x, previous.z, previous.at].every(Number.isFinite)) return false;
+  const dt = now - previous.at, dx = p.x - previous.x, dz = p.z - previous.z;
+  const distance = Math.hypot(dx, dz);
+  if (dt <= 0 || dt > 1500 || distance <= .02 || distance > vehicle.speed * dt / 1000 * 1.25 + 1) return false;
+  const t = Math.max(0, Math.min(1, ((stop.x - previous.x) * dx + (stop.z - previous.z) * dz) / (distance * distance)));
+  if (Math.hypot(previous.x + dx * t - stop.x, previous.z + dz * t - stop.z) > stop.radius) return false;
+  tour.next++;
+  if (tour.next === TOUR_STOPS.length) tour.previous = null;
+  return true;
+}
+
 if (typeof document !== 'undefined') {
   // shortcut: this is a local game save; use a server ledger before adding shared rewards.
   const key = 'heobrain.expedition.v1';
-  let profile = empty(), mounted = false, active = false, storageAvailable = true, ready = false;
+  let profile = empty(), mounted = false, active = false, storageAvailable = true, ready = false, tour = null;
   try { profile = readProfile(localStorage.getItem(key)); } catch { storageAvailable = false; }
   const root = document.createElement('section');
   root.className = 'alien-game'; root.setAttribute('aria-label', '외계 생명체 탐사와 차고');
@@ -92,12 +125,28 @@ if (typeof document !== 'undefined') {
     <div class="free-drive-controls"><label for="free-drive-vehicle">차량 선택<select id="free-drive-vehicle" aria-label="차량 선택" aria-describedby="free-drive-help">${VEHICLES.map(vehicle => `<option value="${vehicle.id}">${vehicle.name} · ${Math.round(vehicle.speed * 3.6)}km/h</option>`).join('')}</select></label>
     <button type="button" class="free-drive-ride" disabled>도시 준비 중…</button></div>
     <p class="alien-game-status" role="status"></p>
-    <p class="free-drive-help" id="free-drive-help"><span class="free-drive-desktop-help">WASD 운전 · 드래그 시선 · V 탑승/하차</span><span class="free-drive-mobile-help">시승 시작 후 화면의 방향 버튼으로 운전하세요.</span></p>`;
+    <p class="free-drive-help" id="free-drive-help"><span class="free-drive-desktop-help">WASD 운전 · 드래그 시선 · V 탑승/하차</span><span class="free-drive-mobile-help">시승 시작 후 화면의 방향 버튼으로 운전하세요.</span></p>
+    <details class="drive-tour"><summary>도시 관광 코스 <span class="tour-progress">대로 따라 4구간</span></summary>
+      <p>선택한 차로 빛 기둥 4곳을 순서대로 지나가세요. 첫 코스는 환승광장부터 이어지는 곧은 대로입니다.</p>
+      <ol class="tour-stops"></ol><div class="tour-actions"><button type="button" class="tour-start" disabled>관광 시작 · 무료</button><button type="button" class="tour-cancel" hidden>관광 그만하기</button></div>
+      <p class="tour-note">완주 기록은 이번 방문 동안만 유지됩니다. 포획·크레딧·업무 승인과 별도입니다.</p>
+    </details><p class="tour-target" hidden></p><p class="tour-status" role="status"></p>`;
   document.body.append(drive);
   document.body.classList.add('free-drive-ready');
   const vehicleSelect = drive.querySelector('select');
   const quickRide = drive.querySelector('.free-drive-ride');
   const status = drive.querySelector('.alien-game-status');
+  const tourPanel = drive.querySelector('.drive-tour'), tourStart = drive.querySelector('.tour-start');
+  const tourCancel = drive.querySelector('.tour-cancel'), tourTarget = drive.querySelector('.tour-target');
+  const tourStatus = drive.querySelector('.tour-status'), tourProgress = drive.querySelector('.tour-progress');
+  for (const stop of TOUR_STOPS) {
+    const item = document.createElement('li'); item.textContent = stop.title; drive.querySelector('.tour-stops').append(item);
+  }
+  const driveSize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => {
+    const height = Math.ceil(drive.getBoundingClientRect().height);
+    if (height > 0) document.body.style.setProperty('--free-drive-height', height + 'px');
+  });
+  driveSize?.observe(drive);
   const start = root.querySelector('.alien-game-start');
   const catchButton = root.querySelector('.alien-game-catch');
   const rideButton = root.querySelector('.alien-game-ride');
@@ -117,6 +166,51 @@ if (typeof document !== 'undefined') {
     catch { storageAvailable = false; }
   }
   function say(text) { status.textContent = text + (storageAvailable ? '' : ' 저장 공간을 사용할 수 없어 이번 방문 동안만 유지됩니다.'); }
+  function tourPaused(o) {
+    return !o || document.hidden || !mounted || o.space.layer !== 'meadow' || o.space.view !== 'walk' ||
+      o.controls.vehicleSpeed <= 0 || o.space.rosterOpen || o.space.buildingOpen || o.space.resultsOpen;
+  }
+  function renderTour(o = office()) {
+    const done = tour?.next === TOUR_STOPS.length, stop = tour && TOUR_STOPS[tour.next];
+    const paused = tourPaused(o), current = o?.controls.player?.pos;
+    const progress = tour ? (done ? '완주! 4/4' : tour.next + '/4 통과') : '대로 따라 4구간';
+    if (tourProgress.textContent !== progress) tourProgress.textContent = progress;
+    tourStart.disabled = !ready || (!!stop && !paused);
+    tourStart.textContent = done ? '한 번 더 관광' : stop ? (paused ? '이어서 운전' : '관광 진행 중') : '관광 시작 · 무료';
+    tourCancel.hidden = !tour;
+    tourTarget.hidden = !stop;
+    if (stop && current) {
+      const angle = Math.atan2(stop.x - current.x, stop.z - current.z) - o.controls.yaw;
+      const relative = Math.atan2(Math.sin(angle), Math.cos(angle));
+      const direction = Math.abs(relative) < Math.PI / 4 ? '앞쪽' : Math.abs(relative) > Math.PI * 3 / 4 ? '뒤쪽' : relative > 0 ? '오른쪽' : '왼쪽';
+      const distance = Math.round(Math.hypot(current.x - stop.x, current.z - stop.z));
+      const target = (paused ? '잠시 멈춤 · ' : '') + '다음 ' + (tour.next + 1) + '/4 ' + stop.title + ' · ' + distance + 'm · ' + direction;
+      if (tourTarget.textContent !== target) tourTarget.textContent = target;
+    }
+    tourPanel.querySelectorAll('li').forEach((item, i) => {
+      item.classList.toggle('visited', !!tour && i < tour.next);
+      if (tour && i === tour.next) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
+    });
+  }
+  tourPanel.addEventListener('toggle', () => {
+    document.body.classList.toggle('tour-panel-open', tourPanel.open);
+    if (tourPanel.open) setPanel(false);
+    clearTouch(); office()?.controls.keys.clear(); if (tour) tour.previous = null; renderTour();
+  });
+  tourStart.onclick = () => {
+    if (!ready) return;
+    if (!mounted) toggleRide();
+    if (!mounted) { tourStatus.textContent = '지상에 착지한 뒤 다시 관광을 시작하세요.'; return; }
+    if (!tour || tour.next === TOUR_STOPS.length) tour = createTour();
+    tour.previous = null; tourPanel.open = false;
+    clearTouch(); office()?.controls.keys.clear(); tourStart.blur();
+    tourStatus.textContent = tour.next ? '관광을 이어갑니다. 다음 빛 기둥으로 운전하세요.' : '관광 출발! 대로의 빛 기둥을 순서대로 통과하세요.';
+    renderTour();
+  };
+  tourCancel.onclick = () => {
+    tour = null; tourStatus.textContent = '관광을 마쳤습니다. 자유롭게 시승을 이어갈 수 있어요.';
+    clearTouch(); office()?.controls.keys.clear(); renderTour(); tourPanel.querySelector('summary').focus();
+  };
   function nearest() {
     const p = context().position;
     if (!p) return null;
@@ -127,6 +221,7 @@ if (typeof document !== 'undefined') {
     vehicleSelect.disabled = !ready || mounted;
     quickRide.disabled = !ready;
     quickRide.textContent = !ready ? '도시 준비 중…' : mounted ? '하차하기 · V' : '무료 시승 시작';
+    renderTour();
     root.querySelector('.alien-wallet').textContent = `${credits(profile)} C`;
     root.querySelector('.alien-game-progress').textContent = `포획 도감 ${profile.captured.length}/8 · 보유 차량 ${profile.owned.length}/2`;
     root.querySelector('.alien-game-garage').replaceChildren(...VEHICLES.map(vehicle => {
@@ -153,6 +248,7 @@ if (typeof document !== 'undefined') {
     render();
   };
   const setPanel = (open) => {
+    if (open) tourPanel.open = false;
     panel.hidden = !open; launch.setAttribute('aria-expanded', String(open));
     document.body.classList.toggle('alien-panel-open', open);
   };
@@ -192,7 +288,7 @@ if (typeof document !== 'undefined') {
   rideButton.onclick = toggleRide;
   mobileActions.querySelector('.mobile-ride').onclick = toggleRide;
   window.addEventListener('keydown', event => {
-    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input,textarea,select,[contenteditable="true"]')) return;
+    if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input,textarea,select,button,summary,a[href],[contenteditable="true"]')) return;
     if (!active || office()?.space.view !== 'walk') return;
     if (event.key.toLowerCase() === 'f') { event.preventDefault(); catchNearest(); }
     if (event.key.toLowerCase() === 'v') { event.preventDefault(); toggleRide(); }
@@ -211,6 +307,11 @@ if (typeof document !== 'undefined') {
       o.controls.setVehicleSpeed(0); mounted = false; render();
       say('시승을 마쳤습니다. 차를 골라 다시 시승하세요.');
     }
+    if (tour && advanceTour(tour, { ...context(), vehicleId: profile.selected,
+      groundY: o.world.heightAt(o.controls.player.pos.x, o.controls.player.pos.z), paused: !!tourPaused(o) }, performance.now())) {
+      tourStatus.textContent = tour.next === TOUR_STOPS.length ? '도시 관광 완주! 네 구간을 모두 직접 운전했습니다.' : tour.next + '/4 통과! 다음은 ' + TOUR_STOPS[tour.next].title + '입니다.';
+    }
+    renderTour(o);
     const walking = active && o.space.layer === 'meadow' && o.space.view === 'walk';
     document.body.classList.toggle('alien-game-active', walking);
     const target = nearest();
@@ -226,7 +327,8 @@ if (typeof document !== 'undefined') {
   }, 200);
   window.addEventListener('pagehide', event => {
     if (!event.persisted) clearInterval(timer);
-    office()?.controls.setVehicleSpeed(0); mounted = false; render();
+    office()?.controls.setVehicleSpeed(0); mounted = false; if (tour) tour.previous = null; render();
+    if (!event.persisted) driveSize?.disconnect();
   });
   render(); say('차를 선택하고 무료 시승 시작을 누르세요.');
 
@@ -267,8 +369,19 @@ if (typeof document !== 'undefined') {
       box('hovercar-thruster', [.5,.2,.8], [side*.9,.2,-.9], glow, car);
     }
     car.setEnabled(false);
+    const tourMaterial = material('tour-gold', '#ffd18a', true);
+    const tourBeacon = new B.TransformNode('tour-checkpoint', scene);
+    const tourRing = B.MeshBuilder.CreateTorus('tour-ring', { diameter: 12, thickness: .18, tessellation: 32 }, scene);
+    tourRing.material = tourMaterial; tourRing.parent = tourBeacon; tourRing.position.y = .3; tourRing.isPickable = false;
+    box('tour-pole', [.22,5,.22], [0,2.5,0], tourMaterial, tourBeacon);
+    box('tour-flag', [2,1,.12], [1,4.5,0], tourMaterial, tourBeacon);
+    tourBeacon.setEnabled(false);
     let lastColor = '';
     scene.onBeforeRenderObservable.add(() => {
+      const stop = tour && TOUR_STOPS[tour.next];
+      const showTour = !!stop && o.space.layer === 'meadow' && !o.space.rosterOpen && !o.space.buildingOpen && !o.space.resultsOpen;
+      tourBeacon.setEnabled(showTour);
+      if (showTour) tourBeacon.position.set(stop.x, o.world.heightAt(stop.x, stop.z), stop.z);
       for (const alien of aliens) {
         alien.node.setEnabled(o.space.layer === 'meadow' && !profile.captured.includes(alien.id));
         alien.ring.setEnabled(active);

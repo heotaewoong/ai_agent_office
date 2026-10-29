@@ -1775,12 +1775,12 @@
       if (!down) this.keys.delete(k);
       if (space.rosterOpen || space.buildingOpen || space.resultsOpen) return;
       if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
-      if (k === ' ' && e.target?.closest?.('button')) return;
-      if (down && k === 'm') { this.setView(space.view === 'walk' ? 'overview' : 'walk'); return; }
       if (down && k === 'escape') {
         if (space.view === 'walk') { this.exitSpace(); return; }
         hud.closePanel(); this.resetOverview(); return;
       }
+      if (e.target?.closest?.('button, summary, a[href]')) return;
+      if (down && k === 'm') { this.setView(space.view === 'walk' ? 'overview' : 'walk'); return; }
       if (space.view !== 'walk') return;
       if (down && k === 'r') { this.yaw = this.player.av.root.rotation.y + Math.PI; this.pitch = 0.18; return; }
       if (down && k === 'e') {
