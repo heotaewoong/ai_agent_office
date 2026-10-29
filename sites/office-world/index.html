@@ -26,11 +26,34 @@
   </div>
   <div class="spacer"></div>
   <button type="button" class="reset-btn" id="btn-reset" hidden>← 전체 보기<span class="kbd">Esc</span></button>
+  <button type="button" class="world-toolbar-btn" id="btn-attention" disabled title="오류·사람 답 대기 동료의 부서를 차례로 봅니다">도움 0</button>
+  <button type="button" class="world-toolbar-btn" id="btn-roster" aria-pressed="false" aria-controls="roster-panel">동료 목록</button>
+  <details class="world-tools" id="world-tools">
+    <summary aria-label="환경과 이동 설정">환경</summary>
+    <div class="world-tools-body">
+      <h2>내게 편한 오피스</h2>
+      <label for="world-quality">화질</label>
+      <div class="world-quality-row"><select id="world-quality"><option value="low">가볍게 · 저사양</option><option value="high">선명하게 · 고화질</option></select><button type="button" id="world-quality-apply">적용</button></div>
+      <small>화질 변경 시 도시를 다시 엽니다. 탐험·차량 기록은 유지됩니다.</small>
+      <label class="world-motion-label"><input type="checkbox" id="world-motion"> 배경 움직임 줄이기</label>
+      <small>기기의 움직임 감소 설정도 존중합니다.</small>
+      <h3>전망 바로 보기</h3>
+      <div class="world-view-links"><button type="button" data-world-view="meadow">지상 미래도시</button><button type="button" data-world-view="office">우리 팀 공중도시</button><button type="button" data-world-view="cruiser">우주순양함 전망</button></div>
+      <p id="world-setting-status" role="status"></p>
+    </div>
+  </details>
   <div class="view-switch" role="group" aria-label="시점">
     <button type="button" id="btn-overview" aria-pressed="true">관제<span class="kbd">M</span></button>
     <button type="button" id="btn-walk" class="walk-only" aria-pressed="false">걷기<span class="kbd">M</span></button>
   </div>
 </header>
+
+<section class="roster-panel" id="roster-panel" hidden aria-label="동료 업무 목록">
+  <div class="roster-heading"><div><h1>동료 업무 한눈에</h1><p id="roster-summary"></p></div><span>읽기 전용 관제</span></div>
+  <p class="roster-source" id="roster-source" role="status"></p>
+  <div class="roster-filters"><input type="search" id="roster-search" aria-label="동료와 업무 검색" placeholder="동료·모델·업무 검색"><label><input type="checkbox" id="roster-attention"> 도움·오류만</label></div>
+  <div class="roster-list" id="roster-list"></div>
+</section>
 
 <details class="expedition" id="explore">
   <summary><span>✦ 오피스 탐험</span><strong id="explore-count">0 XP · 0/6</strong></summary>

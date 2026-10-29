@@ -4,11 +4,16 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
-  const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SYSTEM_REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let REDUCED = SYSTEM_REDUCED;
+  try { REDUCED ||= localStorage.getItem('heobrain.reduced-motion.v1') === 'true'; } catch (_) { /* 세션 설정 사용 */ }
   const isPhone = () => window.innerWidth <= 720;
   const B = window.BABYLON;
   // ?quality=low 이면 그림자·SSAO·블룸을 끈다(저사양 PC·휴대폰)
-  const QUALITY = new URLSearchParams(location.search).get('quality') || (isPhone() ? 'low' : 'high');
+  const qualityQuery = new URLSearchParams(location.search).get('quality');
+  let savedQuality = null;
+  try { savedQuality = localStorage.getItem('heobrain.world-quality.v1'); } catch (_) { /* 기본 화질 사용 */ }
+  const QUALITY = [qualityQuery, savedQuality].find(v => ['low', 'high'].includes(v)) || (isPhone() ? 'low' : 'high');
 
   const notice = (title, text) => {
     $('notice-title').textContent = title;
@@ -31,6 +36,7 @@
     agents: [],            // 아바타가 붙은 동료 목록
     layer: 'office',      // office=y0 공중 팀 대지, meadow=약 -85m 지상
     view: 'overview',      // 'overview' | 'walk'
+    rosterOpen: false,
     selectedStage: null,
     embedFocus: null,
     embedResult: null,
@@ -163,7 +169,7 @@
           engine: a.engine || '',
           model: a.model || '',
           stageId: stageIds.has(a.stageId) ? a.stageId : out.stages[0].id,
-          status: statuses.has(a.status) ? a.status : 'idle',
+          status: statuses.has(a.status) ? a.status : 'unknown',
           task: a.task || '',
         });
       });
@@ -343,8 +349,8 @@
     init(canvas) {
       this.canvas = canvas;
       this.engine = new B.Engine(canvas, true, { preserveDrawingBuffer: false, stencil: false, antialias: true });
-      // 고해상도 화면에서도 선명하게: 장치 픽셀 비율만큼 실제 렌더 해상도를 올린다(최대 2배).
-      const applyDpr = () => this.engine.setHardwareScalingLevel(1 / Math.min(2, window.devicePixelRatio || 1));
+      // 저사양은 CSS 픽셀당 1픽셀, 고화질은 최대 2픽셀로 GPU 작업량을 제한한다.
+      const applyDpr = () => this.engine.setHardwareScalingLevel(this.renderScale(window.devicePixelRatio));
       applyDpr();
       const scene = new B.Scene(this.engine);
       this.scene = scene;
@@ -387,7 +393,30 @@
 
       scene.onBeforeRenderObservable.add(() => this.tick());
       window.addEventListener('resize', () => { this.applyDpr(); this.engine.resize(); });
-      this.engine.runRenderLoop(() => scene.render());
+      this.renderFrame = () => scene.render();
+      this.renderPaused = true;
+      document.addEventListener('visibilitychange', () => this.syncRendering());
+      this.syncRendering();
+    },
+
+    renderScale(dpr) {
+      const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+      return 1 / Math.min(QUALITY === 'low' ? 1 : 2, Math.max(1, density));
+    },
+
+    syncMotionUI() {
+      const button = $('btn-traffic');
+      button.disabled = REDUCED;
+      button.textContent = REDUCED ? '동작 줄이기 · 교통 정지' : this.trafficPaused ? '교통 연출 재생' : '교통 연출 멈춤';
+      button.setAttribute('aria-pressed', String(REDUCED || this.trafficPaused));
+    },
+
+    syncRendering() {
+      const paused = document.hidden || space.rosterOpen;
+      if (!this.renderFrame || this.renderPaused === paused) return;
+      this.renderPaused = paused;
+      if (paused) this.engine.stopRenderLoop(this.renderFrame);
+      else { this.engine.resize(); this.engine.runRenderLoop(this.renderFrame); }
     },
 
     buildSky() {
@@ -785,7 +814,7 @@
         const parts=[];groups.forEach(meshes=>{const m=B.Mesh.MergeMeshes(meshes,true,true,undefined,false,false);if(m){m.isVisible=false;m.isPickable=false;parts.push(m);}});return parts;
       };
       const templates={car:master('car'),fly:master('fly'),plane:master('plane'),cruiser:master('cruiser')};
-      this.traffic=[];this.trafficClock=0;this.trafficPaused=REDUCED;
+      this.traffic=[];this.trafficClock=0;this.trafficPaused=false;
       const spawn=(kind,index)=>{
         const root=new B.TransformNode(`traffic-${kind}-${index}`,scene);
         templates[kind].forEach((mesh,i)=>{const instance=mesh.createInstance(`${kind}-${index}-${i}`);instance.parent=root;instance.isVisible=true;instance.isPickable=false;});
@@ -1180,6 +1209,19 @@
       marker.parent = root; marker.position.y = hipY + 0.78 + 0.95; marker.isPickable = false;
       marker.material = this.mat('marker', '#4ad994', { emissive: 1.0, unlit: true });
       root.getChildMeshes().forEach((m) => { if (m !== marker) { this.castShadow(m); this.receiveShadow(m); } });
+      const trim = this.pbr('avatar-trim', '#dbe8ef', .5, .4, 'metal');
+      const accent = this.mat('avatar-badge', '#8cfff1', { emissive: .3, unlit: true });
+      const outfit = (part, w, h, d, material, x, y, z, parent = root) => {
+        const mesh = B.MeshBuilder.CreateBox(name + '-' + part, { width: w, height: h, depth: d }, s);
+        mesh.parent = parent; mesh.position.set(x, y, z); mesh.material = material;
+        mesh.isPickable = false; this.receiveShadow(mesh);
+      };
+      outfit('collar', .66, .1, .38, trim, 0, hipY + .72, 0);
+      outfit('chest-plate', .39, .34, .055, trim, 0, hipY + .47, .1975);
+      outfit('belt', .66, .1, .38, trim, 0, hipY + .09, 0);
+      outfit('badge', .1, .075, .018, accent, -.095, hipY + .53, .237);
+      [-1, 1].forEach(side => outfit('earpiece-' + side, .12, .22, .26, trim, side * .345, hipY + 1.09, 0));
+      [armL, armR].forEach((arm, i) => outfit('sleeve-' + i, .24, .26, .26, body.material, 0, -.13, 0, arm));
       return { root, legL, legR, armL, armR, head, body, marker, hipY, phase: Math.random() * 6 };
     },
 
@@ -1257,6 +1299,7 @@
 
     // 동료가 허브(기억)까지 걸어갔다 돌아오는 경로
     memoryTrip(agent) {
+      if (REDUCED || document.hidden || space.rosterOpen) return;
       if (!agent.desk || agent.mode !== 'seated') return;
       const st = agent.stage;
       const d = agent.desk;
@@ -1305,6 +1348,7 @@
 
     // ---------------- 흐름 점 ----------------
     spawnFlow(flow) {
+      if (REDUCED || document.hidden || space.rosterOpen) return;
       const from = space.stages.find((s) => s.id === flow.from);
       const to = space.stages.find((s) => s.id === flow.to);
       if (!from || !to || from === to) return;
@@ -1364,11 +1408,13 @@
         this.hub.core.scaling.set(pulse, pulse, pulse);
         this.stepAgents(dt);
         this.stepFlows(dt);
-        space.agents.forEach((a) => { a.av.marker.isVisible = a.status !== 'running' || Math.sin(this.time * 5 + a.av.phase) > -0.4; });
+
       }
+      space.agents.forEach((a) => { a.av.marker.isVisible = true; });
       controls.tick(dt);
       document.body.classList.toggle('wide-overview', space.view === 'overview' && controls.overview.radius > 105);
-      hud.tick();
+      this.hudElapsed = (this.hudElapsed || 0) + dt;
+      if (this.hudElapsed >= 1 / 15) { this.hudElapsed = 0; hud.tick(); }
     },
   };
 
@@ -1544,10 +1590,8 @@
         else if (meta.stageId) hud.openStage(meta.stageId);
         else if (meta.hub) hud.openBrain();
       });
-      $('btn-traffic').textContent = REDUCED ? '동작 줄이기 · 교통 정지' : world.trafficPaused ? '교통 연출 재생' : '교통 연출 멈춤';
-      $('btn-traffic').disabled = REDUCED;
-      $('btn-traffic').setAttribute('aria-pressed', String(world.trafficPaused));
-      $('btn-traffic').addEventListener('click', () => { world.trafficPaused = !world.trafficPaused; $('btn-traffic').textContent = world.trafficPaused ? '교통 연출 재생' : '교통 연출 멈춤'; $('btn-traffic').setAttribute('aria-pressed', String(world.trafficPaused)); });
+      world.syncMotionUI();
+      $('btn-traffic').addEventListener('click', () => { if (REDUCED) return; world.trafficPaused = !world.trafficPaused; world.syncMotionUI(); });
       $('btn-rooms').addEventListener('click', () => { const open = $('cards').classList.toggle('mobile-open'); $('btn-rooms').setAttribute('aria-expanded', String(open)); });
       $('btn-layer').addEventListener('click', () => this.setLayer(space.layer === 'office' ? 'meadow' : 'office', space.view === 'walk'));
       $('btn-overview').addEventListener('click', () => this.setView('overview'));
@@ -1593,6 +1637,7 @@
     onKey(e, down) {
       const k = e.key.toLowerCase();
       if (!down) this.keys.delete(k);
+      if (space.rosterOpen) return;
       if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       if (k === ' ' && e.target?.closest?.('button')) return;
       if (down && k === 'm') { this.setView(space.view === 'walk' ? 'overview' : 'walk'); return; }
@@ -1852,7 +1897,9 @@
     hideAgentCard() { if (this.agentCard) this.agentCard.hidden = true; },
 
     tick() {
-      if (isPhone() || space.layer === 'meadow') { this.cards.forEach((el) => { el.hidden = false; }); this.brainCard.hidden = false; this.agentCard.hidden = true; if (!isPhone() && ++this.miniT % 4 === 0) this.drawMinimap(); return; }
+      const now = performance.now(), redrawMini = now - this.miniT >= 200;
+      if (redrawMini) this.miniT = now;
+      if (isPhone() || space.layer === 'meadow') { this.cards.forEach((el) => { el.hidden = false; }); this.brainCard.hidden = false; this.agentCard.hidden = true; if (!isPhone() && redrawMini) this.drawMinimap(); return; }
       const w = world.canvas.clientWidth, h = world.canvas.clientHeight;
       const walk = space.view === 'walk';
       const ppos = controls.player.pos;
@@ -1890,8 +1937,7 @@
           this.agentCard.style.left = `${ap.x}px`; this.agentCard.style.top = `${ap.y}px`;
         } else { this.agentCard.hidden = true; this.agentCardTarget = null; }
       }
-      this.miniT += 1;
-      if (this.miniT % 4 === 0) this.drawMinimap();
+      if (redrawMini) this.drawMinimap();
     },
 
     drawMinimap() {
@@ -1946,10 +1992,115 @@
   // ======================================================================
   // 보조
   // ======================================================================
+  // 같은 투영을 읽는 간편 관제. 보기/초점 변경은 업무를 실행하지 않는다.
+  const workbench = {
+    attentionId: null,
+
+    sourceLabel(source, failed) {
+      if (source === 'sample-fallback') return '실시간 연결 실패 · 예시 데이터';
+      if (source !== 'live') return '예시 데이터 · 실행 연결 전';
+      return failed ? '연결 지연 · 마지막 API 데이터' : '실시간 API';
+    },
+
+    filteredAgents(agents, query = '', attention = false) {
+      const needle = query.trim().toLocaleLowerCase();
+      const rank = { error: 0, waiting: 1 };
+      return agents.filter(a => (!attention || a.status === 'error' || a.status === 'waiting') &&
+        [a.name, a.engine, a.model, a.task].some(v => String(v || '').toLocaleLowerCase().includes(needle)))
+        .sort((a, b) => (rank[a.status] ?? 2) - (rank[b.status] ?? 2));
+    },
+
+    nextAttentionId(agents, current) {
+      const targets = this.filteredAgents(agents, '', true);
+      if (!targets.length) return null;
+      return targets[(targets.findIndex(a => a.id === current) + 1) % targets.length].id;
+    },
+
+    setRoster(open) {
+      space.rosterOpen = open === true;
+      controls.keys.clear(); controls.dragging = false;
+      $('roster-panel').hidden = !space.rosterOpen;
+      $('btn-roster').textContent = space.rosterOpen ? '3D 도시로' : '동료 목록';
+      $('btn-roster').setAttribute('aria-pressed', String(space.rosterOpen));
+      document.body.classList.toggle('roster-view', space.rosterOpen);
+      world.syncRendering();
+      if (space.rosterOpen) { $('world-tools').open = false; $('roster-search').focus(); }
+      else $('btn-roster').focus();
+    },
+
+    focusAttention() {
+      const agents = space.data?.agents || [];
+      this.attentionId = this.nextAttentionId(agents, this.attentionId);
+      const agent = agents.find(a => a.id === this.attentionId);
+      if (!agent) return;
+      this.setRoster(false);
+      controls.setVehicleSpeed(0); controls.setLayer('office');
+      hud.openStage(agent.stageId);
+    },
+
+    refresh(d) {
+      const agents = d?.agents || [], targets = this.filteredAgents(agents, '', true);
+      $('btn-attention').disabled = !targets.length;
+      $('btn-attention').textContent = '도움 ' + targets.length;
+      $('roster-summary').textContent = agents.length + '명 · 도움/오류 ' + targets.length + '명';
+      const source = this.sourceLabel(data.source, Boolean(data.error));
+      const stamp = d?.generatedAt && Number.isFinite(Date.parse(d.generatedAt)) ? fmtTime(d.generatedAt) : '시각 미확인';
+      $('roster-source').textContent = source + ' · 원본 갱신 ' + stamp;
+      const visible = this.filteredAgents(agents, $('roster-search').value, $('roster-attention').checked);
+      const cards = visible.map(a => {
+        const card = document.createElement('article'); card.className = 'roster-agent';
+        const title = document.createElement('h2'); title.textContent = a.name;
+        const badge = document.createElement('span'); badge.className = 'roster-state ' + a.status; badge.textContent = statusLabel(a.status);
+        const stage = d.stages.find(s => s.id === a.stageId);
+        const meta = document.createElement('p'); meta.className = 'roster-meta'; meta.textContent = [stage?.name, a.engine, a.model].filter(Boolean).join(' · ');
+        const task = document.createElement('p'); task.textContent = a.task || '표시할 업무 설명이 없습니다.';
+        const visit = document.createElement('button'); visit.type = 'button'; visit.textContent = '부서 보기';
+        visit.onclick = () => { this.setRoster(false); controls.setVehicleSpeed(0); controls.setLayer('office'); hud.openStage(a.stageId); };
+        card.append(title, badge, meta, task, visit); return card;
+      });
+      if (!cards.length) { const empty = document.createElement('p'); empty.textContent = d ? '조건에 맞는 동료가 없습니다.' : '동료 데이터를 읽는 중입니다.'; cards.push(empty); }
+      $('roster-list').replaceChildren(...cards);
+    },
+
+    init() {
+      $('world-quality').value = QUALITY;
+      $('world-motion').checked = REDUCED; $('world-motion').disabled = SYSTEM_REDUCED;
+      $('world-quality-apply').onclick = () => {
+        const quality = $('world-quality').value;
+        if (!['low', 'high'].includes(quality)) return;
+        try { localStorage.setItem('heobrain.world-quality.v1', quality); } catch (_) { /* URL 설정 사용 */ }
+        if (quality === QUALITY) { $('world-setting-status').textContent = '현재 화질을 저장했습니다.'; return; }
+        const url = new URL(location.href); url.searchParams.set('quality', quality); url.searchParams.set('layer', space.layer);
+        location.assign(url.href);
+      };
+      $('world-motion').onchange = () => {
+        REDUCED = SYSTEM_REDUCED || $('world-motion').checked;
+        world.syncMotionUI();
+        try { localStorage.setItem('heobrain.reduced-motion.v1', String(REDUCED)); } catch (_) { /* 세션 설정 사용 */ }
+        $('world-setting-status').textContent = REDUCED ? '도시의 배경 움직임을 줄였습니다.' : '도시의 배경 움직임을 켰습니다.';
+      };
+      $('btn-roster').onclick = () => this.setRoster(!space.rosterOpen);
+      $('btn-attention').onclick = () => this.focusAttention();
+      $('roster-search').oninput = $('roster-attention').onchange = () => this.refresh(space.data);
+      $('world-tools').addEventListener('toggle', () => { if ($('world-tools').open) { controls.keys.clear(); controls.dragging = false; } });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && space.rosterOpen) this.setRoster(false); });
+      document.querySelectorAll('[data-world-view]').forEach(button => {
+        button.onclick = () => {
+          this.setRoster(false); controls.setVehicleSpeed(0);
+          const office = button.dataset.worldView === 'office';
+          controls.setLayer(office ? 'office' : 'meadow');
+          if (button.dataset.worldView === 'cruiser') controls.animateCamera({ alpha: -.7, beta: 1.1, radius: 125, target: new B.Vector3(155, 46, 86) });
+          $('world-tools').open = false;
+        };
+      });
+      data.onChange(d => this.refresh(d || space.data)); this.refresh(space.data);
+    },
+  };
+
   const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const fmt = (n) => Number(n || 0).toLocaleString('ko-KR');
   const fmtTime = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('ko-KR', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
-  const statusLabel = (s) => ({ running: '실행 중', idle: '대기', waiting: '사람 답 대기', error: '오류' }[s] || s);
+  const statusLabel = (s) => ({ running: '실행 중', idle: '대기', waiting: '사람 답 대기', error: '오류', unknown: '상태 미확인' }[s] || '상태 미확인');
   const faceColor = (a) => a.av.body.material.diffuseColor.toHexString();
 
   // ======================================================================
@@ -2002,6 +2153,7 @@
     controls.init();
     data.init();
     embed.init();
+    workbench.init();
 
     let simTimer = null;
     data.onChange((d) => {
@@ -2024,6 +2176,7 @@
       if (!REDUCED) d.flows.forEach((f, i) => setTimeout(() => world.spawnFlow(f), 600 + i * 1800));
       if (!REDUCED && data.source !== 'live' && !simTimer) {
         simTimer = setInterval(() => {
+          if (REDUCED || document.hidden || space.rosterOpen) return;
           const seated = space.agents.filter((a) => a.mode === 'seated' && a.status !== 'waiting');
           if (seated.length) world.memoryTrip(seated[Math.floor(Math.random() * seated.length)]);
           const f = d.flows[Math.floor(Math.random() * d.flows.length)];
@@ -2054,7 +2207,7 @@
   }
 
   // 디버그·검사용 접근 (비밀값 없음)
-  window.__officeWorld = { space, world, controls, hud, data, embed };
+  window.__officeWorld = { space, world, controls, hud, data, embed, workbench };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
