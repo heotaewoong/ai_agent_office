@@ -231,6 +231,19 @@ API: `POST /api/settings/profiles` (`{"kind": "voice|image|clip", "profile": "..
 # API: GET /api/jobs/{id}/deliveries · POST /api/jobs/{id}/deliveries/youtube ({"channel_key": "youtube_main_ko"}) · POST /api/jobs/{id}/deliveries/{delivery_id}/reconcile
 ```
 
+### 글 모델 (원고·검수·퀴즈·카드 문구)
+
+제작 설정 → 제작 프로필 → "글 모델"에서 고른다. 선택은 무료이며 새 요청부터 적용된다. 실패해도 다른 제공자로 자동 전환하지 않는다.
+
+| 프로필 | 제공자 | 키 | 단가(100만 토큰, 입력/출력) |
+|---|---|---|---|
+| `gpt-5.4-mini` | OpenAI | `OPENAI_API_KEY` | $0.75 / $4.50 |
+| `gpt-5.5` | OpenAI | `OPENAI_API_KEY` | $5 / $30 |
+| `gemini-3.8-flash` (기본) | Gemini | `GEMINI_API_KEY` | $0.75 / $3.75 |
+| `gemini-3.5-flash-lite` | Gemini | `GEMINI_API_KEY` | $0.30 / $2.50 |
+
+OpenAI는 Chat Completions + JSON schema 응답 형식, `reasoning_effort: low`로 호출한다. 4xx는 과금 없음으로 정산하고 5xx는 예약을 유지한다. CLI: `python -m office.text_selection status|set --profile gpt-5.4-mini`. 단가 출처: https://developers.openai.com/api/docs/pricing (2026-10-30 확인).
+
 ### 독자 브리프 프리셋
 
 원고 생성·비평·평가·수정은 모두 같은 독자 브리프를 읽습니다. 프리셋은 `backend/office/briefs.py`에 있고 `GET /api/briefs`가 그대로 돌려줍니다. 기본값은 `ai-agent`이며, RSS에서 만든 작업과 브리프 없이 등록한 기획에는 기본 프리셋이 적용됩니다.
