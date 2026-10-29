@@ -95,6 +95,7 @@ export function QuizPanel({ job, busy, action }: { job: Job; busy: boolean; acti
           </button>
         </div>
       </div>
+      <p className="muted">이 퀴즈 JSON은 별도 검토용 결과입니다. ② 출고 승인에서 고른 제작물 ZIP에 최신 퀴즈가 자동으로 추가되지 않습니다.</p>
       {!approved && <p className="muted">① 원고 승인 뒤에만 만들 수 있습니다. 문제만 만들고 풀기·채점은 스토어의 퀴즈 도구가 합니다.</p>}
       {pending && <p className="muted">생성 요청을 받았습니다. 작업자가 저장하면 자동으로 표시됩니다.</p>}
       {loadError && <p className="field-error">{loadError}</p>}

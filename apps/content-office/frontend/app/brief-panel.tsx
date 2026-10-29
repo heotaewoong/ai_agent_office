@@ -2,16 +2,16 @@
 
 import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
-import { briefOverridesFromForm, briefSummary } from "../lib/briefs";
+import { briefFormFromBrief, briefOverridesFromForm, briefSummary } from "../lib/briefs";
 import type { Action, BriefPresets, Job } from "../lib/types";
-import { BRIEF_FORM_EMPTY, BriefFields } from "./brief-fields";
+import { BriefFields } from "./brief-fields";
 
 /** 작업실의 독자 브리프 카드. 현재 브리프를 보여주고 프리셋·덮어쓰기를 바꿉니다. 바꾸면 다음 원고 생성부터 적용됩니다. */
 export function BriefPanel({ job, busy, action }: { job: Job; busy: boolean; action: Action }) {
   const uid = useId();
   const [presets, setPresets] = useState<BriefPresets>({ default: "", presets: [] });
   const [presetError, setPresetError] = useState("");
-  const [form, setForm] = useState<Record<string, string | boolean>>({ ...BRIEF_FORM_EMPTY, brief_preset: job.brief?.preset ?? "" });
+  const [form, setForm] = useState<Record<string, string | boolean>>(() => briefFormFromBrief(job.brief));
   const [error, setError] = useState("");
   const rows = briefSummary(job.brief);
 
@@ -37,7 +37,7 @@ export function BriefPanel({ job, busy, action }: { job: Job; busy: boolean; act
       return;
     }
     setError("");
-    const preset = String(form.brief_preset || job.brief?.preset || presets.default);
+    const preset = String(form.brief_preset || presets.default || job.brief?.preset || "");
     void action(
       "독자 브리프 변경",
       () => api.setJobBrief(job.id, preset, parsed.overrides),
@@ -76,7 +76,7 @@ export function BriefPanel({ job, busy, action }: { job: Job; busy: boolean; act
             form={form}
             onChange={(key, value) => {
               setError("");
-              setForm((f) => ({ ...f, [key]: value }));
+              setForm((f) => key === "brief_preset" ? { ...briefFormFromBrief(undefined), brief_preset: value } : { ...f, [key]: value });
             }}
             loadError={presetError}
           />

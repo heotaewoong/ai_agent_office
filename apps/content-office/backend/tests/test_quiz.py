@@ -211,27 +211,80 @@ def released_job(store):
     return store.job(job["id"])
 
 
-def test_package_zip_includes_quiz_json_and_card_pngs(context):
+def test_package_zip_keeps_approved_files_after_new_quiz_and_card_news(context):
+    import hashlib
     import io
     import zipfile
     from office.cards import plan_cards
     from tests.test_cards import FakeCardsProvider, good_slides
     store, client, _ = context
     job = released_job(store)
+
+    def snapshot():
+        response = client.get(f"/api/jobs/{job['id']}/package")
+        assert response.status_code == 200
+        with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+            members = {name: hashlib.sha256(archive.read(name)).hexdigest() for name in archive.namelist()}
+            assert json.loads(archive.read("handoff.json"))["extras"] == []
+            return members
+
+    approved = snapshot()
+    assert set(approved) == {"tistory.txt", "handoff.json"}
+    assert snapshot() == approved  # ZIP 시각 메타데이터 대신 구성원 내용의 해시를 비교한다.
     generate_quiz(store, job["id"], provider=FakeQuizProvider([good_quiz()]))
-    plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))
+    plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]), images=False)
+    current = store.job(job["id"])
+    assert current["manifest"] == job["manifest"] and current["release_approval"] == job["release_approval"]
+    assert snapshot() == approved
+    assert client.get(f"/api/artifacts/{current['quiz']['artifact_id']}").status_code == 200
+    assert client.get(f"/api/artifacts/{current['cards']['slides'][0]['artifact_id']}").status_code == 200
+    bad = good_quiz()
+    bad["questions"][0]["evidence"] = ["E9"]
+    generate_quiz(store, job["id"], provider=FakeQuizProvider([bad, bad]))
+    plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]), images=False)
+    latest = store.job(job["id"])
+    assert latest["quiz"]["version"] == 2 and latest["quiz"]["checks"]["passed"] is False
+    assert latest["cards"]["version"] == 2 and snapshot() == approved
+    # 별도 초안이 손상돼도 이미 승인한 블로그 ZIP은 그대로이며, 그 초안의 개별 조회는 막는다.
+    card = latest["cards"]["slides"][0]
+    (store.artifacts / card["artifact"]["path"]).write_bytes(b"tampered")
+    assert client.get(f"/api/artifacts/{card['artifact_id']}").status_code == 409
+    assert snapshot() == approved
+    # ②로 승인한 파일 자체가 바뀌면 기존 검증대로 출고를 막는다.
+    (store.artifacts / "tistory.txt").write_bytes(b"tampered")
+    assert client.get(f"/api/jobs/{job['id']}/package").status_code == 409
+
+
+@pytest.mark.parametrize("output", ["blog", "video", "pdf", "cards"])
+def test_package_preserves_each_selected_manifest_output(tmp_path, output):
+    import hashlib
+    import io
+    import zipfile
+    from office.store import digest
+
+    store = Store(tmp_path)
+    job = approved_job(store)
+    selections = {kind: True for kind in ("blog", "video", "pdf", "cards")}
+    store.review_source(job["id"], job["source_hash"], "approved", "operator", selections)
+    files = []
+    for kind, name in {"blog": "tistory.txt", "video": "short.mp4", "pdf": "summary.pdf", "cards": "scene-01.png"}.items():
+        data = ("승인 범위 검증용 합성 파일: " + kind).encode()
+        (store.artifacts / name).write_bytes(data)
+        files.append({"id": f"asset_{kind}", "name": name, "path": name, "sha256": hashlib.sha256(data).hexdigest(), "outputs": [kind]})
+    manifest = {"source_hash": job["source_hash"], "files": files, "completed_outputs": list(selections), "output_status": {kind: {"state": "completed"} for kind in selections}, "thumbnail_candidates": [{"id": "thumb-synthetic"}], "media": {}}
+    manifest["hash"] = digest(manifest)
+    store.save_manifest_if_current(job["id"], job["source_hash"], selections, manifest)
+    selected = store.select_thumbnail(job["id"], "thumb-synthetic", manifest["hash"], "operator")
+    store.review_release(job["id"], selected["manifest"]["hash"], "approved", "operator", media_reviewed=True, outputs=[output])
+    client = TestClient(create_app(store), base_url="http://localhost:8510")
     response = client.get(f"/api/jobs/{job['id']}/package")
     assert response.status_code == 200
+    expected = next(file for file in files if file["outputs"] == [output])
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        names = archive.namelist()
-        assert "tistory.txt" in names and "quiz/quiz-v1.json" in names and "cards/cards.json" in names
-        assert [n for n in names if n.startswith("cards/card-")] == [f"cards/card-{i:02}.png" for i in range(1, 7)]
-        assert json.loads(archive.read("quiz/quiz-v1.json"))["questions"][0]["id"] == "Q1"
-        assert json.loads(archive.read("cards/cards.json"))["slides"][0]["index"] == 1
-        assert json.loads(archive.read("handoff.json"))["extras"][0] == "quiz/quiz-v1.json"
-    # 카드 파일이 바뀌면 패키지를 만들지 않는다
-    (store.artifacts / store.job(job["id"])["cards"]["slides"][0]["artifact"]["path"]).write_bytes(b"tampered")
-    assert client.get(f"/api/jobs/{job['id']}/package").status_code == 409
+        assert set(archive.namelist()) == {expected["name"], "handoff.json"}
+        assert hashlib.sha256(archive.read(expected["name"])).hexdigest() == expected["sha256"]
+        handoff = json.loads(archive.read("handoff.json"))
+        assert handoff["manifest"]["exported_outputs"] == [output] and handoff["extras"] == []
 
 
 def test_gates_list_quiz_and_cards_issues_as_non_blocking_warnings(context):

@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse
 
 from .quiz import enqueue_output
 from .runtime import window_open
-from .store import WorkflowError, canonical
+from .store import WorkflowError
 
 QUIZ_KEYS = ("version", "generated_at", "source_hash", "questions", "checks", "artifact_id")
 SLIDE_KEYS = ("index", "title", "body", "artifact_id", "visual", "template", "background")
@@ -55,26 +55,6 @@ def _verified_path(store, file):
     if hashlib.sha256(path.read_bytes()).hexdigest() != file["sha256"]:
         raise HTTPException(409, "파일이 변경되어 재검수가 필요합니다")
     return path
-
-
-def package_extras(store, job):
-    """출고 패키지 ZIP에 넣을 (경로, 바이트) 목록: quiz/quiz-vN.json, cards/card-NN.png, cards/cards.json."""
-    extras = []
-    for output, folder in (("quiz", "quiz"), ("cards", "cards")):
-        record = job.get(output) or {}
-        if record.get("source_hash") != job.get("source_hash"):
-            continue
-        artifacts = [record["artifact"]] if output == "quiz" and record.get("artifact") else [s["artifact"] for s in record.get("slides", []) if s.get("artifact")]
-        for artifact in artifacts:
-            path = (store.artifacts / artifact["path"]).resolve()
-            data = path.read_bytes() if path.is_relative_to(store.artifacts.resolve()) and path.is_file() else None
-            if data is None or hashlib.sha256(data).hexdigest() != artifact["sha256"]:
-                raise WorkflowError(f"{'퀴즈' if output == 'quiz' else '카드'} 파일이 변경되어 다시 만들어야 합니다")
-            extras.append((f"{folder}/{artifact['name']}", data))
-        if output == "cards" and artifacts:
-            summary = {"version": record.get("version"), "generated_at": record.get("generated_at"), "source_hash": record.get("source_hash"), "slides": [{k: s.get(k) for k in SLIDE_KEYS} for s in record.get("slides", [])], "checks": record.get("checks")}
-            extras.append(("cards/cards.json", canonical(summary).encode("utf-8")))
-    return extras
 
 
 def output_warnings(job):

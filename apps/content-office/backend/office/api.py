@@ -411,11 +411,7 @@ def create_app(store: Store | None = None):
                     if hashlib.sha256(data).hexdigest() != record['sha256']:
                         raise WorkflowError('출고 파일이 변경되어 재검수가 필요합니다')
                     archive.writestr(record['name'], data)
-                from .api_quiz_cards import package_extras  # 현재 원고의 quiz/quiz-vN.json, cards/card-NN.png, cards/cards.json
-                extras = package_extras(store, job)
-                for name, data in extras:
-                    archive.writestr(name, data)
-                archive.writestr("handoff.json", canonical({"source_hash": job["source_hash"], "manifest": {**manifest, 'files': records, 'exported_outputs': sorted(outputs), 'thumbnail_candidates': manifest.get('thumbnail_candidates', []) if 'video' in outputs else [], 'media': manifest.get('media', {}) if 'video' in outputs else {}}, "release": approval, "extras": [name for name, _ in extras], "next_action": "계정·일정·대상을 확인하고 각 플랫폼에서 직접 게시", "external_published": False}))
+                archive.writestr("handoff.json", canonical({"source_hash": job["source_hash"], "manifest": {**manifest, 'files': records, 'exported_outputs': sorted(outputs), 'thumbnail_candidates': manifest.get('thumbnail_candidates', []) if 'video' in outputs else [], 'media': manifest.get('media', {}) if 'video' in outputs else {}}, "release": approval, "extras": [], "next_action": "계정·일정·대상을 확인하고 각 플랫폼에서 직접 게시", "external_published": False}))
             os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)

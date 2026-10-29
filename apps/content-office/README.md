@@ -2,6 +2,8 @@
 
 공식 AI RSS에서 기사를 고르고, 근거가 연결된 한국어 원고를 검토한 뒤 블로그와 YouTube Shorts를 제작하는 개인용 로컬 앱입니다. 현재 작업실은 **http://localhost:3110**, API는 **http://localhost:8510/api/health**입니다. Windows 브라우저에서도 두 주소의 응답을 확인했습니다.
 
+아래 2026-10-26 작업 시간·예산은 초기 실험 기록입니다. 현재 제작 허가는 앱에 저장된 작업 시간과 원고·출고 승인을 확인합니다. 개발·검증 시간을 요청해도 제작 작업 시간이나 예산이 자동으로 열리지 않습니다.
+
 이번 사용자 지정 작업 시간은 **2026-10-26 02:20–08:20 KST**, 외부 API 총한도는 **10,000원**입니다. 앱 장부의 비용은 제공자 사용량과 확인한 단가를 이용한 추정 원가이며 계정 청구서 대사 금액이 아닙니다. 예산 환산 가정은 1달러=2,000원으로, 시장 환율을 뜻하지 않습니다.
 
 ## 처음 사용하는 순서
@@ -57,6 +59,8 @@ flowchart TD
 | 출고 승인 후 | 선택 제작물과 `handoff.json`을 포함한 ZIP |
 | 생성 배경·영상 선택 시 | 장면별 `background-NN.png`, 생성 장면의 `generated-NN.mp4`와 글자 레이어 `overlay-NN.png`, manifest의 `background`·`clips` 고지 |
 | YouTube 비공개 업로드 후 | 상태 폴더 설정의 업로드 장부(`deliveries`): 상태·외부 ID·자산 해시·대사 시각 |
+
+출고 ZIP은 ②에서 승인하고 선택한 manifest 파일만 담습니다. 별도로 생성한 최신 퀴즈 JSON·카드뉴스 초안을 자동 첨부하지 않습니다. 이 초안의 개별 미리보기·다운로드는 유지하지만 출고 승인을 대신하지 않습니다. 초안을 다시 만들거나 초안 파일이 손상돼도 이미 승인된 ZIP의 구성원별 내용 해시는 달라지지 않습니다.
 
 MP4는1080×1920 H.264/AAC입니다. SRT는 실제 장면 음성 길이에 연결합니다. 생성된 커버·SRT 파일이 YouTube에 적용됐다는 뜻은 아닙니다. 썸네일 점수는 로컬 가독성·대비·원고 표현 일치 검사이며 실제 CTR 예측이나 성과 측정이 아닙니다.
 
@@ -315,7 +319,7 @@ YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 
 
 ### 카드뉴스
 
-같은 조건(① 승인 원고)에서 6~8장의 카드를 만듭니다. 작업실 "카드뉴스" 카드에서 생성·새로고침하며, 장마다 제목·본문·이미지(`artifact_id`)가 미리보기 격자로 보입니다. 글자 넘침·오탈자·장수 범위는 `checks.issues`로 돌아오고 6~8장이 아니면 장수 배지가 주황색입니다. 배경은 제작 설정의 배경 이미지 프로필을 따르고 한국어 글자는 로컬에서 얹습니다.
+같은 조건(① 승인 원고)에서 6~8장의 카드를 만듭니다. 작업실 "카드뉴스" 카드에서 생성·새로고침하며, 장마다 제목·본문·이미지(`artifact_id`)가 미리보기 격자로 보입니다. 글자 넘침·오탈자·장수 범위는 `checks.issues`로 돌아오고 6~8장이 아니면 장수 배지가 주황색입니다. 배경은 제작 설정의 배경 이미지 프로필을 따르고 한국어 글자는 로컬에서 얹습니다. 화면의 배경 이미지 체크를 유지하면 현재 프로필을 따르며, `none`이면 키가 있어도 글자 카드만 만듭니다. 체크를 끄면 배경을 만들지 않습니다. API의 생략/`null`도 프로필을 따르고 `false`는 끄기, 명시적 `true`는 기존 이미지 사용 허용(Codex 선택 시 구독, 그 외 OpenAI API)을 유지합니다. 글 모델의 카드 문구 작성은 배경 이미지 생성과 별개입니다.
 
 ```bash
 # API: POST /api/jobs/{id}/cards → 202 {"task_id"} · GET /api/jobs/{id}/cards → {"cards": null | {version, generated_at, source_hash, slides[{index, title, body, artifact_id}], checks}}
@@ -347,10 +351,19 @@ YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 
 
 ### 뉴스레터 ③
 
-③ 회차 승인은 회차 내용(제목·본문·수신자 묶음)에 대한 승인이지 발송이 아닙니다. 이 앱은 메일을 보내지 않으며, 발송은 오너가 승인된 회차를 내보내(`export`, Markdown) 자기 메일러에서 수동으로 합니다. 보낸 뒤 "발송 완료로 표시"를 눌러 기록합니다(승인된 회차에만 버튼이 보입니다). 흐름: 제작·출고함의 "뉴스레터 회차 · ③"에서 회차 키(`YYYY-MM-wN`, 서울 날짜 기준 1~7일 w1 … 29~31일 w5)와 제목으로 회차를 만들면 ① 승인 원고와 동의 유지 리드로 초안이 생깁니다(② 출고 승인 뒤 서버가 자동으로 만든 초안이 있으면 그대로 보입니다). 초안·반려 상태에서 메모와 함께 ③ 승인·반려를 결정하고, 철회가 생겼으면 "최신 동의로 다시 만들기"로 수신자 묶음을 갱신한 뒤 다시 승인합니다. 회차의 `hash`와 `recipients_hash`가 승인 대상 버전입니다.
+현재 원고와 제작물에 맞는 **② 출고 승인 뒤** 회차를 만들 수 있습니다. ③은 회차 내용의 사람 검토 기록이며 발송이 아닙니다. 앱은 메일을 보내지 않습니다. 오너가 승인한 Markdown을 자기 메일러에서 직접 보낸 뒤에만 "발송 완료로 표시"합니다.
 
-```bash
-# API: POST /api/jobs/{id}/newsletter ({"issue_key", "subject"}) · GET /api/newsletters · GET /api/newsletters/{id}/export (text/markdown) · POST /api/newsletters/{id}/review ({"decision": "approve|reject", "note"}) · POST /api/newsletters/{id}/rebuild · POST /api/newsletters/{id}/sent
+제작·출고함의 "뉴스레터 회차 · ③"에서 회차 키(`YYYY-MM-wN`)와 제목으로 초안을 만들거나, ② 뒤 자동으로 만들어진 초안을 읽습니다. GET의 `review_hash`는 회차 ID·내용 `hash`·저장된 `recipients_hash`를 묶습니다. 승인·반려 요청은 화면에서 읽은 `review_hash`를 `expected_hash`로 보내며, 재작성으로 내용/수신자 스냅샷이 달라졌으면 409로 거부합니다. 토큰 없는 옛 요청은 422로 막고, 판본을 읽지 못한 화면의 승인 버튼은 켜지지 않습니다.
+
+③이 실시간 동의목록을 고정한다는 뜻은 아닙니다. 현재 동의는 rebuild·발송 표시 때 다시 계산합니다. 수신자만 바뀌면 기존 내용 승인은 유지하고, 내용이 바뀌면 다시 검토합니다. 회차에 이메일 원문을 넣지 않습니다. 실제 발송 기능·고객 수신 성공은 별도 범위입니다.
+
+```text
+POST /api/jobs/{id}/newsletter ({"issue_key", "subject"})
+GET /api/newsletters
+GET /api/newsletters/{id}/export (text/markdown)
+POST /api/newsletters/{id}/review ({"decision": "approve|reject", "note", "expected_hash": "GET의 review_hash"})
+POST /api/newsletters/{id}/rebuild
+POST /api/newsletters/{id}/sent
 ```
 
 ### 오퍼 스냅샷

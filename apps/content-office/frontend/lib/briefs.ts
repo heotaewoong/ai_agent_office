@@ -27,6 +27,13 @@ function text(form: Form, key: string): string {
 
 const KEYS: Exclude<keyof BriefOverrides, "language">[] = ["reader", "problem", "outcome", "cta", "topic", "prior_knowledge", "tone"];
 
+/** 기존 작업을 편집할 때 표시하지 않는 설정까지 보존합니다. */
+export function briefFormFromBrief(brief: Brief | null | undefined): Form {
+  const form: Form = { brief_preset: brief?.preset ?? "" };
+  for (const key of [...KEYS, "language"] as const) form[`brief_${key}`] = brief?.[key] ?? "";
+  return form;
+}
+
 /** 폼의 brief_* 값을 서버 덮어쓰기 객체로 바꿉니다. 빈 값은 프리셋 값을 그대로 쓰므로 보내지 않습니다. */
 export function briefOverridesFromForm(form: Form): { overrides: BriefOverrides } | { error: string } {
   const overrides: BriefOverrides = {};

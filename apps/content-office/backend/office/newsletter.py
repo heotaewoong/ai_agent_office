@@ -4,6 +4,7 @@
 - `hash`는 내용(제목·마크다운·원고/출고 버전)의 해시다. 승인③은 이 해시에 붙는다. 수신자 스냅샷은 "발송 직전 최신 동의"
   규칙대로 rebuild·sent 때마다 현재 동의로 다시 계산하며, 수신자만 바뀐 경우 승인③은 유지한다.
 - 승인③은 오직 사람(actor)이 만든다. 승인·거절·발송 기록 어디에서도 메일을 보내지 않는다.
+- `review_hash`는 회차 ID·내용 해시·수신자 스냅샷을 묶은 검토용 값이다. 읽을 때 계산하며, 옛 화면의 판정을 막는다.
 """
 from __future__ import annotations
 
@@ -65,7 +66,9 @@ def _content(job, release, subject):
 
 
 def _issue(row):
-    return {"id": row["id"], "issue_key": row["issue_key"], "job_id": row["job_id"], "state": row["state"], **json.loads(row["data"]), "created_at": row["created_at"], "updated_at": row["updated_at"]}
+    issue = {"id": row["id"], "issue_key": row["issue_key"], "job_id": row["job_id"], "state": row["state"], **json.loads(row["data"]), "created_at": row["created_at"], "updated_at": row["updated_at"]}
+    issue["review_hash"] = digest({"issue_id": issue["id"], "content_hash": issue["hash"], "recipients_hash": issue["recipients_hash"]})
+    return issue
 
 
 def _load(db, issue_id):
@@ -77,7 +80,7 @@ def _load(db, issue_id):
 
 
 def _write(db, issue):
-    data = {key: value for key, value in issue.items() if key not in ("id", "issue_key", "job_id", "state", "created_at", "updated_at")}
+    data = {key: value for key, value in issue.items() if key not in ("id", "issue_key", "job_id", "state", "created_at", "updated_at", "review_hash")}
     db.execute("UPDATE newsletter_issues SET state=?, data=?, updated_at=? WHERE id=?", (issue["state"], canonical(data), now(), issue["id"]))
     return _load(db, issue["id"])
 
@@ -140,13 +143,15 @@ def issue(store, issue_id):
         return _load(db, issue_id)
 
 
-def review_issue(store, issue_id, decision, *, actor, note=None):
+def review_issue(store, issue_id, decision, *, expected_hash, actor, note=None):
     """승인③. 사람 검토자가 기록하며 아무것도 보내지 않는다."""
     if decision not in ("approve", "reject") or not str(actor or "").strip():
         raise WorkflowError("유효한 회차 판정(approve·reject)과 검토자가 필요합니다")
     note_text = str(note).strip()[:500] if note else None
     with store.connection(transaction=True) as db:
         current = _load(db, issue_id)
+        if expected_hash != current["review_hash"]:
+            raise WorkflowError("회차 내용 또는 수신자 묶음이 변경되었습니다. 다시 불러와 확인한 뒤 검토하세요")
         if current["state"] == "approved":
             raise WorkflowError("이미 승인③한 회차입니다. 내용을 바꾸려면 다시 만든(rebuild) 뒤 검토하세요")
         if current["state"] == "sent_manual":

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import { defaultIssueKey, newsletterStateLabel, validIssueKey } from "../lib/newsletter";
-import { formatDate, sourceApproved } from "../lib/workflow";
+import { approvalIsCurrent, formatDate } from "../lib/workflow";
 import type { Action, Job, NewsletterIssue } from "../lib/types";
 import { Icon } from "./icons";
 
@@ -18,7 +18,6 @@ export function NewsletterPanel({ job, busy, action }: { job: Job; busy: boolean
   const [subject, setSubject] = useState(job.title ?? "");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState("");
-  const approved = sourceApproved(job.state);
 
   const load = useCallback(async () => {
     try {
@@ -33,7 +32,9 @@ export function NewsletterPanel({ job, busy, action }: { job: Job; busy: boolean
   useEffect(() => {
     void load();
   }, [load, job.updated_at, job.state, job.release_approval?.version]);
-  const releaseApproved = job.release_approval?.decision === "approved";
+  const releaseApproved = job.release_approval?.decision === "approved"
+    && approvalIsCurrent(job.release_approval.version, job.manifest?.hash)
+    && approvalIsCurrent(job.manifest?.source_hash, job.source_hash);
 
   async function run(label: string, execute: () => Promise<unknown>, success: string) {
     const ok = await action(label, execute, success);
@@ -79,18 +80,19 @@ export function NewsletterPanel({ job, busy, action }: { job: Job; busy: boolean
           제목
           <input id={`${uid}-subject`} value={subject} maxLength={200} disabled={busy} onChange={(e) => setSubject(e.target.value)} />
         </label>
-        <button className="button primary" type="button" disabled={busy || !approved || !keyValid || !subject.trim()} onClick={build}>
+        <button className="button primary" type="button" disabled={busy || !releaseApproved || !keyValid || !subject.trim()} onClick={build}>
           이 작업으로 회차 만들기
         </button>
       </div>
       {!keyValid && <p className="field-error">회차 키는 2026-10-w5 형식입니다.</p>}
-      {!approved && <p className="muted">① 원고 승인 뒤에 회차를 만들 수 있습니다.</p>}
+      {!releaseApproved && <p className="muted">② 출고 승인 뒤에 회차를 만들 수 있습니다. 제작·출고함에서 먼저 출고할 결과물을 검토하세요.</p>}
       {loadError && <p className="field-error">{loadError}</p>}
       {mine.length === 0 && !loadError && <p className="muted">이 작업으로 만든 회차가 아직 없습니다.{others > 0 ? ` 다른 작업의 회차 ${others}개는 운영 기록에서 확인하세요.` : ""}</p>}
       {mine.length > 0 && (
         <ul className="delivery-list">
           {mine.map((issue) => {
             const reviewable = issue.state === "draft" || issue.state === "rejected";
+            const reviewToken = /^[a-f0-9]{64}$/.test(issue.review_hash ?? "") ? issue.review_hash : "";
             const note = notes[issue.id] ?? "";
             return (
               <li key={issue.id} className={`delivery-item newsletter-item state-${issue.state}`}>
@@ -113,12 +115,13 @@ export function NewsletterPanel({ job, busy, action }: { job: Job; busy: boolean
                 <div className="newsletter-actions">
                   {reviewable && (
                     <div className="newsletter-review" role="group" aria-label="③ 회차 승인">
+                      {!reviewToken && <p className="field-error" role="alert">검토할 회차 판본을 확인하지 못했습니다. 화면을 새로고침한 뒤 본문과 수신자 묶음을 다시 읽어 주세요.</p>}
                       <textarea rows={2} placeholder="③ 회차 승인 메모 (선택)" value={note} disabled={busy} onChange={(e) => setNotes((n) => ({ ...n, [issue.id]: e.target.value }))} />
                       <div className="derived-actions">
-                        <button className="button primary small" type="button" disabled={busy} onClick={() => void run("③ 회차 승인", () => api.reviewNewsletter(issue.id, "approve", note.trim()), "③ 회차를 승인했습니다. 발송은 하지 않았습니다. 내보내서 메일러로 보내세요.")}>
+                        <button className="button primary small" type="button" disabled={busy || !reviewToken} onClick={() => void run("③ 회차 승인", () => api.reviewNewsletter(issue.id, "approve", note.trim(), reviewToken), "③ 회차를 승인했습니다. 발송은 하지 않았습니다. 내보내서 메일러로 보내세요.")}>
                           <Icon name="check" size={13} />③ 회차 승인
                         </button>
-                        <button className="button text small" type="button" disabled={busy} onClick={() => void run("③ 회차 반려", () => api.reviewNewsletter(issue.id, "reject", note.trim()), "회차를 반려했습니다.")}>
+                        <button className="button text small" type="button" disabled={busy || !reviewToken} onClick={() => void run("③ 회차 반려", () => api.reviewNewsletter(issue.id, "reject", note.trim(), reviewToken), "회차를 반려했습니다.")}>
                           반려
                         </button>
                       </div>

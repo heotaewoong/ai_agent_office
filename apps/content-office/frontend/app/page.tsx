@@ -15,7 +15,7 @@ import type {
   VoiceProfile,
 } from "../lib/types";
 import {
-  acceptJobRefresh,
+  createJobRefreshGuard,
   completedOutputs,
   validReleaseOutputs,
   approvalIsCurrent,
@@ -141,6 +141,14 @@ export default function Office() {
   const [lastLoaded, setLastLoaded] = useState<string>();
   const [ideaRefresh, setIdeaRefresh] = useState(0);
   const alive = useRef(true);
+  const jobRefresh = useRef(createJobRefreshGuard());
+  const selectJob = useCallback((id: string) => {
+    if (id !== jobRefresh.current.activeId) {
+      jobRefresh.current.select(id);
+      setJob(null);
+    }
+    setActiveId(id);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -149,7 +157,7 @@ export default function Office() {
       setDashboard(data);
       setConnected(true);
       setLastLoaded(new Date().toISOString());
-      setActiveId((current) => current || data.jobs?.[0]?.id || "");
+      if (!jobRefresh.current.activeId) selectJob(data.jobs?.[0]?.id || "");
       setSelected((current) =>
         current.filter((id) =>
           data.articles.some((article) => article.id === id),
@@ -167,7 +175,7 @@ export default function Office() {
     } finally {
       if (alive.current) setLoading(false);
     }
-  }, []);
+  }, [selectJob]);
 
   useEffect(() => {
     alive.current = true;
@@ -182,19 +190,24 @@ export default function Office() {
     };
   }, [loadDashboard]);
 
-  const loadJob = useCallback(async () => {
-    if (!activeId) return;
-    const data = await api.job(activeId);
-    if (alive.current) setJob((current) => acceptJobRefresh(current, data));
-  }, [activeId]);
+  const loadJob = useCallback(async (id = jobRefresh.current.activeId) => {
+    const ticket = jobRefresh.current.begin(id);
+    if (!ticket) return;
+    try {
+      const data = await api.job(id);
+      const current = jobRefresh.current.settle(ticket);
+      if (alive.current && current) setJob(data);
+    } catch (cause) {
+      if (jobRefresh.current.settle(ticket) && alive.current) throw cause;
+    }
+  }, []);
 
   useEffect(() => {
     if (!activeId) return;
     let current = true;
     const fetchJob = async () => {
       try {
-        const value = await api.job(activeId);
-        if (current) setJob(value);
+        await loadJob(activeId);
       } catch (cause) {
         if (current)
           setError(
@@ -209,7 +222,7 @@ export default function Office() {
       current = false;
       clearInterval(timer);
     };
-  }, [activeId]);
+  }, [activeId, loadJob]);
 
   async function action(
     label: string,
@@ -218,15 +231,18 @@ export default function Office() {
   ): Promise<true | string> {
     if (busy) return "이미 처리 중입니다";
     if (!connected) return "연결을 확인해 주세요";
+    const targetJobId = jobRefresh.current.activeId;
     setBusy(label);
     setError("");
     setNotice("");
     try {
       await execute();
+      jobRefresh.current.invalidate(targetJobId);
       await Promise.all([loadDashboard(), loadJob()]);
       setNotice(success);
       return true;
     } catch (cause) {
+      jobRefresh.current.invalidate(targetJobId);
       const message =
         cause instanceof Error ? cause.message : "요청을 처리하지 못했습니다.";
       if (cause instanceof OfficeApiError && cause.status === 409) {
@@ -252,7 +268,7 @@ export default function Office() {
       "작업 만들기",
       async () => {
         const result = await api.createJobs(selected);
-        setActiveId(result.jobs[0]?.id || activeId);
+        selectJob(result.jobs[0]?.id || jobRefresh.current.activeId);
         setView("studio");
         setSelected([]);
       },
@@ -518,7 +534,7 @@ export default function Office() {
                   <IdeaBank
                     refreshKey={ideaRefresh}
                     onSelected={(j) => {
-                      setActiveId(j.id);
+                      selectJob(j.id);
                       setView("studio");
                       void loadDashboard();
                     }}
@@ -635,7 +651,7 @@ export default function Office() {
                         <button
                           key={item.id}
                           className={`job-item ${item.id === activeId ? "active" : ""}`}
-                          onClick={() => setActiveId(item.id)}
+                          onClick={() => selectJob(item.id)}
                         >
                           <Badge state={item.state} />
                           <strong>
@@ -687,7 +703,9 @@ export default function Office() {
                         }
                         busy={!!busy || !connected}
                         action={action}
-                        onSaved={(value) => setJob(value)}
+                        onSaved={(value) => {
+                          if (jobRefresh.current.invalidate(value.id)) setJob(value);
+                        }}
                         onDelivery={() => setView("delivery")}
                       />
                     ) : (
@@ -715,14 +733,14 @@ export default function Office() {
                             key={`youtube-${job.id}`}
                             job={job}
                             youtubeConfigured={Boolean(dashboard.provider?.youtube?.configured)}
-                            busy={!!busy || !connected}
+                            busy={!!busy || !connected || Boolean(localDrafts[job.id])}
                             action={action}
                           />
                         )}
                         <NewsletterPanel
                           key={`newsletter-${job.id}`}
                           job={job}
-                          busy={!!busy || !connected}
+                          busy={!!busy || !connected || Boolean(localDrafts[job.id])}
                           action={action}
                         />
                       </>
@@ -738,7 +756,7 @@ export default function Office() {
                   connected={connected}
                   onOpen={(v, id) => {
                     if (id && dashboard?.jobs.some((j) => j.id === id))
-                      setActiveId(id);
+                      selectJob(id);
                     setView(v);
                   }}
                   onAction={async (a, id) => {
@@ -770,7 +788,7 @@ export default function Office() {
                 <Activity
                   dashboard={dashboard}
                   job={job}
-                  onChoose={(id) => setActiveId(id)}
+                  onChoose={selectJob}
                   activeId={activeId}
                   busy={!!busy || !connected}
                   action={action}

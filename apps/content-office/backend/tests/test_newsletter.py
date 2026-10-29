@@ -50,7 +50,9 @@ def test_build_issue_snapshots_consent_without_emails(tmp_path):
     listing = client.get("/api/newsletters").json()["issues"]
     # 출고 승인② 때 자동으로 만든 초안(job_id-v1)과 방금 만든 회차, 최신순
     assert listing[0]["id"] == issue["id"] and {i["issue_key"] for i in listing} == {"2026-11-w1", f"{job_id}-v1"}
-    assert client.get(f"/api/newsletters/{issue['id']}").json()["hash"] == issue["hash"]
+    fetched = client.get(f"/api/newsletters/{issue['id']}").json()
+    assert fetched["hash"] == issue["hash"]
+    assert len(issue["review_hash"]) == 64 and fetched["review_hash"] == issue["review_hash"] == listing[0]["review_hash"]
     export = client.get(f"/api/newsletters/{issue['id']}/export")
     assert export.status_code == 200 and export.headers["content-type"].startswith("text/markdown") and export.text == markdown
     assert client.get("/api/newsletters/issue_missing").status_code == 409
@@ -63,26 +65,27 @@ def test_review_is_human_recorded_and_never_sends(tmp_path):
     issue = client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "2026-11-w2", "subject": "이번 주 복습"}, headers=headers).json()
     early = client.post(f"/api/newsletters/{issue['id']}/sent", json={}, headers=headers)
     assert early.status_code == 409
-    rejected = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "reject", "note": "제목 수정"}, headers=headers).json()
+    rejected = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "reject", "expected_hash": issue["review_hash"], "note": "제목 수정"}, headers=headers).json()
     assert rejected["state"] == "rejected" and rejected["approval"]["decision"] == "rejected" and rejected["approval"]["note"] == "제목 수정"
-    approved = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "note": None}, headers=headers)
+    approved = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "expected_hash": issue["review_hash"], "note": None}, headers=headers)
     assert approved.status_code == 200
     body = approved.json()
     assert body["state"] == "approved" and body["sent_at"] is None
     assert body["approval"]["stage"] == "③" and body["approval"]["decision"] == "approved" and body["approval"]["actor"] == "local-operator" and body["approval"]["at"]
+    assert body["approval"]["version"] == issue["hash"]
     kinds = [e["kind"] for e in store.events(job_id)]
     assert kinds.count("newsletter_reviewed") == 2 and "newsletter_sent_manual" not in kinds
-    again = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "note": None}, headers=headers)
+    again = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "expected_hash": issue["review_hash"], "note": None}, headers=headers)
     assert again.status_code == 409
     sent = client.post(f"/api/newsletters/{issue['id']}/sent", json={}, headers=headers)
     assert sent.status_code == 200 and sent.json()["state"] == "sent_manual" and sent.json()["sent_at"]
     event = next(e for e in store.events(job_id) if e["kind"] == "newsletter_sent_manual")
     assert event["data"]["recipient_count"] == 1 and event["data"]["issue_key"] == "2026-11-w2"
     assert client.post(f"/api/newsletters/{issue['id']}/sent", json={}, headers=headers).status_code == 409
-    assert client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "reject", "note": None}, headers=headers).status_code == 409
+    assert client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "reject", "expected_hash": issue["review_hash"], "note": None}, headers=headers).status_code == 409
     from office.newsletter import review_issue
     with pytest.raises(WorkflowError):
-        review_issue(store, issue["id"], "approve", actor="", note=None)
+        review_issue(store, issue["id"], "approve", expected_hash=issue["review_hash"], actor="", note=None)
 
 
 def test_rebuild_refreshes_consent_and_resets_approval_when_content_changes(tmp_path):
@@ -90,7 +93,7 @@ def test_rebuild_refreshes_consent_and_resets_approval_when_content_changes(tmp_
     client, headers = api(store)
     first = lead(client, headers, "first@example.com")
     issue = client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "2026-11-w3", "subject": None}, headers=headers).json()
-    client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "note": None}, headers=headers)
+    client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "expected_hash": issue["review_hash"], "note": None}, headers=headers)
     lead(client, headers, "second@example.com")
     client.post(f"/api/leads/{first['id']}/withdraw", json={}, headers=headers)
     rebuilt = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
@@ -150,8 +153,124 @@ def test_dashboard_counts_leads_and_newsletters(tmp_path):
     client.post(f"/api/leads/{first['id']}/withdraw", json={}, headers=headers)
     auto_issue = client.get("/api/newsletters").json()["issues"][0]
     client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "2026-11-w9", "subject": None}, headers=headers)
-    client.post(f"/api/newsletters/{auto_issue['id']}/review", json={"decision": "approve", "note": None}, headers=headers)
+    client.post(f"/api/newsletters/{auto_issue['id']}/review", json={"decision": "approve", "expected_hash": auto_issue["review_hash"], "note": None}, headers=headers)
     dashboard = client.get("/api/dashboard").json()
     assert dashboard["leads"] == {"consented": 1}
     assert dashboard["newsletters"] == {"draft": 1, "approved": 1}
     assert "one@example.com" not in json.dumps(dashboard) and "two@example.com" not in json.dumps(dashboard)
+
+
+@pytest.mark.parametrize("change", ["content", "recipients"])
+@pytest.mark.parametrize("decision", ["approve", "reject"])
+def test_review_rejects_stale_preview(tmp_path, change, decision):
+    store, job_id = released_fixture(tmp_path)
+    client, headers = api(store)
+    issue = client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "stale-preview", "subject": None}, headers=headers).json()
+    viewed_hash = issue["review_hash"]
+    if change == "content":
+        client.put(f"/api/jobs/{job_id}/offer", json={"product": "새 자료", "price_krw": 9900, "url": "https://heobrain.kr/new", "note": None}, headers=headers)
+    else:
+        lead(client, headers, "new-reader@example.com")
+    rebuilt = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
+    if change == "content":
+        assert rebuilt["hash"] != issue["hash"]
+    else:
+        assert rebuilt["recipients_hash"] != issue["recipients_hash"]
+    assert rebuilt["review_hash"] != viewed_hash
+    response = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": decision, "expected_hash": viewed_hash, "note": None}, headers=headers)
+    assert response.status_code == 409
+    current = client.get(f"/api/newsletters/{issue['id']}").json()
+    assert current["state"] == "draft" and current["approval"] is None
+    assert not [event for event in store.events(job_id) if event["kind"] == "newsletter_reviewed"]
+
+
+@pytest.mark.parametrize("expected", [None, "short", "g" * 64])
+def test_review_requires_valid_preview_hash(tmp_path, expected):
+    store, job_id = released_fixture(tmp_path)
+    client, headers = api(store)
+    issue = client.get("/api/newsletters").json()["issues"][0]
+    payload = {"decision": "approve", "note": None}
+    if expected is not None:
+        payload["expected_hash"] = expected
+    response = client.post(f"/api/newsletters/{issue['id']}/review", json=payload, headers=headers)
+    assert response.status_code == 422
+    assert client.get(f"/api/newsletters/{issue['id']}").json()["approval"] is None
+    assert not [event for event in store.events(job_id) if event["kind"] == "newsletter_reviewed"]
+
+
+def test_review_token_cannot_be_reused_for_another_issue(tmp_path):
+    store, job_id = released_fixture(tmp_path)
+    client, headers = api(store)
+    first = client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "first", "subject": None}, headers=headers).json()
+    second = client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "second", "subject": None}, headers=headers).json()
+    assert first["hash"] == second["hash"] and first["recipients_hash"] == second["recipients_hash"]
+    assert first["review_hash"] != second["review_hash"]
+    response = client.post(f"/api/newsletters/{second['id']}/review", json={"decision": "approve", "expected_hash": first["review_hash"]}, headers=headers)
+    assert response.status_code == 409
+    assert client.get(f"/api/newsletters/{second['id']}").json()["approval"] is None
+
+
+def test_unchanged_rebuild_preserves_preview_hash_and_content_approval_semantics(tmp_path):
+    store, job_id = released_fixture(tmp_path)
+    client, headers = api(store)
+    issue = client.get("/api/newsletters").json()["issues"][0]
+    rebuilt = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
+    assert rebuilt["review_hash"] == issue["review_hash"]
+    approved = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "expected_hash": rebuilt["review_hash"]}, headers=headers)
+    assert approved.status_code == 200
+    assert approved.json()["approval"]["version"] == issue["hash"]
+
+
+def test_review_compare_and_approval_remain_atomic_during_rebuild(tmp_path, monkeypatch):
+    from contextlib import contextmanager
+    from threading import Event, Thread, current_thread
+    from office import newsletter
+
+    store, job_id = released_fixture(tmp_path)
+    issue = newsletter.issues(store)[0]
+    store.set_offer(job_id, {"product": "새 자료", "price_krw": 9900, "url": "https://heobrain.kr/new", "note": None}, "op")
+    held, release, waiting, acquired = (Event() for _ in range(4))
+    original_connection, original_released = store.connection, newsletter._released_job
+    errors = []
+
+    @contextmanager
+    def observed_connection(transaction=False):
+        rebuilding = current_thread().name == "newsletter-rebuild" and transaction
+        if rebuilding:
+            waiting.set()
+        with original_connection(transaction=transaction) as db:
+            if rebuilding:
+                acquired.set()
+            yield db
+
+    def paused_release(db, current_store, current_job):
+        if current_thread().name == "newsletter-review":
+            held.set()
+            assert release.wait(5), "검토 트랜잭션을 풀지 못했습니다"
+        return original_released(db, current_store, current_job)
+
+    def run(function):
+        try:
+            function()
+        except BaseException as error:
+            errors.append(error)
+
+    monkeypatch.setattr(store, "connection", observed_connection)
+    monkeypatch.setattr(newsletter, "_released_job", paused_release)
+    monkeypatch.setattr(newsletter, "consent_snapshot", lambda _: {"recipient_count": issue["recipient_count"], "recipients_hash": issue["recipients_hash"]})
+    reviewer = Thread(name="newsletter-review", target=run, args=(lambda: newsletter.review_issue(store, issue["id"], "approve", expected_hash=issue["review_hash"], actor="op"),))
+    rebuilder = Thread(name="newsletter-rebuild", target=run, args=(lambda: newsletter.rebuild_issue(store, issue["id"], actor="op"),))
+    reviewer.start()
+    try:
+        assert held.wait(5), "검토 트랜잭션을 시작하지 못했습니다"
+        rebuilder.start()
+        assert waiting.wait(5), "재작성 트랜잭션이 대기하지 않았습니다"
+        assert not acquired.is_set()
+    finally:
+        release.set()
+        reviewer.join(5)
+        if rebuilder.ident is not None:
+            rebuilder.join(5)
+    assert not reviewer.is_alive() and not rebuilder.is_alive() and not errors
+    current = newsletter.issue(store, issue["id"])
+    assert current["hash"] != issue["hash"] and current["state"] == "draft" and current["approval"] is None

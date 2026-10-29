@@ -239,6 +239,36 @@ def test_images_false_or_no_openai_key_never_builds_a_paid_renderer(tmp_path, mo
     assert plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))["visual_source"] == "first_party_gradient_and_text"
 
 
+@pytest.mark.parametrize("explicit_none", [False, True])
+def test_default_card_images_respect_none_profile_with_openai_text_key(tmp_path, monkeypatch, explicit_none):
+    import office.image_provider as image_provider
+    from office.cards import _card_renderer
+    from office.image_selection import select_profile
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-placeholder-not-a-real-key")
+    monkeypatch.setattr(image_provider, "make_openai_card_image_renderer", lambda *a, **k: (_ for _ in ()).throw(AssertionError("default none profile selected a paid image renderer")))
+    store = Store(tmp_path)
+    job = approved_job(store)
+    if explicit_none:
+        select_profile(store, "none", actor="test-operator")
+    notes = []
+    assert _card_renderer(store, job["id"], None, None, notes) is None
+    assert notes == [] and store.budget()["spent_krw"] == 0
+
+
+def test_explicit_card_images_preserve_openai_opt_in_with_none_profile(tmp_path, monkeypatch):
+    import office.image_provider as image_provider
+    from office.cards import _card_renderer
+
+    marker, calls = object(), []
+    monkeypatch.setenv("OPENAI_API_KEY", "test-placeholder-not-a-real-key")
+    monkeypatch.setattr(image_provider, "make_openai_card_image_renderer", lambda store, **kwargs: calls.append(kwargs) or marker)
+    store = Store(tmp_path)
+    job = approved_job(store)
+    assert _card_renderer(store, job["id"], True, None, []) is marker
+    assert calls == [{"job_id": job["id"], "allow_paid": True}]
+
+
 def test_failed_refine_keeps_the_first_plan_instead_of_failing(tmp_path):
     store = Store(tmp_path)
     job = approved_job(store)

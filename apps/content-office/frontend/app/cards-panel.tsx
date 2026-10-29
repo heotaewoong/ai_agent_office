@@ -49,9 +49,9 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
   async function generate() {
     const ok = await action(
       "카드뉴스 생성",
-      () => api.requestCards(job.id, images),
+      () => api.requestCards(job.id, images ? undefined : false),
       images
-        ? "카드뉴스 생성을 요청했습니다. 카드마다 주제 이미지를 만드느라 1~2분 걸립니다."
+        ? "선택한 배경 이미지 프로필로 카드뉴스 생성을 요청했습니다. 이미지 없음이면 글자 카드만 만듭니다."
         : "카드뉴스 생성을 요청했습니다. 결과가 저장되면 아래에 표시됩니다.",
     );
     if (ok === true) setPending({ before: cards?.generated_at ?? "" });
@@ -70,7 +70,7 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
         <div className="derived-actions">
           <label className="card-image-toggle">
             <input type="checkbox" checked={images} onChange={(event) => setImages(event.target.checked)} />
-            카드마다 주제 이미지 생성 (OpenAI · 장당 약 60~200원)
+            제작 설정의 배경 이미지 프로필 사용 (이미지 없음이면 글자 카드)
           </label>
           <button className="button secondary small" type="button" disabled={busy || !approved || Boolean(pending)} onClick={() => void generate()}>
             {cards ? "다시 생성" : "카드뉴스 생성"}
@@ -81,7 +81,8 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
           </button>
         </div>
       </div>
-      {!approved && <p className="muted">① 원고 승인 뒤에만 만들 수 있습니다. 주제 이미지는 OpenAI로 만들고 한국어 글자는 로컬에서 크게 얹습니다.</p>}
+      <p className="muted">여기서 별도로 만든 카드뉴스는 개별 검토·다운로드용입니다. ② 출고 승인에서 고른 제작물 ZIP에 자동으로 추가되지 않습니다.</p>
+      {!approved && <p className="muted">① 원고 승인 뒤에만 만들 수 있습니다. 배경 이미지는 제작 설정을 따르고, 한국어 글자는 로컬에서 크게 얹습니다.</p>}
       {pending && <p className="muted">생성 요청을 받았습니다. 작업자가 저장하면 자동으로 표시됩니다.</p>}
       {loadError && <p className="field-error">{loadError}</p>}
       {stale && (

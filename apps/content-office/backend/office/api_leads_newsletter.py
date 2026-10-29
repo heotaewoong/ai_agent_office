@@ -33,6 +33,7 @@ class NewsletterInput(BaseModel):
 
 class NewsletterReview(BaseModel):
     decision: Literal["approve", "reject"]
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     note: str | None = Field(default=None, max_length=500)
 
 
@@ -92,7 +93,7 @@ def register(app, store):
     @app.post("/api/newsletters/{issue_id}/review")
     def review_newsletter(issue_id: str, body: NewsletterReview):
         # 승인③은 세션의 사람 검토자가 기록한다. 승인해도 발송은 일어나지 않는다.
-        return newsletter.review_issue(store, issue_id, body.decision, actor=ACTOR, note=body.note)
+        return newsletter.review_issue(store, issue_id, body.decision, expected_hash=body.expected_hash, actor=ACTOR, note=body.note)
 
     @app.post("/api/newsletters/{issue_id}/rebuild")
     def rebuild_newsletter(issue_id: str):

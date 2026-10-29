@@ -101,6 +101,33 @@ export function acceptJobRefresh<T extends { id: string }>(
   return current?.id === incoming.id ? incoming : current;
 }
 
+/** One GET per selection; selection or a mutation invalidates earlier responses. */
+export function createJobRefreshGuard() {
+  let activeId = "";
+  let pending: Readonly<{ id: string }> | null = null;
+  return {
+    get activeId() { return activeId; },
+    select(id: string) {
+      if (id !== activeId) { activeId = id; pending = null; }
+    },
+    begin(id: string) {
+      if (!id || id !== activeId || pending) return null;
+      pending = { id };
+      return pending;
+    },
+    settle(ticket: Readonly<{ id: string }>) {
+      if (pending !== ticket || ticket.id !== activeId) return false;
+      pending = null;
+      return true;
+    },
+    invalidate(id: string) {
+      if (id !== activeId) return false;
+      pending = null;
+      return true;
+    },
+  };
+}
+
 export function thumbnailArtifact(candidate: ThumbnailCandidate): Artifact {
   return "artifact" in candidate ? candidate.artifact : candidate;
 }

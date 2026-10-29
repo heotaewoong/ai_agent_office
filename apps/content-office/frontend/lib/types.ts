@@ -163,6 +163,7 @@ export type Job = {
   packaging?: PackagingRecord | null;
   manifest?: {
     hash: string;
+    source_hash?: string;
     files: Artifact[];
     thumbnail_candidates?: ThumbnailCandidate[];
     best_candidate_id?: string;
@@ -516,6 +517,7 @@ export type NewsletterIssue = {
   recipients_hash: string;
   built_at: string;
   hash: string;
+  review_hash: string;
   approval: null | { stage: string; decision: string; actor: string; at: string; note: string };
   sent_at: string | null;
 };

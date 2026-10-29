@@ -233,8 +233,8 @@ export const api = {
   newsletters: () => request<{ issues: NewsletterIssue[] }>("/newsletters"),
   newsletterExportUrl: (id: string) =>
     `/api/newsletters/${encodeURIComponent(id)}/export`,
-  reviewNewsletter: (id: string, decision: "approve" | "reject", note: string) =>
-    request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/review`, "POST", { decision, note }),
+  reviewNewsletter: (id: string, decision: "approve" | "reject", note: string, expectedHash: string) =>
+    request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/review`, "POST", { decision, note, expected_hash: expectedHash }),
   rebuildNewsletter: (id: string) =>
     request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/rebuild`, "POST", {}),
   markNewsletterSent: (id: string) =>

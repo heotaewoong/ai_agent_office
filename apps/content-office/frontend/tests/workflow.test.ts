@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   draftStatus,
   acceptJobRefresh,
+  createJobRefreshGuard,
   evidenceInputAllowed,
   retryBlockedReason,
   completedOutputs,
@@ -124,6 +125,51 @@ test("다른작업의늦은응답이현재검토중인문서를덮어쓰지않�
   const update = { id: "job-b", state: "source_approved" };
   assert.equal(acceptJobRefresh(current, update), update);
   assert.equal(acceptJobRefresh(null, update), null);
+});
+
+test("작업 조회는 중첩하지 않고 실패 뒤에도 다음 조회를 허용한다", () => {
+  const guard = createJobRefreshGuard();
+  guard.select("job-a");
+  const failed = guard.begin("job-a");
+  assert.ok(failed);
+  assert.equal(guard.begin("job-a"), null);
+  assert.equal(guard.settle(failed), true);
+  assert.ok(guard.begin("job-a"));
+});
+
+test("작업을 바꾸면 예전 성공·오류가 새 작업의 진행 중 조회를 해제하지 않는다", () => {
+  const guard = createJobRefreshGuard();
+  guard.select("job-a");
+  const old = guard.begin("job-a");
+  assert.ok(old);
+  guard.select("job-b");
+  const current = guard.begin("job-b");
+  assert.ok(current);
+  assert.equal(guard.settle(old), false);
+  assert.equal(guard.begin("job-b"), null);
+  assert.equal(guard.invalidate("job-a"), false);
+  assert.equal(guard.settle(current), true);
+  assert.equal(guard.activeId, "job-b");
+});
+
+test("저장 뒤 옛 GET이 역순 도착해도 저장 결과와 새 조회를 덮지 않는다", async () => {
+  const guard = createJobRefreshGuard();
+  guard.select("job-a");
+  let resolveOld!: (value: string) => void;
+  const oldResponse = new Promise<string>((resolve) => { resolveOld = resolve; });
+  let displayed = "v1";
+  const old = guard.begin("job-a");
+  assert.ok(old);
+  const pendingOld = oldResponse.then((value) => { if (guard.settle(old)) displayed = value; });
+  assert.equal(guard.invalidate("job-a"), true);
+  displayed = "saved-v2";
+  const fresh = guard.begin("job-a");
+  assert.ok(fresh);
+  if (guard.settle(fresh)) displayed = "fresh-v2";
+  resolveOld("stale-v1");
+  await pendingOld;
+  assert.equal(displayed, "fresh-v2");
+  assert.ok(guard.begin("job-a"));
 });
 
 test("뉴스 네 번째 선택을 막고 기존 선택은 해제할 수 있다", () => {
