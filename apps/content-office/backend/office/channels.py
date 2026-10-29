@@ -35,7 +35,7 @@ CHANNELS = {row["key"]: row for row in (
     _channel("x_main", "x", "X", "ko"),
     _channel("slack_internal", "slack", "Slack 내부 알림", "ko", None, "T0CBW3G1E77", "notify"),
     _channel("discord_contact", "discord", "Discord 연락", "ko", None, "1163846683814264882", "notify"),
-    _channel("store", "store", "heobrain.kr", "ko"),
+    _channel("store", "store", "heobrain.kr", "ko", "https://www.heobrain.kr"),
 )}
 
 

@@ -35,6 +35,17 @@ def test_operator_can_bind_external_id_and_enable_without_touching_secrets(tmp_p
     assert any(e["kind"] == "channel_updated" for e in store.events(limit=5))
 
 
+def test_store_channel_default_url_preserves_operator_override(tmp_path):
+    from office.channels import channel, update_channel
+    store = Store(tmp_path)
+    assert channel(store, "store")["public_url"] == "https://www.heobrain.kr"
+    custom_url = "https://example.com/operator-selected-store"
+    update_channel(store, "store", {"public_url": custom_url}, actor="local-operator")
+    row = channel(store, "store")
+    assert row["public_url"] == custom_url
+    assert row["publication_enabled"] is False
+
+
 def test_youtube_credentials_are_per_channel_with_legacy_fallback(monkeypatch):
     from office.channels import youtube_credentials, configured_youtube_channels
     for key in ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN", "YOUTUBE_MAIN_KO_REFRESH_TOKEN", "YOUTUBE_ENGLISH_REFRESH_TOKEN"):
