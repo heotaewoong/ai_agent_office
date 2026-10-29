@@ -12,7 +12,7 @@ function method(name, globals = {}) {
   return Function(...Object.keys(globals), 'return ({' + source.slice(start, end + 6) + '}).' + name)(...Object.values(globals));
 }
 const planFor = quality => method('architecturePlan', { QUALITY: quality });
-const walkable = method('walkable', { space: { layer: 'office', stages: [] }, ISLAND_W: 18, ISLAND_D: 16 });
+const walkable = method('walkable', { space: { layer: 'office', stages: [] }, workshop:{collides:()=>false}, ISLAND_W: 18, ISLAND_D: 16 });
 const canWalk = (obstacles, x, z) => walkable.call({ officeObstacles: obstacles, heightAt: () => 0 }, { x, z }, 0);
 
 function corners(part) {

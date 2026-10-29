@@ -28,6 +28,7 @@
   <button type="button" class="reset-btn" id="btn-reset" hidden>← 전체 보기<span class="kbd">Esc</span></button>
   <button type="button" class="world-toolbar-btn" id="btn-attention" disabled title="오류·사람 답 대기 동료의 부서를 차례로 봅니다">도움 0</button>
   <button type="button" class="world-toolbar-btn" id="btn-roster" aria-pressed="false" aria-controls="roster-panel">동료 목록</button>
+  <button type="button" class="world-toolbar-btn" id="btn-build" aria-pressed="false" aria-controls="build-panel">건축</button>
   <details class="world-tools" id="world-tools">
     <summary aria-label="환경과 이동 설정">환경</summary>
     <div class="world-tools-body">
@@ -47,6 +48,20 @@
     <button type="button" id="btn-walk" class="walk-only" aria-pressed="false">걷기<span class="kbd">M</span></button>
   </div>
 </header>
+
+<section class="build-panel" id="build-panel" hidden aria-label="보호 부지 건축">
+  <div class="build-heading"><div><h1>나만의 스카이 블록</h1><p>보호 부지 · 16×10m</p></div><button type="button" id="build-close" aria-label="건축 닫기">닫기</button></div>
+  <p class="build-guide">건물을 고른 뒤 부지를 누르거나 칸을 골라 배치하세요. 기존 도로와 포털은 보호돼요.</p>
+  <label for="build-target">새 건물 / 배치한 건물</label><select id="build-target"><option value="">새 건물</option></select>
+  <label for="build-kind">건물 선택</label><select id="build-kind"></select>
+  <div class="build-position"><label for="build-col">가로 칸<select id="build-col"></select></label><label for="build-row">세로 칸<select id="build-row"></select></label></div>
+  <div class="build-rotation"><button type="button" id="build-rotate">↻ 90° 회전</button><span id="build-spec"></span></div>
+  <p id="build-preview-status" class="build-preview-status" role="status"></p>
+  <button type="button" id="build-apply" class="build-primary">배치 확정</button>
+  <div class="build-actions"><button type="button" id="build-undo" disabled>↶ 되돌리기</button><button type="button" id="build-delete" disabled>선택 건물 삭제</button></div>
+  <p id="build-count"></p><p id="build-message" role="status"></p>
+  <small>2m 격자 · 회전 후 적용 · 최근 20회 되돌리기(현재 접속 중)<br>장식 건물의 내부는 통과할 수 없어요.</small>
+</section>
 
 <section class="roster-panel" id="roster-panel" hidden aria-label="동료 업무 목록">
   <div class="roster-heading"><div><h1>동료 업무 한눈에</h1><p id="roster-summary"></p></div><span>읽기 전용 관제</span></div>

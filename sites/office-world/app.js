@@ -37,6 +37,7 @@
     layer: 'office',      // office=y0 공중 팀 대지, meadow=약 -85m 지상
     view: 'overview',      // 'overview' | 'walk'
     rosterOpen: false,
+    buildingOpen: false,
     selectedStage: null,
     embedFocus: null,
     embedResult: null,
@@ -894,6 +895,7 @@
 
     // ---------------- 섬 ----------------
     clearStages() {
+      if(workshop.ready)workshop.clear();
       space.stages.forEach((st) => st.node.dispose());
       space.stages = [];
       this.flows.forEach((f) => f.mesh.dispose());
@@ -989,6 +991,38 @@
         box('front-light',0,5.22,6.13,12.5,.06,.12,'light');
         const ribs=QUALITY==='low'?5:9;
         for(let i=0;i<ribs;i++)box('roof-rib',-6.6+i*13.2/(ribs-1),7.22,-5.8,.13,.15,3.5,'shell');
+      }
+      if(kind==='build-tower'){
+        box('podium',0,.15,0,4,.3,4,'frame');
+        box('tower-core',0,3.35,0,3.2,5.5,3.2,'glass');
+        for(const x of [-1.72,1.72])for(const z of [-1.72,1.72])box('tower-pier',x,3.3,z,.24,6,.24,'shell');
+        for(const y of [.55,2.5,4.45,6.4])box('tower-belt',0,y,0,3.8,.16,3.8,'frame');
+        box('tower-crown',0,6.75,0,4,.26,4,'shell');
+        for(const x of [-1.2,0,1.2])box('tower-roof-fin',x,7.1,0,.15,.6,2.8,'frame');
+        for(const x of [-1.72,1.72])box('tower-guide',x,3.4,-1.86,.06,4.9,.05,'light');
+        box('tower-entry',0,.95,-1.93,1.1,1.3,.08,'frame');
+      }else if(kind==='build-lab'){
+        box('lab-plinth',0,.12,0,6,.24,4,'frame');
+        box('lab-back',0,1.9,1.7,5.7,3.3,.4,'shell');
+        box('lab-glazing',0,1.9,-1.76,5.3,2.8,.14,'glass');
+        for(const x of [-2.7,2.7])box('lab-side',x,1.9,0,.42,3.3,3.7,'shell');
+        for(const x of [-1.75,0,1.75])box('lab-mullion',x,1.95,-1.87,.1,2.9,.08,'frame');
+        box('lab-door',0,1.2,-1.94,1.1,2.1,.06,'frame');
+        box('lab-canopy',0,3.7,-1.1,5.9,.26,1.8,'shell');
+        box('lab-roof',0,4.2,0,5.9,.25,3.8,'frame');
+        for(const x of [-2,-1,0,1,2])box('lab-fin',x,4.55,0,.14,.5,3.3,'shell');
+        box('lab-light',0,3.53,-1.94,5.2,.07,.06,'light');
+      }else if(kind==='build-port'){
+        box('port-dock',0,.15,0,4,.3,6,'frame');
+        box('port-terminal',0,1.65,1.6,3.4,2.7,2.3,'glass');
+        for(const x of [-1.7,1.7])for(const z of [-2.6,2.6])box('port-pier',x,2.2,z,.3,4,.3,'shell');
+        box('port-roof',0,4.2,0,4,.3,5.9,'shell');
+        for(const x of [-1.5,1.5])box('port-roof-edge',x,4.5,0,.3,.2,5.8,'frame');
+        box('port-banner',0,4.03,-2.97,3.3,.12,.04,'light');
+        box('shuttle-hull',0,.9,-1.25,1.8,.55,2.4,'shell');
+        box('shuttle-cabin',0,1.35,-1.05,1.3,.45,1.35,'glass');
+        for(const x of [-1.05,1.05])box('shuttle-foil',x,.75,-1.3,.35,.2,2.2,'frame');
+        for(const x of [-.65,.65])box('shuttle-headlamp',x,1.02,-2.47,.25,.12,.04,'light');
       }
       return {parts,obstacles};
     },
@@ -1095,6 +1129,7 @@
       this.portals.office.y=0;
       this.scene.getMeshByName('transfer-gate-office').position.y=3;
       this.scene.getMeshByName('transfer-base-office').position.y=.1;
+      if(workshop.ready){workshop.rebuild();workshop.sync();}
     },
 
     heightAt(x, z) {
@@ -1260,43 +1295,68 @@
 
     // ---------------- 아바타 ----------------
     buildAvatar(name, skin, shirt, hair) {
-      const s = this.scene;
-      const root = new B.TransformNode(`avatar-${name}`, s);
-      const hipY = 0.78;
-      const make = (n, w, h, d, hex) => { const m = this.box(`${name}-${n}`, w, h, d, hex); m.parent = root; m.isPickable = false; return m; };
-      const body = make('body', 0.62, 0.78, 0.34, shirt); body.position.y = hipY + 0.39;
-      const head = make('head', 0.58, 0.58, 0.58, skin); head.position.y = hipY + 0.78 + 0.31;
-      const cap = make('hair', 0.62, 0.2, 0.62, hair); cap.position.y = hipY + 0.78 + 0.56;
-      const hairBack = make('hair-back', 0.62, 0.3, 0.14, hair); hairBack.position.set(0, hipY + 0.78 + 0.34, -0.26);
-      [-0.13, 0.13].forEach((ex, i) => { const eye = make(`eye-${i}`, 0.1, 0.1, 0.04, '#1a1e2e'); eye.position.set(ex, hipY + 0.78 + 0.34, 0.3); });
-      const limb = (n, w, h, d, hex, px, py) => {
-        const pivot = new B.TransformNode(`${name}-${n}-pivot`, s);
-        pivot.parent = root; pivot.position.set(px, py, 0);
-        const m = this.box(`${name}-${n}`, w, h, d, hex); m.parent = pivot; m.position.y = -h / 2; m.isPickable = false;
+      const s=this.scene,root=new B.TransformNode('avatar-'+name,s),hipY=.78,high=QUALITY!=='low';
+      const make=(n,w,h,d,hex)=>{const m=this.box(name+'-'+n,w,h,d,hex);m.parent=root;m.isPickable=false;return m;};
+      const body=make('body',.62,.78,.34,shirt);body.position.y=hipY+.39;
+      const head=make('head',.58,.58,.58,skin);head.position.y=hipY+.78+.31;
+      const limb=(n,w,h,d,hex,px,py)=>{
+        const pivot=new B.TransformNode(name+'-'+n+'-pivot',s);pivot.parent=root;pivot.position.set(px,py,0);
+        const mesh=this.box(name+'-'+n,w,h,d,hex);mesh.parent=pivot;mesh.position.y=-h/2;mesh.isPickable=false;
         return pivot;
       };
-      const legL = limb('legL', 0.28, hipY, 0.3, '#2b3350', -0.16, hipY);
-      const legR = limb('legR', 0.28, hipY, 0.3, '#2b3350', 0.16, hipY);
-      const armL = limb('armL', 0.22, 0.72, 0.24, skin, -0.44, hipY + 0.74);
-      const armR = limb('armR', 0.22, 0.72, 0.24, skin, 0.44, hipY + 0.74);
-      const marker = B.MeshBuilder.CreateSphere(`${name}-marker`, { diameter: 0.26, segments: 8 }, s);
-      marker.parent = root; marker.position.y = hipY + 0.78 + 0.95; marker.isPickable = false;
-      marker.material = this.mat('marker', '#4ad994', { emissive: 1.0, unlit: true });
-      root.getChildMeshes().forEach((m) => { if (m !== marker) { this.castShadow(m); this.receiveShadow(m); } });
-      const trim = this.pbr('avatar-trim', '#dbe8ef', .5, .4, 'metal');
-      const accent = this.mat('avatar-badge', '#8cfff1', { emissive: .3, unlit: true });
-      const outfit = (part, w, h, d, material, x, y, z, parent = root) => {
-        const mesh = B.MeshBuilder.CreateBox(name + '-' + part, { width: w, height: h, depth: d }, s);
-        mesh.parent = parent; mesh.position.set(x, y, z); mesh.material = material;
-        mesh.isPickable = false; this.receiveShadow(mesh);
+      const legL=limb('legL',.28,hipY,.3,'#2b3350',-.16,hipY),legR=limb('legR',.28,hipY,.3,'#2b3350',.16,hipY);
+      const armL=limb('armL',.22,.72,.24,skin,-.44,hipY+.74),armR=limb('armR',.22,.72,.24,skin,.44,hipY+.74);
+      const marker=B.MeshBuilder.CreateSphere(name+'-marker',{diameter:.26,segments:8},s);
+      marker.parent=root;marker.position.y=hipY+.78+.95;marker.isPickable=false;
+      marker.material=this.mat('marker','#4ad994',{emissive:1,unlit:true});
+      const trim=this.pbr('avatar-trim','#dbe8ef',.5,.4,'metal'),gear=this.pbr('avatar-gear','#24394c',.6,.35,'metal');
+      const accent=this.mat('avatar-badge','#8cfff1',{emissive:.3,unlit:true}),hairMat=this.mat('avatar-hair',hair),ink=this.mat('avatar-face','#1a1e2e');
+      const whites=this.mat('avatar-eye-white','#f4f7ed'),groups=new Map();
+      const detail=(part,w,h,d,material,x,y,z,parent=root)=>{
+        const mesh=B.MeshBuilder.CreateBox(name+'-'+part,{width:w,height:h,depth:d},s);
+        mesh.position.set(x,y,z);mesh.material=material;
+        if(!groups.has(parent))groups.set(parent,new Map());
+        const byMaterial=groups.get(parent);if(!byMaterial.has(material))byMaterial.set(material,[]);byMaterial.get(material).push(mesh);
       };
-      outfit('collar', .66, .1, .38, trim, 0, hipY + .72, 0);
-      outfit('chest-plate', .39, .34, .055, trim, 0, hipY + .47, .1975);
-      outfit('belt', .66, .1, .38, trim, 0, hipY + .09, 0);
-      outfit('badge', .1, .075, .018, accent, -.095, hipY + .53, .237);
-      [-1, 1].forEach(side => outfit('earpiece-' + side, .12, .22, .26, trim, side * .345, hipY + 1.09, 0));
-      [armL, armR].forEach((arm, i) => outfit('sleeve-' + i, .24, .26, .26, body.material, 0, -.13, 0, arm));
-      return { root, legL, legR, armL, armR, head, body, marker, hipY, phase: Math.random() * 6 };
+      detail('hair-cap',.62,.17,.62,hairMat,0,2.135,0);
+      detail('hair-back',.62,.31,.13,hairMat,0,1.98,-.27);
+      for(const side of [-1,1]){
+        detail('hair-temple',.075,.24,.38,hairMat,side*.275,2.02,-.07);
+        if(high)detail('brow',.13,.025,.022,hairMat,side*.13,1.995,.307);
+        detail('eye',high?.065:.1,.095,.018,ink,side*.13,1.9,high?.328:.31);
+        if(high){
+          detail('eye-white',.13,.105,.026,whites,side*.13,1.9,.307);
+          detail('eye-glint',.018,.023,.01,accent,side*.13-.012,1.92,.344);
+        }
+        detail('earpiece',.12,.22,.26,trim,side*.345,hipY+1.09,0);
+      }
+      for(const x of high?[-.2,0,.2]:[-.16,.16])detail('fringe',high?.2:.31,.13+(x<0?.06:0),.11,hairMat,x,2.065,.27);
+      detail('mouth',.12,.025,.015,ink,0,1.735,.31);
+      if(high)detail('nose',.075,.085,.08,head.material,0,1.815,.327);
+      detail('collar',.66,.1,.38,trim,0,hipY+.72,0);
+      detail('chest-plate',.39,.34,.055,trim,0,hipY+.47,.1975);
+      detail('belt',.66,.1,.38,trim,0,hipY+.09,0);
+      detail('badge',.1,.075,.018,accent,-.095,hipY+.53,.237);
+      detail('pack',.45,.5,.13,trim,0,hipY+.42,-.235);
+      detail('pack-inset',.27,.31,.03,ink,0,hipY+.42,-.33);
+      [armL,armR].forEach(arm=>{
+        detail('sleeve',.24,.26,.26,body.material,0,-.13,0,arm);
+        detail('shoulder',.28,.085,.29,trim,0,-.045,0,arm);
+        detail('glove',.245,.2,.27,gear,0,-.64,.015,arm);
+        detail('glove-cuff',.255,.065,.28,gear,0,-.53,.015,arm);
+      });
+      [legL,legR].forEach(leg=>{
+        detail('boot',.305,.22,.38,gear,0,-hipY+.11,.025,leg);
+        detail('boot-toe',.31,.1,.15,gear,0,-hipY+.065,.17,leg);
+      });
+      // Merge only unparented local details, then attach them to their animated pivot.
+      for(const [parent,materials] of groups)for(const parts of materials.values()){
+        const detailName=parts[0].name;
+        const mesh=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);
+        if(mesh){mesh.name=detailName+'-detail';mesh.parent=parent;mesh.isPickable=false;}
+      }
+      root.getChildMeshes().forEach(mesh=>{if(mesh!==marker&&!mesh.material?.disableLighting){this.castShadow(mesh);this.receiveShadow(mesh);}});
+      return {root,legL,legR,armL,armR,head,body,marker,hipY,phase:Math.random()*6};
     },
 
     setPose(av, pose) {
@@ -1457,6 +1517,7 @@
         return !(this.groundCity?.obstacles||[]).some(o=>o.r?Math.hypot(v.x-o.x,v.z-o.z)<o.r+clearance:Math.abs(v.x-o.x)<o.w/2+clearance&&Math.abs(v.z-o.z)<o.d/2+clearance);
       }
       const h = this.heightAt(v.x, v.z);
+      if(workshop.collides(v,clearance))return false;
       if((this.officeObstacles||[]).some(o=>Math.hypot(v.x-o.x,v.z-o.z)<o.r+clearance))return false;
       if (h === null) return false;
       if (fromY !== undefined && h - fromY > 1.01) return false;
@@ -1655,7 +1716,7 @@
       const stop = () => { this.dragging = false; };
       canvas.addEventListener('pointerup', stop); canvas.addEventListener('pointercancel', stop);
       s.onPointerObservable.add((info) => {
-        if (info.type !== B.PointerEventTypes.POINTERTAP || space.view !== 'overview') return;
+        if (info.type !== B.PointerEventTypes.POINTERTAP || space.view !== 'overview' || workshop.opened) return;
         const pick = info.pickInfo;
         if (!pick || !pick.hit || !pick.pickedMesh) return;
         const meta = pick.pickedMesh.metadata || {};
@@ -1711,7 +1772,7 @@
     onKey(e, down) {
       const k = e.key.toLowerCase();
       if (!down) this.keys.delete(k);
-      if (space.rosterOpen) return;
+      if (space.rosterOpen || space.buildingOpen) return;
       if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       if (k === ' ' && e.target?.closest?.('button')) return;
       if (down && k === 'm') { this.setView(space.view === 'walk' ? 'overview' : 'walk'); return; }
@@ -2067,6 +2128,215 @@
   // 보조
   // ======================================================================
   // 같은 투영을 읽는 간편 관제. 보기/초점 변경은 업무를 실행하지 않는다.
+  const workshop = {
+    key:'heobrain.buildings.v1',
+    catalog:{tower:{name:'오로라 관측 타워',w:4,d:4,h:7.4},lab:{name:'프리즘 연구소',w:6,d:4,h:4.8},port:{name:'오비탈 모빌리티 허브',w:4,d:6,h:4.6}},
+    plot:{x:32,z:-46,cols:8,rows:5,step:2},items:[],history:[],visibleItems:[],storedRaw:null,storageBlocked:false,
+    selectedId:null,draft:{kind:'tower',col:1,row:1,turn:0},opened:false,ready:false,root:null,preview:null,message:'',
+
+    bounds(item) {
+      const model=this.catalog[item.kind],p=this.plot;
+      const w=item.turn%2?model.d:model.w,d=item.turn%2?model.w:model.d;
+      const minX=p.x-p.cols*p.step/2+item.col*p.step,minZ=p.z-p.rows*p.step/2+item.row*p.step;
+      return {minX,minZ,maxX:minX+w,maxZ:minZ+d,w,d};
+    },
+
+    validateLayout(items) {
+      if(!Array.isArray(items)||items.length>8)return '건물은 최대 8개까지 배치할 수 있어요.';
+      const ids=new Set(),p=this.plot;
+      for(const item of items){
+        if(!item||typeof item!=='object'||typeof item.id!=='string'||!/^b[1-9][0-9]{0,5}$/.test(item.id)||ids.has(item.id))return '건물 기록의 식별자가 올바르지 않아요.';
+        ids.add(item.id);
+        if(typeof item.kind!=='string'||!Object.hasOwn(this.catalog,item.kind)||!['col','row','turn'].every(k=>Number.isInteger(item[k]))||item.turn<0||item.turn>3)return '건물 종류나 위치·회전 기록이 올바르지 않아요.';
+        const b=this.bounds(item);
+        if(item.col<0||item.row<0||b.maxX>p.x+p.cols*p.step/2||b.maxZ>p.z+p.rows*p.step/2)return '건물 전체가 보호 부지 안에 들어와야 해요.';
+      }
+      for(let i=0;i<items.length;i++)for(let j=i+1;j<items.length;j++){
+        const a=this.bounds(items[i]),b=this.bounds(items[j]);
+        if(a.minX<b.maxX&&a.maxX>b.minX&&a.minZ<b.maxZ&&a.maxZ>b.minZ)return '다른 건물과 겹쳐요. 빈 칸을 선택하세요.';
+      }
+      return '';
+    },
+
+    obstruction(item) {
+      const b=this.bounds(item),x=(b.minX+b.maxX)/2,z=(b.minZ+b.maxZ)/2;
+      if((world.officeObstacles||[]).some(o=>Math.hypot(Math.max(b.minX-o.x,0,o.x-b.maxX),Math.max(b.minZ-o.z,0,o.z-b.maxZ))<o.r+.4))return '기존 도시 시설과 겹쳐요.';
+      for(const st of space.stages){
+        const c=Math.cos(st.angle),s=Math.sin(st.angle),dx=x-c*46,dz=z-s*46;
+        const intersects=[[1,0],[0,1],[c,s],[-s,c]].every(([ax,az])=>Math.abs(dx*ax+dz*az)<b.w/2*Math.abs(ax)+b.d/2*Math.abs(az)+15*Math.abs(c*ax+s*az)+2*Math.abs(-s*ax+c*az)+.4);
+        if(intersects)return '부서로 이어지는 도로는 비워 두세요.';
+      }
+      const player=controls.player?.pos;
+      if(space.layer==='office'&&player&&player.x>b.minX-.45&&player.x<b.maxX+.45&&player.z>b.minZ-.45&&player.z<b.maxZ+.45)return '캐릭터가 있는 칸은 비워 두세요.';
+      return '';
+    },
+
+    restore() {
+      this.history=[];this.selectedId=null;this.items=[];this.storageBlocked=false;this.message='';
+      try{
+        this.storedRaw=localStorage.getItem(this.key);
+        if(this.storedRaw===null)return;
+        if(this.storedRaw.length>32768)throw new Error('size');
+        const saved=JSON.parse(this.storedRaw);
+        if(saved?.version!==1||this.validateLayout(saved.items))throw new Error('layout');
+        this.items=saved.items.map(({id,kind,col,row,turn})=>({id,kind,col,row,turn}));
+      }catch(_){this.storageBlocked=true;this.message='건축 기록을 읽지 못했어요. 기존 저장은 보존했으며 덮어쓰지 않아요.';}
+    },
+
+    persist(next,selectedId=null,undo=false) {
+      const reason=this.validateLayout(next);
+      if(reason){this.message=reason;return false;}
+      if(this.storageBlocked){this.message='기존 건축 기록을 보호하고 있어요. 브라우저 저장 상태를 확인해 주세요.';return false;}
+      const clean=next.map(({id,kind,col,row,turn})=>({id,kind,col,row,turn})),raw=JSON.stringify({version:1,items:clean});
+      try{
+        if(localStorage.getItem(this.key)!==this.storedRaw){this.message='다른 탭에서 건축 기록이 바뀌었어요. 건축 창을 닫았다 다시 열어 주세요.';return false;}
+        localStorage.setItem(this.key,raw);
+      }catch(_){this.message='저장하지 못해 변경을 적용하지 않았어요. 브라우저의 저장 허용·여유 공간을 확인하세요.';return false;}
+      if(!undo){this.history.push(this.items.map(i=>({...i})));if(this.history.length>20)this.history.shift();}
+      this.items=clean;this.storedRaw=raw;this.selectedId=selectedId;
+      return true;
+    },
+
+    applyDraft() {
+      const id=this.selectedId||'b'+(Math.max(0,...this.items.map(i=>Number(i.id.slice(1))))+1);
+      const item={id,...this.draft},next=this.selectedId?this.items.map(i=>i.id===id?item:i):[...this.items,item];
+      const reason=this.validateLayout(next)||this.obstruction(item);
+      if(reason){this.message=reason;this.sync();return false;}
+      if(JSON.stringify(next)===JSON.stringify(this.items)){this.message='위치나 회전을 바꾼 뒤 적용하세요.';this.sync();return false;}
+      if(!this.persist(next,id)){this.sync();return false;}
+      this.message='건물을 배치했어요. 이 브라우저에 저장됐어요.';this.rebuild();this.sync();return true;
+    },
+
+    remove() {
+      if(!this.selectedId)return false;
+      if(!this.persist(this.items.filter(i=>i.id!==this.selectedId))) {this.sync();return false;}
+      this.message='선택한 건물을 삭제했어요. 되돌리기로 복원할 수 있어요.';this.rebuild();this.sync();return true;
+    },
+
+    undo() {
+      if(!this.history.length)return false;
+      if(!this.persist(this.history[this.history.length-1],null,true)){this.sync();return false;}
+      this.history.pop();this.message='직전 변경을 되돌렸어요.';this.rebuild();this.sync();return true;
+    },
+
+    collides(v,clearance=.4) {
+      return this.visibleItems.some(i=>{const b=this.bounds(i);return v.x>b.minX-clearance&&v.x<b.maxX+clearance&&v.z>b.minZ-clearance&&v.z<b.maxZ+clearance;});
+    },
+
+    clear() {
+      this.preview?.dispose();this.preview=null;this.root?.dispose();this.root=null;this.visibleItems=[];this.models=new Map();this.pickPlane=null;
+    },
+
+    model(item,parent,ghost=false) {
+      const b=this.bounds(item),node=new B.TransformNode('build-'+item.id,world.scene);
+      node.parent=parent;node.position.set((b.minX+b.maxX)/2,0,(b.minZ+b.maxZ)/2);node.rotation.y=item.turn*Math.PI/2;
+      const built=world.buildArchitecture('build-'+item.kind,node);
+      if(ghost){
+        const reason=this.validateLayout([...this.items.filter(i=>i.id!==item.id),item])||this.obstruction(item);
+        const material=world.mat('building-preview',reason?'#ff817c':'#8aecd7',{emissive:.7,alpha:.45,unlit:true});
+        built.meshes.forEach(m=>{world.shadows?.removeShadowCaster(m);m.material=material;});
+      }
+      return node;
+    },
+
+    rebuild() {
+      if(!this.ready)return;
+      this.clear();this.root=new B.TransformNode('protected-building-plot',world.scene);
+      this.visibleItems=this.items.filter(i=>!this.obstruction(i));
+      this.models=new Map();this.visibleItems.forEach(i=>this.models.set(i.id,this.model(i,this.root)));
+      const p=this.plot,x=p.x-p.cols*p.step/2,z=p.z-p.rows*p.step/2,lines=[];
+      for(let c=0;c<=p.cols;c++)lines.push([new B.Vector3(x+c*p.step,.045,z),new B.Vector3(x+c*p.step,.045,z+p.rows*p.step)]);
+      for(let r=0;r<=p.rows;r++)lines.push([new B.Vector3(x,.045,z+r*p.step),new B.Vector3(x+p.cols*p.step,.045,z+r*p.step)]);
+      const grid=B.MeshBuilder.CreateLineSystem('protected-plot-grid',{lines},world.scene);grid.parent=this.root;grid.color=B.Color3.FromHexString('#75d7cb');grid.alpha=.65;grid.isPickable=false;
+      if(this.opened){
+        this.pickPlane=B.MeshBuilder.CreateGround('building-pick-plane',{width:p.cols*p.step,height:p.rows*p.step},world.scene);
+        this.pickPlane.position.set(p.x,.02,p.z);this.pickPlane.parent=this.root;this.pickPlane.visibility=0;
+      }
+      this.updatePreview();
+    },
+
+    draftMatchesSelection() {
+      const item=this.items.find(i=>i.id===this.selectedId);
+      return !!item&&['kind','col','row','turn'].every(k=>item[k]===this.draft[k]);
+    },
+
+    updatePreview() {
+      this.preview?.dispose();this.preview=null;
+      const unchanged=this.draftMatchesSelection();
+      this.models?.forEach((node,id)=>node.setEnabled(!this.opened||id!==this.selectedId||unchanged));
+      if(this.pickPlane)this.pickPlane.isPickable=this.opened;
+      if(this.opened&&this.root&&!unchanged)this.preview=this.model({id:this.selectedId||'b999999',...this.draft},this.root,true);
+    },
+
+    sync() {
+      if(!this.ready)return;
+      const target=$('build-target');target.replaceChildren(new Option('새 건물', ''));
+      this.items.forEach(i=>target.add(new Option(this.catalog[i.kind].name+' · '+(i.col+1)+','+(i.row+1)+' · '+i.turn*90+'°',i.id)));
+      target.value=this.selectedId||'';
+      $('build-kind').value=this.draft.kind;$('build-col').value=String(this.draft.col);$('build-row').value=String(this.draft.row);
+      const model=this.catalog[this.draft.kind],item={id:this.selectedId||'b999999',...this.draft};
+      const invalid=this.validateLayout([...this.items.filter(i=>i.id!==item.id),item])||this.obstruction(item);
+      const held=this.items.length-this.visibleItems.length;
+      $('build-spec').textContent=model.w+'×'+model.d+'m · '+this.draft.turn*90+'° · 높이 '+model.h+'m';
+      $('build-preview-status').textContent=invalid||(this.draftMatchesSelection()?'배치 완료 · 위치나 회전을 바꾸면 미리보기가 나타나요.':'민트색 미리보기 위치에 배치할 수 있어요.');
+      $('build-preview-status').classList.toggle('invalid',!!invalid);
+      $('build-apply').textContent=this.selectedId?'위치·회전 적용':'배치 확정';$('build-apply').disabled=!!invalid||this.storageBlocked||this.draftMatchesSelection();
+      $('build-delete').disabled=!this.selectedId||this.storageBlocked;$('build-undo').disabled=!this.history.length||this.storageBlocked;
+      $('build-count').textContent=this.items.length+'/8 건물 · 되돌리기 '+this.history.length+'/20';
+      $('btn-build').disabled=!world.terrain;
+      $('build-message').textContent=(held?held+'개 건물은 현재 도로·캐릭터와 겹쳐 표시를 보류했어요. 저장 원본은 유지돼요. ':'')+(this.message||'건축 기록은 이 브라우저에 저장돼요. 차량·업무 기록과 별개예요.');
+      this.updatePreview();
+    },
+
+    frame() {
+      controls.animateCamera({alpha:-1.1,beta:.9,radius:isPhone()?46:34,target:new B.Vector3(32,isPhone()?-5:2,-46)});
+    },
+
+    setOpen(open) {
+      if(open){
+        if(!world.terrain)return;
+        try{if(localStorage.getItem(this.key)!==this.storedRaw)this.restore();}catch(_){this.storageBlocked=true;}
+        workbench.setRoster(false);hud.closePanel();controls.keys.clear();controls.dragging=false;controls.setVehicleSpeed(0);
+        controls.setLayer('office');controls.setView('overview');controls.overview.detachControl();
+        $('world-tools').open=false;this.opened=true;space.buildingOpen=true;document.body.classList.add('building-view');
+        $('build-panel').hidden=false;$('btn-build').setAttribute('aria-pressed','true');
+        this.frame();
+        this.rebuild();this.sync();$('build-kind').focus({preventScroll:true});$('build-panel').scrollTop=0;
+      }else{
+        this.opened=false;space.buildingOpen=false;this.preview?.dispose();this.preview=null;controls.keys.clear();controls.dragging=false;
+        document.body.classList.remove('building-view');$('build-panel').hidden=true;$('btn-build').setAttribute('aria-pressed','false');
+        controls.overview.attachControl(world.canvas,true);this.updatePreview();$('btn-build').focus();
+      }
+    },
+
+    init() {
+      this.restore();this.ready=true;$('btn-build').disabled=!world.terrain;
+      for(const [kind,model]of Object.entries(this.catalog))$('build-kind').add(new Option(model.name,kind));
+      for(let c=0;c<this.plot.cols;c++)$('build-col').add(new Option(String(c+1),String(c)));
+      for(let r=0;r<this.plot.rows;r++)$('build-row').add(new Option(String(r+1),String(r)));
+      window.addEventListener('resize',()=>{if(this.opened)this.frame();});
+      $('btn-build').onclick=()=>this.setOpen(!this.opened);$('build-close').onclick=()=>this.setOpen(false);
+      const update=()=>{this.draft={kind:$('build-kind').value,col:Number($('build-col').value),row:Number($('build-row').value),turn:this.draft.turn};this.message='';this.sync();};
+      ['build-kind','build-col','build-row'].forEach(id=>$(id).onchange=update);
+      world.scene.onPointerObservable.add(info=>{
+        if(!this.opened||info.type!==B.PointerEventTypes.POINTERTAP||!this.pickPlane)return;
+        const rect=world.canvas.getBoundingClientRect(),hit=world.scene.pick(info.event.clientX-rect.left,info.event.clientY-rect.top,m=>m===this.pickPlane);
+        if(!hit?.hit||!hit.pickedPoint)return;
+        const p=this.plot;this.draft.col=Math.min(p.cols-1,Math.max(0,Math.floor((hit.pickedPoint.x-p.x+p.cols*p.step/2)/p.step)));
+        this.draft.row=Math.min(p.rows-1,Math.max(0,Math.floor((hit.pickedPoint.z-p.z+p.rows*p.step/2)/p.step)));
+        this.message='';this.sync();
+      });
+      $('build-target').onchange=()=>{this.selectedId=$('build-target').value||null;const item=this.items.find(i=>i.id===this.selectedId);this.draft=item?{kind:item.kind,col:item.col,row:item.row,turn:item.turn}:{kind:'tower',col:1,row:1,turn:0};this.message='';this.sync();};
+      $('build-rotate').onclick=()=>{this.draft.turn=(this.draft.turn+1)%4;this.message='';this.sync();};
+      $('build-apply').onclick=()=>this.applyDraft();$('build-delete').onclick=()=>this.remove();$('build-undo').onclick=()=>this.undo();
+      document.addEventListener('keydown',e=>{
+        if(!this.opened)return;
+        if(e.key==='Escape'){e.preventDefault();e.stopPropagation();this.setOpen(false);return;}
+        if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!e.target.closest('input,select,textarea')){e.preventDefault();e.stopPropagation();this.undo();}
+      });
+    },
+  };
+
   const workbench = {
     attentionId: null,
 
@@ -2234,6 +2504,7 @@
     data.init();
     embed.init();
     workbench.init();
+    workshop.init();
 
     let simTimer = null;
     data.onChange((d) => {
