@@ -157,7 +157,7 @@ def test_card_style_mixed_endings_and_template_reason_are_flagged():
 
 def test_card_prompt_separates_feed_from_actor_and_handles_empty_description():
     from office.korean import CARD_PROMPT
-    assert "feed는 글이 올라온 곳일 뿐 발표 주체가 아니다" in CARD_PROMPT
+    assert "발표 주체는 url로 정한다" in CARD_PROMPT and "feed 이름만 보고 주어를 정하지 않는다" in CARD_PROMPT
     assert "제목만 보고 정리했어요" in CARD_PROMPT
 
 

@@ -808,8 +808,8 @@ function ArticleCard({
     ...(card?.why ? [card.why] : []),
     ...(article.score_reasons ?? []),
   ];
-  // 국어 검수를 거친 카드 제목을 먼저 쓰고, 없으면 편집 선정 제목, 그다음 원제.
-  const headline = card?.headline || article.editorial_title || article.title;
+  // 사람이 다듬은 편집 선정 제목(국어 규칙 테스트로 고정)을 먼저 쓰고, 없으면 국어 검수를 거친 카드 제목, 그다음 원제.
+  const headline = article.editorial_title || card?.headline || article.title;
   const issues = card?.check?.issues ?? [];
   return (
     <article className={`article-card ${checked ? "selected" : ""}`}>
