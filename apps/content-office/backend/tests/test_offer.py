@@ -17,15 +17,15 @@ def test_set_offer_requires_https_and_records_actor(tmp_path):
     store = Store(tmp_path)
     job = store.create_job({"id": "offer-test", "title": "오퍼 시험"})
     client, headers = api(store)
-    bad = client.put(f"/api/jobs/{job['id']}/offer", json={"product": "D-30 플래너", "price_krw": 9900, "url": "http://heobrain.store/planner"}, headers=headers)
+    bad = client.put(f"/api/jobs/{job['id']}/offer", json={"product": "D-30 플래너", "price_krw": 9900, "url": "http://heobrain.kr/planner"}, headers=headers)
     assert bad.status_code == 409
     assert "offer" not in store.job(job["id"])
     empty = client.put(f"/api/jobs/{job['id']}/offer", json={"product": "   ", "price_krw": None, "url": None, "note": None}, headers=headers)
     assert empty.status_code == 409
-    ok = client.put(f"/api/jobs/{job['id']}/offer", json={"product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.store/planner", "note": "첫 달 안내"}, headers=headers)
+    ok = client.put(f"/api/jobs/{job['id']}/offer", json={"product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.kr/planner", "note": "첫 달 안내"}, headers=headers)
     assert ok.status_code == 200
     offer = ok.json()["offer"]
-    assert offer["product"] == "D-30 플래너" and offer["price_krw"] == 9900 and offer["url"] == "https://heobrain.store/planner" and offer["note"] == "첫 달 안내"
+    assert offer["product"] == "D-30 플래너" and offer["price_krw"] == 9900 and offer["url"] == "https://heobrain.kr/planner" and offer["note"] == "첫 달 안내"
     assert offer["captured_at"] and offer["actor"] == "local-operator"
     assert store.job(job["id"])["offer"] == offer
     cleared = client.delete(f"/api/jobs/{job['id']}/offer", headers=headers)
@@ -51,9 +51,9 @@ def test_blog_export_adds_offer_line_only_when_offer_exists(tmp_path):
     packet = {"title": "원고", "body": "## 핵심\n\n본문입니다.", "evidence": [{"id": "E1", "url": "https://example.com/a", "claim": "근거"}]}
     plain = blog_markdown(packet)
     assert "함께 보기" not in plain and blog_markdown(packet, None) == plain
-    offer = {"product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.store/planner", "note": "첫 달 안내", "captured_at": "2026-10-29T00:00:00+00:00", "actor": "op"}
+    offer = {"product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.kr/planner", "note": "첫 달 안내", "captured_at": "2026-10-29T00:00:00+00:00", "actor": "op"}
     with_offer = blog_markdown(packet, offer)
-    assert with_offer.startswith(plain) and "함께 보기" in with_offer and "D-30 플래너" in with_offer and "9,900원" in with_offer and "https://heobrain.store/planner" in with_offer
+    assert with_offer.startswith(plain) and "함께 보기" in with_offer and "D-30 플래너" in with_offer and "9,900원" in with_offer and "https://heobrain.kr/planner" in with_offer
     files = write_blog_exports(packet, tmp_path / "with", offer) if (tmp_path / "with").mkdir() is None else None
     assert "함께 보기" in (tmp_path / "with" / "tistory.md").read_text(encoding="utf-8")
     assert "D-30 플래너" in (tmp_path / "with" / "naver.txt").read_text(encoding="utf-8")
@@ -66,7 +66,7 @@ def test_media_produce_passes_job_offer_to_blog_export(tmp_path, monkeypatch):
     from office import media
     from tests.test_media import approved_job
     store, job_id = approved_job(tmp_path, video=False, cards=False)
-    store.set_offer(job_id, {"product": "오픽 7일 연습표", "price_krw": None, "url": "https://heobrain.store/opic", "note": None}, actor="op")
+    store.set_offer(job_id, {"product": "오픽 7일 연습표", "price_krw": None, "url": "https://heobrain.kr/opic", "note": None}, actor="op")
     seen = {}
     real = media.write_blog_exports
 
