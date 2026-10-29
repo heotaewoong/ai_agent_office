@@ -10,33 +10,43 @@ from .runtime import AlreadyRunning, ProcessLock, aware_time, utcnow
 from .store import WorkflowError, canonical, identifier
 
 
-def start_session(store, *, minutes, current=None, source='local_operator_cli'):
+def start_session(store, *, minutes, current=None, source='local_operator_cli', stop_services=None):
+    """Issue a new work window. `stop_services(store)` may stop a worker/watcher that was started
+    before any window existed (start-local.sh does that); it returns the names it stopped."""
     if type(minutes) is not int or not 1 <= minutes <= 360:
         raise WorkflowError('작업 시간은 1~360분의 정수로 직접 지정하세요')
     current = aware_time(current or utcnow())
     try:
-        # An old watcher must finish closing its own window before a new one is issued.
-        with ProcessLock(store.root / 'watcher.lock'), ProcessLock(store.root / 'worker.lock'):
-            with store.connection(transaction=True) as db:
-                row = db.execute("SELECT value FROM settings WHERE key='work_window'").fetchone()
-                previous = json.loads(row[0]) if row else None
-                if previous and previous.get('authorized_end') and aware_time(previous['authorized_end']) > current:
-                    raise WorkflowError('기존 작업 시간이 진행 중입니다. 현재 시간의 종료를 확인한 뒤 새 세션을 시작하세요')
-                row = db.execute("SELECT value FROM settings WHERE key='work_window_history'").fetchone()
-                history = json.loads(row[0]) if row else []
-                if previous:
-                    history.append(previous)
-                window = {'id': identifier('window'), 'authorized_start': current.isoformat(),
-                          'authorized_end': (current + timedelta(minutes=minutes)).isoformat(),
-                          'status': 'active', 'user_confirmed': True, 'authorization_source': source if source in ('local_operator_cli', 'local_operator_ui') else 'local_operator_cli',
-                          'scope': 'RSS, drafts, media after source approval; existing total budget retained; publication not included'}
-                db.execute("INSERT OR REPLACE INTO settings VALUES('work_window_history',?)", (canonical(history[-100:]),))
-                db.execute("INSERT OR REPLACE INTO settings VALUES('work_window',?)", (canonical(window),))
-                store._event(db, 'manual_work_window_started', window)
-                return window
+        return _issue_window(store, minutes, current, source)
     except AlreadyRunning:
+        if stop_services and stop_services(store):
+            try:
+                return _issue_window(store, minutes, current, source)
+            except AlreadyRunning:
+                pass
         raise WorkflowError('이전 작업자 또는 감시가 실행 중입니다. 종료를 확인한 뒤 새 세션을 시작하세요') from None
 
+
+def _issue_window(store, minutes, current, source):
+    # An old watcher must finish closing its own window before a new one is issued.
+    with ProcessLock(store.root / 'watcher.lock'), ProcessLock(store.root / 'worker.lock'):
+        with store.connection(transaction=True) as db:
+            row = db.execute("SELECT value FROM settings WHERE key='work_window'").fetchone()
+            previous = json.loads(row[0]) if row else None
+            if previous and previous.get('authorized_end') and aware_time(previous['authorized_end']) > current:
+                raise WorkflowError('기존 작업 시간이 진행 중입니다. 현재 시간의 종료를 확인한 뒤 새 세션을 시작하세요')
+            row = db.execute("SELECT value FROM settings WHERE key='work_window_history'").fetchone()
+            history = json.loads(row[0]) if row else []
+            if previous:
+                history.append(previous)
+            window = {'id': identifier('window'), 'authorized_start': current.isoformat(),
+                      'authorized_end': (current + timedelta(minutes=minutes)).isoformat(),
+                      'status': 'active', 'user_confirmed': True, 'authorization_source': source if source in ('local_operator_cli', 'local_operator_ui') else 'local_operator_cli',
+                      'scope': 'RSS, drafts, media after source approval; existing total budget retained; publication not included'}
+            db.execute("INSERT OR REPLACE INTO settings VALUES('work_window_history',?)", (canonical(history[-100:]),))
+            db.execute("INSERT OR REPLACE INTO settings VALUES('work_window',?)", (canonical(window),))
+            store._event(db, 'manual_work_window_started', window)
+            return window
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

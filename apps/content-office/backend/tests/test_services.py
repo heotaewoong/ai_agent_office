@@ -63,3 +63,35 @@ def test_starts_worker_and_watcher_once_and_records_them(tmp_path):
     assert saved['services']['worker']['pid'] == os.getpid() and saved['services']['worker']['log'].endswith('worker.log')
     again = start_window_services(store, app_dir=tmp_path, platform='posix', spawn=spawn)
     assert again['started'] == [] and set(again['running']) == {'worker', 'watcher'} and len(calls) == 2
+
+
+def test_stop_windowless_services_terminates_managed_worker_only_without_active_window(tmp_path):
+    import subprocess, sys, time
+    from datetime import datetime, timedelta, timezone
+    from office.runtime import process_identity
+    from office.services import stop_windowless_services
+    store = Store(tmp_path / 'state')
+    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])
+    try:
+        time.sleep(.3)
+        identity = process_identity(child.pid)
+        assert identity
+        path = registry(store, tmp_path, {'api': {'pid': 1, 'start_ticks': 'x'}, 'worker': {**identity, 'log': 'worker.log'}})
+        # An active window means the worker belongs to that window: never touch it.
+        store.set_setting('work_window', {'status': 'active', 'authorized_end': (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat()})
+        assert stop_windowless_services(store, app_dir=tmp_path) == []
+        assert child.poll() is None
+        store.set_setting('work_window', None)
+        assert stop_windowless_services(store, app_dir=tmp_path) == ['worker']
+        for _ in range(50):
+            if child.poll() is not None:
+                break
+            time.sleep(.1)
+        assert child.poll() is not None
+        saved = json.loads(path.read_text())
+        assert 'worker' not in saved['services'] and saved['services']['api'] == {'pid': 1, 'start_ticks': 'x'}
+        assert any(e['kind'] == 'window_services_stopped' and e['data']['stopped'] == ['worker'] for e in store.events(limit=5))
+        assert stop_windowless_services(store, app_dir=tmp_path) == []
+    finally:
+        if child.poll() is None:
+            child.kill()

@@ -465,7 +465,7 @@ def create_app(store: Store | None = None):
         # The operator's own explicit action in the UI; agents never call this.
         from .session import start_session
         from . import services
-        window = start_session(store, minutes=request.minutes, source="local_operator_ui")
+        window = start_session(store, minutes=request.minutes, source="local_operator_ui", stop_services=services.stop_windowless_services)
         return {"work_window": window, "budget": store.budget(), "services": services.start_window_services(store)}
 
     @app.get("/api/jobs/{job_id}/deliveries")

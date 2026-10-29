@@ -47,3 +47,31 @@ def test_still_running_watcher_prevents_new_session_from_racing_old_close(tmp_pa
         with pytest.raises(WorkflowError, match='종료|실행'):
             start_session(store, minutes=60, current=AT)
     assert store.setting('work_window') is None
+
+
+def test_windowless_worker_is_stopped_so_operator_can_open_window(tmp_path):
+    """start-local.sh starts a worker when no window exists; opening the first window must replace it, not fail."""
+    from office.session import start_session
+    from office.runtime import ProcessLock
+    store = Store(tmp_path)
+    lock = ProcessLock(store.root / 'worker.lock')
+    lock.__enter__()
+    calls = []
+
+    def stop_services(s):
+        calls.append(s)
+        lock.__exit__(None, None, None)
+        return ['worker']
+    window = start_session(store, minutes=30, current=AT, source='local_operator_ui', stop_services=stop_services)
+    assert calls == [store] and window['status'] == 'active' and window['authorization_source'] == 'local_operator_ui'
+    assert datetime.fromisoformat(window['authorized_end']) == AT + timedelta(minutes=30)
+
+
+def test_window_open_still_fails_when_nothing_could_be_stopped(tmp_path):
+    from office.session import start_session
+    from office.runtime import ProcessLock
+    store = Store(tmp_path)
+    with ProcessLock(store.root / 'worker.lock'):
+        with pytest.raises(WorkflowError, match='실행 중'):
+            start_session(store, minutes=30, current=AT, stop_services=lambda s: [])
+    assert store.setting('work_window') is None
