@@ -120,16 +120,34 @@ class Store:
                 raise WorkflowError("기사를 찾을 수 없습니다")
             return json.loads(r[0])
 
-    def create_job(self, article):
+    @staticmethod
+    def _validated_brief(brief):
+        # briefs.py가 WorkflowError를 이 모듈에서 가져오므로 순환 import를 피해 함수 안에서 불러온다
+        from .briefs import normalise_brief
+        return normalise_brief(brief)
+
+    def create_job(self, article, brief=None):
+        brief = self._validated_brief(brief)
         with self.connection(transaction=True) as db:
             for row in db.execute("SELECT data FROM jobs"):
                 existing = json.loads(row[0])
                 if existing["article"]["id"] == article["id"]:
                     return existing
-            job = {"id": identifier("job"), "article": article, "title": article.get("editorial_title", article["title"]), "state": "research_ready", "error": None, "source_hash": None, "source_packet": None, "source_approval": None, "release_approval": None, "manifest": None, "selections": {"blog": True, "video": True, "pdf": False, "cards": False}, "created_at": now(), "updated_at": now()}
+            job = {"id": identifier("job"), "article": article, "title": article.get("editorial_title", article["title"]), "state": "research_ready", "error": None, "source_hash": None, "source_packet": None, "source_approval": None, "release_approval": None, "manifest": None, "selections": {"blog": True, "video": True, "pdf": False, "cards": False}, "brief": brief, "created_at": now(), "updated_at": now()}
             db.execute("INSERT INTO jobs VALUES(?,?,?)", (job["id"], canonical(job), now()))
-            self._event(db, "job_created", {"article_id": article["id"], "role": "총괄"}, job["id"])
+            self._event(db, "job_created", {"article_id": article["id"], "role": "총괄", "brief_preset": brief["preset"]}, job["id"])
             return job
+
+    def set_brief(self, job_id, brief, actor):
+        """작업의 독자 브리프를 바꾼다. 승인은 건드리지 않으며 다음 원고 생성·검수부터 적용된다."""
+        if not str(actor or "").strip():
+            raise WorkflowError("브리프를 바꾼 담당자가 필요합니다")
+        validated = self._validated_brief(brief)
+        with self.connection(transaction=True) as db:
+            job = self._job(db, job_id)
+            job["brief"] = validated
+            self._event(db, "brief_set", {"preset": validated["preset"], "axis": validated["axis"], "actor": actor, "role": "기획", "next_action": "새 원고를 생성하거나 재검수하면 바뀐 브리프가 적용됩니다"}, job_id)
+            return self._write_job(db, job)
 
     def job(self, job_id):
         with self.connection() as db:

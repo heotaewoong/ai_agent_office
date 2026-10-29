@@ -227,14 +227,31 @@ def test_unselected_missing_output_does_not_block_selected_blog_release(context)
 
 def test_delivery_routes_require_release_and_report_ledger(context, monkeypatch):
     store, client, headers = context
-    for key in ('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN'):
+    for key in ('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN', 'YOUTUBE_MAIN_KO_REFRESH_TOKEN', 'YOUTUBE_ENGLISH_REFRESH_TOKEN'):
         monkeypatch.delenv(key, raising=False)
     job = store.create_job({'id': 'delivery-route', 'title': '업로드 경로'})
     assert client.get(f"/api/jobs/{job['id']}/deliveries").json() == {'deliveries': [], 'youtube_configured': False}
     response = client.post(f"/api/jobs/{job['id']}/deliveries/youtube", headers=headers)
     assert response.status_code == 409 and '출고 승인②' in response.json()['detail']
-    assert client.get('/api/dashboard').json()['provider']['youtube'] == {'configured': False, 'visibility': 'private', 'automatic_retry': False}
+    assert client.get('/api/dashboard').json()['provider']['youtube'] == {'configured': False, 'channels': [], 'visibility': 'private', 'automatic_retry': False}
     assert client.post(f"/api/jobs/{job['id']}/deliveries/missing/reconcile", headers=headers).status_code == 409
+    unknown = client.post(f"/api/jobs/{job['id']}/deliveries/youtube", json={'channel_key': 'tistory_main'}, headers=headers)
+    assert unknown.status_code == 409 and '채널' in unknown.json()['detail']
+
+
+def test_channel_routes_expose_registry_and_accept_operator_settings_only(context):
+    store, client, headers = context
+    rows = client.get('/api/channels').json()['channels']
+    by_key = {row['key']: row for row in rows}
+    assert by_key['youtube_english']['external_account_id'] == 'UCc2CaOrPo-1dezowe7kklZA' and by_key['youtube_main_ko']['publication_enabled'] is False
+    assert 'refresh_token' not in by_key['youtube_main_ko'] and by_key['youtube_main_ko']['credentials_configured'] in (True, False)
+    assert client.put('/api/channels/youtube_main_ko', json={'publication_enabled': True}).status_code == 403
+    updated = client.put('/api/channels/youtube_main_ko', json={'external_account_id': 'UCmainko0000000000000000', 'publication_enabled': True}, headers=headers)
+    assert updated.status_code == 200 and updated.json()['external_account_id'] == 'UCmainko0000000000000000' and updated.json()['publication_enabled'] is True
+    assert client.put('/api/channels/youtube_main_ko', json={'external_account_id': 'bad'}, headers=headers).status_code == 409
+    assert client.put('/api/channels/tiktok_main', json={'publication_enabled': True}, headers=headers).status_code == 409
+    assert client.put('/api/channels/youtube_main_ko', json={'refresh_token': 'abc'}, headers=headers).status_code == 409
+    assert any(e['kind'] == 'channel_updated' for e in store.events(limit=5))
 
 
 def test_public_origin_is_opt_in_https_only_and_marks_cookie_secure(tmp_path, monkeypatch):

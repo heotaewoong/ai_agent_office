@@ -212,3 +212,78 @@ def test_changed_asset_after_release_is_rejected(tmp_path, monkeypatch):
     with pytest.raises(WorkflowError, match='변경|검증'):
         deliver_youtube(store, job_id, actor='op', session=session)
     assert session.puts == []
+
+
+def test_channel_key_selects_credentials_and_is_part_of_idempotency(tmp_path, monkeypatch):
+    from office.youtube_delivery import deliver_youtube, deliveries
+    env(monkeypatch)
+    monkeypatch.setenv('YOUTUBE_ENGLISH_REFRESH_TOKEN', 'en-token')
+    store, job_id = released_fixture(tmp_path)
+    session = FakeYouTube()
+    with pytest.raises(WorkflowError, match='언어'):
+        deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_english')
+    assert session.puts == []
+    from office.briefs import build_brief
+    store.set_brief(job_id, build_brief('productivity-automation', {'language': 'en'}), 'op')
+    # The brief now says English, so the Korean channel is a mismatch too: blocked before any request.
+    with pytest.raises(WorkflowError, match='언어'):
+        deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_main_ko')
+    assert session.puts == []
+    en = deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_english')
+    assert en['channel_key'] == 'youtube_english' and en['locale'] == 'en' and en['state'] == 'private'
+    assert session.posts[0]['data']['refresh_token'] == 'en-token' and len(session.puts) == 1
+    assert en['idempotency_key'] == hashlib.sha256(json.dumps({'asset_sha256': hashlib.sha256(MP4).hexdigest(), 'channel': 'youtube', 'channel_key': 'youtube_english', 'job_id': job_id, 'manifest_hash': store.job(job_id)['manifest']['hash']}, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+    assert [r['channel_key'] for r in deliveries(store, job_id)] == ['youtube_english']
+
+
+def test_language_mismatch_blocks_before_request_and_english_channel_uses_its_token(tmp_path, monkeypatch):
+    from office.youtube_delivery import deliver_youtube, deliveries
+    from office.briefs import build_brief
+    env(monkeypatch)
+    monkeypatch.setenv('YOUTUBE_ENGLISH_REFRESH_TOKEN', 'en-token')
+    store, job_id = released_fixture(tmp_path)
+    store.set_brief(job_id, build_brief('productivity-automation', {'language': 'en'}), 'op')
+    session = FakeYouTube()
+    with pytest.raises(WorkflowError, match='언어'):
+        deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_main_ko')
+    assert session.posts == []
+    record = deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_english')
+    assert record['channel_key'] == 'youtube_english' and record['locale'] == 'en' and record['state'] == 'private'
+    assert session.posts[0]['data']['refresh_token'] == 'en-token'
+    again = deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_english')
+    assert again['id'] == record['id'] and len(session.puts) == 1
+    assert len(deliveries(store, job_id)) == 1
+
+
+def test_unknown_channel_or_missing_channel_token_is_rejected(tmp_path, monkeypatch):
+    from office.youtube_delivery import deliver_youtube
+    env(monkeypatch)
+    monkeypatch.delenv('YOUTUBE_ENGLISH_REFRESH_TOKEN', raising=False)
+    store, job_id = released_fixture(tmp_path)
+    with pytest.raises(WorkflowError, match='채널'):
+        deliver_youtube(store, job_id, actor='op', session=FakeYouTube(), channel_key='tistory_main')
+    from office.briefs import build_brief
+    store.set_brief(job_id, build_brief('productivity-automation', {'language': 'en'}), 'op')
+    with pytest.raises(WorkflowError, match='YOUTUBE_ENGLISH_REFRESH_TOKEN'):
+        deliver_youtube(store, job_id, actor='op', session=FakeYouTube(), channel_key='youtube_english')
+
+
+def test_response_channel_id_mismatch_marks_needs_review(tmp_path, monkeypatch):
+    from office.youtube_delivery import deliver_youtube
+    from office.channels import update_channel
+    env(monkeypatch)
+    store, job_id = released_fixture(tmp_path)
+    update_channel(store, 'youtube_main_ko', {'external_account_id': 'UCexpected00000000000000'}, actor='op')
+    session = FakeYouTube()
+    session.video['snippet'] = {'channelId': 'UCother000000000000000000'}
+    with pytest.raises(WorkflowError, match='채널'):
+        deliver_youtube(store, job_id, actor='op', session=session)
+    from office.youtube_delivery import deliveries
+    record = deliveries(store, job_id)[0]
+    assert record['state'] == 'needs_review' and record['reason'] == 'channel_mismatch'
+    assert 'delivery_channel_mismatch' in [e['kind'] for e in store.events(job_id)]
+    good = FakeYouTube()
+    good.video['snippet'] = {'channelId': 'UCexpected00000000000000'}
+    store2, job2 = released_fixture(tmp_path / 'ok')
+    update_channel(store2, 'youtube_main_ko', {'external_account_id': 'UCexpected00000000000000'}, actor='op')
+    assert deliver_youtube(store2, job2, actor='op', session=good)['state'] == 'private'

@@ -167,6 +167,7 @@ export type Job = {
     version?: string;
     decision?: string;
   };
+  brief?: Brief | null;
 };
 export type Feed = {
   id?: string;
@@ -213,12 +214,14 @@ export type ProviderStatus = {
   voice?: VoiceProfile;
   image?: ProviderProfile;
   clip?: ProviderProfile;
-  youtube?: { configured?: boolean; visibility?: string; automatic_retry?: boolean };
+  youtube?: { configured?: boolean; visibility?: string; automatic_retry?: boolean; channels?: string[] };
 };
 export type ProfileSummaries = { voice: VoiceProfile; image: ProviderProfile; clip: ProviderProfile };
 export type Delivery = {
   id: string;
   channel: string;
+  channel_key?: string;
+  locale?: string;
   job_id: string;
   state: string;
   visibility?: string;
@@ -301,6 +304,7 @@ export type Idea = {
   outlier_band: string;
   reasons: string[];
   blocked: string[];
+  brief?: Brief | null;
 };
 export type Lesson = {
   id: string;
@@ -336,7 +340,61 @@ export type IdeaInput = {
   fit: number;
   covered_before: boolean;
   policy_flags: string[];
+  brief_preset?: string;
+  brief?: BriefOverrides;
 };
+export type BriefLanguage = "ko" | "en";
+export type BriefAxis = "A" | "B";
+export type BriefPreset = {
+  id: string;
+  axis: BriefAxis;
+  label: string;
+  topic: string;
+  reader: string;
+  prior_knowledge: string;
+  problem: string;
+  outcome: string;
+  tone: string;
+  language: BriefLanguage;
+  cta: string;
+};
+export type BriefPresets = { default: string; presets: BriefPreset[] };
+export type BriefOverrides = {
+  reader?: string;
+  problem?: string;
+  outcome?: string;
+  cta?: string;
+  language?: BriefLanguage;
+  topic?: string;
+  prior_knowledge?: string;
+  tone?: string;
+};
+export type Brief = {
+  preset: string;
+  axis: string;
+  label: string;
+  topic: string;
+  reader: string;
+  prior_knowledge: string;
+  problem: string;
+  outcome: string;
+  tone: string;
+  language: string;
+  cta: string;
+};
+export type ChannelDelivery = "youtube_api" | "manual" | "notify";
+export type Channel = {
+  key: string;
+  platform: string;
+  label: string;
+  locale: string;
+  public_url: string;
+  external_account_id: string;
+  delivery: ChannelDelivery;
+  publication_enabled: boolean;
+  credentials_configured: boolean;
+};
+export type ChannelPatch = { external_account_id?: string; publication_enabled?: boolean; public_url?: string };
 export type SnapshotChannel =
   | "youtube_long"
   | "shorts"

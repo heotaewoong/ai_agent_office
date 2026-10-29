@@ -1,4 +1,5 @@
 import type { IdeaInput } from "./types";
+import { briefOverridesFromForm } from "./briefs.ts";
 
 type Form = Record<string, string | boolean>;
 
@@ -49,6 +50,9 @@ export function ideaInputFromForm(form: Form): { input: IdeaInput } | { error: s
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const brief = briefOverridesFromForm(form);
+  if ("error" in brief) return brief;
+  const brief_preset = text(form, "brief_preset");
   return {
     input: {
       title,
@@ -60,6 +64,8 @@ export function ideaInputFromForm(form: Form): { input: IdeaInput } | { error: s
       fit,
       covered_before: form.covered_before === true,
       policy_flags,
+      ...(brief_preset ? { brief_preset } : {}),
+      ...(Object.keys(brief.overrides).length > 0 ? { brief: brief.overrides } : {}),
     },
   };
 }

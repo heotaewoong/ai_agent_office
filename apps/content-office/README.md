@@ -174,7 +174,7 @@ npm run build
 | `GEMINI_API_KEY` | 기존 Gemini 연결. 환경으로만 전달하며 UI·ZIP·저장소에 넣지 않습니다 |
 | `OPENAI_API_KEY` | 배경 이미지 프로필 `openai-gpt-image`를 고른 경우에만 필요합니다. 실행하는 운영자가 자신의 키를 환경 파일에 넣으며, 영수증·UI·ZIP·저장소에 기록하지 않습니다 |
 | `RUNWAYML_API_SECRET` | 생성 영상 프로필 `runway-*`를 고른 경우에만 필요합니다. 같은 규칙으로 환경으로만 전달합니다 |
-| `YOUTUBE_CLIENT_ID` · `YOUTUBE_CLIENT_SECRET` · `YOUTUBE_REFRESH_TOKEN` | YouTube 비공개 업로드를 요청할 때만 필요한 채널 소유자의 OAuth 자격입니다. 장부·이벤트·ZIP에 기록하지 않습니다 |
+| `YOUTUBE_CLIENT_ID` · `YOUTUBE_CLIENT_SECRET` · `YOUTUBE_<채널키>_REFRESH_TOKEN` | YouTube 비공개 업로드를 요청할 때만 필요한 채널 소유자의 OAuth 자격입니다. refresh token은 채널 키마다 따로 둡니다(`YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`). 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. 장부·이벤트·ZIP에 기록하지 않습니다 |
 | `OFFICE_STATE_DIR` | DB·자산·캐시 위치. 기본 `~/.local/state/heobrain-content-office` |
 | `OFFICE_MODEL` | 새 장부의 명시적 모델 선택. 현재 실제 작성에 검증한 모델은 `gemini-3.5-flash-lite`이며 저장된 모델 설정이 우선합니다 |
 | `CONTENT_OFFICE_FONT` | 한국어 TTF 경로. 이 환경은 Windows Malgun Gothic을 사용하며 폰트 파일을 배포하지 않습니다 |
@@ -214,21 +214,71 @@ cd "<저장소 경로>/apps/content-office/backend"
 
 ### 화면에서 설정하기
 
-왼쪽 메뉴 "제작 설정"에서 음성·배경 이미지·생성 영상 프로필을 고르고, 서버 키의 연결 여부(값은 표시하지 않음)와 경고를 확인하고, 작업 시간을 열 수 있습니다. 작업 시간을 열면 Linux(EC2)에서는 작업자와 감시 프로세스도 함께 시작해 PID 장부에 기록하므로 `stop-local.sh`로 같이 멈춥니다. Windows는 기존처럼 `start-windows.ps1 -Worker -Watcher`를 씁니다. 사이드바의 남은 시간 표시를 누르면 이 화면으로 이동합니다. "제작·출고함"에서 영상을 고르면 아래에 YouTube 비공개 업로드 버튼과 업로드 기록·대사 버튼이 나옵니다.
+왼쪽 메뉴 "제작 설정"에서 음성·배경 이미지·생성 영상 프로필을 고르고, 서버 키의 연결 여부(값은 표시하지 않음)와 경고를 확인하고, 작업 시간을 열 수 있습니다. 같은 화면 아래 "채널" 표에서 채널 레지스트리(아래 절)를 봅니다. 작업 시간을 열면 Linux(EC2)에서는 작업자와 감시 프로세스도 함께 시작해 PID 장부에 기록하므로 `stop-local.sh`로 같이 멈춥니다. Windows는 기존처럼 `start-windows.ps1 -Worker -Watcher`를 씁니다. 사이드바의 남은 시간 표시를 누르면 이 화면으로 이동합니다. "제작·출고함"에서 영상을 고르면 아래에 YouTube 비공개 업로드 버튼과 업로드 기록·대사 버튼이 나옵니다.
 
-API: `POST /api/settings/profiles` (`{"kind": "voice|image|clip", "profile": "..."}`), `POST /api/session/window` (`{"minutes": 1~360}`).
+API: `POST /api/settings/profiles` (`{"kind": "voice|image|clip", "profile": "..."}`), `POST /api/session/window` (`{"minutes": 1~360}`), `GET /api/channels`, `PUT /api/channels/{key}`.
 
 ### YouTube 비공개 업로드
 
-출고 승인②를 받은 영상에 한해 운영자가 명시적으로 요청하면 소유 채널에 `privacyStatus: private`로 올립니다. 공개·예약 공개는 앱이 바꾸지 않으며 YouTube Studio에서 운영자가 결정합니다. 제목·태그는 승인 원고의 영상 계획, 설명은 제작물의 `description.txt`를 쓰고 합성 음성·생성 화면 고지를 덧붙입니다. 같은 영상(자산 해시·제작물 판본)은 한 번만 올리며, 결과 불명이면 자동 재전송 대신 대사(reconcile)로 세션을 이어 올리거나 외부 ID로 상태를 확인합니다. 업로드 결과의 공개 범위가 private가 아니면 `needs_review`로 표시합니다.
+출고 승인②를 받은 영상에 한해 운영자가 명시적으로 요청하면 채널 레지스트리에서 고른 YouTube 채널(기본 `youtube_main_ko`)에 `privacyStatus: private`로 올립니다. 작업 브리프의 언어와 채널 언어가 다르면 화면이 먼저 안내하고 서버도 요청 전에 거부합니다. 공개·예약 공개는 앱이 바꾸지 않으며 YouTube Studio에서 운영자가 결정합니다. 제목·태그는 승인 원고의 영상 계획, 설명은 제작물의 `description.txt`를 쓰고 합성 음성·생성 화면 고지를 덧붙입니다. 같은 영상(자산 해시·제작물 판본)은 한 번만 올리며, 결과 불명이면 자동 재전송 대신 대사(reconcile)로 세션을 이어 올리거나 외부 ID로 상태를 확인합니다. 업로드 결과의 공개 범위가 private가 아니면 `needs_review`로 표시합니다.
 
-채널 소유자의 OAuth 자격은 `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` 환경변수로만 전달합니다. 접근 토큰은 호출 동안만 메모리에 있고 장부·이벤트에 기록하지 않습니다. 2026-10-28 기준 YouTube Data API는 업로드 전용 일일 버킷(100회)과 기타 메서드 10,000단위를 따로 둡니다.
+채널 소유자의 OAuth 자격은 `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`와 채널 키별 `YOUTUBE_<채널키>_REFRESH_TOKEN` 환경변수로만 전달합니다. 업로드 응답의 `channelId`가 등록한 채널 ID와 다르면 `needs_review`(사유 `channel_mismatch`)로 남깁니다. 접근 토큰은 호출 동안만 메모리에 있고 장부·이벤트에 기록하지 않습니다. 2026-10-28 기준 YouTube Data API는 업로드 전용 일일 버킷(100회)과 기타 메서드 10,000단위를 따로 둡니다.
 
 ```bash
 .venv/bin/python -m office.youtube_delivery status --job <job_id>
 .venv/bin/python -m office.youtube_delivery deliver --job <job_id>
 .venv/bin/python -m office.youtube_delivery reconcile --job <job_id> --delivery <delivery_id>
-# API: GET /api/jobs/{id}/deliveries · POST /api/jobs/{id}/deliveries/youtube · POST /api/jobs/{id}/deliveries/{delivery_id}/reconcile
+# API: GET /api/jobs/{id}/deliveries · POST /api/jobs/{id}/deliveries/youtube ({"channel_key": "youtube_main_ko"}) · POST /api/jobs/{id}/deliveries/{delivery_id}/reconcile
+```
+
+### 독자 브리프 프리셋
+
+원고 생성·비평·평가·수정은 모두 같은 독자 브리프를 읽습니다. 프리셋은 `backend/office/briefs.py`에 있고 `GET /api/briefs`가 그대로 돌려줍니다. 기본값은 `ai-agent`이며, RSS에서 만든 작업과 브리프 없이 등록한 기획에는 기본 프리셋이 적용됩니다.
+
+| 프리셋 | 축 | 이름 | 언어 |
+|---|---|---|---|
+| `ai-agent` (기본) | B · AI·자동화 | AI·에이전트 실무 | ko |
+| `productivity-automation` | B · AI·자동화 | 생산성·업무 자동화 | ko |
+| `exam-opic` | A · 시험·편입 | 오픽(OPIc) 등급 올리기 | ko |
+| `exam-info-processing` | A · 시험·편입 | 정보처리기사 합격 | ko |
+| `transfer-admission` | A · 시험·편입 | 대학 편입 준비 | ko |
+
+덮어쓸 수 있는 칸은 `reader`(독자)·`problem`(문제)·`outcome`(약속한 결과)·`cta`·`language`(ko/en)·`topic`·`prior_knowledge`·`tone`입니다. 빈 문자열은 프리셋 값을 그대로 씁니다. 화면에서는 "기획 직접 등록"의 독자 브리프 칸(프리셋 선택 + 독자·문제·약속한 결과·CTA·언어)과 작업실 상단의 "독자 브리프" 카드에서 바꿉니다. 작업의 브리프를 바꾸면 다음 원고 생성부터 적용되고, 이미 만든 원고를 고치지는 않습니다.
+
+```bash
+# API: GET /api/briefs · POST /api/ideas (brief_preset, brief: {reader, problem, outcome, cta, language, ...}) · PUT /api/jobs/{id}/brief ({"preset": "...", "overrides": {...}})
+```
+
+### 문체 규칙
+
+브랜드 보이스는 `backend/config/brand/voice.md`가 정본이고, 금지 표현은 같은 폴더의 `banned_claims.json`에 있습니다. 생성·비평·평가·수정 프롬프트가 같은 파일을 읽습니다. 모델 판단과 별도로 `office/editorial.py`의 결정적 문체 검사가 다음을 걸러 수정 루프로 보냅니다.
+
+- 줄표(—, –)로 문장을 잇는 것
+- "~라고 생각합니다" 반복
+- 훈계 표현("포기하지 마세요", "노력하면 됩니다" 등)
+- 과장 광고("무조건 합격", "3일 완성", "100% 합격", "뇌과학으로 입증" 등)
+- 해요체 비율: 습니다체 문장이 해요체보다 많으면 지적
+
+검사 결과는 원고 품질의 `deterministic_checks`에 사유와 함께 남고, 사람의 ① 원고 승인을 대신하지 않습니다.
+
+### 채널 레지스트리
+
+채널 목록은 `backend/office/channels.py`에 고정돼 있고, 운영자가 바꿀 수 있는 값(`external_account_id`·`publication_enabled`·`public_url`)만 설정 `channel_registry`에 저장합니다. 공개 주소는 오너가 준 값이며 주소 존재·소유권·발행 권한·실제 게시 성공은 각각 별개 상태입니다. `publication_enabled`는 기본 `false`입니다.
+
+| 채널 키 | 플랫폼 | 언어 | 전달 |
+|---|---|---|---|
+| `youtube_main_ko` | YouTube 메인 | ko | 공식 API 비공개 업로드 |
+| `youtube_english` | YouTube 영어 | en | 공식 API 비공개 업로드 |
+| `instagram_main` · `instagram_english` | Instagram | ko · en | 수동 |
+| `threads_main` · `x_main` · `linkedin_personal` | Threads · X · LinkedIn 개인 | ko | 수동 |
+| `tistory_main` · `naver_blog_main` | 블로그 | ko | 수동(HTML/MD/TXT 묶음) |
+| `slack_internal` · `discord_contact` | 내부 알림 | ko | 검토 알림만 |
+| `store` | heobrain.store | ko | 스토어 서버가 판정, 오피스는 가격을 바꾸지 않음 |
+
+YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 키별 `YOUTUBE_<KEY>_REFRESH_TOKEN`(예: `YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`)으로 전달합니다. 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. 화면 "제작 설정 → 채널"에서는 공개 주소 링크, YouTube 채널 ID(`UC`로 시작하는 24자, 화면에서 형식 검사), 발행 허용, 토큰 연결 여부만 보이고 토큰 값은 표시하거나 입력받지 않습니다. 업로드 패널은 YouTube 채널을 고르며 브리프 언어와 채널 언어가 다르면 보내기 전에 막고, 응답 `channelId`가 등록값과 다르면 업로드 기록을 `needs_review`로 둡니다. 업로드 기록에는 `channel_key`와 `locale`이 함께 남습니다.
+
+```bash
+# API: GET /api/channels · PUT /api/channels/{key} ({"external_account_id"?, "publication_enabled"?, "public_url"?})
 ```
 
 ## 검사와 증거

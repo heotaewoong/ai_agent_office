@@ -16,6 +16,10 @@ import type {
   ProfileSummaries,
   Delivery,
   WindowStart,
+  BriefPresets,
+  BriefOverrides,
+  Channel,
+  ChannelPatch,
 } from "./types";
 
 export class OfficeApiError extends Error {
@@ -96,8 +100,14 @@ export const api = {
     request<WindowStart>("/session/window", "POST", { minutes }),
   deliveries: (id: string) =>
     request<{ deliveries: Delivery[]; youtube_configured: boolean }>(`/jobs/${encodeURIComponent(id)}/deliveries`),
-  deliverYoutube: (id: string) =>
-    request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/youtube`, "POST", {}),
+  deliverYoutube: (id: string, channelKey = "youtube_main_ko") =>
+    request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/youtube`, "POST", { channel_key: channelKey }),
+  briefs: () => request<BriefPresets>("/briefs"),
+  setJobBrief: (id: string, preset: string, overrides: BriefOverrides) =>
+    request<Job>(`/jobs/${encodeURIComponent(id)}/brief`, "PUT", { preset, overrides }),
+  channels: () => request<{ channels: Channel[] }>("/channels"),
+  updateChannel: (key: string, patch: ChannelPatch) =>
+    request<Channel>(`/channels/${encodeURIComponent(key)}`, "PUT", patch),
   reconcileDelivery: (id: string, deliveryId: string) =>
     request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/reconcile`, "POST", {}),
   knowledge: (query = "") =>

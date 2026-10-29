@@ -8,9 +8,11 @@ from .brand import brand_system_prompt, load_brand
 from .gates import run_gates
 from .packaging import require_packaging
 from .providers import Provider
+from .briefs import DEFAULT_PRESET, PRESETS, brief_for_job, build_brief
 from .store import Store, WorkflowError, canonical, digest
 
-AUDIENCE = {"topic": "AI / AI Agent", "reader": "AI를 업무와 콘텐츠 제작에 활용하려는 한국어 입문·실무 독자", "prior_knowledge": "챗봇 사용 경험. 논문 통계·API 전문 지식은 가정하지 않음", "problem": "AI 뉴스를 읽어도 내 업무에 적용할 작은 사례와 판단 기준이 남지 않음", "outcome": "완결된 사례의 입력·판단·다음 행동을 설명하고 자기 업무 하나에 적용할 질문을 적을 수 있음", "tone": "구체적이고 자연스러운 설명. 독자에게 줄 답을 먼저 쓰고, 관련 한계를 필요한 위치에 짧게 남김. 자극적 단정·가짜 경험·매출 보장 금지"}
+# 과거 고정 독자 설정. 이제 기본 프리셋(ai-agent)의 필드와 같으며, 실제 호출은 작업별 브리프를 쓴다.
+AUDIENCE = {field: PRESETS[DEFAULT_PRESET][field] for field in ("topic", "reader", "prior_knowledge", "problem", "outcome", "tone")}
 RUBRIC = {"version": "heobrain-news-2026-10-26-v2-reader-value", "critical": ["출처 없는 핵심 주장·숫자", "공급사 주장과 독립 검증 혼동", "합성·표본 결과의 일반화", "국가 지원·가격·상품 조건 조작", "원문에 없는 개인 경험·매출 보장", "영상이 원고보다 강한 주장"], "dimensions": ["주장과 근거 일치", "숫자·기간·단위", "독자 질문에 대한 구체적인 답", "완결 사례의 입력·판단·다음 행동", "필요한 비교표와 읽기 구조", "관련 한계와 반증", "한 질문을 끝까지 설명하는 영상", "말하기와 화면 문구의 분리"], "pass_score": 80, "refine_limit": 2}
 
 SCENE_SCHEMA = {"type": "object", "properties": {"narration": {"type": "string"}, "caption": {"type": "string"}, "visual": {"type": "string"}}, "required": ["narration", "caption", "visual"], "additionalProperties": False}
@@ -27,11 +29,13 @@ def content_context(packet):
     return {key: value for key, value in packet.items() if key not in ("quality", "call_log", "approval")}
 
 
-def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None):
+def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None, brief=None):
     packet = copy.deepcopy(packet)
+    # 비평·평가·수정은 생성과 같은 브리프를 받는다. 넘기지 않으면 원고에 저장된 독자 설정, 그것도 없으면 기본 프리셋.
+    brief = brief if brief is not None else (packet.get("audience") or build_brief(DEFAULT_PRESET))
     history = []
     for round_no in range(3):
-        payload = canonical({"packet": content_context(packet), "audience": AUDIENCE, "rubric": RUBRIC})
+        payload = canonical({"packet": content_context(packet), "audience": brief, "rubric": RUBRIC})
         reviews = []
         for role in ("critique", "eval"):
             if event:
@@ -49,13 +53,58 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
             return packet
         if event:
             event("editorial_role", {"role": "refine", "round": round_no + 1})
-        refine_context = {"packet": content_context(packet), "feedback": reviews, "deterministic_feedback": checks, "audience": AUDIENCE, "rubric": RUBRIC}
+        refine_context = {"packet": content_context(packet), "feedback": reviews, "deterministic_feedback": checks, "audience": brief, "rubric": RUBRIC}
         if packaging is not None:
             refine_context["packaging"] = packaging
         refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. body는 1,200자 이상의 완성된 전체 원고이며 수정 요약이 아니다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
         for key in ("title", "body", "video"):
             packet[key] = refined[key]
     raise AssertionError("unreachable")
+
+
+PREACHING_PHRASES = ("포기하지 마세요", "노력하면 됩니다", "열심히 하세요", "반드시 해야 합니다", "게으르면", "정신 차리세요", "핑계 대지 마세요")
+OVERCLAIM_PHRASES = ("3일 완성", "무조건 합격", "100% 합격", "뇌과학으로 입증", "단기간에 완벽", "누구나 쉽게", "이것만 보면 끝")
+FORMAL_ENDING = re.compile(r"(습니다|입니다|됩니다)(?:[.!?…]|$)")
+HAEYO_ENDING = re.compile(r"(요|죠)(?:[.!?…]|$)")
+THOUGHT_PHRASE = re.compile(r"[라다]고 생각합니다")
+EN_DASH_AS_DASH = re.compile(r"(?<![0-9])–|–(?![0-9])")
+
+
+def packet_texts(packet):
+    """문체 검사 대상 문자열: 제목·본문·영상 제목/설명·장면 내레이션/자막·썸네일 문구."""
+    texts = [packet.get("title", ""), packet.get("body", "")]
+    video = packet.get("video", {}) or {}
+    texts.extend([video.get("title", ""), video.get("description", "")])
+    for scene in video.get("scenes", []) or []:
+        texts.extend(str(scene.get(key, "")) for key in ("narration", "caption"))
+    for thumb in video.get("thumbnails", []) or []:
+        texts.extend(str(thumb.get(key, "")) for key in ("title", "subtitle"))
+    return [str(text or "") for text in texts]
+
+
+def style_issues(packet, brand=None):
+    """voice.md의 문체 규칙을 결정적으로 검사한다. 걸리면 수정 루프로 보낸다."""
+    texts = packet_texts(packet)
+    joined = "\n".join(texts)
+    issues = []
+    if "—" in joined or EN_DASH_AS_DASH.search(joined):
+        issues.append("줄표(— 또는 –)는 쓰지 않아요. 쉼표나 마침표로 문장을 나누세요")
+    thought_count = len(THOUGHT_PHRASE.findall(joined))
+    if thought_count >= 2:
+        issues.append(f"'~라고 생각합니다'가 {thought_count}회 반복돼요. 한 번만 쓰거나 근거 있는 단정으로 바꾸세요")
+    for phrase in PREACHING_PHRASES:
+        if phrase in joined:
+            issues.append(f"훈계 표현 '{phrase}'은(는) 쓰지 않아요. 독자가 오늘 할 수 있는 행동 하나로 바꾸세요")
+    brand = brand if brand is not None else load_brand()
+    overclaims = list(dict.fromkeys([*OVERCLAIM_PHRASES, *brand.get("banned", [])]))
+    for phrase in overclaims:
+        if phrase and re.search(re.escape(phrase), joined, flags=re.IGNORECASE):
+            issues.append(f"과장 광고 표현 '{phrase}'은(는) 쓰지 않아요. 근거 있는 범위로 줄이세요")
+    formal = sum(len(FORMAL_ENDING.findall(text)) for text in texts)
+    haeyo = sum(len(HAEYO_ENDING.findall(text)) for text in texts)
+    if formal >= 3 and formal > haeyo:
+        issues.append(f"해요체가 기본이에요. 습니다체 문장 {formal}개가 해요체 {haeyo}개보다 많아요")
+    return issues
 
 
 def deterministic_checks(packet):
@@ -92,7 +141,8 @@ def deterministic_checks(packet):
         issues.append("숏폼은 3~7개 설명 장면으로 구성해야 합니다")
     if sum(len(s.get("narration", "")) for s in scenes) > 360:
         issues.append("숏폼 내레이션이 너무 길어 실제 음성 검사가 필요합니다")
-    return {"passed": not issues, "issues": issues, "checks": ["본문 길이·구조", "한국어 문장", "출처 URL", "근거 ID 연결", "지표·단위 경고 규칙", "장면 수", "내레이션 길이"]}
+    issues.extend(style_issues(packet))
+    return {"passed": not issues, "issues": issues, "checks": ["본문 길이·구조", "한국어 문장", "출처 URL", "근거 ID 연결", "지표·단위 경고 규칙", "장면 수", "내레이션 길이", "문체 규칙"]}
 
 
 def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
@@ -111,17 +161,19 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
         article = {**article, "evidence": evidence, "limitations": report["limitations"], "hook": report["hook"], "evidence_source_kind": report["source_kind"], "evidence_checked_at": report["retrieved_at"]}
         store.save_article_evidence_if_current(job_id, job['source_hash'], article)
         store.event("evidence_collected", {"role": "RSS 연구", "source_sha256": report["source_sha256"], "claims": len(evidence), "source_kind": report["source_kind"]}, job_id)
+    brief = brief_for_job(job)
     if evaluate_only:
         packet = job.get("source_packet")
         if not packet:
             raise WorkflowError("검수할 원고가 없습니다")
+        packet = {**packet, "audience": brief, "brief_preset": brief["preset"]}
     else:
-        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": AUDIENCE, "packaging": job.get("packaging"), "rubric": RUBRIC, "instructions": "한국어 Markdown 원고 2,000~3,200자. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
+        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": brief, "packaging": job.get("packaging"), "rubric": RUBRIC, "instructions": "한국어 Markdown 원고 2,000~3,200자. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
         packet = provider.generate("gen", [{"role": "system", "content": brand_system_prompt(BASE, brand)}, {"role": "user", "content": canonical(context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.6})
-        packet.update(evidence=evidence, audience=AUDIENCE, source_article_url=article["url"], limitations=article.get("limitations", []))
+        packet.update(evidence=evidence, audience=brief, brief_preset=brief["preset"], source_article_url=article["url"], limitations=article.get("limitations", []))
         if job.get("packaging"):
             packet["packaging_hash"] = job["packaging"]["packaging_hash"]
-    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks, system=brand_system_prompt(BASE, brand), packaging=job.get("packaging"))
+    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks, system=brand_system_prompt(BASE, brand), packaging=job.get("packaging"), brief=brief)
     checks = deterministic_checks(packet)
     packet["quality"]["deterministic_checks"] = checks
     if not checks["passed"]:

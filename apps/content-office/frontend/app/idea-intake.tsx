@@ -1,11 +1,14 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../lib/api";
 import { ideaInputFromForm } from "../lib/ideas";
+import type { BriefPresets } from "../lib/types";
+import { BRIEF_FORM_EMPTY, BriefFields } from "./brief-fields";
 
 const EMPTY: Record<string, string | boolean> = {
+  ...BRIEF_FORM_EMPTY,
   title: "",
   source_url: "",
   views: "",
@@ -22,7 +25,23 @@ export function IdeaIntake({ onSaved }: { onSaved: () => void }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [presets, setPresets] = useState<BriefPresets>({ default: "", presets: [] });
+  const [presetError, setPresetError] = useState("");
   const uid = useId();
+  useEffect(() => {
+    let alive = true;
+    api
+      .briefs()
+      .then((value) => {
+        if (alive) setPresets(value);
+      })
+      .catch((cause) => {
+        if (alive) setPresetError(cause instanceof Error ? cause.message : "브리프 프리셋을 불러오지 못했습니다.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const set = (key: string, value: string | boolean) => {
     setMessage("");
     setForm((f) => ({ ...f, [key]: value }));
@@ -89,6 +108,7 @@ export function IdeaIntake({ onSaved }: { onSaved: () => void }) {
           </div>
           {field("policy_flags", "정책 플래그 (쉼표로 구분)", "no_primary_source, templated_series, ai_persona_real_person_ymyl")}
           <p className="muted">자유 입력도 가능합니다. 위 세 키나 1차 출처 0개는 ⓪ 기획 선택을 막습니다(저장은 됩니다).</p>
+          <BriefFields uid={uid} presets={presets.presets} defaultPreset={presets.default} form={form} onChange={set} loadError={presetError} />
         </div>
         </fieldset>
         {error && (

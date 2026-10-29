@@ -61,7 +61,7 @@ export function uploadReadiness(job: Pick<Job, "selections" | "manifest" | "rele
   if (!release || release.decision !== "approved" || release.version !== job.manifest?.hash || !(release.outputs ?? []).includes("video"))
     return { ok: false, reason: "영상에 대한 현재 출고 승인②가 필요합니다. 제작물을 검토하고 영상을 포함해 출고 승인하세요." };
   if (!youtubeConfigured)
-    return { ok: false, reason: "YouTube 자격(YOUTUBE_CLIENT_ID·YOUTUBE_CLIENT_SECRET·YOUTUBE_REFRESH_TOKEN)이 서버에 설정되지 않았습니다." };
+    return { ok: false, reason: "YouTube 자격(YOUTUBE_CLIENT_ID·YOUTUBE_CLIENT_SECRET·채널 키별 YOUTUBE_<KEY>_REFRESH_TOKEN)이 이 채널에 설정되지 않았습니다." };
   return { ok: true, reason: "소유 채널에 비공개(private)로 올립니다. 공개 여부는 YouTube Studio에서 직접 정합니다." };
 }
 

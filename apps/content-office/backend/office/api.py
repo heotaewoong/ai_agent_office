@@ -16,7 +16,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .bootstrap import default_store
@@ -25,6 +25,7 @@ from .store import Store, WorkflowError, canonical, digest, identifier, now
 from .runtime import window_open
 from .analytics import baseline, parse_studio_text, propose_lessons
 from .brand import load_brand
+from .briefs import DEFAULT_PRESET, build_brief, presets_payload
 from .gates import run_gates
 from .ideas import rank_ideas, score_idea
 from .packaging import attach_packaging, require_packaging
@@ -107,6 +108,14 @@ class IdeaInput(BaseModel):
     fit: float = Field(default=0, ge=0, le=1)
     covered_before: bool = False
     policy_flags: list[str] = []
+    # 독자 브리프: 프리셋 ID(없으면 기본 ai-agent)와 필드별 덮어쓰기(topic·reader·prior_knowledge·problem·outcome·tone·language·cta)
+    brief_preset: str | None = Field(default=None, max_length=100)
+    brief: dict | None = None
+
+
+class BriefInput(BaseModel):
+    preset: str = Field(min_length=1, max_length=100)
+    overrides: dict | None = None
 
 
 class ThumbnailInput(BaseModel):
@@ -147,6 +156,19 @@ class StudioCsvInput(BaseModel):
 
 class LessonReview(BaseModel):
     decision: Literal["approved", "rejected"]
+
+
+class ChannelPatch(BaseModel):
+    # 운영자가 바꿀 수 있는 채널 설정만 받는다. refresh token 같은 비밀값은 환경변수로만 전달한다.
+    # 모르는 필드는 버리지 않고 channels.update_channel이 '필드' 오류(409)로 돌려보낸다.
+    model_config = ConfigDict(extra="allow")
+    external_account_id: str | None = Field(default=None, max_length=200)
+    publication_enabled: bool | None = None
+    public_url: str | None = Field(default=None, max_length=500)
+
+
+class YoutubeDeliveryRequest(BaseModel):
+    channel_key: str = Field(default="youtube_main_ko", max_length=64)
 
 
 def create_app(store: Store | None = None):
@@ -217,11 +239,12 @@ def create_app(store: Store | None = None):
         from .image_selection import profile_summary as image_profile_summary
         from .video_selection import profile_summary as clip_profile_summary
         from .youtube_delivery import configured as youtube_configured
+        from .channels import configured_youtube_channels
         feed_report = store.setting("feed_report", {})
         current_ids = {article["id"] for article in rank_articles(store.articles_list())}
         active_ids = set(feed_report.get("active_article_ids", current_ids))
         articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
-        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff"}
+        return {"articles": articles[:80], "jobs": store.jobs(), "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff"}
 
     @app.get("/api/space")
     def space():
@@ -460,11 +483,25 @@ def create_app(store: Store | None = None):
         return {"deliveries": deliveries(store, job_id), "youtube_configured": configured()}
 
     @app.post("/api/jobs/{job_id}/deliveries/youtube", status_code=202)
-    def deliver_youtube_video(job_id: str):
+    def deliver_youtube_video(job_id: str, body: YoutubeDeliveryRequest | None = None):
         # Explicit private upload of the release-approved② video; never public, never retried on its own.
+        # channel_key picks the owner's YouTube channel (youtube_main_ko by default) and its own refresh token.
         require_open_window()
         from .youtube_delivery import deliver_youtube
-        return deliver_youtube(store, job_id, actor="local-operator")
+        channel_key = body.channel_key if body else "youtube_main_ko"
+        return deliver_youtube(store, job_id, actor="local-operator", channel_key=channel_key)
+
+    @app.get("/api/channels")
+    def list_channels():
+        # Owner-provided public addresses plus per-channel state; secrets never leave the environment.
+        from .channels import registry
+        return {"channels": registry(store)}
+
+    @app.put("/api/channels/{key}")
+    def update_channel_settings(key: str, patch: ChannelPatch):
+        # CSRF-protected like every mutation; publication_enabled never replaces release approval②.
+        from .channels import update_channel
+        return update_channel(store, key, patch.model_dump(exclude_unset=True), actor="local-operator")
 
     @app.post("/api/jobs/{job_id}/deliveries/{delivery_id}/reconcile")
     def reconcile_delivery(job_id: str, delivery_id: str):
@@ -488,7 +525,22 @@ def create_app(store: Store | None = None):
 
     @app.post("/api/ideas")
     def add_idea(idea: IdeaInput):
-        return store.save_idea(score_idea(idea.model_dump(), lessons=store.lessons("approved")))
+        card = idea.model_dump()
+        overrides = card.pop("brief", None)
+        preset = card.pop("brief_preset", None)
+        # 잘못된 프리셋·필드는 WorkflowError → 409. 브리프는 기획 카드에 함께 저장되어 선택⓪ 때 작업으로 넘어간다.
+        card["brief"] = build_brief(preset or DEFAULT_PRESET, overrides)
+        return store.save_idea(score_idea(card, lessons=store.lessons("approved")))
+
+    @app.get("/api/briefs")
+    def list_briefs():
+        return presets_payload()
+
+    @app.put("/api/jobs/{job_id}/brief")
+    def set_job_brief(job_id: str, body: BriefInput):
+        # CSRF 보호는 공통 미들웨어가 한다. 승인①②는 건드리지 않으며 다음 생성·재검수부터 적용된다.
+        brief = build_brief(body.preset, body.overrides)
+        return store.set_brief(job_id, brief, "local-operator")
 
     @app.post("/api/ideas/{idea_id}/select")
     def choose_idea(idea_id: str):
@@ -501,7 +553,7 @@ def create_app(store: Store | None = None):
         if not str(refreshed.get("source_url", "")).startswith("https://"):
             raise WorkflowError("기획을 선택하려면 https 출처 URL이 필요합니다")
         idea = store.select_idea(idea_id, "local-operator")
-        job = store.create_job({"id": idea_id, "title": idea["title"], "url": idea["source_url"], "origin": "idea", "evidence": []})
+        job = store.create_job({"id": idea_id, "title": idea["title"], "url": idea["source_url"], "origin": "idea", "evidence": []}, brief=idea.get("brief"))
         return {"idea": idea, "job": job}
 
     @app.post("/api/jobs/{job_id}/packaging")

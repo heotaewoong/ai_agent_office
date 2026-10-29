@@ -28,3 +28,16 @@ test("조회수 계열 숫자 검증", () => {
     assert.ok("error" in ideaInputFromForm({ ...base, channel_avg_views: bad }), bad);
   }
 });
+test("브리프 프리셋과 덮어쓰기는 비어 있지 않은 값만 보낸다", () => {
+  const base = { title: "x", source_url: "https://a.b", demand: "10", primary_sources: "1", fit: "1", covered_before: false, policy_flags: "" };
+  const plain = ideaInputFromForm(base);
+  assert.ok("input" in plain);
+  assert.equal("brief_preset" in plain.input, false);
+  assert.equal("brief" in plain.input, false);
+  const withBrief = ideaInputFromForm({ ...base, brief_preset: "exam-transfer", brief_reader: " 편입 준비생 ", brief_problem: "", brief_outcome: "", brief_cta: "무료 체크리스트", brief_language: "en" });
+  assert.ok("input" in withBrief);
+  assert.equal(withBrief.input.brief_preset, "exam-transfer");
+  assert.deepEqual(withBrief.input.brief, { reader: "편입 준비생", cta: "무료 체크리스트", language: "en" });
+  const badLang = ideaInputFromForm({ ...base, brief_language: "fr" });
+  assert.ok("error" in badLang && badLang.error.includes("언어"));
+});

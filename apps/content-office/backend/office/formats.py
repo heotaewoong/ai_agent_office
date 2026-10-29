@@ -12,6 +12,11 @@ FORMATS = {
     "youtube_long": {"delivery": "manual_upload", "checks": ["썸네일 3안 1280×720 이상", "첫 1분에 제목 약속 이행"]},
     "shorts": {"delivery": "manual_upload", "checks": ["3초 안 훅", "180초 이하", "마지막 문장이 첫 장면으로 이어짐"]},
     "newsletter": {"delivery": "approval_3", "checks": ["발송 직전 최신 동의", "회차 키"]},
+    # 아래 소셜 포맷은 수동 전달 전용이다. 제작 파이프라인(media/exports)은 이 키를 모르며 plan_formats 분기에만 쓴다.
+    "x_post": {"delivery": "manual_paste", "checks": ["짧은 글 초안은 승인② 뒤 사람이 붙여넣기", "계정 주소는 오너 확인 후 등록"]},
+    "threads_post": {"delivery": "manual_paste", "checks": ["즉시 발행 옵션이 승인②를 우회하지 않음", "짧은 글 초안만"]},
+    "linkedin_post": {"delivery": "manual_paste", "checks": ["방법·사례 중심", "개인 프로필이며 조직 페이지가 아님"]},
+    "instagram_card": {"delivery": "manual_upload", "checks": ["카드·릴 검토 묶음", "공식 게시 API 조건 확인 전 수동"]},
 }
 
 

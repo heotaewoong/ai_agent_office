@@ -2,8 +2,11 @@
 
 Protocol verified 2026-10-28: https://developers.google.com/youtube/v3/guides/using_resumable_upload_protocol
 Video resource: https://developers.google.com/youtube/v3/docs/videos
-The operator supplies YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET / YOUTUBE_REFRESH_TOKEN for their own
-channel through the runtime environment only. Access tokens live in memory for one call.
+The operator supplies YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET (shared) and one refresh token per channel
+key (YOUTUBE_MAIN_KO_REFRESH_TOKEN, YOUTUBE_ENGLISH_REFRESH_TOKEN; legacy YOUTUBE_REFRESH_TOKEN still counts
+for youtube_main_ko) through the runtime environment only. Access tokens live in memory for one call.
+The brief language must match the channel locale before any request, the channel key is part of the
+idempotency key, and a response channelId that differs from the registered one becomes needs_review.
 Delivery states: created → accepted → private | failed | unknown | needs_review. An unknown result is
 reconciled before anything is sent again; nothing is ever re-uploaded blindly.
 """
@@ -11,11 +14,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 from pathlib import Path
 
 import requests
 
+from .channels import CHANNELS, channel as channel_row, configured_youtube_channels, missing_credential_names, youtube_credentials
 from .store import WorkflowError, canonical, digest, now
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -28,11 +31,34 @@ MAX_TITLE = 100
 MAX_DESCRIPTION = 5000
 MAX_TAG_CHARS = 500
 LEDGER_KEY = "deliveries"
-ENV_KEYS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
+DEFAULT_CHANNEL = "youtube_main_ko"
 
 
 def configured():
-    return all(os.environ.get(key) for key in ENV_KEYS)
+    """True when at least one YouTube channel key has a full credential set."""
+    return bool(configured_youtube_channels())
+
+
+def _youtube_channel(store, channel_key):
+    definition = CHANNELS.get(channel_key)
+    if not definition or definition["platform"] != "youtube":
+        raise WorkflowError(f"'{channel_key}'은(는) 등록된 YouTube 채널 키가 아닙니다. 채널 레지스트리를 확인하세요")
+    return channel_row(store, channel_key)
+
+
+def _credentials(channel_key):
+    credentials = youtube_credentials(channel_key)
+    if credentials is None:
+        raise WorkflowError("·".join(missing_credential_names(channel_key)) + f"이 설정되지 않았습니다({channel_key}). 채널 소유자가 실행 환경 파일에 넣은 뒤 다시 요청하세요")
+    return credentials
+
+
+def _require_language_match(store, job, row):
+    from .briefs import brief_for_job
+    language = brief_for_job(job).get("language")
+    if language != row["locale"]:
+        raise WorkflowError(f"브리프 언어({language})와 채널 '{row['key']}' 언어({row['locale']})가 다릅니다. 업로드는 요청하지 않았습니다")
+    return language
 
 
 def deliveries(store, job_id=None):
@@ -95,12 +121,9 @@ def video_metadata(job, manifest, paths):
             "status": {"privacyStatus": "private", "selfDeclaredMadeForKids": False}}
 
 
-def _access_token(session):
-    if not configured():
-        raise WorkflowError("YOUTUBE_CLIENT_ID·YOUTUBE_CLIENT_SECRET·YOUTUBE_REFRESH_TOKEN이 설정되지 않았습니다. 채널 소유자가 실행 환경 파일에 넣은 뒤 다시 요청하세요")
+def _access_token(session, credentials):
     try:
-        response = session.post(TOKEN_URL, data={"client_id": os.environ["YOUTUBE_CLIENT_ID"], "client_secret": os.environ["YOUTUBE_CLIENT_SECRET"],
-                                                 "refresh_token": os.environ["YOUTUBE_REFRESH_TOKEN"], "grant_type": "refresh_token"}, timeout=(10, 30))
+        response = session.post(TOKEN_URL, data={**credentials, "grant_type": "refresh_token"}, timeout=(10, 30))
         if response.status_code != 200:
             raise WorkflowError(f"YouTube 인증 갱신 실패 HTTP {response.status_code}. 업로드는 시작하지 않았습니다")
         token = response.json().get("access_token")
@@ -129,19 +152,30 @@ def _finalize(store, record, body):
         _save(store, record)
         store.event("delivery_visibility_mismatch", {"delivery_id": record["id"], "external_id": external_id, "privacy_status": status.get("privacyStatus")}, record["job_id"])
         raise WorkflowError("업로드 결과의 공개 범위가 private가 아닙니다. YouTube Studio에서 즉시 확인하세요")
+    expected = channel_row(store, record.get("channel_key", DEFAULT_CHANNEL)).get("external_account_id")
+    snippet = body.get("snippet") if isinstance(body.get("snippet"), dict) else {}
+    actual = snippet.get("channelId")
+    if expected and isinstance(actual, str) and actual and actual != expected:
+        record.update(state="needs_review", reason="channel_mismatch", response_channel_id=actual)
+        _save(store, record)
+        store.event("delivery_channel_mismatch", {"delivery_id": record["id"], "external_id": external_id, "channel_key": record.get("channel_key"), "expected_channel_id": expected, "response_channel_id": actual}, record["job_id"])
+        raise WorkflowError(f"업로드된 채널 ID({actual})가 등록된 채널 '{record.get('channel_key')}'({expected})과 다릅니다. YouTube Studio에서 즉시 확인하세요")
     record.update(state="private", visibility="private", reason=None)
     _save(store, record)
     store.event("delivery_private", {"delivery_id": record["id"], "external_id": external_id, "channel": "youtube", "quota_units_estimate": QUOTA_UNITS_INSERT}, record["job_id"])
     return record
 
 
-def deliver_youtube(store, job_id, *, actor, session=None):
+def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_CHANNEL):
     session = session or requests
+    row = _youtube_channel(store, channel_key)
     job, manifest, release, paths = _released_video(store, job_id)
+    credentials = _credentials(channel_key)
+    locale = _require_language_match(store, job, row)
     video_path = paths["short.mp4"]
     data = video_path.read_bytes()
     asset_sha = hashlib.sha256(data).hexdigest()
-    key = digest({"channel": "youtube", "job_id": job_id, "asset_sha256": asset_sha, "manifest_hash": manifest["hash"]})
+    key = digest({"channel": "youtube", "channel_key": channel_key, "job_id": job_id, "asset_sha256": asset_sha, "manifest_hash": manifest["hash"]})
     existing = store.setting(LEDGER_KEY, {}).get(key)
     if existing:
         if existing["state"] in ("accepted", "unknown"):
@@ -149,13 +183,13 @@ def deliver_youtube(store, job_id, *, actor, session=None):
         if existing["state"] in ("private", "published", "needs_review"):
             return existing
     metadata = video_metadata(job, manifest, paths)
-    token = _access_token(session)
-    record = {"id": "delivery_" + key[:16], "key": key, "channel": "youtube", "job_id": job_id, "asset_sha256": asset_sha,
+    token = _access_token(session, credentials)
+    record = {"id": "delivery_" + key[:16], "key": key, "channel": "youtube", "channel_key": channel_key, "locale": locale, "job_id": job_id, "asset_sha256": asset_sha,
               "manifest_hash": manifest["hash"], "release_version": release["version"], "idempotency_key": key,
               "title": metadata["snippet"]["title"], "visibility": "private", "state": "created", "actor": str(actor)[:120],
               "quota_units_estimate": QUOTA_UNITS_INSERT, "quota_note": QUOTA_NOTE, "created_at": now(), "updated_at": now()}
     _save(store, record)
-    store.event("delivery_created", {"delivery_id": record["id"], "channel": "youtube", "visibility": "private"}, job_id)
+    store.event("delivery_created", {"delivery_id": record["id"], "channel": "youtube", "channel_key": channel_key, "visibility": "private"}, job_id)
     headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json; charset=UTF-8",
                "X-Upload-Content-Length": str(len(data)), "X-Upload-Content-Type": "video/mp4"}
     try:
@@ -192,7 +226,7 @@ def reconcile_youtube(store, job_id, delivery_id, *, session=None):
     record = next((r for r in deliveries(store, job_id) if r["id"] == delivery_id), None)
     if not record:
         raise WorkflowError("해당 업무의 업로드 기록이 없습니다")
-    token = _access_token(session)
+    token = _access_token(session, _credentials(record.get("channel_key", DEFAULT_CHANNEL)))
     if record["state"] in ("accepted", "unknown") and record.get("session_uri"):
         _, manifest, _, paths = _released_video(store, job_id)
         data = paths["short.mp4"].read_bytes()
@@ -249,18 +283,19 @@ def main():
     parser.add_argument("command", choices=["status", "deliver", "reconcile"])
     parser.add_argument("--job", required=True)
     parser.add_argument("--delivery")
+    parser.add_argument("--channel", default=DEFAULT_CHANNEL, help="채널 키 (youtube_main_ko·youtube_english)")
     args = parser.parse_args()
     from .bootstrap import default_store
     store = default_store()
     try:
         if args.command == "deliver":
-            print(canonical(deliver_youtube(store, args.job, actor="local-operator-cli")))
+            print(canonical(deliver_youtube(store, args.job, actor="local-operator-cli", channel_key=args.channel)))
         elif args.command == "reconcile":
             if not args.delivery:
                 parser.error("reconcile 명령에는 --delivery가 필요합니다")
             print(canonical(reconcile_youtube(store, args.job, args.delivery)))
         else:
-            print(canonical({"configured": configured(), "deliveries": deliveries(store, args.job)}))
+            print(canonical({"configured": configured(), "channels": configured_youtube_channels(), "deliveries": deliveries(store, args.job)}))
     except WorkflowError as error:
         parser.exit(1, str(error) + "\n")
 

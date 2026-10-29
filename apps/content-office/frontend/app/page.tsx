@@ -33,6 +33,7 @@ import { Icon } from "./icons";
 import { WorldView } from "./world-view";
 import { SettingsPanel } from "./settings-panel";
 import { YoutubePanel } from "./youtube-panel";
+import { BriefPanel } from "./brief-panel";
 import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
 import { packagingRequired } from "../lib/packaging";
@@ -1030,6 +1031,7 @@ function Studio({
           <span>{job.error}</span>
         </div>
       )}
+      <BriefPanel key={`brief-${job.id}-${job.brief?.preset ?? ""}`} job={job} busy={locked} action={action} />
       {job.article?.origin === "idea" && (
         <PackagingPanel
           key={job.packaging?.packaging_hash ?? "new"}
