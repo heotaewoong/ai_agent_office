@@ -36,6 +36,7 @@ import { SettingsPanel } from "./settings-panel";
 import { ArchitectureView } from "./architecture-view";
 import { YoutubePanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
+import { updateBriefDrafts, type BriefDraft, type BriefDraftUpdate } from "../lib/briefs";
 import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
 import { QuizPanel } from "./quiz-panel";
@@ -116,8 +117,12 @@ export default function Office() {
   const [intakeDrafts, setIntakeDrafts] = useState<Record<string, IntakeDraft>>(
     {},
   );
+  const [briefDrafts, setBriefDrafts] = useState<Record<string, BriefDraft>>({});
+  const updateBriefDraft = useCallback((job: Job, update: BriefDraftUpdate) => {
+    setBriefDrafts((current) => updateBriefDrafts(current, job, update));
+  }, []);
   const hasUnsavedDrafts =
-    Object.keys(localDrafts).length > 0 || Object.keys(intakeDrafts).length > 0;
+    Object.keys(localDrafts).length > 0 || Object.keys(intakeDrafts).length > 0 || Object.keys(briefDrafts).length > 0;
   useEffect(() => {
     if (!hasUnsavedDrafts) return;
     const warn = (event: BeforeUnloadEvent) => {
@@ -333,7 +338,7 @@ export default function Office() {
             <span className={`status-dot ${connected ? "live" : ""}`} />
             <span>
               {connected
-                ? "로컬 오피스 연결됨"
+                ? "오피스 연결됨"
                 : loading
                   ? "오피스 연결 중"
                   : "연결 확인 필요"}
@@ -352,7 +357,7 @@ export default function Office() {
           <div className="operator">
             <span className="avatar">H</span>
             <span>
-              나의 편집실<small>운영자 · LOCAL WORKSPACE</small>
+              나의 편집실<small>운영자 · 내 작업공간</small>
             </span>
             <span className="operator-dot">↗</span>
           </div>
@@ -386,7 +391,7 @@ export default function Office() {
                 뉴스레터 초안 {dashboard.newsletters.draft ?? 0} · ③ {dashboard.newsletters.approved ?? 0}
               </span>
             )}
-            <span className="local-chip">LOCAL</span>
+            <span className="local-chip">내 작업공간</span>
           </div>
         </header>
         <main id="main-content" tabIndex={-1}>
@@ -473,8 +478,8 @@ export default function Office() {
               <p>실제 RSS 수집 기록과 저장된 작업을 확인합니다.</p>
             </div>
           ) : !dashboard ? (
-            <Empty title="로컬 오피스에 연결할 수 없어요" icon="activity">
-              API와 작업자가 실행 중인지 확인한 뒤{" "}
+            <Empty title="오피스에 연결할 수 없어요" icon="activity">
+              오피스 API 주소와 연결 상태를 확인한 뒤{" "}
               <button
                 className="inline-button"
                 onClick={() => void loadDashboard()}
@@ -660,6 +665,7 @@ export default function Office() {
                               item.article?.title}
                           </strong>
                           <span>
+                            {briefDrafts[item.id] && "브리프 수정 중 · "}
                             {formatDate(item.updated_at, true)}
                             <Icon name="chevron" size={14} />
                           </span>
@@ -693,6 +699,8 @@ export default function Office() {
                           })
                         }
                         cached={localDrafts[job.id]}
+                        cachedBrief={briefDrafts[job.id]}
+                        onBriefDraftChange={updateBriefDraft}
                         onDraftChange={(id, value) =>
                           setLocalDrafts((current) => {
                             const next = { ...current };
@@ -710,6 +718,12 @@ export default function Office() {
                       />
                     ) : (
                       <>
+                        {briefDrafts[job.id] && (
+                          <div className="notice" role="status">
+                            <span>다음 원고용 브리프에 저장하지 않은 변경이 있습니다. 기존 승인 원고·출고물은 그대로 사용할 수 있습니다.</span>
+                            <button className="button text" type="button" onClick={() => setView("studio")}>브리프 확인</button>
+                          </div>
+                        )}
                         {localDrafts[job.id] && (
                           <div className="notice error" role="alert">
                             <Icon name="alert" size={18} />
@@ -1009,6 +1023,8 @@ function Studio({
   intake,
   onIntakeChange,
   cached,
+  cachedBrief,
+  onBriefDraftChange,
   onDraftChange,
   busy,
   action,
@@ -1020,6 +1036,8 @@ function Studio({
   intake?: IntakeDraft;
   onIntakeChange: (value: IntakeDraft | null) => void;
   cached?: LocalDraft;
+  cachedBrief?: BriefDraft;
+  onBriefDraftChange: (job: Job, update: BriefDraftUpdate) => void;
   onDraftChange: (id: string, value: LocalDraft | null) => void;
   busy: boolean;
   action: Action;
@@ -1126,7 +1144,7 @@ function Studio({
           <span>{job.error}</span>
         </div>
       )}
-      <BriefPanel key={`brief-${job.id}-${job.brief?.preset ?? ""}`} job={job} busy={locked} action={action} />
+      <BriefPanel key={`brief-${job.id}`} job={job} busy={locked} action={action} cached={cachedBrief} onDraftChange={onBriefDraftChange} />
       {job.article?.origin === "idea" && (
         <PackagingPanel
           key={job.packaging?.packaging_hash ?? "new"}
@@ -2492,7 +2510,9 @@ function Activity({
             ))}
           </select>
         </div>
-        {job?.events?.length ? (
+        {activeId && !job ? (
+          <p className="muted" role="status">선택한 작업의 실행 기록을 불러오고 있어요.</p>
+        ) : job?.events?.length ? (
           <div className="timeline">
             {job.events
               .slice()
@@ -2524,12 +2544,14 @@ function Activity({
         ) : (
           <p className="muted">선택한 작업의 저장된 이벤트가 아직 없습니다.</p>
         )}
-        <TaskProgress
-          tasks={dashboard.tasks ?? job?.tasks ?? []}
-          jobs={dashboard.jobs}
-          busy={busy}
-          action={action}
-        />
+        {(!activeId || job) && (
+          <TaskProgress
+            tasks={job?.tasks ?? dashboard.tasks ?? []}
+            jobs={job ? [job, ...dashboard.jobs.filter((item) => item.id !== job.id)] : dashboard.jobs}
+            busy={busy}
+            action={action}
+          />
+        )}
       </section>
     </div>
   );

@@ -132,3 +132,47 @@ test('a full collection can buy both vehicles and survives a normal save round t
   assert.deepEqual(restored, p);
   assert.equal(credits(restored), credits(p));
 });
+
+function drivePanelSync(mounted, drive, summary, state, classes) {
+  const start = source.indexOf('  function syncDrivePanel() {');
+  const end = source.indexOf('\n  }', start);
+  assert(start >= 0 && end > start, 'the native disclosure must synchronize driving visibility');
+  return Function('mounted', 'drive', 'driveSummary', 'driveState', 'document',
+    'tourPanel', 'return ' + source.slice(start, end + 4))(mounted, drive, summary, state, { body: { classList: classes } }, { open: true });
+}
+
+test('optional driving stays folded until opened and preserves controls when reopened', () => {
+  const controls = { selected: 'nova', tour: { next: 2 } }, classes = new Map();
+  const drive = { open: false, controls, set innerHTML(_) { assert.fail('folding must not replace vehicle or tour controls'); } };
+  const summary = { setAttribute(key, value) { this[key] = value; } }, state = {};
+  const sync = drivePanelSync(false, drive, summary, state, { toggle: (key, value) => classes.set(key, value) });
+  sync();
+  assert.equal(drive.open, false);
+  assert.equal(classes.get('free-drive-open'), false);
+  assert.equal(classes.get('tour-panel-open'), false);
+  for (const open of [true, false, true]) {
+    drive.open = open; sync();
+    assert.equal(classes.get('free-drive-open'), open);
+    assert.equal(classes.get('tour-panel-open'), open);
+    assert.equal(drive.controls, controls);
+    assert.equal(drive.controls.selected, 'nova');
+    assert.equal(drive.controls.tour.next, 2);
+  }
+  assert.equal(summary['aria-disabled'], 'false');
+});
+
+test('driving keeps the disclosure open so dismount controls remain available', () => {
+  const drive = { open: false }, summary = { setAttribute(key, value) { this[key] = value; } }, state = {};
+  const flags = new Map(), classes = { toggle: (key, value) => flags.set(key, value) };
+  const sync = drivePanelSync(true, drive, summary, state, classes);
+  sync();
+  assert.equal(drive.open, true);
+  assert.equal(flags.get('free-drive-open'), true);
+  assert.equal(summary['aria-disabled'], 'true');
+  drive.open = false; sync();
+  assert.equal(drive.open, true, 'programmatic folding cannot hide an active driver\'s dismount button');
+  drivePanelSync(false, drive, summary, state, classes)();
+  assert.equal(summary['aria-disabled'], 'false');
+  drive.open = false; drivePanelSync(false, drive, summary, state, classes)();
+  assert.equal(flags.get('free-drive-open'), false);
+});

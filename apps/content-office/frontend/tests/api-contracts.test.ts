@@ -39,3 +39,17 @@ test("카드 기본 요청은 프로필을 따르고 명시적인 이미지 선�
   await api.requestCards("job-a", true);
   assert.deepEqual(bodies, [{}, { images: false }, { images: true }]);
 });
+
+test("브리프 저장은 편집을 시작한 판본 토큰을 보낸다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const expected = "c".repeat(64);
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    assert.equal(String(input), "/api/jobs/job%20a/brief");
+    assert.equal(init?.method, "PUT");
+    assert.deepEqual(JSON.parse(String(init?.body)), { preset: "ai-agent", overrides: { reader: "새 독자" }, expected_brief_hash: expected });
+    return Response.json({ id: "job a", brief_hash: expected });
+  };
+  await api.setJobBrief("job a", "ai-agent", { reader: "새 독자" }, expected);
+});

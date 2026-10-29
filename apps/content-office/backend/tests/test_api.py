@@ -39,6 +39,94 @@ def test_create_job_and_refresh_detail_keep_same_id(context):
     assert client.get(f"/api/jobs/{job_id}").json()["id"] == job_id
 
 
+@pytest.mark.parametrize("state", ["failed", "running", "unknown"])
+def test_selected_job_keeps_its_tasks_after_other_jobs_fill_dashboard_history(context, state):
+    from office.store import canonical, now
+    store, client, _ = context
+    job = store.create_job(store.article("one"))
+    task = store.enqueue("draft", {"job_id": job["id"], "source_hash": None}, key="selected-status")
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE tasks SET state=? WHERE id=?", (state, task["id"]))
+    with store.connection(transaction=True) as db:
+        stamp = now()
+        db.executemany("INSERT INTO tasks VALUES(?,?,?,?,?,NULL,NULL,?,?)", [(f"task_other_{index}", "draft", canonical({"job_id": f"job_other_{index}"}), "completed", f"other:{index}", stamp, stamp) for index in range(105)])
+    dashboard = client.get("/api/dashboard").json()
+    assert len(dashboard["tasks"]) == 100 and task["id"] not in {row["id"] for row in dashboard["tasks"]}
+    response = client.get(f"/api/jobs/{job['id']}")
+    assert response.status_code == 200
+    assert [(row["id"], row["state"]) for row in response.json()["tasks"]] == [(task["id"], state)]
+    assert store.job(job["id"]) == job
+
+
+def test_job_summaries_bound_metadata_and_preserve_detail_ids_with_smaller_payload(context):
+    from office.store import canonical
+    store, client, _ = context
+    private = "PRIVATE_SUMMARY_SENTINEL"
+    hostile_title = '<img src=x onerror="alert(1)"> 합성 제목'
+    with store.connection(transaction=True) as db:
+        for index in range(105):
+            stamp = f"2026-10-29T00:{index // 60:02}:{index % 60:02}+00:00"
+            job = {"id": f"job_{index:03}", "title": hostile_title, "state": "source_review", "updated_at": stamp,
+                   "source_hash": "a" * 64, "source_packet": {"body": private + "." * 12000, "evidence": [private]},
+                   "article": {"url": "https://example.com/" + private, "body": private}, "payload": private, "actor": private,
+                   "source_approval": {"id": "approval_synthetic", "decision": "approved", "version": "a" * 64, "created_at": stamp, "actor": private},
+                   "release_approval": {"decision": "rejected", "version": "b" * 64, "created_at": stamp, "outputs": ["blog"], "note": private},
+                   "manifest": {"hash": "b" * 64, "source_hash": "a" * 64, "path": private, "files": [{"id": "asset_synthetic", "kind": "text", "sha256": "c" * 64, "outputs": ["blog"], "path": private, "url": private}]}}
+            db.execute("INSERT INTO jobs VALUES(?,?,?)", (job["id"], canonical(job), stamp))
+    dashboard = client.get("/api/dashboard")
+    response = client.get("/api/jobs/summaries")
+    assert dashboard.status_code == response.status_code == 200
+    summaries = response.json()["jobs"]
+    assert len(dashboard.json()["jobs"]) == 105 and len(summaries) == 80
+    assert summaries[0]["id"] == "job_104" and summaries[-1]["id"] == "job_025"
+    assert summaries[0]["title"] == hostile_title
+    assert response.headers["content-type"].startswith("application/json")
+    assert private not in response.text and len(response.content) < len(dashboard.content) / 5
+    assert len(client.get("/api/jobs/summaries?limit=1").json()["jobs"]) == 1
+    detail = client.get("/api/jobs/" + summaries[-1]["id"])
+    assert detail.status_code == 200 and detail.json()["id"] == "job_025"
+    assert private in detail.json()["source_packet"]["body"]
+    for summary in summaries:
+        assert set(summary) == {"id", "title", "state", "source_hash", "source_approval", "release_approval", "manifest"}
+        assert set(summary["source_approval"]) == {"id", "decision", "version", "created_at"}
+        assert set(summary["release_approval"]) == {"decision", "version", "created_at", "outputs"}
+        assert set(summary["manifest"]) == {"hash", "source_hash", "files"}
+        assert set(summary["manifest"]["files"][0]) == {"id", "kind", "sha256", "outputs"}
+
+
+@pytest.mark.parametrize("limit", ["0", "81", "-1", "1.5", "wrong"])
+def test_job_summaries_reject_invalid_limit_before_reading_jobs(context, monkeypatch, limit):
+    store, client, _ = context
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("잘못된 limit으로 작업을 조회했습니다")
+
+    monkeypatch.setattr(store, "jobs", unexpected)
+    assert client.get("/api/jobs/summaries?limit=" + limit).status_code == 422
+
+
+def test_job_summaries_sanitize_malformed_nested_metadata_and_bound_every_list(context):
+    store, client, _ = context
+    private = "PRIVATE_NESTED_SENTINEL"
+    job = store.create_job(store.article("one"))
+    file = {"id": "../invalid", "kind": {"body": private}, "sha256": "not-a-hash", "outputs": ["x" * 90] * 30 + [{"body": private}], "arbitrary": private}
+    store.update_job(job["id"], title="t" * 250, state="s" * 90, source_hash="not-a-hash",
+                     source_approval={"id": "../invalid", "decision": "d" * 70, "version": "A" * 64, "created_at": "t" * 90, "actor": private},
+                     release_approval=[private], manifest={"hash": {"body": private}, "source_hash": "A" * 64, "files": [file] * 100, "unknown": private})
+    response = client.get("/api/jobs/summaries?limit=80")
+    assert response.status_code == 200
+    summary = response.json()["jobs"][0]
+    assert len(summary["title"]) == 200 and len(summary["state"]) == 60
+    assert summary["source_hash"] is None and summary["release_approval"] is None
+    assert summary["source_approval"] == {"id": None, "decision": "d" * 40, "version": "a" * 64, "created_at": "t" * 60}
+    assert summary["manifest"]["hash"] is None and summary["manifest"]["source_hash"] == "a" * 64
+    assert len(summary["manifest"]["files"]) == 80
+    for metadata in summary["manifest"]["files"]:
+        assert metadata["id"] is None and metadata["sha256"] is None and isinstance(metadata["kind"], str)
+        assert len(metadata["outputs"]) == 20 and all(len(output) == 60 for output in metadata["outputs"])
+    assert private not in response.text
+
+
 def test_produce_cannot_bypass_source_approval(context):
     store, client, headers = context
     job = store.create_job(store.article("one"))

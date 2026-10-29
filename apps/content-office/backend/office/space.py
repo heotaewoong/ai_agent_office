@@ -104,7 +104,7 @@ def project_space(store, office_url: str = "http://localhost:3110", agents=()) -
     used = budget["reserved_krw"] + budget["spent_krw"]
     items["ops"].append(item("ops", "budget", f"외부 API 예산 {budget['cap_krw']:,}원 중 {used:,}원 사용·예약", "info", "추정 원가 · 청구 대사 전", False))
 
-    tasks = store.tasks()
+    tasks = store.task_activity(TASK_AGENT)
     model = store.setting("model") or ""
     status = {}
     for room, ids in ROOM_AGENTS.items():
@@ -117,6 +117,8 @@ def project_space(store, office_url: str = "http://localhost:3110", agents=()) -
                 status[aid] = ("running", f"{active['kind']} 처리 중")
             elif mine and mine[0]["state"] == "failed":
                 status[aid] = ("error", "마지막 작업 실패")
+            elif mine and mine[0]["state"] == "unknown":
+                status[aid] = ("unknown", "호출 결과 불명 · 대사 필요")
             elif waiting:
                 status[aid] = ("waiting", "사람 답 대기")
             else:

@@ -11,16 +11,17 @@ const H='a'.repeat(64),OTHER='b'.repeat(64),PRIVATE='PRIVATE_SENTINEL_DO_NOT_EXP
 const job=(id='job_1',extra={})=>({id,title:'작업 '+id,state:'complete',source_hash:H,manifest:{hash:OTHER,source_hash:H,files:[]},...extra});
 const response=(body,status=200,type='application/json')=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':type}});
 function fixture(options={}){
-  const elements=new Map(),classes=new Set(),requests=[];
+  const elements=new Map(),classes=new Set(),requests=[],posts=[];
   const $=id=>{if(!elements.has(id))elements.set(id,{textContent:'',innerHTML:'',hidden:false,attributes:{},setAttribute(k,v){this.attributes[k]=v;},querySelectorAll(){return [];},focus(){}});return elements.get(id);};
   const data={apiUrl:Object.hasOwn(options,'apiUrl')?options.apiUrl:'/api/space'},location=new URL('https://office.test/world/index.html?api=/api/space');
   const controls={keys:new Set(['w']),dragging:true,setVehicleSpeed(){},setView(){}},world={syncs:0,syncRendering(){this.syncs++;}},space={};
   const document={body:{classList:{add:c=>classes.add(c),remove:c=>classes.delete(c)}},addEventListener(){}};
   const fetch=(url,init)=>{requests.push({url,init});return options.fetch?options.fetch(url,init):Promise.resolve(response({jobs:[]}));};
-  const results=Function('data','location','fetch','AbortController','setTimeout','clearTimeout','$','esc','controls','world','space','document','workshop','workbench','hud','return ('+literal+')')
-    (data,location,fetch,AbortController,setTimeout,clearTimeout,$,esc,controls,world,space,document,{opened:false},{setRoster(){}},{closePanel(){}});
+  const embed={enabled:options.embed===true,post(message){posts.push(message);}};
+  const results=Function('data','location','fetch','AbortController','setTimeout','clearTimeout','$','esc','controls','world','space','document','workshop','workbench','hud','embed','return ('+literal+')')
+    (data,location,fetch,AbortController,setTimeout,clearTimeout,$,esc,controls,world,space,document,{opened:false},{setRoster(){}},{closePanel(){}},embed);
   const actualRender=results.render;let renders=0;results.render=()=>{renders++;};results.opened=true;
-  return {results,data,location,requests,elements,$,controls,world,space,classes,actualRender,get renders(){return renders;}};
+  return {results,data,location,requests,posts,embed,elements,$,controls,world,space,classes,actualRender,get renders(){return renders;}};
 }
 function deferredFixture(){
   const pending=[];
@@ -32,7 +33,7 @@ function deepKeys(value){return value&&typeof value==='object'?Object.keys(value
 
 test('result endpoints require the exact same-origin space API and never enable artifact routes',()=>{
   const f=fixture(),r=f.results;
-  assert.equal(r.endpoint('list'),'https://office.test/api/dashboard');
+  assert.equal(r.endpoint('list'),'https://office.test/api/jobs/summaries?limit=80');
   assert.equal(r.endpoint('job','j_1-2'),'https://office.test/api/jobs/j_1-2');
   assert.equal(r.endpoint('deliveries','j'),'https://office.test/api/jobs/j/deliveries');
   assert.equal(r.endpoint('draft','j','d_1'),'https://office.test/api/jobs/j/drafts/d_1/preview');
@@ -40,7 +41,7 @@ test('result endpoints require the exact same-origin space API and never enable 
   for(const value of [null,'https://evil.test/api/space','https://office.test.evil.test/api/space','https://u:p@office.test/api/space','http://office.test/api/space','/api/space/','/api/%73pace','/data/space.json','javascript:alert(1)','data:application/json,{}','file:///api/space','blob:https://office.test/id']){
     f.data.apiUrl=value;assert.equal(r.endpoint('list'),null,String(value));
   }
-  f.data.apiUrl='https://office.test/api/space?ignored=https://evil.test#ignored';assert.equal(r.endpoint('list'),'https://office.test/api/dashboard');
+  f.data.apiUrl='https://office.test/api/space?ignored=https://evil.test#ignored';assert.equal(r.endpoint('list'),'https://office.test/api/jobs/summaries?limit=80');
 });
 
 test('route identifiers reject schemes, traversal, encoding, HTML and oversized or non-string input',()=>{
@@ -87,6 +88,67 @@ test('delivery records remain separate from completed tasks and missing or faile
   assert(!JSON.stringify(d).includes(PRIVATE));assert.equal(r.detail(raw,{}).deliveryError,true);
 });
 
+test('known job states use the backend Korean labels and next review without adding metadata',async()=>{
+  const backend=await readFile(new URL('../../../apps/content-office/backend/office/space.py',import.meta.url),'utf8');
+  const labels=backend.slice(backend.indexOf('STATE_LABELS = {'),backend.indexOf('\n}',backend.indexOf('STATE_LABELS = {')));
+  const f=fixture({embed:true}),r=f.results;
+  for(const [,state,label]of labels.matchAll(/"([a-z_]+)": "([^"]+)"/g)){
+    assert.equal(r.reviewStep(state).label,label,state);
+    assert(['studio','delivery','activity'].includes(r.reviewStep(state).view));
+  }
+  const raw=job('selected',{state:'source_review',source_packet:{body:PRIVATE},drafts:[]});
+  r.jobs=[r.summary(raw)];r.current=r.detail(raw,{deliveries:[]});r.selectedId='selected';
+  f.actualRender.call(r);
+  const html=f.$('panel-body').innerHTML;
+  assert(html.includes('사람 승인 대기 ①'));assert(html.includes('다음 검토'));
+  assert(html.includes('생성초안 기록'));assert(html.includes('현재 원고가 없다는 뜻은 아닙니다'));
+  assert(!html.includes('이 조회에서 원고를 받지 못했습니다.'));assert(!html.includes(PRIVATE));
+  assert.deepEqual(Object.keys(r.current).sort(),['job','tasks','drafts','deliveries','deliveryError'].sort());
+});
+
+test('embedded review opens only the validated selected job in a fixed review view',()=>{
+  const f=fixture({embed:true}),r=f.results;
+  for(const [state,view]of [['source_review','studio'],['release_review','delivery'],['needs_reconciliation','activity'],['future_state','activity']]){
+    r.current=r.detail(job('selected',{state}),{deliveries:[]});r.selectedId='selected';
+    f.actualRender.call(r);assert(f.$('panel-body').innerHTML.includes('선택 작업 검토 화면 열기'));
+    f.$('results-open-review').onclick();assert.deepEqual(f.posts.at(-1),{type:'open',view,itemId:'selected'});
+  }
+  assert.equal(f.requests.length,0);
+  const count=f.posts.length;
+  for(const id of ['other','../selected','<img>','javascript:alert(1)',null])assert.equal(r.openReview(id),false);
+  assert.equal(f.posts.length,count);
+  r.loading=true;assert.equal(r.openReview('selected'),false);r.loading=false;
+  f.data.apiUrl='https://evil.test/api/space';assert.equal(r.openReview('selected'),false);
+  assert.equal(f.posts.length,count);
+  r.opened=false;assert.equal(r.openReview('selected'),false);
+});
+
+test('standalone and unknown states keep an app link and original ID without inventing approval or publication',()=>{
+  const f=fixture(),r=f.results;
+  for(const state of ['unknown','future_state','__proto__','<img src=x onerror=alert(1)>']){
+    r.current=r.detail(job('original_id',{state}),{deliveries:[]});r.selectedId='original_id';
+    f.actualRender.call(r);
+    const html=f.$('panel-body').innerHTML+f.$('panel-foot').innerHTML;
+    assert(html.includes('상태 미확인'));assert(html.includes('original_id'));assert(html.includes('https://office.test/'));
+    assert(!html.includes('선택 작업 검토 화면 열기'));assert(!/<(?:img|script)\b/.test(html));
+    assert.equal(r.openReview('original_id'),false);
+  }
+  assert.equal(f.posts.length,0);assert.equal(f.requests.length,0);
+});
+
+test('a rendered review button cannot open an older job after a fast selection change',()=>{
+  const f=fixture({embed:true}),r=f.results;
+  r.current=r.detail(job('old',{state:'source_review'}),{deliveries:[]});r.selectedId='old';
+  f.actualRender.call(r);const oldClick=f.$('results-open-review').onclick;
+  r.current=null;r.selectedId='new';r.loading=true;oldClick();assert.equal(f.posts.length,0);
+  r.current=r.detail(job('new',{state:'release_review'}),{deliveries:[]});r.loading=false;
+  f.actualRender.call(r);oldClick();assert.equal(f.posts.length,0);
+  f.$('results-open-review').onclick();assert.deepEqual(f.posts,[{type:'open',view:'delivery',itemId:'new'}]);
+  r.current={...r.current,job:{...r.current.job,id:'wrong'}};
+  assert.equal(r.openReview('new'),false);
+  assert.equal(f.requests.length,0);
+});
+
 test('rendering escapes hostile text and exposes only a safe draft preview and review app link',()=>{
   const f=fixture(),r=f.results,attack='<img src=x onerror="alert(1)"><script>alert(2)</script>';
   const raw=job('job_ok',{title:attack,state:attack,manifest:{hash:H,source_hash:H,files:[{id:'html_file',kind:attack,sha256:OTHER,outputs:[attack],url:'javascript:alert(9)',path:PRIVATE}]},drafts:[{id:'draft_ok',title:attack,version:2}],tasks:[{id:'task_ok',kind:attack,state:attack}]});
@@ -110,6 +172,19 @@ test('every data request is a non-cached same-origin GET and HTTP 401 or unexpec
     const f=fixture({fetch:async()=>response(body,status,type)}),r=f.results;assert.equal(await r.load(),false);assert(r.error);assert.equal(r.listAt,null);assert.deepEqual(r.jobs,[]);
     assert.equal(f.requests.length,1);const init=f.requests[0].init;assert.equal(init.method,'GET');assert.equal(init.credentials,'same-origin');assert.equal(init.cache,'no-store');assert.equal(init.redirect,'error');assert(init.signal instanceof AbortSignal);
   }
+});
+
+test('list uses only the bounded summary GET and an old server 404 never falls back to dashboard',async()=>{
+  const f=fixture({fetch:async()=>response({jobs:[job('safe_summary')]})}),r=f.results;
+  assert.equal(await r.load(),true);
+  assert.equal(f.requests.length,1);
+  assert.equal(f.requests[0].url,'https://office.test/api/jobs/summaries?limit=80');
+  assert.equal(f.requests[0].init.method,'GET');assert.equal(f.requests[0].init.credentials,'same-origin');
+  const old=fixture({fetch:async()=>response({},404)});
+  assert.equal(await old.results.load(),false);
+  assert.match(old.results.error,/요약 목록.*서버/);assert.match(old.results.error,/404/);
+  assert.equal(old.requests.length,1);assert(!old.requests.some(request=>request.url.includes('/dashboard')));
+  assert.deepEqual(old.results.jobs,[]);assert.equal(old.results.listAt,null);
 });
 
 test('a successful list deduplicates validated jobs and a later failure retains a clearly stale prior observation',async()=>{

@@ -192,6 +192,7 @@ export type Job = {
     decision?: string;
   };
   brief?: Brief | null;
+  brief_hash?: string;
   offer?: Offer | null;
 };
 export type Feed = {

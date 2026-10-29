@@ -155,6 +155,88 @@ def context(tmp_path):
     return store, client, {"Origin": "http://localhost:3110", "X-Office-CSRF": token}
 
 
+@pytest.mark.parametrize("kind,images", [("quiz", None), ("cards", None), ("cards", False), ("cards", True)])
+@pytest.mark.parametrize("history_scope", ["same-job", "other-jobs"])
+def test_output_request_stays_idempotent_after_more_than_100_attempts(tmp_path, kind, images, history_scope):
+    from office.quiz import enqueue_output
+    from office.store import canonical, now
+    store = Store(tmp_path)
+    job = approved_job(store)
+    job = store.update_job(job["id"], **{kind: {"version": 1}})
+    budget = store.budget()
+    ended_states = ("completed", "failed", "partial", "completed")
+    with store.connection(transaction=True) as db:
+        stamp = now()
+        db.executemany("INSERT INTO tasks VALUES(?,?,?,?,?,NULL,NULL,?,?)", [(f"task_prior_{index}", kind, canonical({"job_id": job["id"], "source_hash": job["source_hash"]}), ended_states[index % 4], f"prior:{kind}:{index}", stamp, stamp) for index in range(120)])
+        for index, (other_kind, payload) in enumerate([("draft", {"job_id": job["id"], "source_hash": job["source_hash"]}), (kind, {"job_id": job["id"], "source_hash": "0" * 64}), (kind, {"job_id": "job_other", "source_hash": job["source_hash"]})]):
+            db.execute("INSERT INTO tasks VALUES(?,?,?,?,?,NULL,NULL,?,?)", (f"task_different_{index}", other_kind, canonical(payload), "completed", f"different:{index}", stamp, stamp))
+    first = enqueue_output(store, job, kind, images)
+    if history_scope == "other-jobs":
+        with store.connection(transaction=True) as db:
+            stamp = now()
+            db.executemany("INSERT INTO tasks VALUES(?,?,?,?,?,NULL,NULL,?,?)", [(f"task_other_{index}", "draft", canonical({"job_id": f"job_other_{index}"}), "completed", f"other:{index}", stamp, stamp) for index in range(105)])
+    second = enqueue_output(store, job, kind, images)
+    third = enqueue_output(store, job, kind, images)
+    assert first["id"] == second["id"] == third["id"]
+    assert first["state"] == second["state"] == third["state"] == "queued"
+    suffix = "" if images is None else (":img" if images else ":noimg")
+    assert first["dedup_key"].endswith(":120" + suffix)
+    with store.connection() as db:
+        queued = db.execute("SELECT COUNT(*) FROM tasks WHERE kind=? AND state='queued' AND json_extract(payload,'$.job_id')=?", (kind, job["id"])).fetchone()[0]
+    assert queued == 1
+    assert len(store.tasks(job["id"])) == 100
+    assert store.job(job["id"]) == job and store.budget() == budget
+
+
+@pytest.mark.parametrize("kind,images", [("quiz", None), ("cards", None), ("cards", False), ("cards", True)])
+@pytest.mark.parametrize("hidden_history", [False, True])
+def test_unknown_output_blocks_new_keys_and_image_options_without_side_effects(context, kind, images, hidden_history):
+    from office.quiz import enqueue_output
+    from office.store import canonical, now
+    store, client, headers = context
+    job = approved_job(store)
+    previous = enqueue_output(store, job, kind, False if kind == "cards" else None)
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE tasks SET state='unknown' WHERE id=?", (previous["id"],))
+        if hidden_history:
+            stamp = now()
+            db.executemany("INSERT INTO tasks VALUES(?,?,?,?,?,NULL,NULL,?,?)", [(f"task_newer_{index}", "draft", canonical({"job_id": job["id"], "source_hash": job["source_hash"]}), "completed", f"newer:{index}", stamp, stamp) for index in range(105)])
+    before_job, before_budget, before_events = store.job(job["id"]), store.budget(), store.events(job["id"])
+    with store.connection() as db:
+        task_count = db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    assert store.finished_task_count(job["id"], kind, job["source_hash"]) == 1
+    with pytest.raises(WorkflowError, match="결과 불명"):
+        enqueue_output(store, job, kind, images)
+    body = {} if images is None else {"images": images}
+    response = client.post(f"/api/jobs/{job['id']}/{kind}", json=body, headers=headers)
+    assert response.status_code == 409 and "결과 불명" in response.json()["detail"]
+    assert store.task(previous["id"])["state"] == "unknown"
+    assert store.job(job["id"]) == before_job and store.budget() == before_budget and store.events(job["id"]) == before_events
+    with store.connection() as db:
+        assert db.execute("SELECT COUNT(*) FROM tasks").fetchone()[0] == task_count
+
+
+def test_output_unknown_guard_keeps_pending_reuse_failed_retry_and_new_scopes(tmp_path):
+    from office.quiz import enqueue_output
+    store = Store(tmp_path)
+    job = approved_job(store)
+    first = enqueue_output(store, job, "quiz")
+    assert enqueue_output(store, job, "quiz")["id"] == first["id"]
+    claimed = store.claim("worker")
+    assert claimed["id"] == first["id"]
+    assert enqueue_output(store, job, "quiz")["id"] == first["id"]
+    store.finish_task(first["id"], "worker", {}, state="failed")
+    retry = enqueue_output(store, job, "quiz")
+    assert retry["id"] != first["id"]
+    store.claim("worker")
+    store.finish_task(retry["id"], "worker", {}, state="unknown")
+    assert enqueue_output(store, job, "cards", False)["state"] == "queued"
+    source = store.save_source(job["id"], {**job["source_packet"], "title": "새 원고 판본"})
+    store.review_source(job["id"], source["source_hash"], "approved", "operator", {"blog": True})
+    fresh = enqueue_output(store, store.job(job["id"]), "quiz")
+    assert fresh["state"] == "queued" and fresh["payload"]["source_hash"] != job["source_hash"]
+
+
 def test_quiz_routes_require_approval_then_enqueue_and_expose_result(context):
     store, client, headers = context
     job = approved_job(store, approve=False)
@@ -196,6 +278,46 @@ def test_produce_task_auto_enqueues_quiz_and_cards_once(tmp_path, monkeypatch):
     generate_quiz(store, job["id"], provider=FakeQuizProvider([good_quiz()]))
     plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))
     assert worker.process_task(store, task)["queued_outputs"] == {}
+
+
+@pytest.mark.parametrize("unknown_kind", ["quiz", "cards"])
+def test_unknown_optional_output_does_not_block_other_outputs_or_main_production(tmp_path, monkeypatch, unknown_kind):
+    from office import media
+    from office.quiz import enqueue_output
+    store = Store(tmp_path)
+    job = approved_job(store)
+    unresolved = enqueue_output(store, job, unknown_kind)
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE tasks SET state='unknown' WHERE id=?", (unresolved["id"],))
+    produced = []
+
+    def produce(s, job_id, **kwargs):
+        produced.append(job_id)
+        s.update_job(job_id, state="release_review")
+        return {"hash": "synthetic-manifest", "output_status": {"blog": {"state": "completed"}}, "completed_outputs": ["blog"]}
+
+    monkeypatch.setattr(media, "produce", produce)
+    task = store.enqueue("produce", {"job_id": job["id"], "source_hash": job["source_hash"]}, key="main-production")
+    assert worker.run_once(store, "synthetic-worker") is True
+    result = store.task(task["id"])
+    other = "cards" if unknown_kind == "quiz" else "quiz"
+    assert result["state"] == "completed" and set(result["result"]["queued_outputs"]) == {other}
+    assert produced == [job["id"]] and store.job(job["id"])["state"] == "release_review"
+    assert store.task(unresolved["id"])["state"] == "unknown"
+    assert [(item["kind"], item["state"]) for item in store.tasks(job["id"]) if item["state"] == "queued"] == [(other, "queued")]
+
+
+def test_auto_outputs_do_not_hide_unrelated_workflow_errors(tmp_path, monkeypatch):
+    from office import quiz
+    store = Store(tmp_path)
+    job = approved_job(store)
+
+    def invalid(*args, **kwargs):
+        raise WorkflowError("synthetic validation failure")
+
+    monkeypatch.setattr(quiz, "enqueue_output", invalid)
+    with pytest.raises(WorkflowError, match="validation failure"):
+        quiz.enqueue_missing_outputs(store, job)
 
 
 def released_job(store):

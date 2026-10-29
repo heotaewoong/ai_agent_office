@@ -3,6 +3,10 @@ node_modules/
 .venv/
 venv/
 .next/
+.next.before-*/
+.next.candidate-*/
+.next.failed-*/
+.next.rollback-*/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -29,6 +33,7 @@ Thumbs.db
 .hermes/
 .claude/
 .codex/
+.serena/
 .agents/
 .gemini/
 .openai/

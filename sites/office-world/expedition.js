@@ -119,9 +119,10 @@ if (typeof document !== 'undefined') {
   document.body.append(root);
   const panel = root.querySelector('.alien-game-panel');
   const launch = root.querySelector('.alien-game-launch');
-  const drive = document.createElement('section');
+  const drive = document.createElement('details');
   drive.className = 'free-drive'; drive.setAttribute('aria-label', '무료 차량 시승');
-  drive.innerHTML = `<div class="free-drive-heading"><strong>차량 골라 무료 시승</strong><span>포획 · 구매 없이 바로</span></div>
+  drive.innerHTML = `<summary class="free-drive-summary"><strong>도시 탐험·차량 시승</strong><span class="free-drive-state">선택 놀이</span></summary>
+    <div class="free-drive-heading"><strong>차량 골라 무료 시승</strong><span>포획 · 구매 없이 바로</span></div>
     <div class="free-drive-controls"><label for="free-drive-vehicle">차량 선택<select id="free-drive-vehicle" aria-label="차량 선택" aria-describedby="free-drive-help">${VEHICLES.map(vehicle => `<option value="${vehicle.id}">${vehicle.name} · ${Math.round(vehicle.speed * 3.6)}km/h</option>`).join('')}</select></label>
     <button type="button" class="free-drive-ride" disabled>도시 준비 중…</button></div>
     <p class="alien-game-status" role="status"></p>
@@ -135,6 +136,7 @@ if (typeof document !== 'undefined') {
   document.body.classList.add('free-drive-ready');
   const vehicleSelect = drive.querySelector('select');
   const quickRide = drive.querySelector('.free-drive-ride');
+  const driveSummary = drive.querySelector('.free-drive-summary'), driveState = drive.querySelector('.free-drive-state');
   const status = drive.querySelector('.alien-game-status');
   const tourPanel = drive.querySelector('.drive-tour'), tourStart = drive.querySelector('.tour-start');
   const tourCancel = drive.querySelector('.tour-cancel'), tourTarget = drive.querySelector('.tour-target');
@@ -192,8 +194,20 @@ if (typeof document !== 'undefined') {
       if (tour && i === tour.next) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
     });
   }
+  function syncDrivePanel() {
+    if (mounted) drive.open = true;
+    document.body.classList.toggle('free-drive-open', drive.open);
+    document.body.classList.toggle('tour-panel-open', drive.open && tourPanel.open);
+    driveSummary.setAttribute('aria-disabled', String(mounted));
+    driveState.textContent = mounted ? '운전 중 · 하차 후 접기' : '선택 놀이';
+  }
+  driveSummary.onclick = event => { if (mounted) event.preventDefault(); };
+  drive.addEventListener('toggle', () => {
+    syncDrivePanel(); clearTouch(); office()?.controls.keys.clear();
+    if (tour) tour.previous = null;
+  });
   tourPanel.addEventListener('toggle', () => {
-    document.body.classList.toggle('tour-panel-open', tourPanel.open);
+    syncDrivePanel();
     if (tourPanel.open) setPanel(false);
     clearTouch(); office()?.controls.keys.clear(); if (tour) tour.previous = null; renderTour();
   });
@@ -221,6 +235,7 @@ if (typeof document !== 'undefined') {
     vehicleSelect.disabled = !ready || mounted;
     quickRide.disabled = !ready;
     quickRide.textContent = !ready ? '도시 준비 중…' : mounted ? '하차하기 · V' : '무료 시승 시작';
+    syncDrivePanel();
     renderTour();
     root.querySelector('.alien-wallet').textContent = `${credits(profile)} C`;
     root.querySelector('.alien-game-progress').textContent = `포획 도감 ${profile.captured.length}/8 · 보유 차량 ${profile.owned.length}/2`;

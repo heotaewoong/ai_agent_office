@@ -493,6 +493,8 @@ a { color: var(--accent); }
 /* 간편 관제와 환경 설정은 기존 투영을 그대로 읽는다. */
 .world-toolbar-btn,.world-tools summary,.world-tools button{border:1px solid var(--line);border-radius:8px;background:#122335;color:var(--fg);padding:9px 12px;min-height:40px;cursor:pointer;white-space:nowrap;}
 .world-toolbar-btn:disabled{opacity:.55;cursor:default;}.world-toolbar-btn[aria-pressed="true"]{border-color:#84e4d0;color:#b9ffeb;}
+.world-toolbar-btn.world-primary{background:#b4f2df;color:#103b36;border-color:#d3ffef;font-weight:700;}
+.world-toolbar-btn.world-primary[aria-pressed="true"]{background:#244e49;color:#e0fff5;border-color:#b4f2df;}
 .world-tools{flex-shrink:0;}.world-tools summary{list-style:none;}.world-tools summary::-webkit-details-marker{display:none;}
 .world-tools-body{position:fixed;right:16px;top:80px;width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 100px);overflow:auto;padding:20px;background:#101c2bf5;border:1px solid #6aacbb;border-radius:16px;box-shadow:0 12px 48px #0009;z-index:60;}
 .world-tools h2{margin:0 0 18px;font-size:18px;}.world-tools h3{font-size:14px;margin:22px 0 10px;}.world-tools label{display:block;font-weight:600;margin-bottom:8px;}.world-tools small{display:block;color:#b3c5d5;font-size:12px;line-height:1.7;margin-top:8px;}.world-tools select{min-width:0;flex:1;background:#1d3042;color:var(--fg);padding:10px;border:1px solid #71939f;border-radius:8px;font:inherit;}.world-quality-row{display:flex;gap:8px;}.world-motion-label{margin-top:20px;}.world-view-links{display:grid;gap:8px;}.world-view-links button{text-align:left;}#world-setting-status{min-height:20px;color:#b9ffeb;font-size:12px;}
@@ -519,3 +521,15 @@ a { color: var(--accent); }
 .results-view .panel{inset:82px 16px 16px auto;width:min(600px,calc(100vw - 32px));max-height:none;}.results-view .panel-body{min-height:0;overflow:auto;}.results-view .panel-foot{flex-wrap:wrap;}.results-source{padding:12px;background:#173b46;border-radius:8px;color:#d0f8e9;font-size:13px;line-height:1.7;}.result-picker{display:block;font-size:12px;color:#bfd0e0;}.result-picker select{display:block;width:100%;margin:8px 0 18px;padding:11px;min-height:44px;border:1px solid #7597ab;border-radius:8px;background:#173044;color:#f1fbff;font:inherit;font-size:14px;}.result-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}.result-card{display:flex;flex-direction:column;text-align:left;gap:10px;padding:16px;background:#172d41;color:#ecf7ff;border:1px solid #3e687b;border-radius:10px;cursor:pointer;overflow-wrap:anywhere;}.result-card span,.result-card small{color:#a8cfc8;font-size:11px;}.result-card strong,.result-detail h3{font-size:16px;line-height:1.7;}.result-block{margin:22px 0;padding-top:12px;border-top:1px solid #34546b;}.result-meta{display:grid;grid-template-columns:125px minmax(0,1fr);gap:10px;margin:10px 0;font-size:12px;line-height:1.7;}.result-meta dt{color:#9fbaca;}.result-meta dd{margin:0;overflow-wrap:anywhere;color:#e3f1fb;}.result-entry{padding:12px;margin:10px 0;border:1px solid #35556a;border-radius:8px;}.result-entry>span{display:block;overflow-wrap:anywhere;font-size:11px;color:#b1c7d8;margin:8px 0;}.result-caution,.result-empty{font-size:12px;line-height:1.8;color:#bfccda;}.result-caution{padding:10px;border-left:3px solid #83bfba;}.result-card:focus-visible,.result-picker select:focus-visible{outline:3px solid #b9ffeb;outline-offset:3px;}
 .results-view .free-drive,.results-view .expedition,.results-view .alien-game,.results-view .city-activities,.results-view .layer-nav,.results-view .rooms-menu,.results-view .cards,.results-view .ticker,.results-view .help,.results-view .exit-btn,.results-view .tags,.results-view .minimap,.results-view .touch-pad,.results-view .mobile-game-actions,.results-view .view-switch,.results-view #btn-attention,.results-view #btn-roster,.results-view #btn-build,.results-view #world-tools,.results-view #btn-reset,.building-view #btn-results,.roster-view #btn-results{display:none!important;}
 @media(max-width:720px){.results-view .panel{inset:74px 10px 10px;width:auto;max-height:none;}.result-grid{grid-template-columns:1fr;}.result-meta{grid-template-columns:100px minmax(0,1fr);font-size:11px;}.result-picker select{font-size:16px;}}
+
+/* 좁은 화면에서도 연결 상태를 읽고 업무 버튼을 누를 수 있게 두 줄로 배치한다. */
+@media (max-width: 720px) {
+  .topbar { flex-wrap: wrap; gap: 6px; padding-block: 8px; }
+  .topbar > .brand { flex: 0 0 100%; box-sizing: border-box; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 10px; }
+  .brand-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+  .brand-meta { flex: 0 1 auto; max-width: 65%; flex-wrap: nowrap; font-size: 10px; }
+  .source-pill { white-space: nowrap; }
+  .topbar > .spacer { display: none; }
+  .results-view .panel { top: 98px; }
+  .roster-panel { top: 98px; }
+}

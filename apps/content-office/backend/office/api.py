@@ -6,6 +6,7 @@ import json
 import math
 import mimetypes
 import os
+import re
 import secrets
 import time
 import tempfile
@@ -13,7 +14,7 @@ import zipfile
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -61,6 +62,46 @@ AGENTS = [
     {"id": "release", "name": "배포 준비", "description": "출고 승인·수동 전달 패키지", "mode": "외부 게시 대기"},
     {"id": "marketing", "name": "마케팅", "description": "후크·메타데이터·독자 가치", "mode": "편집 계약"},
 ]
+
+
+def _job_summary(job):
+    """목록에는 제한된 메타데이터만 제공한다. 원고·근거·경로는 원본 상세 조회에 남긴다."""
+    def text(value, limit):
+        return value[:limit] if isinstance(value, str) else ""
+
+    def safe_id(value):
+        return value if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value) else None
+
+    def content_hash(value):
+        return value.lower() if isinstance(value, str) and re.fullmatch(r"[a-fA-F0-9]{64}", value) else None
+
+    def outputs(values):
+        result = []
+        for value in values if isinstance(values, list) else []:
+            if isinstance(value, str):
+                result.append(value[:60])
+                if len(result) == 20:
+                    break
+        return result
+
+    def approval(record, release=False):
+        if not isinstance(record, dict):
+            return None
+        result = {"decision": text(record.get("decision"), 40), "version": content_hash(record.get("version")), "created_at": text(record.get("created_at"), 60)}
+        if release:
+            result["outputs"] = outputs(record.get("outputs"))
+        else:
+            result["id"] = safe_id(record.get("id"))
+        return result
+
+    if not isinstance(job, dict) or not safe_id(job.get("id")):
+        return None
+    manifest = job.get("manifest") if isinstance(job.get("manifest"), dict) else {}
+    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    return {"id": job["id"], "title": text(job.get("title"), 200) or job["id"], "state": text(job.get("state"), 60) or "unknown",
+            "source_hash": content_hash(job.get("source_hash")), "source_approval": approval(job.get("source_approval")), "release_approval": approval(job.get("release_approval"), True),
+            "manifest": {"hash": content_hash(manifest.get("hash")), "source_hash": content_hash(manifest.get("source_hash")),
+                         "files": [{"id": safe_id(file.get("id")), "kind": text(file.get("kind"), 60) or "형식 미제공", "sha256": content_hash(file.get("sha256")), "outputs": outputs(file.get("outputs"))} for file in files[:80] if isinstance(file, dict)]}}
 
 
 class JobSelection(BaseModel):
@@ -116,6 +157,7 @@ class IdeaInput(BaseModel):
 class BriefInput(BaseModel):
     preset: str = Field(min_length=1, max_length=100)
     overrides: dict | None = None
+    expected_brief_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
 class ThumbnailInput(BaseModel):
@@ -266,9 +308,14 @@ def create_app(store: Store | None = None):
             raise WorkflowError("현재 최근 기사 후보가 아닙니다. RSS를 새로 확인하고 선택하세요")
         return {"jobs": [store.create_job(article) for article in articles]}
 
+    @app.get("/api/jobs/summaries")
+    def job_summaries(limit: int = Query(80, ge=1, le=80)):
+        return {"jobs": [summary for job in store.jobs(limit=limit) if (summary := _job_summary(job)) is not None]}
+
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: str):
-        return {**store.job(job_id), "events": store.events(job_id), "tasks": store.tasks(job_id), "drafts": store.drafts(job_id)}
+        job = store.job(job_id)
+        return {**job, "brief_hash": digest(job.get("brief")), "events": store.events(job_id), "tasks": store.tasks(job_id), "drafts": store.drafts(job_id)}
 
     @app.get('/api/jobs/{job_id}/drafts/{draft_id}/preview')
     def draft_preview(job_id: str, draft_id: str):
@@ -529,7 +576,8 @@ def create_app(store: Store | None = None):
     def set_job_brief(job_id: str, body: BriefInput):
         # CSRF 보호는 공통 미들웨어가 한다. 승인①②는 건드리지 않으며 다음 생성·재검수부터 적용된다.
         brief = build_brief(body.preset, body.overrides)
-        return store.set_brief(job_id, brief, "local-operator")
+        job = store.set_brief(job_id, brief, "local-operator", expected_hash=body.expected_brief_hash)
+        return {**job, "brief_hash": digest(job.get("brief"))}
 
     @app.post("/api/ideas/{idea_id}/select")
     def choose_idea(idea_id: str):

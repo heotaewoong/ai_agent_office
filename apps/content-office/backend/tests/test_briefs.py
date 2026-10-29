@@ -100,9 +100,79 @@ def test_api_accepts_brief_on_idea_and_on_job(tmp_path):
     assert idea["brief"]["preset"] == "exam-opic" and idea["brief"]["problem"] == "단어는 외웠는데 말이 안 나옴"
     selected = client.post(f"/api/ideas/{idea['id']}/select", headers=headers).json()
     assert selected["job"]["brief"]["preset"] == "exam-opic" and selected["job"]["brief"]["cta"] == "무료 문법 PDF 받기"
-    changed = client.put(f"/api/jobs/{selected['job']['id']}/brief", json={"preset": "productivity-automation", "overrides": {"problem": "같은 정리를 매주 반복"}}, headers=headers)
+    viewed = client.get(f"/api/jobs/{selected['job']['id']}").json()
+    changed = client.put(f"/api/jobs/{selected['job']['id']}/brief", json={"preset": "productivity-automation", "overrides": {"problem": "같은 정리를 매주 반복"}, "expected_brief_hash": viewed["brief_hash"]}, headers=headers)
     assert changed.status_code == 200 and changed.json()["brief"]["axis"] == "B" and changed.json()["brief"]["problem"] == "같은 정리를 매주 반복"
     assert client.get("/api/briefs").json()["default"] == "ai-agent"
     assert any(p["id"] == "exam-opic" and p["axis"] == "A" for p in client.get("/api/briefs").json()["presets"])
     assert client.post("/api/ideas", json={**body, "brief_preset": "nope"}, headers=headers).status_code in (409, 422)
     assert score_idea(body)["score"] > 0
+
+
+def test_brief_update_rejects_same_preset_from_an_old_tab(tmp_path):
+    from fastapi.testclient import TestClient
+    from office.api import create_app
+    from office.store import digest
+
+    store = Store(tmp_path)
+    job = store.create_job({"id": "two-tabs", "title": "기사", "url": "https://example.com/a"})
+    client = TestClient(create_app(store), base_url="http://localhost:8510")
+    headers = {"Origin": "http://localhost:3110", "X-Office-CSRF": client.get("/api/session").json()["csrf"]}
+    viewed = client.get(f"/api/jobs/{job['id']}").json()
+    viewed_hash = viewed["brief_hash"]
+    first = client.put(f"/api/jobs/{job['id']}/brief", json={"preset": job["brief"]["preset"], "overrides": {"reader": "다른 탭의 새 독자"}, "expected_brief_hash": viewed_hash}, headers=headers)
+    assert first.status_code == 200
+    after_first = store.job(job["id"])
+    event_count = len(store.events(job["id"]))
+    stale = client.put(f"/api/jobs/{job['id']}/brief", json={"preset": job["brief"]["preset"], "overrides": {"reader": "옛 탭의 독자", "cta": "내가 편집한 CTA"}, "expected_brief_hash": viewed_hash}, headers=headers)
+    assert stale.status_code == 409
+    assert store.job(job["id"]) == after_first
+    assert len(store.events(job["id"])) == event_count
+    assert viewed["brief_hash"] == digest(viewed["brief"])
+    assert first.json()["brief_hash"] == digest(first.json()["brief"])
+
+
+@pytest.mark.parametrize("token", [{}, {"expected_brief_hash": None}, {"expected_brief_hash": "short"}, {"expected_brief_hash": "g" * 64}])
+def test_brief_api_requires_a_valid_viewed_token(tmp_path, token):
+    from fastapi.testclient import TestClient
+    from office.api import create_app
+
+    store = Store(tmp_path)
+    job = store.create_job({"id": "invalid-token", "title": "기사", "url": "https://example.com/a"})
+    client = TestClient(create_app(store), base_url="http://localhost:8510")
+    headers = {"Origin": "http://localhost:3110", "X-Office-CSRF": client.get("/api/session").json()["csrf"]}
+    before = store.job(job["id"])
+    events = store.events(job["id"])
+    response = client.put(f"/api/jobs/{job['id']}/brief", json={"preset": "ai-agent", "overrides": {"reader": "저장하지 않을 독자"}, **token}, headers=headers)
+    assert response.status_code == 422
+    assert store.job(job["id"]) == before and store.events(job["id"]) == events
+
+
+def test_brief_compare_and_set_is_atomic_and_preserves_approvals(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    from office.briefs import build_brief
+    from office.store import digest
+
+    store = Store(tmp_path)
+    job = store.create_job({"id": "competing-briefs", "title": "기사", "url": "https://example.com/a"})
+    original = store.update_job(job["id"], source_hash="original-source", source_approval={"decision": "approved", "version": "original-source"}, release_approval={"decision": "approved", "version": "original-manifest"}, manifest={"hash": "original-manifest"})
+    expected = digest(original["brief"])
+    barrier = Barrier(2)
+
+    def update(reader):
+        barrier.wait(timeout=5)
+        try:
+            store.set_brief(job["id"], build_brief("ai-agent", {"reader": reader}), "operator", expected_hash=expected)
+            return "saved"
+        except WorkflowError as error:
+            assert "브리프가 변경" in str(error)
+            return "conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(update, ["첫 탭 독자", "둘째 탭 독자"]))
+    assert sorted(results) == ["conflict", "saved"]
+    current = store.job(job["id"])
+    for key in ("source_hash", "source_approval", "release_approval", "manifest"):
+        assert current[key] == original[key]
+    assert len([event for event in store.events(job["id"]) if event["kind"] == "brief_set"]) == 1

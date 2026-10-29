@@ -3,13 +3,10 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../lib/api";
-import { leadSourceLabel, validEmail } from "../lib/leads";
+import { changeLeadForm, emptyLeadForm, LEAD_SOURCES, leadFormAfterSave, leadInputFromForm, leadSourceLabel, validEmail } from "../lib/leads";
 import { formatDate } from "../lib/workflow";
-import type { Action, Lead, LeadSummary } from "../lib/types";
+import type { Action, Lead, LeadInput, LeadSummary } from "../lib/types";
 import { Icon } from "./icons";
-
-const SOURCES = ["homepage", "youtube", "blog", "newsletter", "manual", "other"];
-const EMPTY = { email: "", magnet_key: "", source: "manual", consent_version: "v1", consent_text: "뉴스레터와 자료 안내 메일 수신에 동의합니다." };
 
 /** 리드마그넷 동의 장부. 이메일 원문은 서버 장부에만 있고 화면에는 마스킹된 값만 옵니다. */
 export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) {
@@ -17,7 +14,7 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [summary, setSummary] = useState<LeadSummary | null>(null);
   const [loadError, setLoadError] = useState("");
-  const [form, setForm] = useState<Record<string, string>>(EMPTY);
+  const [form, setForm] = useState(emptyLeadForm);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -42,40 +39,26 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!validEmail(form.email)) {
-      setError("이메일 형식을 확인하세요.");
-      return;
-    }
-    if (!form.magnet_key.trim()) {
-      setError("리드마그넷 키를 입력하세요. 예: exam-d30-planner");
-      return;
-    }
-    if (!form.consent_version.trim() || !form.consent_text.trim()) {
-      setError("동의 문구와 버전을 입력하세요.");
+    const parsed = leadInputFromForm(form);
+    if ("error" in parsed) {
+      setError(parsed.error);
       return;
     }
     setError("");
     const ok = await action(
       "리드 등록",
-      () =>
-        api.addLead({
-          email: form.email.trim(),
-          magnet_key: form.magnet_key.trim(),
-          source: form.source,
-          consent_version: form.consent_version.trim(),
-          consent_text: form.consent_text.trim(),
-        }),
+      () => api.addLead(parsed.input),
       "리드를 동의 장부에 기록했습니다. 자료 전달은 수동이며 보낸 뒤 '전달 완료'로 표시하세요.",
     );
     if (ok === true) {
-      setForm((f) => ({ ...f, email: "" }));
+      setForm(leadFormAfterSave);
       await load();
     }
   }
 
-  const set = (key: string, value: string) => {
+  const set = (key: keyof LeadInput, value: string) => {
     setError("");
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => changeLeadForm(f, key, value));
   };
   const emailOk = form.email.trim() === "" || validEmail(form.email);
 
@@ -125,12 +108,12 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
               </div>
               <div>
                 <label htmlFor={`${uid}-magnet`}>리드마그넷 키</label>
-                <input id={`${uid}-magnet`} value={form.magnet_key} placeholder="exam-d30-planner" maxLength={80} onChange={(e) => set("magnet_key", e.target.value)} />
+                <input id={`${uid}-magnet`} value={form.magnet_key} placeholder="exam-d30-planner" maxLength={100} onChange={(e) => set("magnet_key", e.target.value)} />
               </div>
               <div>
                 <label htmlFor={`${uid}-source`}>출처</label>
                 <select id={`${uid}-source`} value={form.source} onChange={(e) => set("source", e.target.value)}>
-                  {SOURCES.map((s) => (
+                  {LEAD_SOURCES.map((s) => (
                     <option key={s} value={s}>
                       {leadSourceLabel(s)}
                     </option>
@@ -139,18 +122,23 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
               </div>
               <div>
                 <label htmlFor={`${uid}-version`}>동의 문구 버전</label>
-                <input id={`${uid}-version`} value={form.consent_version} maxLength={40} onChange={(e) => set("consent_version", e.target.value)} />
+                <input id={`${uid}-version`} value={form.consent_version} placeholder="독자에게 표시한 실제 버전 식별자" maxLength={50} onChange={(e) => set("consent_version", e.target.value)} />
               </div>
               <label htmlFor={`${uid}-consent`}>동의 문구 (독자가 본 그대로)</label>
-              <textarea id={`${uid}-consent`} rows={2} value={form.consent_text} maxLength={1000} onChange={(e) => set("consent_text", e.target.value)} />
+              <textarea id={`${uid}-consent`} rows={2} value={form.consent_text} placeholder="독자가 실제로 본 동의 문구를 그대로 붙여 넣으세요." maxLength={2000} onChange={(e) => set("consent_text", e.target.value)} />
             </div>
+            <label className="media-review-check" htmlFor={`${uid}-confirmed`}>
+              <input id={`${uid}-confirmed`} type="checkbox" checked={form.consent_confirmed} onChange={(event) => { const confirmed = event.target.checked; setError(""); setForm((current) => ({ ...current, consent_confirmed: confirmed })); }} />
+              <span>이 이메일의 독자가 위 문구를 보고 동의한 사실을 직접 확인했습니다.</span>
+            </label>
+            <p className="muted">실제 동의 기록의 입력 실수를 줄이기 위한 확인입니다. 법률 준수를 보장하지 않습니다.</p>
           </fieldset>
           {error && (
             <p className="notice error" role="alert">
               {error}
             </p>
           )}
-          <button className="button primary" type="submit" disabled={busy || !validEmail(form.email)}>
+          <button className="button primary" type="submit" disabled={busy || !validEmail(form.email) || !form.consent_confirmed}>
             동의 장부에 기록
           </button>
         </form>

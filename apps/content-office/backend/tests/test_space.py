@@ -1,4 +1,5 @@
 import json
+import pytest
 from fastapi.testclient import TestClient
 from office.api import AGENTS, create_app
 from office.space import project_space
@@ -54,6 +55,44 @@ def test_running_draft_task_marks_editor_running(tmp_path):
         db.execute("UPDATE tasks SET state='running'")
     editor = next(a for a in project_space(store, agents=AGENTS)["agents"] if a["id"] == "editor")
     assert editor["status"] == "running"
+
+
+@pytest.mark.parametrize(("kind", "agent_id", "state", "expected"), [
+    ("draft", "editor", "running", "running"), ("evaluate", "critique", "claimed", "running"),
+    ("produce", "video", "unknown", "unknown"), ("refresh", "research", "failed", "error"),
+])
+def test_agent_activity_survives_105_newer_tasks_of_other_kinds(tmp_path, kind, agent_id, state, expected):
+    store = Store(tmp_path)
+    old, recent = "2020-01-01T00:00:00+00:00", "2026-10-29T00:00:00+00:00"
+    with store.connection(transaction=True) as db:
+        rows = [("task_selected", kind, '{"body":"PRIVATE_ACTIVITY_SENTINEL"}', state, "selected", "private-owner", '{"result":"PRIVATE_RESULT"}', old, old)]
+        rows += [(f"task_other_{index:03}", "other", "{}", "completed", f"other:{index}", None, None, recent, recent) for index in range(105)]
+        db.executemany("INSERT INTO tasks VALUES(?,?,?,?,?,?,?,?,?)", rows)
+    assert all(task["id"] != "task_selected" for task in store.tasks())
+    space = project_space(store, agents=AGENTS)
+    agent = next(a for a in space["agents"] if a["id"] == agent_id)
+    assert agent["status"] == expected
+    if state == "unknown":
+        assert "결과 불명" in agent["task"] and "대사" in agent["task"]
+    dumped = json.dumps(space, ensure_ascii=False)
+    assert not any(value in dumped for value in ("PRIVATE_ACTIVITY_SENTINEL", "PRIVATE_RESULT", "private-owner"))
+
+
+def test_latest_completed_stops_prioritizing_old_unknown_and_preserves_human_waiting(tmp_path):
+    store = Store(tmp_path)
+    job = store.create_job({"id": "needs-review", "title": "검토할 원고", "url": "https://example.com"})
+    store.update_job(job["id"], state="source_review")
+    with store.connection(transaction=True) as db:
+        db.executemany("INSERT INTO tasks VALUES(?,?,?, ?,?,NULL,NULL,?,?)", [
+            ("task_unknown", "draft", "{}", "unknown", "unknown", "2020", "2020"),
+            ("task_completed", "draft", "{}", "completed", "completed", "2021", "2021"),
+        ])
+    def editor():
+        return next(a for a in project_space(store, agents=AGENTS)["agents"] if a["id"] == "editor")
+    assert editor()["status"] == "waiting"
+    store.update_job(job["id"], state="research_ready")
+    assert editor()["status"] == "idle"
+    assert store.task("task_unknown")["state"] == "unknown"
 
 
 def test_event_time_is_kst(tmp_path):

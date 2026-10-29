@@ -117,8 +117,8 @@ export const api = {
     request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/youtube`, "POST", { channel_key: channelKey }),
   briefs: () => request<BriefPresets>("/briefs"),
   architecture: () => request<ArchitectureOverview>("/architecture"),
-  setJobBrief: (id: string, preset: string, overrides: BriefOverrides) =>
-    request<Job>(`/jobs/${encodeURIComponent(id)}/brief`, "PUT", { preset, overrides }),
+  setJobBrief: (id: string, preset: string, overrides: BriefOverrides, expectedBriefHash: string) =>
+    request<Job>(`/jobs/${encodeURIComponent(id)}/brief`, "PUT", { preset, overrides, expected_brief_hash: expectedBriefHash }),
   channels: () => request<{ channels: Channel[] }>("/channels"),
   updateChannel: (key: string, patch: ChannelPatch) =>
     request<Channel>(`/channels/${encodeURIComponent(key)}`, "PUT", patch),

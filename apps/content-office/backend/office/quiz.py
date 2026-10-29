@@ -11,7 +11,7 @@ from .briefs import brief_for_job
 from .editorial import BASE, style_issues
 from .media import artifact_record, write_json
 from .providers import Provider
-from .store import Store, WorkflowError, canonical, now
+from .store import Store, UnknownTaskPending, WorkflowError, canonical, now
 
 QUESTION_SCHEMA = {
     "type": "object",
@@ -122,12 +122,12 @@ def enqueue_output(store, job, kind, images=None):
         raise WorkflowError("퀴즈 또는 카드 작업만 넣을 수 있습니다")
     source_hash = job["source_hash"]
     version = int((job.get(kind) or {}).get("version", 0))
-    finished = sum(1 for task in store.tasks(job["id"]) if task["kind"] == kind and task["payload"].get("source_hash") == source_hash and task["state"] not in ("queued", "running"))
+    finished = store.finished_task_count(job["id"], kind, source_hash)
     payload = {"job_id": job["id"], "source_hash": source_hash}
     if kind == "cards" and images is not None:
         payload["images"] = bool(images)
     suffix = "" if images is None else (":img" if images else ":noimg")
-    return store.enqueue(kind, payload, key=f"{kind}:{job['id']}:{source_hash}:v{version}:{finished}{suffix}")
+    return store.enqueue(kind, payload, key=f"{kind}:{job['id']}:{source_hash}:v{version}:{finished}{suffix}", guard_unknown_scope=True)
 
 
 def enqueue_missing_outputs(store, job):
@@ -136,7 +136,11 @@ def enqueue_missing_outputs(store, job):
     for kind in ("quiz", "cards"):
         if (job.get(kind) or {}).get("source_hash") == job["source_hash"]:
             continue
-        queued[kind] = enqueue_output(store, job, kind)["id"]
+        try:
+            queued[kind] = enqueue_output(store, job, kind)["id"]
+        except UnknownTaskPending:
+            # 보조 산출물의 결과 불명은 유지하고, 다른 출력과 주 제작을 막지 않는다.
+            continue
     return queued
 
 

@@ -86,6 +86,9 @@
     error: null,
     timer: null,
     listeners: [],
+    loading: false,
+    requestId: 0,
+    controller: null,
 
     init() {
       const q = new URLSearchParams(location.search).get('api');
@@ -95,33 +98,76 @@
     onChange(fn) { this.listeners.push(fn); },
 
     async fetchJson(url) {
-      const res = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
+      const controller = new AbortController();
+      this.controller = controller;
+      let onAbort;
+      const aborted = new Promise((_, reject) => {
+        onAbort = () => reject(new Error('조회 시간이 초과되었거나 새 조회로 바뀌었습니다'));
+        controller.signal.addEventListener('abort', onAbort, { once: true });
+      });
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        return await Promise.race([aborted, (async () => {
+          const res = await fetch(url, { cache: 'no-store', headers: { Accept: 'application/json' }, signal: controller.signal });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return await res.json();
+        })()]);
+      } catch (error) {
+        if (controller.signal.aborted) throw new Error('조회 시간이 초과되었거나 새 조회로 바뀌었습니다');
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        controller.signal.removeEventListener('abort', onAbort);
+        if (this.controller === controller) this.controller = null;
+      }
     },
 
-    async load(initial) {
-      let raw = null;
-      if (this.apiUrl) {
-        try {
-          raw = await this.fetchJson(this.apiUrl);
-          this.source = 'live';
-          this.error = null;
-        } catch (err) {
-          this.error = `실시간 읽기 실패: ${err.message}`;
-          if (!initial) { this.emit(null); return; }
+    async load(initial, force = false) {
+      if (this.loading && !force) return false;
+      const requestId = ++this.requestId;
+      this.controller?.abort();
+      this.loading = true;
+      try {
+        let raw = null, source = this.source;
+        if (this.apiUrl) {
+          try {
+            raw = await this.fetchJson(this.apiUrl);
+            if (requestId !== this.requestId) return false;
+            source = 'live';
+            this.error = null;
+          } catch (err) {
+            if (requestId !== this.requestId) return false;
+            this.error = `실시간 읽기 실패: ${err.message}`;
+            if (!initial) { this.emit(null); return false; }
+          }
         }
-      }
-      if (!raw) {
-        try {
-          raw = await this.fetchJson('data/space.json');
-          this.source = this.apiUrl ? 'sample-fallback' : 'sample';
-        } catch (err) {
-          notice('투영 데이터를 읽을 수 없습니다', `data/space.json 을 불러오지 못했습니다 (${err.message}). 파일을 직접 열지 말고 정적 서버로 여세요. 예: python -m http.server 8080`);
-          return;
+        if (!raw) {
+          try {
+            raw = await this.fetchJson('data/space.json');
+            if (requestId !== this.requestId) return false;
+            source = this.apiUrl ? 'sample-fallback' : 'sample';
+          } catch (err) {
+            if (requestId !== this.requestId) return false;
+            notice('투영 데이터를 읽을 수 없습니다', `data/space.json 을 불러오지 못했습니다 (${err.message}). 파일을 직접 열지 말고 정적 서버로 여세요. 예: python -m http.server 8080`);
+            return false;
+          }
         }
+        if (requestId !== this.requestId) return false;
+        let normalized;
+        try { normalized = this.normalize(raw); }
+        catch (_) {
+          this.error = '투영 데이터 형식을 확인하지 못했습니다';
+          if (initial) notice('투영 데이터를 읽을 수 없습니다', '원본 데이터 형식을 확인하지 못했습니다. 연결되면 자동으로 다시 조회합니다.');
+          this.emit(null);
+          return false;
+        }
+        this.source = source;
+        this.emit(normalized);
+        $('notice').hidden = true;
+        return true;
+      } finally {
+        if (requestId === this.requestId) this.loading = false;
       }
-      this.emit(this.normalize(raw));
     },
 
     normalize(raw) {
@@ -184,7 +230,8 @@
 
     startPolling() {
       if (!this.apiUrl || this.timer) return;
-      this.timer = setInterval(() => this.load(false), 10000);
+      this.timer = setInterval(() => { if (!document.hidden) this.load(false); }, 10000);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) this.load(false, true); });
     },
   };
 
@@ -1853,6 +1900,24 @@
     cards: new Map(), brainCard: null, agentCard: null, agentCardTarget: null,
     tickerQueue: [], tickerIdx: 0, tickerTimer: null, seenEvents: new Set(),
     mini: null, miniCtx: null, miniT: 0,
+    renderedContent: new WeakMap(),
+
+    replaceContent(element, signature, render, scrollRoot = element) {
+      const previous = this.renderedContent.get(element);
+      // 결과함도 같은 패널을 쓰므로 다른 화면이 바꾼 DOM은 캐시로 건너뛰지 않는다.
+      if (previous?.signature === signature && previous.content === element.innerHTML) return false;
+      const active = document.activeElement;
+      const focusKey = element.contains(active) ? active?.dataset?.focusKey : null;
+      const scrollTop = scrollRoot.scrollTop;
+      render();
+      this.renderedContent.set(element, { signature, content: element.innerHTML });
+      if (focusKey) {
+        const matches = [...element.querySelectorAll('[data-focus-key]')].filter(node => node.dataset.focusKey === focusKey);
+        if (matches.length === 1 && !matches[0].disabled && !matches[0].hidden) matches[0].focus({ preventScroll: true });
+      }
+      scrollRoot.scrollTop = scrollTop;
+      return true;
+    },
 
     init() {
       $('panel-close').addEventListener('click', () => this.closePanel());
@@ -1860,6 +1925,7 @@
         if (!embed.enabled) return;
         const act = e.target.closest('[data-action]');
         if (act) {
+          if (data.source !== 'live' || data.error) return;
           const key = `${act.dataset.item}:${act.dataset.action}`;
           if (space.pendingActions.has(key)) return;
           clearTimeout(actionTimers.get(key));
@@ -1938,7 +2004,8 @@
       $('tags').innerHTML = [...new Set(space.agents.map((a) => `${a.engine} · ${a.model}`.trim()))].filter((t) => t !== '·').map((t) => `<span class="tag">${esc(t)}</span>`).join('');
       const pill = $('source-pill');
       pill.className = `source-pill ${data.source === 'live' ? 'live' : ''} ${data.error ? 'error' : ''}`.trim();
-      pill.textContent = data.source === 'live' ? '실시간' : data.source === 'sample-fallback' ? '예시 데이터 (실시간 실패)' : '예시 데이터';
+      pill.textContent = workbench.sourceLabel(data.source, Boolean(data.error));
+      pill.setAttribute('role', 'status');
       pill.title = data.error || '';
       $('updated-at').textContent = d.generatedAt ? `갱신 ${fmtTime(d.generatedAt)}` : '갱신 시각 없음';
       if (!results.opened&&space.selectedStage) this.openStage(space.selectedStage, true);
@@ -1989,12 +2056,14 @@
       $('panel-title').textContent = st.name;
       $('panel-sub').textContent = `${st.approval ? st.approval + ' · ' : ''}작업 ${st.items.length}건`;
       const agentName = (aid) => { const a = space.agents.find((x) => x.id === aid); return a ? `${a.name} (${a.engine})` : ''; };
-      $('panel-body').innerHTML = st.items.length ? st.items.map((it) => {
+      const bodyHtml = st.items.length ? st.items.map((it) => {
         const cls = it.needsHuman ? 'human' : /fail|error/.test(it.state) ? 'failed' : /writing|producing|research|measuring/.test(it.state) ? 'running' : '';
-        const acts = embed.enabled ? `<div class="item-actions">${(data.source === 'live' ? it.actions : []).map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}"${space.pendingActions.has(it.id + ':' + a.id) ? ' disabled' : ''}>${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}">오피스에서 열기</button>` : ''}</div>` : '';
+        const acts = embed.enabled ? `<div class="item-actions">${(data.source === 'live' ? it.actions : []).map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['action', it.id, a.id]))}"${data.error || space.pendingActions.has(it.id + ':' + a.id) ? ' disabled' : ''}>${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['open', it.id, it.view]))}">오피스에서 열기</button>` : ''}</div>` : '';
         return `<div class="item${space.embedFocus === it.id ? ' active' : ''}" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div><div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
       }).join('') : '<p class="panel-note">이 단계에 등록된 작업이 없습니다.</p>';
-      $('panel-foot').innerHTML = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener">${data.source === 'live' ? '오피스에서 열기' : '플레이북에서 보기'}</a>` : ''}<span class="panel-note">${embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.'}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
+      const footHtml = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}" data-focus-key="${esc(JSON.stringify(['enter', st.id]))}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener" data-focus-key="${esc(JSON.stringify(['stage-link', st.id]))}">${data.source === 'live' ? '오피스에서 열기' : '플레이북에서 보기'}</a>` : ''}<span class="panel-note">${embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.'}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
+      this.replaceContent($('panel-body'), bodyHtml, () => { $('panel-body').innerHTML = bodyHtml; });
+      this.replaceContent($('panel-foot'), footHtml, () => { $('panel-foot').innerHTML = footHtml; });
       panel.hidden = false;
       if (!silent) {
         this.cards.forEach((el, sid) => el.classList.toggle('active', sid === id));
@@ -2353,7 +2422,7 @@
         if(!data.apiUrl)return null;
         const base=new URL(data.apiUrl,location.href);
         if(base.origin!==location.origin||base.username||base.password||base.pathname!=='/api/space'||!['http:','https:'].includes(base.protocol))return null;
-        const paths={list:'/api/dashboard'};
+        const paths={list:'/api/jobs/summaries?limit=80'};
         if(kind==='list')return base.origin+paths.list;
         if(!this.safeId(id))return null;
         if(kind==='job')return base.origin+'/api/jobs/'+encodeURIComponent(id);
@@ -2385,6 +2454,7 @@
 
     async read(url,signal) {
       const response=await fetch(url,{method:'GET',credentials:'same-origin',cache:'no-store',redirect:'error',signal});
+      if(response.status===404&&url===this.endpoint('list'))throw new Error('작업 요약 목록을 지원하지 않는 서버입니다 (HTTP 404). 서버 판본을 확인해 주세요.');
       if(!response.ok)throw new Error('조회 실패 · HTTP '+response.status);
       if(!response.headers.get('content-type')?.includes('application/json'))throw new Error('조회 데이터 형식을 확인하지 못했습니다.');
       try{return await response.json();}catch(_){throw new Error('조회 데이터 형식을 확인하지 못했습니다.');}
@@ -2424,28 +2494,58 @@
 
     match(a,b) { return a&&b?(a===b?'기록 버전 일치':'기록 버전 다름'):'버전 미제공'; },
 
+    reviewStep(state) {
+      const steps={
+        research_ready:['근거 준비','studio','검토 앱에서 근거와 원고 작성 방향을 확인하세요.'],
+        drafting:['원고·검수 중','studio','검토 앱에서 원고와 검수 작업의 진행·오류 기록을 확인하세요.'],
+        source_review:['사람 승인 대기 ①','studio','검토 앱에서 현재 원고·근거·검수 결과를 읽고 판단하세요.'],
+        source_rejected:['원고 거절','studio','검토 앱에서 반려 사유와 수정할 원고를 확인하세요.'],
+        source_approved:['원고 승인','delivery','검토 앱에서 원고 승인 기록과 제작 선택·예산을 확인하세요.'],
+        production_queued:['제작 대기','delivery','검토 앱에서 선택한 제작물과 작업자 대기 상태를 확인하세요.'],
+        producing:['제작 중','delivery','검토 앱에서 제작 진행과 출력별 오류를 확인하세요.'],
+        release_review:['사람 승인 대기 ②','delivery','검토 앱에서 실제 최종 파일과 출고 조건을 확인하세요.'],
+        partial_release_review:['일부 제작 완료','delivery','검토 앱에서 완료한 출력과 실패한 출력을 구분해 확인하세요.'],
+        release_approved:['출고 승인 ② 완료 · 수동 전달 대기','delivery','검토 앱에서 ②의 파일·대상 조건과 실제 전달 결과를 확인하세요.'],
+        blocked:['확인 필요','activity','운영 기록에서 중단 사유와 필요한 확인을 살펴보세요.'],
+        needs_reconciliation:['호출 결과 확인 필요','activity','운영 기록에서 결과 불명 호출을 대조하고 다음 행동을 결정하세요.'],
+        failed:['실패','activity','운영 기록에서 실패 원인과 다음 조치를 확인하세요.'],
+      };
+      const [label,view,next]=Object.hasOwn(steps,state)?steps[state]:['상태 미확인','activity','상태가 확인되지 않았으므로 운영 기록에서 원본 작업을 확인하세요.'];
+      return {label,view,next};
+    },
+
+    openReview(id) {
+      const job=this.current?.job;
+      if(!embed.enabled||!this.opened||this.loading||!this.safeId(id)||id!==this.selectedId||job?.id!==id||!this.endpoint('job',id))return false;
+      embed.post({type:'open',view:this.reviewStep(job.state).view,itemId:id});
+      return true;
+    },
+
     render() {
       if(!this.opened)return;
       const body=$('panel-body'),stamp=this.listAt?new Date(this.listAt).toLocaleString('ko-KR'):'아직 조회하지 않음';
+      let openJobId=null;
       $('panel-title').textContent='내 작업 결과 전시장';$('panel-sub').textContent='읽기 전용 · 목록 조회 '+stamp;
       const row=(label,value)=>'<div class="result-meta"><dt>'+esc(label)+'</dt><dd>'+esc(value||'미제공')+'</dd></div>';
       const approval=(label,record,currentHash)=>'<section class="result-block"><h3>'+label+'</h3><dl>'+row('기록된 판정',record?.decision||'기록 미제공')+row('기록 ID',record?.id)+row('승인 대상 버전',record?.version)+row('버전 비교',this.match(record?.version,currentHash))+row('기록 시각',record?.createdAt)+(record?.outputs?.length?row('대상 출력',record.outputs.join(', ')):'')+'</dl></section>';
-      const options=this.jobs.map(j=>'<option value="'+esc(j.id)+'"'+(j.id===this.selectedId?' selected':'')+'>'+esc(j.title.slice(0,70))+' · '+esc(j.state)+'</option>').join('');
+      const options=this.jobs.map(j=>'<option value="'+esc(j.id)+'"'+(j.id===this.selectedId?' selected':'')+'>'+esc(j.title.slice(0,70))+' · '+esc(this.reviewStep(j.state).label)+'</option>').join('');
       let html='<p class="results-source" role="status">'+(this.error?esc(this.error)+(this.listAt?' · 목록은 마지막 조회 기록입니다.':''):this.loading?'원본 기록을 조회하고 있습니다.':this.listAt?'연결된 오피스의 조회 기록 · 예시 결과로 대체하지 않습니다.':'제작·승인·게시 요청을 보내지 않는 조회 화면입니다.')+'</p>';
       html+='<label class="result-picker">확인할 작업<select id="result-job"'+(this.loading?' disabled':'')+'><option value="">작업을 선택하세요</option>'+options+'</select></label>';
       if(this.current){
-        const d=this.current,j=d.job;
-        html+='<article class="result-detail"><h3>'+esc(j.title)+'</h3><dl>'+row('원본 작업 ID',j.id)+row('작업 상태',j.state)+row('상세 조회 시각',this.detailAt)+row('현재 원고 버전',j.sourceHash)+row('산출물 묶음 버전',j.manifestHash)+row('묶음의 원고 버전',j.manifestSourceHash)+row('원고/묶음 비교',this.match(j.sourceHash,j.manifestSourceHash))+'</dl>';
+        const d=this.current,j=d.job,step=this.reviewStep(j.state);
+        if(embed.enabled&&!this.loading&&this.safeId(j.id)&&j.id===this.selectedId&&this.endpoint('job',j.id))openJobId=j.id;
+        html+='<article class="result-detail"><h3>'+esc(j.title)+'</h3><p class="result-caution"><strong>다음 검토</strong> · '+esc(step.next)+'</p>'+(openJobId?'<button type="button" class="item-link" id="results-open-review">선택 작업 검토 화면 열기</button>':'')+'<dl>'+row('원본 작업 ID',j.id)+row('기록된 작업 상태',step.label)+row('상세 조회 시각',this.detailAt)+row('현재 원고 버전',j.sourceHash)+row('산출물 묶음 버전',j.manifestHash)+row('묶음의 원고 버전',j.manifestSourceHash)+row('원고/묶음 비교',this.match(j.sourceHash,j.manifestSourceHash))+'</dl>';
         html+=approval('① 원고 승인 기록',j.sourceApproval,j.sourceHash)+approval('② 출력 승인 기록',j.releaseApproval,j.manifestHash);
         html+='<p class="result-caution">기록 판정과 버전 비교만 표시합니다. 선택값·출력별 승인 유효성, 실파일 해시 검증은 검토 앱에서 확인하세요.</p>';
-        html+='<section class="result-block"><h3>원고 미리보기</h3>'+(d.drafts.length?d.drafts.map(v=>'<div class="result-entry"><strong>'+esc(v.title||'원고')+'</strong><span>'+esc(v.id)+' · 버전 '+esc(v.version===null?'미제공':String(v.version))+'</span><a class="item-link" target="_blank" rel="noopener" href="'+esc(this.endpoint('draft',j.id,v.id))+'">원고 읽기</a></div>').join(''):'<p>이 조회에서 원고를 받지 못했습니다.</p>')+'</section>';
+        html+='<section class="result-block"><h3>생성초안 기록</h3><p class="result-caution">별도로 저장된 생성초안 목록이며 현재 검토·승인 원고와 다를 수 있습니다.</p>'+(d.drafts.length?d.drafts.map(v=>'<div class="result-entry"><strong>'+esc(v.title||'생성초안')+'</strong><span>'+esc(v.id)+' · 버전 '+esc(v.version===null?'미제공':String(v.version))+'</span><a class="item-link" target="_blank" rel="noopener" href="'+esc(this.endpoint('draft',j.id,v.id))+'">생성초안 읽기</a></div>').join(''):'<p>이 조회에 별도로 저장된 생성초안 기록이 없습니다. 현재 원고가 없다는 뜻은 아닙니다. 현재 원고는 검토 앱에서 원본 작업 ID로 확인하세요.</p>')+'</section>';
         html+='<section class="result-block"><h3>산출물 파일 · '+j.files.length+'개 조회</h3>'+(j.files.length?j.files.map(f=>'<dl class="result-entry">'+row('파일 ID',f.id)+row('형식',f.kind)+row('기록된 SHA-256',f.sha256)+row('대상 출력',f.outputs.join(', '))+'</dl>').join(''):'<p>이 조회에서 산출물 파일을 받지 못했습니다.</p>')+'<p class="result-caution">파일 내용은 자동으로 열지 않습니다. 파일 저장·전체 검토는 오피스 앱에서 진행하세요.</p></section>';
         html+='<section class="result-block"><h3>조회된 실행 기록 · '+d.tasks.length+'건</h3><p class="result-caution">원본 task ID입니다. 별도 run/attempt ID는 미제공입니다. 최근 조회 범위이므로 전체 이력 수가 아닙니다.</p>'+d.tasks.map(t=>'<dl class="result-entry">'+row('task ID',t.id)+row('종류 / 상태',t.kind+' / '+t.state)+row('생성 / 갱신',t.createdAt+' / '+t.updatedAt)+'</dl>').join('')+(d.tasks.length?'':'<p>이 조회 범위에 실행 기록이 없습니다.</p>')+'</section>';
         html+='<section class="result-block"><h3>YouTube 전송 원장</h3>'+(d.deliveryError?'<p>전송 원장을 조회하지 못했습니다. 미게시로 판단하지 않습니다.</p>':d.deliveries.length?d.deliveries.map(v=>'<dl class="result-entry">'+row('전송 상태',v.state)+row('공개 설정',v.privacyStatus||v.visibility||'미제공')+row('갱신 시각',v.updatedAt)+'</dl>').join(''):'<p>이 조회에 YouTube 전송 기록이 없습니다. 다른 채널의 게시 여부는 확인하지 않습니다.</p>')+'</section></article>';
       }else if(!this.selectedId&&!this.loading){
-        html+=this.jobs.length?'<p class="result-caution">조회된 작업 '+this.jobs.length+'건(최대80건). 완료 상태만으로 산출물·승인·공개 게시를 추정하지 않습니다.</p><div class="result-grid">'+this.jobs.slice(0,6).map(j=>'<button type="button" class="result-card" data-result-job="'+esc(j.id)+'"><strong>'+esc(j.title)+'</strong><span>'+esc(j.state)+'</span><small>'+esc(j.id)+'</small></button>').join('')+'</div>':'<p class="result-empty">표시할 작업이 없습니다. 연결된 오피스에서 작업 기록을 만든 뒤 다시 조회하세요.</p>';
+        html+=this.jobs.length?'<p class="result-caution">조회된 작업 '+this.jobs.length+'건(최대80건). 완료 상태만으로 산출물·승인·공개 게시를 추정하지 않습니다.</p><div class="result-grid">'+this.jobs.slice(0,6).map(j=>'<button type="button" class="result-card" data-result-job="'+esc(j.id)+'"><strong>'+esc(j.title)+'</strong><span>'+esc(this.reviewStep(j.state).label)+'</span><small>'+esc(j.id)+'</small></button>').join('')+'</div>':'<p class="result-empty">표시할 작업이 없습니다. 연결된 오피스에서 작업 기록을 만든 뒤 다시 조회하세요.</p>';
       }
       body.innerHTML=html;
+      if(openJobId)$('results-open-review').onclick=()=>this.openReview(openJobId);
       $('result-job').onchange=e=>{if(e.target.value)this.load('job',e.target.value);else{this.selectedId=null;this.current=null;this.render();}};
       body.querySelectorAll('[data-result-job]').forEach(button=>button.onclick=()=>this.load('job',button.dataset.resultJob));
       $('panel-foot').innerHTML='<button type="button" class="item-link" id="results-refresh"'+(this.loading?' disabled':'')+'>다시 조회</button>'+(this.endpoint('list')?'<a class="item-link" href="'+esc(location.origin+'/')+'" target="_blank" rel="noopener">오피스 검토 앱 열기</a>':'')+'<span class="panel-note">승인·제작·게시·재시도·ZIP 생성은 이 화면에서 실행하지 않습니다.</span>';
@@ -2456,14 +2556,14 @@
       if(workshop.opened)workshop.setOpen(false);workbench.setRoster(false);hud.closePanel();
       controls.keys.clear();controls.dragging=false;controls.setVehicleSpeed(0);controls.setView('overview');
       this.opened=true;space.resultsOpen=true;document.body.classList.add('results-view');
-      $('btn-results').setAttribute('aria-pressed','true');$('btn-results').textContent='결과 닫기';$('panel').hidden=false;
+      $('btn-results').setAttribute('aria-pressed','true');$('btn-results').textContent='작업·결과 닫기';$('panel').hidden=false;
       this.render();world.syncRendering();this.load();
     },
 
     close() {
       if(!this.opened)return;
       this.opened=false;space.resultsOpen=false;this.serial++;this.controller?.abort();this.controller=null;this.loading=false;
-      document.body.classList.remove('results-view');$('panel').hidden=true;$('btn-results').setAttribute('aria-pressed','false');$('btn-results').textContent='결과';
+      document.body.classList.remove('results-view');$('panel').hidden=true;$('btn-results').setAttribute('aria-pressed','false');$('btn-results').textContent='작업·결과';
       controls.keys.clear();controls.dragging=false;world.syncRendering();
     },
 
@@ -2484,10 +2584,10 @@
 
     filteredAgents(agents, query = '', attention = false) {
       const needle = query.trim().toLocaleLowerCase();
-      const rank = { error: 0, waiting: 1 };
-      return agents.filter(a => (!attention || a.status === 'error' || a.status === 'waiting') &&
+      const rank = { error: 0, unknown: 1, waiting: 2 };
+      return agents.filter(a => (!attention || Object.hasOwn(rank, a.status)) &&
         [a.name, a.engine, a.model, a.task].some(v => String(v || '').toLocaleLowerCase().includes(needle)))
-        .sort((a, b) => (rank[a.status] ?? 2) - (rank[b.status] ?? 2));
+        .sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3));
     },
 
     nextAttentionId(agents, current) {
@@ -2528,19 +2628,23 @@
       const stamp = d?.generatedAt && Number.isFinite(Date.parse(d.generatedAt)) ? fmtTime(d.generatedAt) : '시각 미확인';
       $('roster-source').textContent = source + ' · 원본 갱신 ' + stamp;
       const visible = this.filteredAgents(agents, $('roster-search').value, $('roster-attention').checked);
-      const cards = visible.map(a => {
-        const card = document.createElement('article'); card.className = 'roster-agent';
-        const title = document.createElement('h2'); title.textContent = a.name;
-        const badge = document.createElement('span'); badge.className = 'roster-state ' + a.status; badge.textContent = statusLabel(a.status);
-        const stage = d.stages.find(s => s.id === a.stageId);
-        const meta = document.createElement('p'); meta.className = 'roster-meta'; meta.textContent = [stage?.name, a.engine, a.model].filter(Boolean).join(' · ');
-        const task = document.createElement('p'); task.textContent = a.task || '표시할 업무 설명이 없습니다.';
-        const visit = document.createElement('button'); visit.type = 'button'; visit.textContent = '부서 보기';
-        visit.onclick = () => { this.setRoster(false); controls.setVehicleSpeed(0); controls.setLayer('office'); hud.openStage(a.stageId); };
-        card.append(title, badge, meta, task, visit); return card;
-      });
-      if (!cards.length) { const empty = document.createElement('p'); empty.textContent = d ? '조건에 맞는 동료가 없습니다.' : '동료 데이터를 읽는 중입니다.'; cards.push(empty); }
-      $('roster-list').replaceChildren(...cards);
+      const signature = JSON.stringify([Boolean(d), visible.map(a => [a.id, a.name, a.status, a.engine, a.model, a.task, a.stageId, d.stages.find(s => s.id === a.stageId)?.name])]);
+      hud.replaceContent($('roster-list'), signature, () => {
+        const cards = visible.map(a => {
+          const card = document.createElement('article'); card.className = 'roster-agent';
+          const title = document.createElement('h2'); title.textContent = a.name;
+          const badge = document.createElement('span'); badge.className = 'roster-state ' + a.status; badge.textContent = statusLabel(a.status);
+          const stage = d.stages.find(s => s.id === a.stageId);
+          const meta = document.createElement('p'); meta.className = 'roster-meta'; meta.textContent = [stage?.name, a.engine, a.model].filter(Boolean).join(' · ');
+          const task = document.createElement('p'); task.textContent = a.task || '표시할 업무 설명이 없습니다.';
+          const visit = document.createElement('button'); visit.type = 'button'; visit.textContent = '부서 보기';
+          visit.dataset.focusKey = JSON.stringify(['agent', a.id, 'visit']);
+          visit.onclick = () => { this.setRoster(false); controls.setVehicleSpeed(0); controls.setLayer('office'); hud.openStage(a.stageId); };
+          card.append(title, badge, meta, task, visit); return card;
+        });
+        if (!cards.length) { const empty = document.createElement('p'); empty.textContent = d ? '조건에 맞는 동료가 없습니다.' : '동료 데이터를 읽는 중입니다.'; cards.push(empty); }
+        $('roster-list').replaceChildren(...cards);
+      }, $('roster-panel'));
     },
 
     init() {
@@ -2646,7 +2750,7 @@
 
     let simTimer = null;
     data.onChange((d) => {
-      if (!d) { hud.refresh(space.data); return; } // 폴링 실패: 마지막 상태 유지, 상태 표시만 갱신
+      if (!d) { if (space.data) hud.refresh(space.data); return; } // 폴링 실패: 마지막 상태 유지, 상태 표시만 갱신
       const first = !space.data;
       const stageKey = d.stages.map((s) => s.id).join('|');
       const agentKey = d.agents.map((a) => a.id).join('|');
@@ -2662,10 +2766,12 @@
         if (agentKey !== prevAgentKey) world.buildAgents(d.agents); else world.updateAgentStatuses(d.agents);
         hud.refresh(d);
       }
-      if (!REDUCED) d.flows.forEach((f, i) => setTimeout(() => world.spawnFlow(f), 600 + i * 1800));
+      const projectionSource = data.source;
+      if (!REDUCED) d.flows.forEach((f, i) => setTimeout(() => { if (data.source === projectionSource) world.spawnFlow(f); }, 600 + i * 1800));
+      if (data.source === 'live' && simTimer) { clearInterval(simTimer); simTimer = null; }
       if (!REDUCED && data.source !== 'live' && !simTimer) {
         simTimer = setInterval(() => {
-          if (REDUCED || document.hidden || space.rosterOpen) return;
+          if (data.source === 'live' || REDUCED || document.hidden || space.rosterOpen) return;
           const seated = space.agents.filter((a) => a.mode === 'seated' && a.status !== 'waiting');
           if (seated.length) world.memoryTrip(seated[Math.floor(Math.random() * seated.length)]);
           const f = d.flows[Math.floor(Math.random() * d.flows.length)];
@@ -2686,8 +2792,10 @@
         const home=layer==='office'?OVERVIEW_HOME:{alpha:-Math.PI/2,beta:1.15,radius:430,target:new B.Vector3(0,-18,0)};
         controls.animateCamera(home,0);
       }
-      data.startPolling(); embed.post({ type: 'ready' });
-    });
+    }).catch((error) => {
+      data.error = '투영 초기화 실패: ' + error.message;
+      notice('투영 데이터를 읽을 수 없습니다', '연결되면 자동으로 다시 조회합니다.');
+    }).finally(() => { data.startPolling(); embed.post({ type: 'ready' }); });
 
     try {
       const saved = localStorage.getItem('office-world.view');

@@ -1,4 +1,4 @@
-import type { Brief, BriefLanguage, BriefOverrides, BriefPreset } from "./types";
+import type { Brief, BriefLanguage, BriefOverrides, BriefPreset, Job } from "./types";
 
 type Form = Record<string, string | boolean>;
 
@@ -32,6 +32,38 @@ export function briefFormFromBrief(brief: Brief | null | undefined): Form {
   const form: Form = { brief_preset: brief?.preset ?? "" };
   for (const key of [...KEYS, "language"] as const) form[`brief_${key}`] = brief?.[key] ?? "";
   return form;
+}
+
+export type BriefDraft = { form: Form; baseHash: string; dirty: boolean };
+export type BriefDraftUpdate = (current: BriefDraft) => BriefDraft;
+type BriefJob = Pick<Job, "id" | "brief" | "brief_hash">;
+
+export function briefDraftFromBrief(brief: Brief | null | undefined, hash?: string): BriefDraft {
+  return { form: briefFormFromBrief(brief), baseHash: hash ?? "", dirty: false };
+}
+
+/** 편집 중에는 외부 브리프로 입력을 덮지 않습니다. */
+export function syncBriefDraft(draft: BriefDraft, brief: Brief | null | undefined, hash?: string): BriefDraft {
+  return !hash || draft.dirty || draft.baseHash === hash ? draft : briefDraftFromBrief(brief, hash);
+}
+
+export function changeBriefDraft(draft: BriefDraft, key: string, value: string): BriefDraft {
+  const form = key === "brief_preset" ? { ...briefFormFromBrief(undefined), brief_preset: value } : { ...draft.form, [key]: value };
+  return { ...draft, form, dirty: true };
+}
+
+export function briefDraftForJob(drafts: Record<string, BriefDraft>, job: BriefJob): BriefDraft {
+  return syncBriefDraft(drafts[job.id] ?? briefDraftFromBrief(job.brief, job.brief_hash), job.brief, job.brief_hash);
+}
+
+/** 화면을 닫아도 작업별 미저장 입력을 보존하고, 저장·명시적 초기화 때만 비웁니다. */
+export function updateBriefDrafts(drafts: Record<string, BriefDraft>, job: BriefJob, update: BriefDraftUpdate): Record<string, BriefDraft> {
+  const next = update(briefDraftForJob(drafts, job));
+  if (next.dirty) return drafts[job.id] === next ? drafts : { ...drafts, [job.id]: next };
+  if (!drafts[job.id]) return drafts;
+  const result = { ...drafts };
+  delete result[job.id];
+  return result;
 }
 
 /** 폼의 brief_* 값을 서버 덮어쓰기 객체로 바꿉니다. 빈 값은 프리셋 값을 그대로 쓰므로 보내지 않습니다. */

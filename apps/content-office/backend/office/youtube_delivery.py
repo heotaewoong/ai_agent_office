@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-from pathlib import Path
+import json
+from contextlib import contextmanager
 
 import requests
 
 from .channels import CHANNELS, channel as channel_row, configured_youtube_channels, missing_credential_names, youtube_credentials
+from .runtime import AlreadyRunning, ProcessLock
 from .store import WorkflowError, canonical, digest, now
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -67,10 +69,27 @@ def deliveries(store, job_id=None):
     return sorted(records, key=lambda record: record.get("created_at", ""))
 
 
-def _save(store, record):
-    ledger = store.setting(LEDGER_KEY, {})
-    ledger[record["key"]] = record
-    store.set_setting(LEDGER_KEY, ledger)
+@contextmanager
+def _delivery_lock(store, key):
+    try:
+        with ProcessLock(store.root / "delivery-locks" / f"{digest(key)}.lock"):
+            yield
+    except AlreadyRunning:
+        raise WorkflowError("같은 영상의 업로드 또는 대사가 진행 중입니다. 완료 뒤 기록을 확인하세요") from None
+
+
+def _save(store, record, *, reserve=False):
+    with store.connection(transaction=True) as db:
+        row = db.execute("SELECT value FROM settings WHERE key=?", (LEDGER_KEY,)).fetchone()
+        ledger = json.loads(row[0]) if row else {}
+        existing = ledger.get(record["key"])
+        if reserve and existing:
+            if existing["state"] in ("created", "accepted", "unknown"):
+                raise WorkflowError("같은 영상의 업로드가 진행 중이거나 결과 불명입니다. 먼저 대사(reconcile)한 뒤 다시 요청하세요")
+            if existing["state"] in ("private", "published", "needs_review"):
+                return existing
+        ledger[record["key"]] = record
+        db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (LEDGER_KEY, canonical(ledger)))
     return record
 
 
@@ -176,22 +195,39 @@ def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_C
     data = video_path.read_bytes()
     asset_sha = hashlib.sha256(data).hexdigest()
     key = digest({"channel": "youtube", "channel_key": channel_key, "job_id": job_id, "asset_sha256": asset_sha, "manifest_hash": manifest["hash"]})
-    existing = store.setting(LEDGER_KEY, {}).get(key)
-    if existing:
-        if existing["state"] in ("accepted", "unknown"):
-            raise WorkflowError("같은 영상의 업로드가 진행 중이거나 결과 불명입니다. 먼저 대사(reconcile)한 뒤 다시 요청하세요")
-        if existing["state"] in ("private", "published", "needs_review"):
-            return existing
     metadata = video_metadata(job, manifest, paths)
-    token = _access_token(session, credentials)
     record = {"id": "delivery_" + key[:16], "key": key, "channel": "youtube", "channel_key": channel_key, "locale": locale, "job_id": job_id, "asset_sha256": asset_sha,
               "manifest_hash": manifest["hash"], "release_version": release["version"], "idempotency_key": key,
               "title": metadata["snippet"]["title"], "visibility": "private", "state": "created", "actor": str(actor)[:120],
               "quota_units_estimate": QUOTA_UNITS_INSERT, "quota_note": QUOTA_NOTE, "created_at": now(), "updated_at": now()}
-    _save(store, record)
-    store.event("delivery_created", {"delivery_id": record["id"], "channel": "youtube", "channel_key": channel_key, "visibility": "private"}, job_id)
+    with _delivery_lock(store, key):
+        return _upload_youtube(store, record, data, metadata, credentials, session)
+
+
+def _upload_youtube(store, record, data, metadata, credentials, session):
+    record = _save(store, record, reserve=True)
+    if record["state"] != "created":
+        return record
+    job_id = record["job_id"]
+    store.event("delivery_created", {"delivery_id": record["id"], "channel": "youtube", "channel_key": record["channel_key"], "visibility": "private"}, job_id)
+    try:
+        token = _access_token(session, credentials)
+    except WorkflowError:
+        record.update(state="failed", reason="oauth_before_upload_failed", updated_at=now())
+        _save(store, record)
+        store.event("delivery_failed", {"delivery_id": record["id"], "reason": record["reason"]}, job_id)
+        raise
     headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json; charset=UTF-8",
                "X-Upload-Content-Length": str(len(data)), "X-Upload-Content-Type": "video/mp4"}
+    try:
+        _, current_manifest, _, _ = _released_video(store, job_id)
+        if current_manifest["hash"] != record["manifest_hash"]:
+            raise WorkflowError("인증을 기다리는 동안 출고 판본이 변경되었습니다. 현재 제작물을 확인한 뒤 다시 요청하세요")
+    except WorkflowError:
+        record.update(state="failed", reason="release_changed_before_upload", updated_at=now())
+        _save(store, record)
+        store.event("delivery_failed", {"delivery_id": record["id"], "reason": record["reason"]}, job_id)
+        raise
     try:
         start = session.post(UPLOAD_URL, headers=headers, json=metadata, timeout=(10, 60))
     except requests.RequestException:
@@ -226,6 +262,18 @@ def reconcile_youtube(store, job_id, delivery_id, *, session=None):
     record = next((r for r in deliveries(store, job_id) if r["id"] == delivery_id), None)
     if not record:
         raise WorkflowError("해당 업무의 업로드 기록이 없습니다")
+    with _delivery_lock(store, record["key"]):
+        record = next(r for r in deliveries(store, job_id) if r["id"] == delivery_id)
+        return _reconcile_youtube(store, job_id, record, session)
+
+
+def _reconcile_youtube(store, job_id, record, session):
+    if record["state"] == "created":
+        record.update(state="unknown", reason="interrupted_before_session_saved", updated_at=now())
+        _save(store, record)
+        store.event("delivery_needs_review", {"delivery_id": record["id"], "reason": record["reason"]}, job_id)
+    if not record.get("session_uri") and not record.get("external_id"):
+        raise WorkflowError("대사할 세션이나 외부 ID가 없어 결과를 확정할 수 없습니다. YouTube Studio에서 직접 확인하세요. 자동 재전송하지 않습니다")
     token = _access_token(session, _credentials(record.get("channel_key", DEFAULT_CHANNEL)))
     if record["state"] in ("accepted", "unknown") and record.get("session_uri"):
         _, manifest, _, paths = _released_video(store, job_id)

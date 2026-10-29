@@ -41,13 +41,14 @@ test('render suspension handles list view, result gallery and hidden tabs withou
 test('attention filtering is explicit and sorting does not mutate source observations', () => {
   const filter = method('workbench', 'filteredAgents');
   const agents = [ { id:'a',name:'작가',status:'idle',task:'원고' }, { id:'b',name:'검수',status:'waiting',task:'원고 검토' }, { id:'c',name:'도구',status:'error',task:'연결 실패' }, { id:'d',name:'미확인',status:'unknown',task:'원고' } ];
-  assert.deepEqual(filter(agents, '', true).map(a => a.id), ['c','b']);
-  assert.deepEqual(filter(agents, ' 원고 ', false).map(a => a.id), ['b','a','d']);
+  assert.deepEqual(filter(agents, '', true).map(a => a.id), ['c','d','b']);
+  assert.deepEqual(filter(agents, ' 원고 ', false).map(a => a.id), ['d','b','a']);
   assert.deepEqual(agents.map(a => a.id), ['a','b','c','d']);
   const next = method('workbench', 'nextAttentionId');
   const ctx = { filteredAgents: filter };
-  assert.equal(next.call(ctx, agents, null), 'c'); assert.equal(next.call(ctx, agents, 'c'), 'b');
-  assert.equal(next.call(ctx, agents, 'b'), 'c'); assert.equal(next.call(ctx, [agents[3]], null), null);
+  assert.equal(next.call(ctx, agents, null), 'c'); assert.equal(next.call(ctx, agents, 'c'), 'd');
+  assert.equal(next.call(ctx, agents, 'd'), 'b'); assert.equal(next.call(ctx, agents, 'b'), 'c');
+  assert.equal(next.call(ctx, [agents[3]], null), 'd');
 });
 
 test('unknown provider status is never silently normalized to idle', () => {

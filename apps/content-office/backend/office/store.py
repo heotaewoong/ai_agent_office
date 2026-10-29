@@ -16,6 +16,10 @@ class WorkflowError(ValueError):
     pass
 
 
+class UnknownTaskPending(WorkflowError):
+    """A guarded output still has an unresolved task for the same source."""
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -139,13 +143,15 @@ class Store:
             self._event(db, "job_created", {"article_id": article["id"], "role": "총괄", "brief_preset": brief["preset"]}, job["id"])
             return job
 
-    def set_brief(self, job_id, brief, actor):
+    def set_brief(self, job_id, brief, actor, *, expected_hash=_UNSET):
         """작업의 독자 브리프를 바꾼다. 승인은 건드리지 않으며 다음 원고 생성·검수부터 적용된다."""
         if not str(actor or "").strip():
             raise WorkflowError("브리프를 바꾼 담당자가 필요합니다")
         validated = self._validated_brief(brief)
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
+            if expected_hash is not _UNSET and digest(job.get("brief")) != expected_hash:
+                raise WorkflowError("다른 화면에서 독자 브리프가 변경되었습니다. 최신 브리프를 불러온 뒤 다시 편집하세요")
             job["brief"] = validated
             self._event(db, "brief_set", {"preset": validated["preset"], "axis": validated["axis"], "actor": actor, "role": "기획", "next_action": "새 원고를 생성하거나 재검수하면 바뀐 브리프가 적용됩니다"}, job_id)
             return self._write_job(db, job)
@@ -154,9 +160,13 @@ class Store:
         with self.connection() as db:
             return self._job(db, job_id)
 
-    def jobs(self):
+    def jobs(self, limit=None):
         with self.connection() as db:
-            return [json.loads(r[0]) for r in db.execute("SELECT data FROM jobs ORDER BY updated_at DESC")]
+            if limit is None:
+                rows = db.execute("SELECT data FROM jobs ORDER BY updated_at DESC")
+            else:
+                rows = db.execute("SELECT data FROM jobs ORDER BY updated_at DESC LIMIT ?", (limit,))
+            return [json.loads(row[0]) for row in rows]
 
     def update_job(self, job_id, **values):
         with self.connection(transaction=True) as db:
@@ -324,11 +334,16 @@ class Store:
             auto_build_issue(self, job_id, actor=actor)
         return job
 
-    def enqueue(self, kind, payload, key):
+    def enqueue(self, kind, payload, key, *, guard_unknown_scope=False):
         """Queue work once per key. A *failed* earlier attempt does not swallow a new explicit request:
         the operator's next click queues a fresh task (key suffixed with the attempt number). Queued,
         running, completed and unknown attempts are returned as they are; unknown stays until reconciled."""
         with self.connection(transaction=True) as db:
+            if guard_unknown_scope and db.execute(
+                "SELECT 1 FROM tasks WHERE kind=? AND json_extract(payload,'$.job_id') IS ? AND json_extract(payload,'$.source_hash') IS ? AND state='unknown' LIMIT 1",
+                (kind, payload.get("job_id"), payload.get("source_hash")),
+            ).fetchone():
+                raise UnknownTaskPending("같은 원고의 이 제작 유형에 결과 불명 작업이 있습니다. 대사로 결과를 확인하기 전에는 새 요청을 만들지 않습니다")
             rows = db.execute("SELECT * FROM tasks WHERE dedup_key=? OR dedup_key LIKE ? ORDER BY created_at DESC, dedup_key DESC", (key, key + "#%")).fetchall()
             if rows and rows[0]["state"] != "failed":
                 return self._task(rows[0])
@@ -361,8 +376,36 @@ class Store:
 
     def tasks(self, job_id=None):
         with self.connection() as db:
-            tasks = [self._task(r) for r in db.execute("SELECT * FROM tasks ORDER BY created_at DESC LIMIT 100")]
-        return [t for t in tasks if not job_id or t["payload"].get("job_id") == job_id]
+            if job_id:
+                rows = db.execute("SELECT * FROM tasks WHERE json_extract(payload,'$.job_id')=? ORDER BY created_at DESC LIMIT 100", (job_id,))
+            else:
+                rows = db.execute("SELECT * FROM tasks ORDER BY created_at DESC LIMIT 100")
+            return [self._task(row) for row in rows]
+
+    def task_activity(self, kinds):
+        """공간 상태용 종류별 1건: 실행 중 우선, 그 외 최신 기록. 본문은 읽지 않는다."""
+        kinds = tuple(dict.fromkeys(kinds))
+        if not kinds:
+            return []
+        placeholders = ",".join("?" for _ in kinds)
+        with self.connection() as db:
+            rows = db.execute(f"""
+                WITH activity AS (
+                    SELECT id,kind,state,created_at,updated_at,
+                           ROW_NUMBER() OVER (PARTITION BY kind ORDER BY
+                               CASE WHEN state IN ('running','claimed') THEN 0 ELSE 1 END,
+                               created_at DESC,id DESC) AS position
+                    FROM tasks WHERE kind IN ({placeholders})
+                )
+                SELECT id,kind,state,created_at,updated_at FROM activity
+                WHERE position=1 ORDER BY created_at DESC,id DESC
+            """, kinds)
+            return [dict(row) for row in rows]
+
+    def finished_task_count(self, job_id, kind, source_hash):
+        """재요청 키의 기존 종료·결과불명 집계에는 화면 이력의 100개 제한을 적용하지 않는다."""
+        with self.connection() as db:
+            return db.execute("SELECT COUNT(*) FROM tasks WHERE kind=? AND json_extract(payload,'$.job_id')=? AND json_extract(payload,'$.source_hash') IS ? AND state NOT IN ('queued','running')", (kind, job_id, source_hash)).fetchone()[0]
 
     def finish_task(self, task_id, owner, result, state="completed"):
         with self.connection(transaction=True) as db:
