@@ -202,10 +202,10 @@ def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None
         text_box(draw, "출처와 한계는 본문 글에서 확인하세요", (90, 1000, 900, 50), 24, "#8a7d69", font_path=regular)
         record = {"template": template, "background": "solid", "cta": str(cta) if cta else None}
     else:
+        # 진행 위치는 아래 점과 큰 번호 워터마크가 보여 주므로 'n/N' 글자는 넣지 않는다(워터마크와 겹침).
         image = _watermark_number(_gradient(top, bottom), index, accent)
         draw = ImageDraw.Draw(image)
         _pill(draw, (90, 90), brand_label, accent, "#0b1327", 30)
-        text_box(draw, f"{index}/{total}", (900, 100, 100, 50), 30, "#dbe6f5", font_path=regular)
         draw.rectangle((90, 258, 250, 268), fill=accent)
         text_box(draw, title, TITLE_BOX, TITLE_SIZE, "#ffffff", minimum_size=TITLE_MIN, font_path=bold, line_gap=12)
         draw.line((90, 630, 990, 630), fill="#ffffff", width=1)
