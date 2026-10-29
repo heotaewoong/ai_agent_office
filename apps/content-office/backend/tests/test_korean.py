@@ -126,3 +126,19 @@ def test_refresh_cards_reuse_same_source_and_stop_without_provider(tmp_path):
     assert "card_ko" not in changed[0]
     event = [e for e in store.events(limit=5) if e["kind"] == "korean_cards"][0]
     assert "Gemini" in (event["data"]["stopped"] or "")
+
+
+class BlockedFirstProvider(CardProvider):
+    def generate(self, role, messages, schema, options=None):
+        if '"title": "blocked"' in messages[-1]["content"]:
+            raise WorkflowError("같은 모델 호출이 진행 중이거나 결과 불명입니다. 먼저 비용·결과 대사가 필요합니다")
+        return super().generate(role, messages, schema, options)
+
+
+def test_unknown_result_article_is_skipped_and_spare_fills_the_slot(tmp_path):
+    store = Store(tmp_path)
+    articles = [article(id="b", title="blocked", score=90), article(id="c", title="second", score=80), article(id="d", title="spare", score=70)]
+    result = {a["id"]: a for a in korean_cards(store, articles, provider=BlockedFirstProvider(), limit=2)}
+    assert "card_ko" not in result["b"] and result["c"]["card_ko"] and result["d"]["card_ko"]
+    event = [e for e in store.events(limit=5) if e["kind"] == "korean_cards"][0]
+    assert event["data"]["skipped_unknown"] == ["b"] and event["data"]["stopped"] is None and event["data"]["made"] == 2
