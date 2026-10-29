@@ -1591,8 +1591,10 @@
     },
 
     onKey(e, down) {
-      if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
       const k = e.key.toLowerCase();
+      if (!down) this.keys.delete(k);
+      if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+      if (k === ' ' && e.target?.closest?.('button')) return;
       if (down && k === 'm') { this.setView(space.view === 'walk' ? 'overview' : 'walk'); return; }
       if (down && k === 'escape') {
         if (space.view === 'walk') { this.exitSpace(); return; }

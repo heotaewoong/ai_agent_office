@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 const source = await readFile(new URL('../expedition.js', import.meta.url), 'utf8');
-const { ALIENS, VEHICLES, credits, readProfile, capture, purchase, canRide } =
+const { ALIENS, VEHICLES, credits, readProfile, capture, purchase, canRide, selectVehicle, startTestDrive } =
   await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 const profile = () => readProfile(null);
 const context = (alien = ALIENS[0], overrides = {}) => ({
@@ -74,17 +74,53 @@ test('insufficient funds and repeat purchases preserve the ledger', () => {
   assert.equal(JSON.stringify(p), purchased);
 });
 
-test('only a vehicle owned by an on-foot grounded player can be mounted', () => {
+test('both known vehicles are free to drive without changing capture or purchase progress', () => {
   const p = profile();
-  assert.equal(canRide(p, 'scout', context()), false);
-  capture(p, ALIENS[0].id, context(ALIENS[0]));
-  capture(p, ALIENS[1].id, context(ALIENS[1]));
-  purchase(p, 'scout');
-  assert.equal(canRide(p, 'scout', context()), true);
-  assert.equal(canRide(p, 'nova', context()), false);
+  for (const vehicle of VEHICLES) {
+    assert.equal(selectVehicle(p, vehicle.id), true);
+    assert.equal(canRide(p, vehicle.id, context()), true);
+    const space = { layer: 'office', view: 'overview' };
+    const actions = [];
+    const controls = {
+      player: { grounded: false }, vehicleSpeed: 0,
+      enableTouchWalk(enabled) { actions.push(['touch', enabled]); },
+      setLayer(layer, walk) {
+        actions.push(['layer', layer, walk]);
+        space.layer = layer; space.view = walk ? 'walk' : 'overview'; this.player.grounded = true;
+      },
+      setVehicleSpeed(speed) { this.vehicleSpeed = speed; return true; },
+    };
+    assert.equal(startTestDrive(p, { space, controls }), true);
+    assert.equal(controls.vehicleSpeed, vehicle.speed);
+    assert.deepEqual(actions, [['touch', true], ['layer', 'meadow', true]]);
+    assert.deepEqual(p.owned, []);
+    assert.deepEqual(p.captured, []);
+    assert.equal(credits(p), 0);
+    assert.deepEqual(readProfile(JSON.stringify(p)), p);
+  }
+});
+
+test('free selection and driving retain invalid-input, airborne and mounted guards', () => {
+  const p = profile(), before = JSON.stringify(p);
+  assert.equal(selectVehicle(p, 'unknown'), false);
+  assert.equal(selectVehicle(p, 'nova', true), false);
+  assert.equal(JSON.stringify(p), before);
   assert.equal(canRide(p, 'unknown', context()), false);
-  for (const override of [{ layer: 'office' }, { view: 'overview' }, { mounted: true }, { grounded: false }])
+  for (const override of [{ layer: 'office' }, { view: 'overview' }, { mounted: true }, { grounded: false }, { grounded: undefined }])
     assert.equal(canRide(p, 'scout', context(ALIENS[0], override)), false);
+  assert.equal(startTestDrive(p, null), false);
+  const space = { layer: 'meadow', view: 'walk' };
+  let drives = 0;
+  const controls = {
+    player: { grounded: false }, vehicleSpeed: 0,
+    enableTouchWalk() {}, setVehicleSpeed() { drives++; return true; },
+    setLayer() { assert.fail('Do not teleport a grounded-mode player just to bypass airborne checks'); },
+  };
+  assert.equal(startTestDrive(p, { space, controls }), false);
+  controls.player.grounded = true; controls.vehicleSpeed = 24;
+  assert.equal(startTestDrive(p, { space, controls }), false);
+  assert.equal(drives, 0);
+  assert.equal(JSON.stringify(p), before);
 });
 
 test('a full collection can buy both vehicles and survives a normal save round trip', () => {

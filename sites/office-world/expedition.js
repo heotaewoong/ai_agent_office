@@ -47,8 +47,25 @@ export function purchase(profile, id) {
   profile.owned.push(id); profile.selected = id;
   return true;
 }
-export function canRide(profile, id, context) {
-  return profile.owned.includes(id) && onFoot(context);
+export function canRide(_profile, id, context) {
+  return VEHICLES.some(vehicle => vehicle.id === id) && onFoot(context);
+}
+export function selectVehicle(profile, id, mounted = false) {
+  if (mounted || !VEHICLES.some(vehicle => vehicle.id === id)) return false;
+  profile.selected = id;
+  return true;
+}
+export function startTestDrive(profile, office) {
+  const vehicle = VEHICLES.find(vehicle => vehicle.id === profile.selected);
+  const controls = office?.controls;
+  if (!vehicle || !controls?.player || !office.space || controls.vehicleSpeed > 0) return false;
+  controls.enableTouchWalk(true);
+  if (office.space.layer !== 'meadow' || office.space.view !== 'walk') controls.setLayer('meadow', true);
+  if (!canRide(profile, vehicle.id, {
+    layer: office.space.layer, view: office.space.view,
+    grounded: controls.player.grounded, mounted: false,
+  })) return false;
+  return controls.setVehicleSpeed(vehicle.speed);
 }
 
 if (typeof document !== 'undefined') {
@@ -58,18 +75,29 @@ if (typeof document !== 'undefined') {
   try { profile = readProfile(localStorage.getItem(key)); } catch { storageAvailable = false; }
   const root = document.createElement('section');
   root.className = 'alien-game'; root.setAttribute('aria-label', '외계 생명체 탐사와 차고');
-  root.innerHTML = `<button type="button" class="alien-game-launch">✦ 외계 생명체 탐사 <span class="alien-wallet">0 C</span></button>
-    <div class="alien-game-panel" hidden><div class="alien-game-heading"><strong>탐사와 차고</strong><button type="button" class="alien-game-close" aria-label="탐사 패널 닫기">×</button></div>
-    <p class="alien-game-note">생명체 두 마리를 안전하게 포획하면 첫 차를 살 수 있어요.</p>
+  root.innerHTML = `<button type="button" class="alien-game-launch">✦ 생명체 탐사 · 선택 놀이 <span class="alien-wallet">0 C</span></button>
+    <div class="alien-game-panel" hidden><div class="alien-game-heading"><strong>탐사 · 보유차 컬렉션</strong><button type="button" class="alien-game-close" aria-label="탐사 패널 닫기">×</button></div>
+    <p class="alien-game-note">두 차량 모두 무료로 시승할 수 있어요. 포획 크레딧은 보유차 컬렉션을 모을 때 사용합니다.</p>
     <p class="alien-game-progress"></p><p class="alien-game-target"></p>
     <button type="button" class="alien-game-start">지상에서 탐사 시작</button>
     <div class="alien-game-actions"><button type="button" class="alien-game-catch" disabled>포획 · F</button><button type="button" class="alien-game-ride" disabled>탑승 · V</button></div>
-    <div class="alien-game-garage"></div><p class="alien-game-status" role="status"></p>
+    <div class="alien-game-garage"></div>
     <p class="alien-game-note">WASD 이동 · 드래그 시선 · F 포획 · V 탑승/하차<br>게임 크레딧은 이 브라우저에 저장됩니다. 실제 결제·업무 승인과 별도입니다.</p></div>`;
   document.body.append(root);
   const panel = root.querySelector('.alien-game-panel');
   const launch = root.querySelector('.alien-game-launch');
-  const status = root.querySelector('.alien-game-status');
+  const drive = document.createElement('section');
+  drive.className = 'free-drive'; drive.setAttribute('aria-label', '무료 차량 시승');
+  drive.innerHTML = `<div class="free-drive-heading"><strong>차량 골라 무료 시승</strong><span>포획 · 구매 없이 바로</span></div>
+    <div class="free-drive-controls"><label for="free-drive-vehicle">차량 선택<select id="free-drive-vehicle" aria-label="차량 선택" aria-describedby="free-drive-help">${VEHICLES.map(vehicle => `<option value="${vehicle.id}">${vehicle.name} · ${Math.round(vehicle.speed * 3.6)}km/h</option>`).join('')}</select></label>
+    <button type="button" class="free-drive-ride" disabled>도시 준비 중…</button></div>
+    <p class="alien-game-status" role="status"></p>
+    <p class="free-drive-help" id="free-drive-help"><span class="free-drive-desktop-help">WASD 운전 · 드래그 시선 · V 탑승/하차</span><span class="free-drive-mobile-help">시승 시작 후 화면의 방향 버튼으로 운전하세요.</span></p>`;
+  document.body.append(drive);
+  document.body.classList.add('free-drive-ready');
+  const vehicleSelect = drive.querySelector('select');
+  const quickRide = drive.querySelector('.free-drive-ride');
+  const status = drive.querySelector('.alien-game-status');
   const start = root.querySelector('.alien-game-start');
   const catchButton = root.querySelector('.alien-game-catch');
   const rideButton = root.querySelector('.alien-game-ride');
@@ -95,6 +123,10 @@ if (typeof document !== 'undefined') {
     return ALIENS.filter(a => !profile.captured.includes(a.id)).map(a => ({ ...a, distance: Math.hypot(a.x - p.x, a.z - p.z) })).sort((a, b) => a.distance - b.distance)[0];
   }
   function render() {
+    vehicleSelect.value = profile.selected;
+    vehicleSelect.disabled = !ready || mounted;
+    quickRide.disabled = !ready;
+    quickRide.textContent = !ready ? '도시 준비 중…' : mounted ? '하차하기 · V' : '무료 시승 시작';
     root.querySelector('.alien-wallet').textContent = `${credits(profile)} C`;
     root.querySelector('.alien-game-progress').textContent = `포획 도감 ${profile.captured.length}/8 · 보유 차량 ${profile.owned.length}/2`;
     root.querySelector('.alien-game-garage').replaceChildren(...VEHICLES.map(vehicle => {
@@ -102,24 +134,35 @@ if (typeof document !== 'undefined') {
       const owned = profile.owned.includes(vehicle.id);
       const label = document.createElement('span'); label.textContent = `${vehicle.name} · ${Math.round(vehicle.speed * 3.6)}km/h`;
       const button = document.createElement('button'); button.type = 'button';
-      button.textContent = owned ? (profile.selected === vehicle.id ? '선택됨' : '선택') : `${vehicle.cost} C 구매`;
+      button.textContent = owned ? (profile.selected === vehicle.id ? '선택됨' : '선택') : `${vehicle.cost} C 보유차 등록`;
       button.disabled = mounted || (owned ? profile.selected === vehicle.id : credits(profile) < vehicle.cost);
       button.onclick = () => {
-        if (owned) { profile.selected = vehicle.id; save(); say(`${vehicle.name} 선택. 지상에서 V로 탑승하세요.`); }
-        else if (purchase(profile, vehicle.id)) { save(); say(`${vehicle.name} 구매 완료. V 또는 탑승 버튼으로 운전하세요.`); }
+        if (owned && selectVehicle(profile, vehicle.id, mounted)) { save(); say(`${vehicle.name} 선택 · 무료 시승 시작을 누르세요.`); }
+        else if (purchase(profile, vehicle.id)) { save(); say(`${vehicle.name} 보유차 등록 완료. 무료 시승으로 운전하세요.`); }
         render();
       };
       item.append(label, button); return item;
     }));
   }
-  const setPanel = (open) => { panel.hidden = !open; launch.setAttribute('aria-expanded', String(open)); };
+  vehicleSelect.onfocus = () => office()?.controls.keys.clear();
+  vehicleSelect.onchange = () => {
+    if (selectVehicle(profile, vehicleSelect.value, mounted)) {
+      save();
+      say(`${VEHICLES.find(vehicle => vehicle.id === profile.selected).name} 선택 · 무료 시승 시작을 누르세요.`);
+    }
+    render();
+  };
+  const setPanel = (open) => {
+    panel.hidden = !open; launch.setAttribute('aria-expanded', String(open));
+    document.body.classList.toggle('alien-panel-open', open);
+  };
   launch.onclick = () => setPanel(panel.hidden);
   root.querySelector('.alien-game-close').onclick = () => setPanel(false);
   start.disabled = true;
   start.onclick = () => {
     const o = office(); if (!ready) return;
     active = true; o.controls.enableTouchWalk(true); o.controls.setLayer('meadow', true);
-    if (matchMedia('(max-width:700px)').matches) setPanel(false);
+    if (matchMedia('(max-width:720px)').matches) setPanel(false);
     say('앞쪽 빛 고리의 생명체로 다가가세요. 7m 안에서 F로 포획합니다.'); start.blur();
   };
   function catchNearest() {
@@ -131,15 +174,21 @@ if (typeof document !== 'undefined') {
   catchButton.onclick = catchNearest;
   mobileActions.querySelector('.mobile-catch').onclick = catchNearest;
   function toggleRide() {
-    const o = office(); if (!o) return;
-    if (mounted) { o.controls.setVehicleSpeed(0); mounted = false; say('하차했습니다. 가까운 생명체를 포획할 수 있습니다.'); }
-    else if (canRide(profile, profile.selected, context())) {
-      const vehicle = VEHICLES.find(v => v.id === profile.selected);
-      mounted = o.controls.setVehicleSpeed(vehicle.speed);
-      if (mounted) say(`${vehicle.name} 운전 중. WASD로 이동하고 V로 하차하세요.`);
+    const o = office(); if (!ready || !o) return;
+    if (mounted) {
+      o.controls.setVehicleSpeed(0); mounted = false;
+      say('하차했습니다. 다른 차량도 무료로 골라 탈 수 있어요.');
+    } else {
+      active = true;
+      mounted = startTestDrive(profile, o);
+      if (mounted) {
+        if (matchMedia('(max-width:720px)').matches) setPanel(false);
+        say(`${VEHICLES.find(vehicle => vehicle.id === profile.selected).name} 시승 중 · V로 하차`);
+      } else say('지상에 착지한 뒤 다시 탑승하세요.');
     }
-    render();
+    clearTouch(); vehicleSelect.blur(); quickRide.blur(); rideButton.blur(); render();
   }
+  quickRide.onclick = toggleRide;
   rideButton.onclick = toggleRide;
   mobileActions.querySelector('.mobile-ride').onclick = toggleRide;
   window.addEventListener('keydown', event => {
@@ -157,7 +206,7 @@ if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => { if (document.hidden) clearTouch(); });
   const timer = setInterval(() => {
     const o = office(); if (!o?.space.data || !o.controls.player || !o.world.scene) return;
-    if (!ready) { ready = true; start.disabled = false; buildScene(o); }
+    if (!ready) { ready = true; start.disabled = false; buildScene(o); render(); }
     if (mounted && (o.space.layer !== 'meadow' || o.space.view !== 'walk' || o.controls.vehicleSpeed === 0)) {
       o.controls.setVehicleSpeed(0); mounted = false; render();
     }
@@ -178,7 +227,7 @@ if (typeof document !== 'undefined') {
     if (!event.persisted) clearInterval(timer);
     office()?.controls.setVehicleSpeed(0); mounted = false; render();
   });
-  render(); say('포획 보상 40 C · 첫 차량 80 C');
+  render(); say('차를 선택하고 무료 시승 시작을 누르세요.');
 
   function buildScene(o) {
     const B = window.BABYLON, scene = o.world.scene;

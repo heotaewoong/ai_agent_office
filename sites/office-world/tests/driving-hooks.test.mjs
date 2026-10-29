@@ -93,3 +93,36 @@ test('mobile movement is explicitly enabled and clearing it releases held contro
   assert.equal(controls.keys.size, 0);
   assert.deepEqual(views, ['overview']);
 });
+
+
+test('vehicle form controls keep keyboard navigation and keyup always releases movement', () => {
+  const space = { layer: 'meadow', view: 'walk' };
+  const views = [];
+  const controls = { keys: new Set(['w']), setView: view => views.push(view) };
+  const onKey = method('onKey', { space, world: {}, hud: {} });
+  let prevented = 0;
+  const event = (key, editing) => ({
+    key, target: { closest: () => editing ? {} : null },
+    preventDefault() { prevented++; },
+  });
+  onKey.call(controls, event('w', true), false);
+  assert.equal(controls.keys.size, 0);
+  for (const key of ['ArrowDown', ' ', 'm', 'w']) onKey.call(controls, event(key, true), true);
+  assert.equal(controls.keys.size, 0);
+  assert.deepEqual(views, []);
+  assert.equal(prevented, 0);
+  const buttonEvent = key => ({
+    key, target: { closest: selector => selector === 'button' ? {} : null },
+    preventDefault() { prevented++; },
+  });
+  onKey.call(controls, buttonEvent(' '), true);
+  assert.equal(controls.keys.size, 0);
+  onKey.call(controls, buttonEvent('w'), true);
+  assert(controls.keys.has('w'), 'WASD still works after a walking or layer button is clicked');
+  onKey.call(controls, buttonEvent('w'), false);
+  assert.equal(controls.keys.size, 0);
+  onKey.call(controls, event('w', false), true);
+  assert(controls.keys.has('w'));
+  onKey.call(controls, event('w', false), false);
+  assert.equal(controls.keys.size, 0);
+});
