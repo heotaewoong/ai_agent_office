@@ -594,6 +594,12 @@ def create_app(store: Store | None = None):
 
     from .api_leads_newsletter import register as register_leads_newsletter; register_leads_newsletter(app, store)  # 리드 동의 장부·뉴스레터③·오퍼
     from .api_calendar_questions import register as register_calendar_questions; register_calendar_questions(app, store)  # 시험 일정·시의성, 독자 질문 수집
+
+    @app.get("/api/architecture")
+    def architecture_overview():
+        # 구조도 화면: 저장소 문서 + 실행 사실(커밋·배포·테스트·키 연결 여부·실측 비용). 읽기 전용.
+        from .architecture import overview
+        return overview(store)
     return app
 
 

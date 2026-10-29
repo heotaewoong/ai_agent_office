@@ -3974,3 +3974,72 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 @keyframes task-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .card-image-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted, #666); margin-right: 8px; }
+
+/* 구조도 */
+.arch { display: grid; gap: 36px; }
+.arch .mono, .arch-commits .mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+.arch-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.arch-fact { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.arch-fact span { font-size: 12px; color: var(--muted); }
+.arch-fact strong { font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.arch-fact strong.bad, .arch-fact em.warn { color: var(--red); }
+.arch-fact em { font-style: normal; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.arch-section { display: grid; gap: 14px; }
+.arch-section h2 { font-size: 20px; margin: 0; }
+.arch-lede { max-width: 70ch; }
+.arch-flow { display: grid; grid-template-columns: repeat(11, auto); overflow-x: auto; padding-bottom: 6px; }
+.arch-stage { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px; width: 172px; display: grid; gap: 8px; align-content: start; }
+.arch-stage h3 { font-size: 14px; margin: 0; }
+.arch-stage ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--muted); display: grid; gap: 3px; }
+.arch-num { font-size: 11px; color: var(--orange); font-weight: 600; letter-spacing: .04em; }
+.arch-who { font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
+.arch-gate { position: relative; width: 60px; display: grid; justify-items: center; align-content: center; gap: 6px; }
+.arch-gate::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px solid var(--line); }
+.arch-mark { position: relative; z-index: 1; width: 40px; height: 40px; border-radius: 50%; background: var(--orange-light); border: 2px solid var(--orange); color: var(--orange); font-weight: 700; font-size: 18px; display: grid; place-items: center; }
+.arch-glabel { position: relative; z-index: 1; font-size: 11px; font-weight: 600; color: var(--orange); background: var(--paper); text-align: center; padding: 0 2px; }
+.arch-gate.plain .arch-mark { width: 26px; height: 26px; font-size: 13px; background: var(--white); border-color: var(--line); color: var(--muted); }
+.arch-legend { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin: 0; }
+.arch-dot.gate { width: 10px; height: 10px; border-radius: 50%; background: var(--orange); display: inline-block; }
+.arch-diagram { background: var(--white); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
+.arch-diagram svg { display: block; width: 100%; min-width: 960px; height: auto; }
+.arch-diagram text.t { font-size: 14.5px; font-weight: 600; fill: var(--ink); }
+.arch-diagram text.s { font-size: 12px; fill: var(--muted); }
+.arch-diagram text.m { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; fill: var(--muted); }
+.arch-diagram text.f { font-family: ui-monospace, Consolas, monospace; font-size: 12px; fill: var(--orange); }
+.arch-diagram text.e { font-size: 13.5px; font-weight: 600; fill: var(--ink); }
+.arch-box { fill: var(--white); stroke: var(--line); stroke-width: 1.2; }
+.arch-box.strong { stroke: var(--orange); stroke-width: 1.5; }
+.arch-frame { fill: var(--paper); stroke: var(--orange); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.arch-ext { fill: var(--green-light); stroke: var(--green); stroke-width: 1; }
+.arch-off { fill: #fbeceb; stroke: var(--red); stroke-width: 1; stroke-dasharray: 4 3; }
+.arch-wire { stroke: var(--muted); stroke-width: 1.4; fill: none; }
+.arch-wire.ext { stroke-dasharray: 4 3; }
+.arch-head { fill: var(--muted); }
+.arch-table { overflow-x: auto; background: var(--white); border: 1px solid var(--line); border-radius: 12px; }
+.arch-table table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+.arch-table th, .arch-table td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.arch-table th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.arch-table tr:last-child td { border-bottom: 0; }
+.arch-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.arch-table td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+.arch-rails { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.arch-rail { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; }
+.arch-rail h3 { font-size: 14px; margin: 0; }
+.arch-rail p { font-size: 13px; color: var(--muted); margin: 0; }
+.arch-status { display: grid; gap: 8px; }
+.arch-status-row { display: grid; grid-template-columns: 84px 1fr; gap: 12px; align-items: baseline; background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+.arch-status-row p { margin: 0; font-size: 13.5px; min-width: 0; }
+.arch-pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; justify-self: start; white-space: nowrap; }
+.arch-pill.ok { background: var(--green-light); color: var(--green); }
+.arch-pill.warn { background: var(--orange-light); color: var(--orange); }
+.arch-pill.off { background: #fbeceb; color: var(--red); }
+.arch-commits { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.arch-commits li { display: grid; grid-template-columns: 76px 1fr auto; gap: 12px; font-size: 13px; background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.arch-commits li span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .arch-flow { grid-template-columns: 1fr; overflow-x: visible; }
+  .arch-stage { width: auto; }
+  .arch-gate { width: auto; grid-auto-flow: column; justify-content: start; gap: 10px; padding: 8px 0 8px 14px; }
+  .arch-gate::before { left: 26px; right: auto; top: 0; bottom: 0; border-top: 0; border-left: 2px solid var(--line); }
+  .arch-status-row, .arch-commits li { grid-template-columns: 1fr; gap: 4px; }
+}

@@ -1,3 +1,4 @@
+import type { ArchitectureOverview } from "./architecture";
 import type {
   Dashboard,
   Job,
@@ -115,6 +116,7 @@ export const api = {
   deliverYoutube: (id: string, channelKey = "youtube_main_ko") =>
     request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/youtube`, "POST", { channel_key: channelKey }),
   briefs: () => request<BriefPresets>("/briefs"),
+  architecture: () => request<ArchitectureOverview>("/architecture"),
   setJobBrief: (id: string, preset: string, overrides: BriefOverrides) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/brief`, "PUT", { preset, overrides }),
   channels: () => request<{ channels: Channel[] }>("/channels"),
