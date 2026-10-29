@@ -209,6 +209,7 @@ if (typeof document !== 'undefined') {
     if (!ready) { ready = true; start.disabled = false; buildScene(o); render(); }
     if (mounted && (o.space.layer !== 'meadow' || o.space.view !== 'walk' || o.controls.vehicleSpeed === 0)) {
       o.controls.setVehicleSpeed(0); mounted = false; render();
+      say('시승을 마쳤습니다. 차를 골라 다시 시승하세요.');
     }
     const walking = active && o.space.layer === 'meadow' && o.space.view === 'walk';
     document.body.classList.toggle('alien-game-active', walking);
