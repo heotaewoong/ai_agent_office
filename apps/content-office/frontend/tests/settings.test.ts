@@ -13,9 +13,18 @@ import {
 
 test("프로필 선택지는 서버 등록값과 같다", () => {
   assert.deepEqual(PROFILE_OPTIONS.voice.map((o) => o.id), ["windows-heami", "gemini-kore"]);
-  assert.deepEqual(PROFILE_OPTIONS.image.map((o) => o.id), ["none", "openai-gpt-image"]);
+  assert.deepEqual(PROFILE_OPTIONS.image.map((o) => o.id), ["none", "openai-gpt-image", "codex-subscription"]);
   assert.deepEqual(PROFILE_OPTIONS.clip.map((o) => o.id), ["none", "runway-gen4-turbo", "runway-gen4.5"]);
   assert.ok(PROFILE_OPTIONS.image.find((o) => o.id === "openai-gpt-image")!.paid);
+  assert.equal(PROFILE_OPTIONS.image.find((o) => o.id === "codex-subscription")!.paid, false);
+});
+
+test("Codex 구독 배경은 API 키가 아니라 codex 로그인을 경고한다", () => {
+  const warnings = settingsWarnings({ configured: true, voice: { id: "gemini-kore" }, image: { id: "codex-subscription", configured: false }, clip: { id: "none" } });
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0].includes("codex") && !warnings[0].includes("OPENAI_API_KEY"));
+  const chips = keyChips({ configured: true, image: { id: "codex-subscription", configured: false, openai_configured: true }, clip: { configured: false } });
+  assert.deepEqual(chips.find((c) => c.label === "OpenAI")!.ok, true);
 });
 
 test("켠 유료 프로필의 키가 없으면 경고, 생성 영상은 배경이 필요", () => {

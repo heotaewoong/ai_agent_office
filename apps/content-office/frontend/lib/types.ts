@@ -224,6 +224,9 @@ export type ProviderProfile = {
   name?: string;
   paid?: boolean;
   configured?: boolean;
+  openai_configured?: boolean;
+  daily_cap_images?: number;
+  used_today?: number;
   model?: string | null;
   job_cap_krw?: number;
   max_clips_per_job?: number;

@@ -6,7 +6,8 @@ import os
 
 from .store import WorkflowError, canonical, now
 
-PROFILES = {'none': '생성 배경 없음 · 글자 카드만', 'openai-gpt-image': 'OpenAI gpt-image-2.5 배경 · 한국어 글자는 로컬 레이어'}
+PROFILES = {'none': '생성 배경 없음 · 글자 카드만', 'openai-gpt-image': 'OpenAI gpt-image-2.5 배경 · 한국어 글자는 로컬 레이어',
+            'codex-subscription': 'Codex 구독(ChatGPT 로그인) 배경 · 한국어 글자는 로컬 레이어'}
 
 
 def profile_summary(store):
@@ -15,10 +16,17 @@ def profile_summary(store):
     if identity not in PROFILES:
         raise WorkflowError('등록되지 않은 이미지 프로필입니다')
     paid = identity == 'openai-gpt-image'
-    return {**profile, 'name': PROFILES[identity], 'paid': paid, 'automatic_fallback': False,
-            'job_cap_krw': 2000 if paid else 0, 'configured': bool(os.environ.get('OPENAI_API_KEY')),
-            'key_source': 'OPENAI_API_KEY 환경변수 · 실행하는 운영자가 설정' if paid else None,
-            'note': '새 제작 요청에 적용합니다. 기존 결과의 실제 배경은 해당 제작물 메타데이터를 확인하세요'}
+    openai_configured = bool(os.environ.get('OPENAI_API_KEY'))
+    summary = {**profile, 'name': PROFILES[identity], 'paid': paid, 'automatic_fallback': False,
+               'job_cap_krw': 2000 if paid else 0, 'configured': openai_configured, 'openai_configured': openai_configured,
+               'key_source': 'OPENAI_API_KEY 환경변수 · 실행하는 운영자가 설정' if paid else None,
+               'note': '새 제작 요청에 적용합니다. 기존 결과의 실제 배경은 해당 제작물 메타데이터를 확인하세요'}
+    if identity == 'codex-subscription':
+        from .codex_image_provider import codex_status, used_today
+        status = codex_status()
+        summary.update(configured=status['configured'], daily_cap_images=status['daily_cap_images'], used_today=used_today(store),
+                       key_source='ChatGPT 로그인 · 앱 실행 계정에서 codex login (API 키 사용 안 함)')
+    return summary
 
 
 def select_profile(store, identity, *, actor):
@@ -35,6 +43,9 @@ def background_renderer_for_job(store, job):
     selections = job.get('selections', {})
     if profile['id'] == 'none' or not (selections.get('video') or selections.get('cards')):
         return None
+    if profile['id'] == 'codex-subscription':
+        from .codex_image_provider import make_codex_background_renderer
+        return make_codex_background_renderer(store, job_id=job['id'])
     from .image_provider import make_openai_background_renderer
     return make_openai_background_renderer(store, job_id=job['id'], allow_paid=True)
 
