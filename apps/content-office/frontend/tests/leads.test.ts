@@ -71,7 +71,7 @@ test("이메일·자료·동의 원문이나 버전 수정과 등록 성공은 �
 
 test("폼 검증은 서버의 출처·자료 키·동의 길이 계약을 지킨다", () => {
   const checked = { ...completed(), consent_confirmed: true };
-  for (const source of ["manual", "blog", "newsletter"]) assert.ok("error" in leadInputFromForm({ ...checked, source }));
+  for (const source of ["manual", "tiktok", "Blog"]) assert.ok("error" in leadInputFromForm({ ...checked, source }));
   for (const magnet_key of ["", "-invalid", "with space", "../path", "a".repeat(101)]) assert.ok("error" in leadInputFromForm({ ...checked, magnet_key }));
   for (const patch of [{ consent_version: "" }, { consent_text: " " }, { consent_version: "v".repeat(51) }, { consent_text: "x".repeat(2001) }]) assert.ok("error" in leadInputFromForm({ ...checked, ...patch }));
   const boundary = leadInputFromForm({ ...checked, magnet_key: "a".repeat(100), consent_version: "v".repeat(50), consent_text: "x".repeat(2000) });

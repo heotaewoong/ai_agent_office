@@ -185,6 +185,28 @@ mkdir -p ~/.local/node && curl -fsSL https://nodejs.org/dist/v24.14.0/node-v24.1
 echo 'export PATH="$HOME/.local/node/bin:$PATH"' >> ~/.profile
 ```
 
+### 매일 아침 뉴스 자동 수집
+
+2026-10-30 오너 결정으로, 운영자가 켜 두면 매일 아침 기사를 자동으로 모읍니다. 기본은 **꺼짐**입니다. "제작 설정 → 매일 자동 수집"에서 켜기, 시각(한국 시간 `HH:MM`, 기본 07:00), 작업 시간(5~30분, 기본 15분), 1회 비용 상한(10~1,000원, 기본 100원)을 정합니다. 설정 저장은 작업 시간을 열지 않고 `daily_collect_updated` 이벤트만 남깁니다.
+
+- **하는 일:** 설정 시각부터 15분 안에 처음 도는 cron 실행이 `scheduled_daily_collect` 작업 시간을 열고(창 기록에 운영자 설정 사본 `operator_schedule`이 남음), RSS 수집과 한국어 카드 요약(`bootstrap.refresh`)만 한 뒤 그 창을 스스로 닫습니다(`closed_by: scheduled_daily_collect`). 결과는 `daily_collect_finished`(기사 수·새 기사 수·사용 비용·상태) 또는 `daily_collect_skipped`(이유) 이벤트와 `daily_collect_runs` 기록으로 남고 화면에 마지막 실행이 보입니다.
+- **하지 않는 일:** 작업자 시작, 원고·제작·업로드, 기획 선택⓪·승인①②③, 발행. 그 시각에 운영자 작업 시간이 열려 있거나 종료가 확인되지 않았으면 그 창을 건드리지 않고 그날은 건너뜁니다. 작업자·감시·배포가 잠금을 쥐고 있어도 건너뜁니다. 하루 한 번만 돌며(같은 날 재실행 없음), 전용 잠금(`runtime/daily-collect.lock`)으로 동시 실행을 막습니다.
+- **비용:** 이번 실행의 사용분(정산+예약)이 상한을 넘기 전에 요약을 멈추고 `stopped_cost_cap`으로 기록합니다. 다음 호출이 지금까지 가장 비싼 한 번만큼 든다고 보고 미리 멈추는 방식이라 실제 사용분은 상한 이하가 목표이며, 기존 총한도와 단가 유효기간 검사도 그대로 적용됩니다. EC2(Linux)에서는 창 마감 5초 전에 SIGALRM으로 수집을 끊습니다.
+- **배포와의 관계:** 자동 수집 창이 열린 몇 분 동안은 배포 스크립트가 "작업 시간이 열려 있음"으로 멈춥니다. 수집이 끝나 창이 닫힌 뒤 다시 실행합니다.
+
+EC2에는 앱 실행 계정(`ubuntu`)의 crontab에 한 줄을 등록해야 실제로 돕니다(`crontab -e`). 스크립트가 `OFFICE_ENV_FILE`의 키를 직접 읽으며 값은 출력하지 않습니다. 상태 폴더를 기본값과 다르게 쓰면 같은 줄에 `OFFICE_STATE_DIR=...`도 넣습니다.
+
+```bash
+*/15 * * * * cd /home/ubuntu/ai_agent_office/apps/content-office/backend && OFFICE_ENV_FILE=$HOME/office.env .venv/bin/python ../scripts/daily_collect.py >> $HOME/.local/state/heobrain-content-office/runtime/daily-collect.log 2>&1
+```
+
+cron은 15분마다 깨어나지만 꺼져 있거나 시각 밖이면 아무것도 하지 않고 한 줄만 로그에 남깁니다.
+
+```bash
+# API: GET /api/settings/daily-collect → {settings{enabled, time_kst, minutes, max_krw, updated_by, updated_at}, last_run, runs[최근 7], slot_minutes, source, limits}
+# PUT /api/settings/daily-collect ({"enabled"?, "time_kst"?, "minutes"?, "max_krw"?}) → 같은 형태 · 잘못된 값은 409
+```
+
 ### 기존 EC2에 검토한 커밋 배포하기
 
 `scripts/deploy-ec2.sh`는 운영 중인 API·화면과 기존 의존성이 있는 Linux 환경용입니다. 처음 설치하거나 의존성을 갱신하는 도구가 아닙니다. 원격의 최신 브랜치를 자동 선택하지 않습니다. 먼저 변경을 검토하고 **승인한 40자리 커밋 SHA**를 지정합니다.
@@ -239,6 +261,7 @@ npm run build
 | `OFFICE_LOCAL_VOICE` | 명시적인 설치 음성 이름. 기본 `Microsoft Heami Desktop`, rate0 |
 | `OFFICE_ENV_FILE` | start-local에 필요한 본인 소유 환경 파일을 지정할 때만 사용합니다 |
 | `OFFICE_PUBLIC_ORIGIN` | 외부 공개 시 브라우저가 여는 단일 HTTPS 주소(예: `https://77-114-15-207.sslip.io`). 앱에는 사용자 계정이 없으므로 모든 요청을 인증하는 리버스 프록시(nginx 기본 인증+TLS) 뒤에서만 설정합니다. 설정하면 세션 쿠키에 Secure가 붙습니다 |
+| `OFFICE_LEAD_ALLOWED_ORIGINS` | 공개 리드 신청(`POST /api/public/leads`)만 추가로 받아들일 HTTPS 출처, 쉼표 구분(예: `https://www.heobrain.kr,https://heobrain.kr`). 경로·와일드카드·http는 시작 시 거부합니다. 운영자 경로에는 적용되지 않습니다 |
 
 음성 프로필은 운영자가 명시적으로 선택합니다. 로컬 Heami와 실제 합성 자료에서 시험한 Gemini3.8 Flash TTS/Kore를 제공합니다. Gemini 경로도 원고 승인① 후 승인된3~7장면 대본에만 호출하며, 원고당1,000원 하위한도와 기존 총10,000원 한도를 함께 적용합니다. `openai-tts`(OpenAI `gpt-4o-mini-tts`, 음성 `marin`, 차분한 한국어 내레이션 지시)도 같은 규칙입니다: 원고 승인①과 현재 원고 버전, 실행 환경의 `OPENAI_API_KEY`(저장하지 않음), 작업 시간·단가 유효기간을 확인한 뒤 승인 장면 대본만 PCM 24kHz로 받아 모노 WAV로 저장하며, Gemini 음성과 합쳐 원고당 1,000원 하위한도를 적용합니다. 단가는 공식 가격표(https://developers.openai.com/api/docs/pricing, 2026-10-30 확인, 2026-11-06까지 유효) 기준 텍스트 입력 $0.60·오디오 출력 $12 / 100만 토큰입니다. 응답에 사용량이 없어 입력 UTF-8 바이트(토큰 상한)와 실제 음성 길이×가정 토큰율(초당 50, 공식 수치 아님)로 추정 정산하고 `provider_usage_estimate_pending_invoice`로 표시하므로 청구서 대사가 필요합니다. 4xx는 0원 정산, 네트워크 오류·5xx는 결과 불명으로 예약을 유지합니다. OpenAI 문서는 이 모델의 종료일을 2027-01-06으로 공지했습니다. 요청이 실패해도 다른 유료 음성으로 자동 전환하지 않습니다. 실제 음성/전사 비교는 아래 조사 폴더의 음성 품질 보고서에 있으며, 자동 전사 차이가 주관적 청취 품질 보증은 아닙니다.
 
@@ -441,6 +464,64 @@ YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 
 
 ```bash
 # API: POST /api/leads ({email, magnet_key, source, consent_version, consent_text}) · GET /api/leads · GET /api/leads/summary · POST /api/leads/{id}/withdraw · POST /api/leads/{id}/sent
+```
+
+출처(`source`)는 `homepage · youtube · instagram · threads · blog · newsletter · other`입니다.
+
+### 공개 리드 신청 폼
+
+독자가 `/lead?m=<자료 키>&src=<출처>`에서 이메일과 동의를 직접 남기면 위 동의 장부에 같은 방식(이메일은 `leads` 표에만, 나머지는 마스킹, 같은 이메일+자료는 한 건)으로 기록됩니다. **자료는 자동으로 보내지지 않습니다.** 완료 화면도 "운영자가 확인 후 이메일로 보내 드려요"라고만 안내합니다. 운영자 화면 "리드마그넷 동의 장부 → 공개 신청 링크"에서 출처별 링크와 heobrain.kr에 붙일 링크 버튼 HTML(iframe·스크립트 없음)을 복사합니다. 링크는 `OFFICE_PUBLIC_ORIGIN` 기준이며, 없으면 지금 화면 주소로 만들고 경고를 표시합니다.
+
+화면은 마스킹된 이메일만 보여 주므로, 실제 발송 주소는 서버에서 운영자가 직접 확인합니다(예: `sqlite3 "$OFFICE_STATE_DIR/office.sqlite3" "SELECT email, magnet_key, created_at FROM leads WHERE json_extract(data,'$.delivery.state')='pending' AND json_extract(data,'$.consent.withdrawn_at') IS NULL"`). 결과를 저장소·채팅·공개 산출물에 붙이지 않습니다.
+
+자료 카탈로그는 `backend/config/lead_magnets.json`입니다(`key, title, description, consent_version, consent_text, public`). **첫 자료 `exam-d30-planner`(시험 D-30 복습 플래너)의 설명과 동의 문구(`2026-10-30-draft1`: 목적 자료 발송과 관련 안내 · 항목 이메일 · 보유 철회 시까지 또는 1년 · 거부 권리)는 초안이며 오너가 확인해야 합니다.** 문구를 바꾸면 `consent_version`도 반드시 바꿉니다. 화면에 보인 버전과 서버의 현재 버전이 다르면 신청을 받지 않으므로, 옛 화면을 연 독자는 새로고침 안내를 받습니다. 이 동의는 광고성 뉴스레터 수신 동의가 아닙니다. 현재 뉴스레터 ③의 수신자 수는 동의가 살아 있는 모든 리드를 세므로, 공개 폼 신청자를 뉴스레터 수신자로 볼지는 오너가 결정해야 합니다.
+
+```bash
+# 공개(운영자 세션 없음) — api.py 미들웨어가 이 두 경로만 세션·CSRF 검사에서 뺍니다(public_leads.PUBLIC_ROUTES)
+# GET  /api/public/magnets → 200 {magnets: [{key, title, description, consent_version, consent_text}]}  (public: true만, 건수 없음)
+# POST /api/public/leads ({email, magnet_key, source, consent_version, consent_checked: true, hp: ""})
+#   → 202 {"status": "received", "message": "신청을 받았어요. 자료는 운영자가 확인 후 이메일로 보내 드려요."}
+#     (새 신청·이미 신청한 이메일·함정 칸(hp)에 값이 있는 요청 모두 같은 본문, 함정 칸이면 저장하지 않음)
+#   → 403 허용되지 않은 Origin(없음 포함) · 413 본문 2KB 초과 · 422 동의 미체크·버전 불일치·없거나 비공개 자료·출처 오류·이메일 형식·추가 필드(consent_text 등)
+#   → 429 같은 IP 시간당 5건·하루 20건 초과
+# 운영자: GET /api/leads/public-form → {public_origin, magnets, sources}
+```
+
+보호 장치: Origin은 `OFFICE_PUBLIC_ORIGIN`, 로컬 화면 주소, `OFFICE_LEAD_ALLOWED_ORIGINS`만 허용합니다(이 추가 출처는 운영자 경로에 쓰이지 않습니다). 동의 문구는 서버 카탈로그 원문을 저장하고 클라이언트가 보낸 문구는 받지 않습니다. IP 한도는 같은 컴퓨터의 프록시(127.0.0.1)를 거친 요청에서만 `X-Forwarded-For`를 오른쪽부터 읽고, 세션 비밀키로 만든 HMAC 해시로만 `public_lead_hits` 표에 하루 동안 남깁니다(원본 IP는 저장하지 않음. 단, uvicorn·nginx 접근 로그에는 평소처럼 남습니다). 이벤트는 `lead_public_signup {magnet_key, source}`이며 이메일을 담지 않습니다.
+
+nginx는 호스트 전체에 기본 인증이 걸려 있으므로, 공개 폼을 열려면 아래 네 위치만 인증을 끕니다. `/lead` 페이지가 실제로 불러오는 것은 `/_next/static/` 아래 JS·CSS뿐이며(파비콘은 `data:`로 막아 `/favicon.ico` 요청 없음), 이 정적 파일은 빌드된 화면 코드로 운영 데이터·이메일·키를 담지 않습니다. 다른 화면과 다른 `/api/*`(GET 포함)는 그대로 기본 인증 뒤에 있습니다. `X-Forwarded-For`는 `$remote_addr`로 덮어써야 독자가 위조한 값이 한도 계산에 섞이지 않습니다. `proxy_pass`는 기존 `location /`과 같은 화면 서버(기본 `127.0.0.1:3110`)를 가리킵니다.
+
+```nginx
+# server { ... auth_basic ...; location / { ... } } 블록 안에 추가
+location = /lead {
+    auth_basic off;
+    proxy_pass http://127.0.0.1:3110;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location ^~ /_next/static/ {
+    auth_basic off;
+    proxy_pass http://127.0.0.1:3110;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location = /api/public/leads {
+    auth_basic off;
+    client_max_body_size 4k;
+    proxy_pass http://127.0.0.1:3110;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+location = /api/public/magnets {
+    auth_basic off;
+    proxy_pass http://127.0.0.1:3110;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
 ```
 
 ### 뉴스레터 ③

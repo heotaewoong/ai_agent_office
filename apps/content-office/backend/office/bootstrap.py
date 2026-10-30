@@ -35,6 +35,12 @@ def enrich(articles):
     return articles
 
 
+def card_provider(store):
+    from .providers import Provider
+    # 두 문장 카드는 가벼운 모델로 충분하다. 원고 작성·검수 모델과 분리해 정한다.
+    return Provider(store, model=os.environ.get("OFFICE_CARD_MODEL", "gemini-3.5-flash-lite"))
+
+
 def korean_cards(store, articles, provider=None, limit=None):
     """화면 앞쪽 기사부터 한국어 카드(제목·두 문장 요약·읽을 이유)를 만든다.
 
@@ -56,9 +62,7 @@ def korean_cards(store, articles, provider=None, limit=None):
     made, stopped, skipped, busy = 0, None, [], 0
     if pending:
         if provider is None:
-            from .providers import Provider
-            # 두 문장 카드는 가벼운 모델로 충분하다. 원고 작성·검수 모델과 분리해 정한다.
-            provider = Provider(store, model=os.environ.get("OFFICE_CARD_MODEL", "gemini-3.5-flash-lite"))
+            provider = card_provider(store)
         for article in pending + spare:
             if have + made >= limit:
                 break

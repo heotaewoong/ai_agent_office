@@ -21,7 +21,7 @@ ACTOR = "local-operator"
 class LeadInput(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     magnet_key: str = Field(min_length=1, max_length=100)
-    source: Literal["homepage", "youtube", "instagram", "threads", "other"]
+    source: Literal["homepage", "youtube", "instagram", "threads", "blog", "newsletter", "other"]
     consent_version: str = Field(min_length=1, max_length=50)
     consent_text: str = Field(min_length=1, max_length=2000)
 

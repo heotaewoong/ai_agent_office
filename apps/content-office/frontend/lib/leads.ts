@@ -1,6 +1,6 @@
 import type { LeadInput } from "./types";
 
-export const LEAD_SOURCES = ["homepage", "youtube", "instagram", "threads", "other"] as const;
+export const LEAD_SOURCES = ["homepage", "youtube", "instagram", "threads", "blog", "newsletter", "other"] as const;
 export type LeadForm = LeadInput & { consent_confirmed: boolean };
 
 export function emptyLeadForm(): LeadForm {
@@ -39,6 +39,8 @@ const SOURCE_LABELS: Record<string, string> = {
   youtube: "YouTube",
   instagram: "Instagram",
   threads: "Threads",
+  blog: "블로그",
+  newsletter: "뉴스레터",
   other: "기타 · 직접 등록",
 };
 

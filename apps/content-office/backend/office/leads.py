@@ -12,7 +12,7 @@ import re
 
 from .store import WorkflowError, canonical, digest, identifier, now
 
-SOURCES = ("homepage", "youtube", "instagram", "threads", "other")
+SOURCES = ("homepage", "youtube", "instagram", "threads", "blog", "newsletter", "other")
 EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$")
 KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 MAX_EMAIL = 254

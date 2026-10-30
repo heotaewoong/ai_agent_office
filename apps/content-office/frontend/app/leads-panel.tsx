@@ -7,6 +7,7 @@ import { changeLeadForm, emptyLeadForm, LEAD_SOURCES, leadFormAfterSave, leadInp
 import { formatDate } from "../lib/workflow";
 import type { Action, Lead, LeadInput, LeadSummary } from "../lib/types";
 import { Icon } from "./icons";
+import { PublicLeadLinks } from "./public-lead-links";
 
 /** 리드마그넷 동의 장부. 이메일 원문은 서버 장부에만 있고 화면에는 마스킹된 값만 옵니다. */
 export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) {
@@ -71,6 +72,7 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
       <p className="settings-help">
         실제 전달 주소와 요청 자료는 권한이 있는 원신청 DM·메일·폼에서 확인하세요. 이 화면은 주소 복원이나 자동 전달을 제공하지 않습니다. 무료 자료 신청만으로 후속 뉴스레터·광고 수신에도 동의했다고 판단하지 마세요.
       </p>
+      <PublicLeadLinks />
       {summary && (
         <dl className="budget-grid">
           <div>

@@ -6,6 +6,7 @@ import type { Dashboard } from "../lib/types";
 import { PROFILE_COST_GUIDANCE, PROFILE_OPTIONS, keyChips, settingsWarnings, validWindowMinutes, type ProfileKind } from "../lib/settings";
 import { Icon } from "./icons";
 import { ChannelsPanel } from "./channels-panel";
+import { DailyCollectPanel } from "./daily-collect-panel";
 import { LeadsPanel } from "./leads-panel";
 
 type Action = (label: string, execute: () => Promise<unknown>, success: string) => Promise<true | string>;
@@ -152,6 +153,7 @@ export function SettingsPanel({
         {budget?.fx_note && <p className="settings-help">{budget.fx_note}</p>}
       </section>
 
+      <DailyCollectPanel busy={busy} action={action} />
       <ChannelsPanel busy={busy} action={action} />
       <LeadsPanel busy={busy} action={action} />
     </div>
