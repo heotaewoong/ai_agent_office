@@ -533,3 +533,13 @@ a { color: var(--accent); }
   .results-view .panel { top: 98px; }
   .roster-panel { top: 98px; }
 }
+
+/* 팀 구성과 기존 콘텐츠 공정은 별도로 표시한다. */
+.team-goals{margin-bottom:18px;padding:14px;border:1px solid #ffffff24;border-radius:12px;background:#ffffff06;line-height:1.65}.team-goals p{margin:0 0 10px}.team-goals ul{margin:0;padding-left:20px}.team-goals li{margin:7px 0}.workflow-map{margin:18px 0;padding:12px;border:1px solid #ffffff24;border-radius:10px}.workflow-map h3{font-size:14px;margin:0 0 10px}.workflow-map>div{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-top:1px solid #ffffff14}.team-choice{display:grid;gap:7px;width:100%;margin:10px 0;padding:15px;text-align:left;border:1px solid #ffffff35;border-radius:12px;background:#ffffff08;color:inherit;font:inherit;cursor:pointer;line-height:1.55}.team-choice:hover{background:#ffffff14}.team-choice:focus-visible{outline:3px solid #7fe3ff;outline-offset:2px}.team-choice span{font-size:13px;color:#d4e0ee}.team-choice small{color:#9eb7d0}.team-memory{margin-top:18px;line-height:1.65}.team-memory summary{cursor:pointer}
+
+
+.world-actions{display:contents}
+@media(max-width:720px){.world-actions{display:flex;flex:0 0 100%;gap:6px;min-width:0;overflow-x:auto;scrollbar-width:none;padding-block:0}.world-actions>*{flex-shrink:0}}
+@media(max-width:720px){.world-actions::-webkit-scrollbar{display:none}}
+@media(max-width:720px){.world-actions .view-switch{padding:0;border:0;background:transparent}.world-actions .view-switch button{min-height:40px}}
+@media(max-width:720px){.topbar{padding-block:4px}}
