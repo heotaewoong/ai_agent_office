@@ -25,3 +25,13 @@
 ## arrival-detail-v2.json · preserved
 
 Existing independently authored Blender arrival asset is retained without modification. Its source GLB hash `4eb3370839e30e33c637f01ef490f4d45136127ff6adff1d45b847fb9212ece6` is embedded in its metadata and tested by `tests/arrival-detail.test.mjs`. Earlier provenance and render records remain in `output/2026-10-30-office-blender-arrival-live-result.md`; this change does not reclassify private materials or overwrite original source assets.
+
+## Lossless gzip transport sidecars · 2026-10-31
+
+Generated from the three original runtime JSON files using Node standard-library `gzipSync(bytes,{level:9})`. No geometry, rights, metadata or external asset changes. Tests gunzip each sidecar and compare every byte with its source. Rebuild sidecars whenever a source changes.
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| arrival-detail-v2.json.gz | 73,807 | 4a4e811e9f8986c2be4875e91ecff3d4eb606e3f7842bb48daafa7de777396de |
+| atrium-detail-v3.json.gz | 85,303 | 3695470e9fac28de92ef7571787932f435770ac4be53d38f8fc5220a067ea160 |
+| guide-avatar-v1.json.gz | 88,700 | ccede067fb2a77d6d5969ff60889075f7b2594859cec7599ec8e3bb89361bd8b |
