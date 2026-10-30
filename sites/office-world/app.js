@@ -259,7 +259,7 @@
           state:'info', stateLabel: `${dev.running.deployed_at ? when(dev.running.deployed_at) + ' 배포 · ' : ''}${dev.running.ci_verified ? 'GitHub에서 검증한 커밋' : '서버에서 검증한 커밋'}`,
           needsHuman:false, actions:[] },
         ...(dev.deployments || []).slice(0, 4).map(r => ({ id:'dev-deploy-' + r.id, title:`배포 ${r.commit}`,
-          state: r.status === 'deployed' ? 'info' : 'failed',
+          state: r.status === 'deployed' || r.transient ? 'info' : 'failed',
           stateLabel:`${r.label}${r.ci_verified ? ' · GitHub 검증' : ''} · ${r.id.slice(4, 6)}/${r.id.slice(6, 8)} ${r.id.slice(9, 11)}:${r.id.slice(11, 13)} UTC`,
           needsHuman:false, actions:[] })),
       ];
