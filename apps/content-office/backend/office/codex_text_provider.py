@@ -11,7 +11,8 @@ from jsonschema import Draft202012Validator, ValidationError
 from .store import WorkflowError, canonical, digest
 
 PROFILE_ID = "codex-subscription-text"
-TIMEOUT_SECONDS = 180
+# Detailed originals plus reviewed channel copies can exceed three minutes; unknown calls still never retry automatically.
+TIMEOUT_SECONDS = 600
 
 class CodexSchemaRejected(WorkflowError):
     """The CLI rejected the request schema before model generation."""

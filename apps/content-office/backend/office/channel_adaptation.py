@@ -8,11 +8,19 @@ CHANNEL_COPY = {
     "linkedin_personal": (3000, "문제 상황 → 선택 기준 → 해결 과정 → 업무에 적용할 교훈"),
     "instagram_main": (2200, "첫 줄의 실용적인 이점 → 짧은 단계 → 저장해 둘 점검 항목"),
     "x_main": (280, "핵심 결론 하나와 중요한 조건. 긴 설명은 원문 링크로 연결"),
+    "instagram_english": (2200, "실용적인 이점 → 짧은 단계 → 점검 항목. 영어 독자를 위한 en-US 본문"),
 }
-COPY_SCHEMA = {"type": "object", "properties": {
-    key: {"type": "string", "minLength": 1, "maxLength": limit}
-    for key, (limit, _) in CHANNEL_COPY.items()
-}, "required": list(CHANNEL_COPY), "additionalProperties": False}
+COPY_LOCALES = {key: 'en' if key == 'instagram_english' else 'ko' for key in CHANNEL_COPY}
+
+
+def copy_schema(language='ko'):
+    keys = [key for key in CHANNEL_COPY if COPY_LOCALES[key] == language]
+    return {"type": "object", "properties": {
+        key: {"type": "string", "minLength": 1, "maxLength": CHANNEL_COPY[key][0]} for key in keys
+    }, "required": keys, "additionalProperties": False}
+
+
+COPY_SCHEMA = copy_schema()
 
 
 def source_link(packet):
@@ -38,10 +46,12 @@ def social_text(packet, key, footer=""):
 
 
 def adaptation_prompt(packet=None):
-    link = source_link(packet or {})
-    targets = {'threads_main': 250, 'linkedin_personal': 600, 'instagram_main': 450, 'x_main': 70}
+    packet = packet or {}
+    link = source_link(packet)
+    language = (packet.get('audience') or {}).get('language', 'ko')
+    targets = {'threads_main': 250, 'linkedin_personal': 600, 'instagram_main': 450, 'instagram_english': 450, 'x_main': 70}
     limits = "; ".join(f"{key}: 본문 목표 {min(targets[key], max(40, limit - len(link) - 120))}자 이하, {style}"
-                       for key, (limit, style) in CHANNEL_COPY.items())
+                       for key, (limit, style) in CHANNEL_COPY.items() if COPY_LOCALES[key] == language)
     return ("블로그와 SNS·숏폼을 분리한다. 네이버·티스토리는 body의 상세 원문과 모든 설정·표·이미지·문제해결·한계를 보존한다. "
             "channel_posts에는 각 채널에 맞게 새로 편집한 요약 본문을 작성한다. 원문의 첫 문단을 반복 발췌하거나 상세 블로그를 SNS 요약으로 덮어쓰지 않는다. "
             "개인 경험·효과·비교 우위·필수 선택 이유를 지어내지 않고 원문에 있는 조건과 한계를 보존한다. "
@@ -59,7 +69,10 @@ def adaptation_issues(packet, footer=""):
     if not isinstance(copies, dict):
         return ["매체별 SNS 요약본 형식이 올바르지 않습니다"]
     issues = []
+    language = (packet.get('audience') or {}).get('language', 'ko')
     for key, (limit, _) in CHANNEL_COPY.items():
+        if COPY_LOCALES[key] != language:
+            continue
         value = copies.get(key)
         if not isinstance(value, str) or not value.strip():
             issues.append(f"{key} 매체별 요약본이 필요합니다")
