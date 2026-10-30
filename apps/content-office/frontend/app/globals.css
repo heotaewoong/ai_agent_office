@@ -4195,3 +4195,41 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
   .arch-status-row { grid-template-columns: 1fr; gap: 7px; }
   .arch-commits li { grid-template-columns: 1fr; gap: 4px; }
 }
+
+/* ===== Mobile layout guard (≤760px) — 2026-10-30 =====
+   Goal: at phone width the page itself never scrolls sideways.
+   Wide things (nav strip, tables, code, diagrams) scroll inside their own box;
+   long URLs/hashes wrap. Rules only apply ≤760px, desktop is unchanged. */
+@media (max-width: 760px) {
+  /* Safety net: the shell clips stray overflow (clip keeps position: sticky working). */
+  .office-shell { max-width: 100%; overflow-x: clip; }
+  .main-shell, main { min-width: 0; max-width: 100%; }
+  main { padding-left: 16px; padding-right: 16px; }
+  .sidebar nav { max-width: 100%; }
+
+  /* Top bar: breadcrumb and chips wrap instead of pushing the page wider. */
+  .topbar { height: auto; min-height: 47px; flex-wrap: wrap; row-gap: 4px; padding: 8px 16px; }
+  .topbar > div:first-child { min-width: 0; }
+  .topbar-right { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; min-width: 0; }
+  .summary-chip { display: inline-block; margin-right: 0; font-size: 9px; letter-spacing: 0; white-space: nowrap; }
+
+  /* Long words, URLs and hashes wrap inside their box. */
+  main { overflow-wrap: break-word; }
+  main :is(a, code, pre, small, .mono, .settings-help) { overflow-wrap: anywhere; }
+
+  /* Media and form controls never exceed the column. */
+  main :is(img, video, canvas, iframe) { max-width: 100%; }
+  main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .button) { max-width: 100%; min-width: 0; }
+
+  /* Code blocks and unwrapped tables scroll inside themselves. */
+  main pre { max-width: 100%; overflow-x: auto; }
+  main :is(.table-scroll, .channel-table-wrap, .arch-table) { max-width: 100%; overflow-x: auto; }
+
+  /* 제작 설정: the outer grid track was sized by its widest child (735px at 400px). */
+  .settings-layout { grid-template-columns: minmax(0, 1fr); }
+  .settings-layout > * { min-width: 0; }
+  .settings-card { padding: 18px 16px; }
+  .profile-groups { grid-template-columns: minmax(0, 1fr); }
+  .profile-group { min-width: 0; }
+  .key-chips li { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+}

@@ -3,6 +3,7 @@
 URL 존재·소유권·발행 권한·실제 게시 성공은 각각 별도 상태다(설계서 4절 채널 원장).
 운영자가 바꿀 수 있는 값(external_account_id·publication_enabled·public_url)만 설정 `channel_registry`에 저장하고,
 정적 정의와 합쳐 돌려주므로 기본값은 저장소를 비워도 살아 있다. refresh token 같은 비밀은 저장소에 넣지 않는다.
+refresh token은 환경변수가 먼저이고, 없으면 'YouTube 채널 연결'(OAuth)이 상태 폴더 밖 비밀 파일(youtube_tokens)에 둔 값을 쓴다.
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import os
 import re
 
 from .store import WorkflowError, now
+from .youtube_tokens import stored_refresh_token
 
 SETTING_KEY = "channel_registry"
 EDITABLE_FIELDS = ("external_account_id", "publication_enabled", "public_url")
@@ -47,11 +49,16 @@ def channel_env_name(key):
     return "YOUTUBE_" + name + "_REFRESH_TOKEN"
 
 
-def _refresh_token(key):
+def env_refresh_token(key):
     token = os.environ.get(channel_env_name(key))
     if not token and key == "youtube_main_ko":
         token = os.environ.get(LEGACY_REFRESH_ENV)
     return token or None
+
+
+def _refresh_token(key):
+    """환경변수(기존 방식)가 우선, 없으면 'YouTube 채널 연결'로 저장한 비밀 파일 값."""
+    return env_refresh_token(key) or stored_refresh_token(key)
 
 
 def youtube_credentials(key):

@@ -1,4 +1,5 @@
 import type { ArchitectureOverview } from "./architecture";
+import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
 import type {
   Dashboard,
   Job,
@@ -123,6 +124,12 @@ export const api = {
   channels: () => request<{ channels: Channel[] }>("/channels"),
   updateChannel: (key: string, patch: ChannelPatch) =>
     request<Channel>(`/channels/${encodeURIComponent(key)}`, "PUT", patch),
+  // YouTube 채널 연결(OAuth): 시작하면 Google 동의 화면 주소만 받고, 토큰은 서버 비밀 파일에만 남습니다.
+  youtubeOAuthStatus: () => request<YoutubeOAuthStatus>("/youtube/oauth/status"),
+  youtubeOAuthStart: (channelKey: string) =>
+    request<{ authorize_url: string; expires_in: number }>("/youtube/oauth/start", "POST", { channel_key: channelKey }),
+  youtubeOAuthDisconnect: (channelKey: string) =>
+    request<YoutubeOAuthChannel>("/youtube/oauth/disconnect", "POST", { channel_key: channelKey }),
   reconcileDelivery: (id: string, deliveryId: string) =>
     request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/reconcile`, "POST", {}),
   knowledge: (query = "") =>

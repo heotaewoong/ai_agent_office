@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import os
 
 from .store import WorkflowError, canonical, now
 
-PROFILES = {'windows-heami': 'Windows Heami 한국어 · 로컬', 'gemini-kore': 'Gemini3.8 Flash TTS · Kore 한국어'}
+PROFILES = {'windows-heami': 'Windows Heami 한국어 · 로컬', 'gemini-kore': 'Gemini3.8 Flash TTS · Kore 한국어',
+            'openai-tts': 'OpenAI gpt-4o-mini-tts · 한국어'}
+KEY_SOURCES = {'gemini-kore': 'GEMINI_API_KEY 환경변수 · 실행하는 운영자가 설정',
+               'openai-tts': 'OPENAI_API_KEY 환경변수 · 실행하는 운영자가 설정'}
 
 
 def profile_summary(store):
@@ -13,8 +17,11 @@ def profile_summary(store):
     identity = profile.get('id')
     if identity not in PROFILES:
         raise WorkflowError('등록되지 않은 음성 프로필입니다')
-    return {**profile, 'name': PROFILES[identity], 'paid': identity == 'gemini-kore',
-            'automatic_fallback': False, 'job_cap_krw': 1000 if identity == 'gemini-kore' else 0,
+    paid = identity in KEY_SOURCES
+    configured = {'windows-heami': os.name == 'nt', 'gemini-kore': bool(os.environ.get('GEMINI_API_KEY')),
+                  'openai-tts': bool(os.environ.get('OPENAI_API_KEY'))}[identity]
+    return {**profile, 'name': PROFILES[identity], 'paid': paid, 'configured': configured, 'key_source': KEY_SOURCES.get(identity),
+            'automatic_fallback': False, 'job_cap_krw': 1000 if paid else 0,
             'note': '새 제작 요청에 적용합니다. 기존 결과의 실제 음성은 해당 제작물 메타데이터를 확인하세요'}
 
 
@@ -31,6 +38,9 @@ def renderer_for_job(store, job):
     profile = profile_summary(store)
     if not job.get('selections', {}).get('video') or profile['id'] == 'windows-heami':
         return None
+    if profile['id'] == 'openai-tts':
+        from .openai_speech import make_openai_voice_renderer
+        return make_openai_voice_renderer(store, job_id=job['id'], allow_paid=True)
     from .speech_provider import make_gemini_voice_renderer
     return make_gemini_voice_renderer(store, job_id=job['id'], allow_paid=True, voice='Kore', synthetic_only=False)
 

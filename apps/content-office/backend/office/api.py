@@ -660,6 +660,7 @@ def create_app(store: Store | None = None):
 
     from .api_leads_newsletter import register as register_leads_newsletter; register_leads_newsletter(app, store)  # 리드 동의 장부·뉴스레터③·오퍼
     from .api_calendar_questions import register as register_calendar_questions; register_calendar_questions(app, store)  # 시험 일정·시의성, 독자 질문 수집
+    from .api_youtube_oauth import register as register_youtube_oauth; register_youtube_oauth(app, store)  # YouTube 채널 연결(OAuth) — 토큰은 상태 폴더 밖 비밀 파일
 
     @app.get("/api/architecture")
     def architecture_overview():

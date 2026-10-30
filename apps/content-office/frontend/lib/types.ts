@@ -231,7 +231,7 @@ export type Agent = {
   mode?: string;
   [key: string]: unknown;
 };
-export type VoiceProfile = {id?:string;name?:string;paid?:boolean;automatic_fallback?:boolean;job_cap_krw?:number;note?:string};
+export type VoiceProfile = {id?:string;name?:string;paid?:boolean;configured?:boolean;key_source?:string|null;automatic_fallback?:boolean;job_cap_krw?:number;note?:string};
 export type ProviderProfile = {
   id?: string;
   name?: string;

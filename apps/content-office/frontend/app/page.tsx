@@ -49,6 +49,7 @@ import { CardsPanel } from "./cards-panel";
 import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
 import { NewsletterPanel } from "./newsletter-panel";
+import { withoutOAuthParams, youtubeOAuthResult } from "../lib/youtube-oauth";
 import { sourceApproved } from "../lib/workflow";
 import { packagingRequired } from "../lib/packaging";
 import {
@@ -206,6 +207,16 @@ export default function Office() {
       if (dashboardRefresh.current.settle(ticket) && alive.current) setLoading(false);
     }
   }, [selectJob]);
+
+  // YouTube 채널 연결(OAuth) 콜백이 /?youtube=… 로 돌려보내면 결과를 한 번 알리고 주소창을 정리합니다.
+  useEffect(() => {
+    const result = youtubeOAuthResult(window.location.search);
+    if (!result) return;
+    setView("settings");
+    if (result.kind === "success") setNotice(result.message);
+    else setError(result.message);
+    window.history.replaceState(null, "", withoutOAuthParams(window.location.href));
+  }, []);
 
   useEffect(() => {
     alive.current = true;

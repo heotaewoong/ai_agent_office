@@ -51,7 +51,7 @@ def _youtube_channel(store, channel_key):
 def _credentials(channel_key):
     credentials = youtube_credentials(channel_key)
     if credentials is None:
-        raise WorkflowError("·".join(missing_credential_names(channel_key)) + f"이 설정되지 않았습니다({channel_key}). 채널 소유자가 실행 환경 파일에 넣은 뒤 다시 요청하세요")
+        raise WorkflowError("·".join(missing_credential_names(channel_key)) + f"이 설정되지 않았습니다({channel_key}). 채널 소유자가 실행 환경 파일에 넣거나 설정 화면의 'YouTube 연결'로 로그인한 뒤 다시 요청하세요")
     return credentials
 
 
