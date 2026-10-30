@@ -1745,7 +1745,7 @@ function Studio({
       }} />
       <ImprovementPanel key={job.id} job={job} />
       <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
-      <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      <CardsPanel job={job} busy={locked} action={action} blockedReason={requestBlockedReason} />
       <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
     </>
   );
