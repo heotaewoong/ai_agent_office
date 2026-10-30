@@ -2011,7 +2011,7 @@ function Delivery({
   voice?: VoiceProfile;
   job: Job;
   busy: boolean;
-  action: Action;
+  action: (label: string, execute: () => Promise<unknown>, success: string) => Promise<true | string>;
 }) {
   const [preview, setPreview] = useState<string>();
   const [releaseVersion, setReleaseVersion] = useState<string>();
@@ -2046,6 +2046,7 @@ function Delivery({
     return file ? [{ ...format, file }] : [];
   });
   const videoFile = mainVideoFile(files);
+  const firstThumbnail = job.manifest?.thumbnail_candidates?.[0];
   const selected =
     files.find((file) => file.id === preview) ??
     blogFormats[0]?.file ??
@@ -2227,7 +2228,7 @@ function Delivery({
       <section className={deliveryStyles.section} aria-labelledby={`delivery-release-${job.id}`}>
       <header className={deliveryStyles.sectionHeading}><span>02</span><div><h2 id={`delivery-release-${job.id}`} data-outline-title="출고 승인">출고 승인</h2><p>전달할 완료 항목을 고른 뒤 현재 파일 버전을 확인하세요.</p></div></header>
       {files.length === 0 ? <p className={deliveryStyles.empty}>제작물이 준비되면 이곳에서 출고 항목을 선택할 수 있어요.</p> : <>
-          {requiresThumbnail && !job.manifest?.selected_thumbnail_id && <div className={deliveryStyles.attention} role="status"><strong>영상 썸네일을 먼저 선택해 주세요.</strong><p>썸네일을 선택하면 출고 승인 단계로 이어갈 수 있어요.</p><a className="button secondary small" href={`#delivery-preview-${job.id}`} onClick={()=>setPreview(videoFile?.id ?? job.manifest?.thumbnail_candidates?.[0]?.id)}>영상·썸네일 확인</a></div>}
+          {requiresThumbnail && !job.manifest?.selected_thumbnail_id && <div className={deliveryStyles.attention} role="status"><strong>영상 썸네일을 먼저 선택해 주세요.</strong><p>썸네일을 선택하면 출고 승인 단계로 이어갈 수 있어요.</p><a className="button secondary small" href={`#delivery-preview-${job.id}`} onClick={()=>setPreview(videoFile?.id ?? (firstThumbnail ? thumbnailArtifact(firstThumbnail).id : undefined)))}>영상·썸네일 확인</a></div>}
           <OutputChoices
             job={job}
             selected={releaseOutputs}
