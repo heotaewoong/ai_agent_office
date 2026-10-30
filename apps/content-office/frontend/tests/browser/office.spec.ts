@@ -823,6 +823,22 @@ test("모바일 목차 선택은 화면 안에서 이동하고 설정 화면에�
   expect(fixture.writes).toEqual([]);
 });
 
+test("모바일 출고함 중간 구역으로 이동하면 현재 위치도 같은 구역을 표시한다", async ({ page }) => {
+  const fixture = await harness(page, true, true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/publish?job=contract-test-job");
+  const select = page.getByRole("combobox", { name: "목차 바로 이동", exact: true });
+  const option = select.locator("option").filter({ hasText: "현재 제작물 미리보기" });
+  const value = await option.getAttribute("value");
+  await select.selectOption(value!);
+  await expect(page.locator(".outline-location")).toContainText("현재 제작물 미리보기");
+  await expect(select).toHaveValue(value!);
+  const target = page.locator(`[id="${value}"]`);
+  await expect(target).toBeFocused();
+  await expect(target).toBeInViewport();
+  expect(fixture.writes).toEqual([]);
+});
+
 test("목차를 오가도 저장하지 않은 원고가 유지되고 숨긴 구역은 제외된다", async ({ page }) => {
   const fixture = await harness(page, true);
   await page.goto("/scripts/contract-test-job");

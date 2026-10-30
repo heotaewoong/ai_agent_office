@@ -20,7 +20,7 @@ export function PageOutline({ scope }: { scope: string }) {
     const panels = new Set<HTMLElement>();
     const updatePosition = () => {
       frame = 0;
-      const edge = (nav.current?.getBoundingClientRect().bottom ?? 0) + 32;
+      const edge = (nav.current?.getBoundingClientRect().bottom ?? 0) + 48;
       const atBottom = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
       const current = atBottom ? nodes.at(-1) : nodes.filter((node) => node.getBoundingClientRect().top <= edge).at(-1) ?? nodes[0];
       setActive(current?.id ?? "");
