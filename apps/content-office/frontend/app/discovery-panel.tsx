@@ -1,7 +1,11 @@
 "use client";
 import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { api } from '../lib/api';
 import { researchSourceLabels, signalLabels, type DiscoveryStatus, type ResearchConfig } from '../lib/discovery';
+
+const controlStyle: CSSProperties = { display: 'block', width: '100%', minHeight: 44, marginTop: 6,
+  padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--white)', fontSize: 16 };
 
 export function DiscoveryPanel() {
   const [data, setData] = useState<DiscoveryStatus | null>(null);
@@ -40,19 +44,19 @@ export function DiscoveryPanel() {
     catch (cause) { setError(cause instanceof Error ? cause.message : '불러오지 못했습니다.'); }
     finally { setBusy(false); }
   }
-  return <section className="outline-panel" aria-labelledby="discovery-heading">
+  return <section className="outline-panel" aria-labelledby="discovery-heading" style={{ fontSize: 16 }}>
     <h2 id="discovery-heading">게시할 곳에 맞춰 소식과 트렌드 조사</h2>
     <p>공식 소식·YouTube·HN을 함께 수집하고, 게시 대상에 필요한 검색·뉴스 신호를 추가합니다. 선택 저장 후 자동 조사하며 원고·승인·게시를 시작하지 않습니다. 추가 모델 호출은 없습니다.</p>
     {error && <p role="alert" className="notice error">{error}</p>}
     {!data || !draft ? <div><p role="status">조사 설정을 불러오는 중입니다.</p><button className="button secondary" disabled={busy} onClick={() => void reload()}>조사 설정 다시 불러오기</button></div> : <>
       <form onSubmit={e => { e.preventDefault(); void save(); }}>
-        <fieldset disabled={busy}><legend>조사할 게시 대상</legend>
+        <fieldset disabled={busy} style={{ minWidth: 0, border: '1px solid var(--line)', borderRadius: 10, padding: 16 }}><legend>조사할 게시 대상</legend>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 20px' }}>{Object.entries(data.platforms).map(([id, label]) => <label key={id}><input type="checkbox" checked={draft.platforms.includes(id)} onChange={e => setDraft({ ...draft, platforms: e.target.checked ? [...draft.platforms, id] : draft.platforms.filter(p => p !== id) })} /> {label}</label>)}</div>
         </fieldset>
         <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-          <label>조사 주제<input value={draft.topic} maxLength={80} required disabled={busy} onChange={e => setDraft({ ...draft, topic: e.target.value })} /></label>
-          <label>관심 지역<select value={draft.region} disabled={busy} onChange={e => setDraft({ ...draft, region: e.target.value })}><option value="KR">한국</option><option value="US">미국</option><option value="GB">영국</option><option value="JP">일본</option></select></label>
-          <details><summary>구독할 공개 YouTube 채널 변경</summary><label>채널 ID · 한 줄에 하나, 최대 6개<textarea value={draft.youtube_channels.join('\n')} disabled={busy} onChange={e => setDraft({ ...draft, youtube_channels: e.target.value.split('\n') })} /></label><p className="muted">UC로 시작하는 채널 ID를 사용합니다. 기본은 OpenAI와 Google Developers이며 계정 로그인·구독 변경은 하지 않습니다.</p></details>
+          <label>조사 주제<input style={controlStyle} value={draft.topic} maxLength={80} required disabled={busy} onChange={e => setDraft({ ...draft, topic: e.target.value })} /></label>
+          <label>관심 지역<select style={controlStyle} value={draft.region} disabled={busy} onChange={e => setDraft({ ...draft, region: e.target.value })}><option value="KR">한국</option><option value="US">미국</option><option value="GB">영국</option><option value="JP">일본</option></select></label>
+          <details><summary>구독할 공개 YouTube 채널 변경</summary><label>채널 ID · 한 줄에 하나, 최대 6개<textarea style={{ ...controlStyle, minHeight: 140, resize: 'vertical' }} value={draft.youtube_channels.join('\n')} disabled={busy} onChange={e => setDraft({ ...draft, youtube_channels: e.target.value.split('\n') })} /></label><p className="muted">UC로 시작하는 채널 ID를 사용합니다. 기본은 OpenAI와 Google Developers이며 계정 로그인·구독 변경은 하지 않습니다.</p></details>
         </div>
         {baseHash !== data.config_hash && <p className="notice">다른 화면에서 설정이 바뀌었습니다. 입력은 보존됩니다. 현재 설정을 다시 불러와 확인하세요.</p>}
         <div className="button-row" style={{ marginTop: 16 }}><button className="button primary" disabled={busy || !draft.platforms.length || baseHash !== data.config_hash}>선택 저장하고 자동 조사</button><button type="button" className="button secondary" disabled={busy} onClick={() => void reload()}>현재 설정 다시 불러오기 · 입력 초기화</button></div>

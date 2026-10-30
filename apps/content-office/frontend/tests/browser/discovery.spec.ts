@@ -30,6 +30,9 @@ test('게시 대상 저장은 조사만 요청하고 시간·원고·승인을 �
   const panel=page.getByRole('region',{name:'게시할 곳에 맞춰 소식과 트렌드 조사'});
   await panel.getByRole('checkbox',{name:'LinkedIn',exact:true}).check();
   await panel.getByLabel('조사 주제',{exact:true}).fill('AI agent');
+  const topic=panel.getByLabel('조사 주제',{exact:true});
+  expect(await topic.evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+  expect((await topic.boundingBox())!.width).toBeGreaterThan(200);
   await panel.getByRole('button',{name:'선택 저장하고 자동 조사'}).click();
   await expect(panel.getByText(/설정과 조사 요청을 저장했습니다/)).toBeVisible();
   expect(writes).toHaveLength(1);
