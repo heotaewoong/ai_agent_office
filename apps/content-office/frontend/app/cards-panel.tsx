@@ -81,7 +81,8 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
           </button>
         </div>
       </div>
-      <p className="muted">여기서 별도로 만든 카드뉴스는 개별 검토·다운로드용입니다. ② 출고 승인에서 고른 제작물 ZIP에 자동으로 추가되지 않습니다.</p>
+      <p className="muted">글·영상·현재 원고의 카드뉴스를 검토용 ZIP으로 함께 받을 수 있습니다. 검사 이슈도 포함되며, 출고 승인②와 플랫폼 업로드는 별도입니다.</p>
+      {approved && job.manifest?.hash && <a className="button secondary small" href={`/api/jobs/${encodeURIComponent(job.id)}/review-package`}>글·영상·카드 검토 ZIP 받기</a>}
       {!approved && <p className="muted">① 원고 승인 뒤에만 만들 수 있습니다. 배경 이미지는 제작 설정을 따르고, 한국어 글자는 로컬에서 크게 얹습니다.</p>}
       {pending && <p className="muted">생성 요청을 받았습니다. 작업자가 저장하면 자동으로 표시됩니다.</p>}
       {loadError && <p className="field-error">{loadError}</p>}
