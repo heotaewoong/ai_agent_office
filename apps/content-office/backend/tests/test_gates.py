@@ -79,3 +79,13 @@ def test_thumbnail_number_without_evidence_blocks():
     report = run_gates(p)
     assert report["status"] == "block"
     assert any(i["rule"] == "metadata_numbers" and "썸네일 1 제목" in i["message"] for i in report["items"])
+
+
+def test_source_url_digits_do_not_become_claims_or_evidence():
+    from office.gates import metadata_fact_check
+    packet = {"body": "개인 사례예요.", "evidence": [{"claim": "원문 https://example.com/999?signature=12345"}],
+              "video": {"description": "출처 https://example.com/%EC%97%90/034?expires=1793458799"}}
+    assert metadata_fact_check(packet) == []
+    packet["video"]["description"] += " 실제 비용은 999만 원이에요."
+    issues = metadata_fact_check(packet)
+    assert len(issues) == 1 and issues[0]["level"] == "block" and "999" in issues[0]["message"]

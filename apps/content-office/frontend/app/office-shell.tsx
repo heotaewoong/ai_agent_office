@@ -1306,7 +1306,7 @@ function Studio({
       <div className="editor-panel">
         {job.article?.operator_source_text && <p className="muted" role="status">
           현재 등록 방식: {job.article.preserve_original === true ? "원문 보존 · 영상 파생" : "요약·재작성"} · 등록 원문 {job.article.operator_source_text.length.toLocaleString("ko-KR")}자 · 현재 본문 {body.length.toLocaleString("ko-KR")}자.
-          {job.article.preserve_original === true && (body === job.article.operator_source_text ? " 등록 원문과 현재 본문이 일치합니다. 검수·승인은 별도로 확인하세요." : " 현재 본문이 등록 원문과 다릅니다. 원문 보존 상태와 검수 결과를 확인하세요.")}
+          {job.article.preserve_original === true && (body === job.article.operator_source_text ? " 등록 원문과 현재 본문이 일치합니다. 검수·승인은 별도로 확인하세요." : " 원문은 보존되어 있고 현재 본문은 별도 편집본입니다. 저장·재검수 후 승인①을 받아 제작하세요.")}
         </p>}
         <div className="editor-toolbar">
           <div className="tabs" aria-label="원고와 근거">

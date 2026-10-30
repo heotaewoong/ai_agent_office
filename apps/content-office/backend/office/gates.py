@@ -15,6 +15,8 @@ YMYL_TOPICS = {"finance", "law", "health"}
 
 
 def _numbers(text):
+    # Encoded source URLs are identifiers, not numerical claims or supporting evidence.
+    text = re.sub(r"https?://[^\s<>\[\]()]+", "", text or "")
     return {re.sub(r"(?<=\d),(?=\d)", "", n) for n in NUMBER.findall(text or "")}
 
 

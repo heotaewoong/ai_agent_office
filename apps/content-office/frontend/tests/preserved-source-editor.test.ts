@@ -19,7 +19,7 @@ function collectComponents(node: ts.Node) {
 }
 collectComponents(declaration);
 
-function fixture(preserveOriginal: boolean | undefined) {
+function fixture(preserveOriginal: boolean | undefined, requestBlockedReason?: string) {
   const original = "# 직접 쓴 글\n\n표현과 줄바꿈을 그대로 보존합니다.\n\n```text\n공백  \n```\n";
   const job = { id: "job-preserved", title: "기존 제목", state: "source_review", source_hash: "a".repeat(64),
     article: { id: "own-article", url: "https://example.test/own-article", preserve_original: preserveOriginal, operator_source_text: original },
@@ -35,7 +35,7 @@ function fixture(preserveOriginal: boolean | undefined) {
   const scope = { require, exports: {}, useState, useRef, useEffect, ...workflow, packagingRequired,
     ...Object.fromEntries([...components].map(name => [name, () => null])) };
   const Studio = Function(...Object.keys(scope), `${compiled}\nreturn Studio;`)(...Object.values(scope));
-  const props = { job, busy: false, onDraftChange: (id: string, draft: Record<string, unknown>) => changes.push({ id, draft }),
+  const props = { job, busy: false, requestBlockedReason, onDraftChange: (id: string, draft: Record<string, unknown>) => changes.push({ id, draft }),
     onIntakeChange: () => {}, onBriefDraftChange: () => {}, onOfferDraftChange: () => {}, onSaved: () => {}, onDelivery: () => {},
     action: () => assert.fail("Editing must not start an API action") };
   const text = (value: any): string => Array.isArray(value) ? value.map(text).join("") : value?.props ? text(value.props.children) : typeof value === "string" || typeof value === "number" ? String(value) : "";
@@ -85,4 +85,15 @@ test("요약 모드와 기존 미지정 모드는 본문 편집을 허용하고 
     assert.equal(current.title.props.value, view.job.title);
     assert.match(current.text, /저장하지 않은 변경/);
   }
+});
+
+
+test("작업 시간이 닫혀도 편집·새 버전 저장 버튼을 제공한다", () => {
+  const view = fixture(true, "작업 시간이 종료됐습니다."), initial = view.render();
+  initial.body.props.onChange({ target: { value: "사용자가 직접 수정한 원고" } });
+  const current = view.render();
+  const save = current.nodes.find(node => node.type === "button" && node.props.children === "새 버전 저장");
+  assert.ok(save);
+  assert.equal(save.props.disabled, false);
+  assert.equal(view.job.article.operator_source_text, view.original);
 });
