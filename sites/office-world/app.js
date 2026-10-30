@@ -2903,6 +2903,12 @@
     workbench.init();
     workshop.init();
     results.init();
+    // Optional appearance code must not delay base-world initialization or load in low mode.
+    if (QUALITY === 'high') void Promise.allSettled([
+      import('./arrival-detail.js?v=20261030'),
+      import('./atrium-detail.js?v=20261031'),
+      import('./guide-avatar.js?v=20261031'),
+    ]);
 
     let simTimer = null;
     data.onChange((d) => {

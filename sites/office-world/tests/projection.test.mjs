@@ -65,7 +65,7 @@ function startup(f) {
   const globals = { world, organization: Function('return (' + objectLiteral('organization') + ')')(), hud: { init() {}, rebuild() {}, refresh() {} }, controls: { init() {}, setLayer() {}, animateCamera() {}, setView() {} },
     data: f.data, embed: { init() {}, post(message) { calls.posts.push(message); } },
     workbench: { init() {} }, workshop: { init() {} }, results: { init() {} },
-    space, REDUCED: false, document: f.document, $: f.$, setTimeout: f.setTimeout, setInterval: f.setInterval, clearInterval: f.clearInterval,
+    space, REDUCED: false, QUALITY: 'low', document: f.document, $: f.$, setTimeout: f.setTimeout, setInterval: f.setInterval, clearInterval: f.clearInterval,
     location: { search: '' }, localStorage: { getItem() { return null; } }, isPhone: () => false, notice: f.notice,
     B: { Vector3: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } } }, OVERVIEW_HOME: {} };
   f.data.init = () => {};
