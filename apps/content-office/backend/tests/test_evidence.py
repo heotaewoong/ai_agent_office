@@ -26,6 +26,19 @@ class ExtractingProvider:
 TEXT = '첫번째 문단은 독립 질문과 조건을 설명하는 합성 시험 자료입니다. ' * 6 + '\n\n' + '두번째 문단은 후속 요청이 필요하다는 점을 설명하는 합성 시험 자료입니다. ' * 6
 
 
+def test_community_registration_date_is_not_sent_as_article_publication_date(tmp_path):
+    class Capturing(ExtractingProvider):
+        def generate(self, role, messages, schema, options=None):
+            self.supplied = json.loads(messages[1]['content'])
+            return super().generate(role, messages, schema, options)
+    provider=Capturing()
+    collect_article_evidence({'title':'AI workflow','url':'https://example.com/source','operator_source_text':TEXT,
+                             'source_kind':'community','published_at':'2026-10-30T00:00:00+00:00','date_note':'HN 등록일, 원문 발행일 미확인'},provider,tmp_path)
+    assert provider.supplied['published_at'] is None
+    assert provider.supplied['listing_date']=='2026-10-30T00:00:00+00:00'
+    assert 'HN 등록일' in provider.supplied['date_note']
+
+
 @pytest.mark.parametrize("title", ["편입 공부 경험", "자격증 학습 계획", "업무 생산성 실험"])
 def test_research_preserves_the_source_topic_and_exact_citations(tmp_path, title):
     class CapturingProvider(ExtractingProvider):

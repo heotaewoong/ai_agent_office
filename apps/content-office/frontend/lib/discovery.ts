@@ -1,5 +1,5 @@
 export type ResearchConfig = { platforms: string[]; topic: string; region: string; youtube_channels: string[] };
-export type ResearchCandidate = { id: string; title: string; url: string; feed_name: string; kind: string; signals: Record<string, string | number | null>; published_at: string; observed_at: string; reason: string };
+export type ResearchCandidate = { id: string; title: string; url: string; feed_name: string; kind: string; signals: Record<string, string | number | null>; published_at: string; observed_at: string; date_note?: string | null; signal_note?: string | null; reason: string };
 export type DiscoveryStatus = {
   config: ResearchConfig; config_hash: string; platforms: Record<string, string>; plan: Record<string, string[]>;
   window_open: boolean; stale: boolean; unconnected: string[];

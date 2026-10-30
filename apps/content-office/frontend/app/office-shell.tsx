@@ -536,7 +536,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                     size={17}
                     className={busy === "RSS 수집 요청" ? "spin" : ""}
                   />
-                  RSS 새로 수집
+                  뉴스 새로 수집
                 </button>
               )}
             </div>
@@ -651,13 +651,13 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         <span className="stat-note">선정 가능한 뉴스 후보</span>
                       </div>
                       <div>
-                        <span className="stat-label">연결한 공식 피드</span>
+                        <span className="stat-label">연결한 수집 출처</span>
                         <strong>
                           {dashboard.feeds.length.toString().padStart(2, "0")}
                           <small>개</small>
                         </strong>
                         <span className="stat-note">
-                          실패·빈 피드는 운영 기록에
+                          실패·빈 출처는 운영 기록에
                         </span>
                       </div>
                     </div>

@@ -42,6 +42,7 @@ def hn_articles(raw, feed, fetcher):
                 'feed_id': feed['id'], 'feed_name': feed['name'], 'segment': 'ai', 'language': 'en',
                 'topics': feed['topics'], 'summary': '', 'published_at': datetime.fromtimestamp(stamp, timezone.utc).isoformat(),
                 'date_status': 'valid', 'retrieved_at': now(), 'source_kind': 'community',
+                'date_note': 'HN 등록일입니다. 연결된 원문 발행일은 확인하지 않았습니다',
                 'discussion_url': f'https://news.ycombinator.com/item?id={identity}',
                 'signals': {'hn_points': row.get('score') if type(row.get('score')) is int else None,
                             'hn_comments': row.get('descendants') if type(row.get('descendants')) is int else None},
@@ -66,6 +67,7 @@ def annotate_feed(raw, articles, feed):
             stats = entry.find('.//{http://search.yahoo.com/mrss/}statistics')
             views = stats.get('views', '') if stats is not None else ''
             row.update(source_kind='youtube', signals={'youtube_views': int(views) if views.isdigit() else None},
+                       date_note='공개 피드의 영상 게시일입니다',
                        signal_note='공개 피드 조회 시점의 누적 조회수입니다. 증가율·영상 전사·전체 시청 검증이 아닙니다')
     elif kind == 'google-trends':
         namespace = '{https://trends.google.com/trending/rss}'
@@ -75,9 +77,10 @@ def annotate_feed(raw, articles, feed):
             if row is None:
                 continue
             row.update(source_kind='search_trend', signals={'search_volume_label': item.findtext(namespace + 'approx_traffic')},
+                       date_note='검색 관심 급상승 항목의 관측일이며 원문 발행일이 아닙니다',
                        signal_note='지역별 급상승 검색의 근사 표시입니다. 플랫폼 조회수·정확한 검색량·사실 검증이 아닙니다')
         articles = [r for r in articles if relevant(r['title'] + ' ' + r.get('summary', ''), feed.get('topic', 'AI 자동화'))]
     elif kind == 'google-news':
         for row in articles:
-            row.update(source_kind='news_aggregator', signal_note='Google 뉴스 중개 목록입니다. 발행사 원문과 독립 출처를 확인하세요')
+            row.update(source_kind='news_aggregator', date_note='Google 뉴스 목록의 날짜입니다. 발행사 원문 날짜를 확인하세요', signal_note='Google 뉴스 중개 목록입니다. 발행사 원문과 독립 출처를 확인하세요')
     return articles

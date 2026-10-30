@@ -116,6 +116,7 @@ def record(store, value, articles, report):
         recommendations[platform] = [{'id': r['id'], 'title': r['title'], 'url': r['url'], 'feed_name': r.get('feed_name'),
                                       'kind': r.get('source_kind', 'official'), 'signals': r.get('signals', {}),
                                       'published_at': r.get('published_at'), 'observed_at': r.get('retrieved_at'),
+                                      'date_note': r.get('date_note'), 'signal_note': r.get('signal_note'),
                                       'reason': f"{PLATFORMS[platform]} 조사 우선 출처 + 주제 일치. 반응 수치는 사실 확인이나 흥행 보장이 아닙니다"}
                                      for r in candidates[:6]]
     snapshot = {'config_hash': digest(value), 'config': value, 'checked_at': report['checked_at'],
@@ -129,6 +130,8 @@ def record(store, value, articles, report):
 def status(store):
     value = config(store)
     snapshot = store.setting('discovery_report:' + digest(value)) or store.setting('discovery_report')
+    if snapshot:
+        snapshot = {k: v for k, v in snapshot.items() if k != 'feed_report'}
     with store.connection() as db:
         row = db.execute("SELECT state,updated_at,result FROM tasks WHERE kind='discover' AND json_extract(payload,'$.config_hash')=? ORDER BY created_at DESC LIMIT 1", (digest(value),)).fetchone()
     activity = {'state': row[0], 'updated_at': row[1], 'error': (json.loads(row[2]) if row[2] else {}).get('error')} if row else None

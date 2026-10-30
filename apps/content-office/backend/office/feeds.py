@@ -148,6 +148,8 @@ def rank_articles(articles, current=None, days=7):
                        'news_aggregator': 'Google 뉴스 중개 · 원출처 확인 필요', 'search_trend': 'Google 급상승 검색 · 사실 검증 아님'}.get(article.get('source_kind'))
         if source_note:
             article['score_reasons'][1] = source_note
+            event = {'community': 'HN 등록(원문 발행일 미확인)', 'youtube': '영상 게시', 'news_aggregator': '뉴스 목록 수록', 'search_trend': '검색 관심 관측'}[article['source_kind']]
+            article['score_reasons'][0] = f'최근 {age_days:.1f}일 이내 {event}'
         article["score_note"] = "편집 규칙 점수이며 성과 측정치가 아닙니다"
         if article.get("segment") == "exam":
             article["score"] = round(freshness + 40, 1)
