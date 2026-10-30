@@ -8,7 +8,7 @@ for (const width of [1440, 390]) {
   test(`원고 시작 폼 ${width}px에서 넓은 편집칸과 입력 보존·진행 조건을 제공한다`, async ({ page }) => {
     const fixture = await harness(page, true);
     await page.setViewportSize({ width, height: 1000 });
-    await page.goto("/news");
+    await page.goto("/plans");
     const panel = page.getByRole("region", { name: "내 원고로 콘텐츠 만들기", exact: true });
     const title = panel.getByLabel("콘텐츠 제목", { exact: false });
     const body = panel.getByLabel("원고·자료·만들고 싶은 내용", { exact: false });
@@ -35,7 +35,7 @@ for (const width of [1440, 390]) {
 test("원고 시작 폼의 가져오기 실패는 입력을 보존하고 다시 시도할 수 있다", async ({ page }) => {
   const fixture = await harness(page, true);
   await page.route("**/api/owned-source/preview", route => route.fulfill({ status: 400, json: { detail: "공개 글을 확인할 수 없습니다. 직접 붙여넣어 주세요." } }));
-  await page.goto("/news");
+  await page.goto("/plans");
   const panel = page.getByRole("region", { name: "내 원고로 콘텐츠 만들기", exact: true });
   const body = panel.getByLabel("원고·자료·만들고 싶은 내용", { exact: false });
   await body.fill("실패해도 보존할 원고");
