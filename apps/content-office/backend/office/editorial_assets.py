@@ -24,7 +24,9 @@ def register_assets(store,job_id,source_hash,title,body,files):
         if len(data)>32*1024*1024:raise WorkflowError('검토 파일 용량이 변경되었습니다')
         checksum=hashlib.sha256(data).hexdigest()
         relative=Path(job_id)/source_hash/'editorial'/checksum/name
-        destination=store.artifacts/relative;destination.parent.mkdir(parents=True,exist_ok=True)
+        destination=store.artifacts/relative
+        if not destination.resolve().is_relative_to(store.artifacts.resolve()):raise WorkflowError('검토 파일 경로가 저장 영역 밖입니다')
+        destination.parent.mkdir(parents=True,exist_ok=True)
         if destination.exists() and destination.read_bytes()!=data:raise WorkflowError('같은 검토 파일의 내용이 달라졌습니다')
         destination.write_bytes(data)
         records.append({'name':name,'path':relative.as_posix(),'sha256':checksum,'size':len(data),'media_type':KINDS[Path(name).suffix.lower()]})

@@ -19,4 +19,5 @@ def process(store,payload):
         raise WorkflowError('비공개 전송을 기다리는 동안 원고·출고 승인이 변경되었습니다')
     row=target(store,payload['channel_key'],job)
     if digest(row)!=payload['channel_hash']:raise WorkflowError('전송을 기다리는 동안 대상 채널 설정이 변경되었습니다')
-    return deliver_youtube(store,job['id'],actor='release-approved-private-queue',channel_key=payload['channel_key'])
+    result=deliver_youtube(store,job['id'],actor='release-approved-private-queue',channel_key=payload['channel_key'])
+    return {key:result[key] for key in ('id','external_id','job_id','channel_key','state','visibility','privacy_status','upload_status','processing_status') if key in result}

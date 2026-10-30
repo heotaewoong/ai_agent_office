@@ -1647,6 +1647,7 @@ function Studio({
                           true,
                         );
                         setApprovalVersion(undefined);
+                        onDelivery();
                       },
                       "원고 승인과 제작 요청을 함께 저장했습니다. 제작·출고함에서 진행 상황을 확인하세요.",
                     )

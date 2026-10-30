@@ -35,5 +35,9 @@ def register(app:FastAPI,store):
     def create(request:Intake):
         if not request.owner_confirmed or not request.title.strip() or len(request.body.strip())<100:
             raise WorkflowError('사용 권한과 제목을 확인해 주세요')
-        if request.source_url:reference_url(request.source_url)
+        if request.source_url:
+            try:
+                if any(c.isspace() for c in request.source_url):raise ValueError()
+                reference_url(request.source_url)
+            except ValueError:raise WorkflowError('올바른 공개 HTTPS 원문 주소를 입력해 주세요') from None
         return create_owned_job(store,request.title.strip(),request.body,request.source_url)

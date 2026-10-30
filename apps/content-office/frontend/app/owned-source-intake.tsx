@@ -24,6 +24,7 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
   return <section className="editor-panel" aria-label="내 원고로 콘텐츠 만들기">
     <h2>내 글이나 아이디어로 콘텐츠 만들기</h2>
     <p>공개 티스토리 글을 가져오거나, 만들고 싶은 콘텐츠의 원고를 직접 적어 주세요. 저장 뒤 작업실에서 독자·기획·원고 검수를 이어갑니다.</p>
+    <p className="muted">원고가 아직 없다면 아래 독자 질문이나 기획 직접 등록에서 주제 하나부터 시작할 수 있습니다.</p>
     <fieldset disabled={busy} style={{border:0,padding:0}}>
       <label htmlFor={id+"-url"}>티스토리 공개 글 주소 (직접 작성하면 비워 두세요)</label>
       <input id={id+"-url"} type="url" value={url} maxLength={2000} placeholder="https://내블로그.tistory.com/entry/글주소" onChange={e=>{revision.current++;setUrl(e.target.value);setNotice("");}} />
