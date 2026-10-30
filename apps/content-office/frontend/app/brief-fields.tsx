@@ -60,11 +60,12 @@ export function BriefFields({
       {BRIEF_FIELDS.map((f) => (
         <div key={f.key}>
           <label htmlFor={`${uid}-brief_${f.key}`}>{f.label} (비우면 프리셋 값)</label>
-          <input
+          <textarea
             id={`${uid}-brief_${f.key}`}
             value={String(form[`brief_${f.key}`] ?? "")}
             placeholder={selected?.[f.key] || f.hint}
             maxLength={500}
+            rows={3}
             onChange={(e) => onChange(`brief_${f.key}`, e.target.value)}
           />
         </div>

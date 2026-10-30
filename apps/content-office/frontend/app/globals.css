@@ -3911,11 +3911,13 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .brief-fields > div { min-width: 0; }
 .brief-fields > div:first-of-type, .brief-fields > div:last-child { grid-column: 1 / -1; }
 .brief-fields label { display: block; font-size: 14px; line-height: 1.7; font-weight: 600; margin-bottom: 8px; }
-.brief-fields select, .brief-fields input {
+.brief-fields select, .brief-fields input, .brief-fields textarea {
   box-sizing: border-box; width: 100%; min-width: 0; min-height: 48px;
   padding: 11px 12px; border: 1px solid #bdcbb5; border-radius: 8px;
   font: inherit; font-size: 16px; line-height: 1.7; color: var(--ink); background: #fff;
 }
+.brief-fields textarea { min-height: 112px; resize: vertical; }
+.studio-section .brief-fields textarea { min-height: 112px; font-size: 16px; line-height: 1.7; }
 .brief-fields .muted { font-size: 13px; line-height: 1.8; margin-top: 8px; }
 @media(max-width:760px) {
   .brief-fields { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 18px; }
