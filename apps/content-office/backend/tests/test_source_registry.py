@@ -36,3 +36,12 @@ def test_dashboard_adds_source_metadata_without_rewriting_saved_articles(tmp_pat
     assert body['articles'][0]['segment'] == 'ai'
     assert len(body['source_registry']) == 11
     assert store.articles_list()[0] == row
+
+
+def test_busy_ai_sources_cannot_starve_exam_notices():
+    from office.source_registry import visible_articles
+    rows=[{'id':str(i),'segment':'ai'} for i in range(90)]+[{'id':'exam','segment':'exam'}]
+    visible=visible_articles(rows)
+    assert len(visible)==80
+    assert any(row['id']=='exam' for row in visible)
+    assert visible[0]['id']=='0'
