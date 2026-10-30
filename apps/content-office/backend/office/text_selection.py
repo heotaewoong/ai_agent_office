@@ -46,7 +46,7 @@ def select_profile(store, identity, *, actor):
     record = {'id': identity, 'selected_by': actor[:120], 'selected_at': now()}
     store.set_setting('text_profile', record)
     store.set_setting('model', identity)
-    store.event('text_profile_selected', {**record, 'name': PROFILES[identity], 'provider': provider_for(identity), 'automatic_fallback': False, 'paid_call_made': False})
+    store.event('text_profile_selected', {**record, 'name': PROFILES[identity], 'provider': 'codex-subscription' if identity == 'codex-subscription-text' else provider_for(identity), 'automatic_fallback': False, 'paid_call_made': False})
     return profile_summary(store)
 
 

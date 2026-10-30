@@ -142,7 +142,12 @@ print(json.dumps({{"type": "turn.completed"}}))
     got, thread = run_codex("배경 한 장")
     seen = json.loads((tmp_path / "seen.json").read_text())
     assert got == raw and thread == "01a188ad-a2d8-70e1-84cd-f26012a81c1d"
-    assert seen["keys"] == [] and seen["argv"][:5] == ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--json"]
+    assert seen["keys"] == []
+    args = seen["argv"]
+    assert args[0] == "exec" and "--skip-git-repo-check" in args and "--json" in args
+    assert args[args.index("--sandbox") + 1] == "read-only"
+    assert "--ignore-user-config" in args and 'forced_login_method="chatgpt"' in args
+    assert "shell_tool" in args and "unified_exec" in args
     assert not (home / "generated_images" / thread).exists()
 
 
@@ -172,3 +177,12 @@ def test_status_needs_cli_and_login_file_without_reading_it(tmp_path, monkeypatc
     assert codex_status()["configured"] is True
     monkeypatch.setenv("CONTENT_OFFICE_CODEX_BIN", "definitely-not-installed-codex")
     assert codex_status()["configured"] is False
+
+
+def test_user_installed_binary_is_found_without_service_path(tmp_path,monkeypatch):
+    from office import codex_image_provider as cp
+    monkeypatch.delenv("CONTENT_OFFICE_CODEX_BIN",raising=False)
+    monkeypatch.setattr(cp.shutil,"which",lambda *args:None)
+    monkeypatch.setattr(cp.Path,"home",lambda:tmp_path)
+    binary=tmp_path/".local/node/bin/codex";binary.parent.mkdir(parents=True);binary.write_text("test");binary.chmod(0o755)
+    assert cp.codex_binary()==str(binary)
