@@ -1481,7 +1481,9 @@ function Studio({
               <h3>
                 {job.state === "source_approved"
                   ? "이 원고로 제작할 준비가 됐어요"
-                  : "읽고 확인한 원고만 다음으로"}
+                  : job.state === "release_review" || job.state === "partial_release_review"
+                    ? "제작을 마쳤어요. 설정을 바꿨다면 다시 만들 수 있어요"
+                    : "읽고 확인한 원고만 다음으로"}
               </h3>
               <p>
                 {dirty
@@ -1492,9 +1494,9 @@ function Studio({
               </p>
             </div>
             <div className="approval-actions">
-              {job.state === "source_approved" ? (
+              {["source_approved", "release_review", "partial_release_review"].includes(job.state) ? (
                 <button
-                  className="button primary"
+                  className={job.state === "source_approved" ? "button primary" : "button secondary"}
                   disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
                   onClick={() =>
                     void action(
@@ -1507,7 +1509,7 @@ function Studio({
                     )
                   }
                 >
-                  선택 항목 제작 시작
+                  {job.state === "source_approved" ? "선택 항목 제작 시작" : "현재 설정으로 다시 제작"}
                   <Icon name="arrow" size={17} />
                 </button>
               ) : (
