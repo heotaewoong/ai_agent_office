@@ -3924,6 +3924,9 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .brief-panel details{margin-top:12px}
 .brief-panel details>summary{cursor:pointer;font-size:12px;color:#5e6853}
 .brief-panel .editor-fields{padding:12px 0}
+.studio-section .brief-panel .editor-fields { padding: 12px 0; }
+.studio-section .brief-fields label { font-size: 14px; }
+@media(max-width:760px) { .brief-panel { padding: 18px 12px; } }
 .brief-rows { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,220px),1fr)); gap: 12px; margin: 18px 0 0; }
 .brief-rows div { min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: #fafbf6; }
 .brief-rows dt { font-size: 12px; color: #56644b; line-height: 1.6; }
