@@ -168,3 +168,28 @@ test("central control is safe before the first projection arrives", () => {
   const open = method("hud", "openBrain", {space:{data:null}});
   assert.doesNotThrow(() => open());
 });
+
+test('dev team becomes a connected team from /api/space dev status with an auto-deploy switch', () => {
+  const devTeam = method('organization', 'devTeam');
+  const project = method('organization', 'project', { organization: { devTeam } });
+  const dev = { version: 1, enabled: false, watcher_installed: true,
+    watcher: { decision: 'waiting_ci', label: 'GitHub 검증 기다림', reason: 'GitHub 검증 진행 중', origin: 'b'.repeat(40), ci: { state: 'pending' } },
+    running: { commit: 'aaaaaaaaaa', deployed_at: '2026-10-30T05:00:00+00:00', ci_verified: true },
+    deployments: [{ id: '20261030T050000Z-1', status: 'deployed', label: '배포 완료', commit: 'aaaaaaaaaa', ci_verified: true },
+                  { id: '20261030T040000Z-2', status: 'checks_failed', label: '빌드 실패', commit: 'cccccccccc', ci_verified: false }] };
+  const team = project({ ...fixture(), dev }).stages.find(st => st.teamId === 'dev');
+  assert.equal(team.connection, 'dev');
+  assert.match(team.approval, /자동 배포 꺼짐/);
+  const auto = team.items.find(it => it.id === 'dev-auto');
+  assert.deepEqual(auto.actions, [{ id: 'auto-deploy-on', label: '자동 배포 켜기' }]);
+  assert.match(team.items.find(it => it.id === 'dev-main').stateLabel, /GitHub 검증 진행 중/);
+  assert.match(team.items.find(it => it.id === 'dev-running').stateLabel, /GitHub에서 검증한 커밋/);
+  assert.equal(team.items.filter(it => it.id.startsWith('dev-deploy-')).length, 2);
+  assert.equal(team.items.find(it => it.id === 'dev-deploy-20261030T040000Z-2').state, 'failed');
+  const on = project({ ...fixture(), dev: { ...dev, enabled: true, watcher: { ...dev.watcher, decision: 'needs_dependencies' } } }).stages.find(st => st.teamId === 'dev');
+  assert.deepEqual(on.items.find(it => it.id === 'dev-auto').actions, [{ id: 'auto-deploy-off', label: '자동 배포 끄기' }]);
+  assert.equal(on.items.find(it => it.id === 'dev-main').needsHuman, true);
+  const without = method('organization', 'project')(fixture()).stages.find(st => st.teamId === 'dev');
+  assert.equal(without.connection, 'planned');
+  assert.equal(without.items.length, 0);
+});

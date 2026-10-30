@@ -168,6 +168,49 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(info['tests']['backend'], {'passed': 5, 'failed': 0, 'skipped': 0, 'errors': 0})
         self.assertEqual(info['tests']['frontend'], {'passed': 6, 'failed': 0})
 
+    def test_ci_verified_deploy_runs_no_server_tests_but_still_builds(self):
+        value = self.h.deployment()
+        value.ci = {'source': 'github-actions', 'check': 'verify', 'url': 'https://github.com/o/r/runs/1'}
+        seen, inner = [], value.runner
+        def recording(command, *, cwd, env=None):
+            seen.append([str(part) for part in command])
+            return inner(command, cwd=cwd, env=env)
+        value.runner = recording
+        release = value.execute()
+        tools = [cmd for cmd in seen if cmd[0] not in ('git', 'bash')]
+        self.assertTrue(tools and all('build' in cmd for cmd in tools), tools)
+        self.assertFalse(any('pytest' in cmd or '--test' in cmd or 'node_modules/typescript/bin/tsc' in cmd for cmd in seen))
+        info = json.loads((self.h.state / 'runtime/build-info.json').read_text())
+        self.assertEqual(info['tests'], {'ci': value.ci})
+        self.assertTrue((release / 'tests.skipped').is_file())
+        self.assertEqual(json.loads((release / 'deployment.json').read_text())['ci'], value.ci)
+
+    def test_ci_verification_needs_a_passed_verify_run_for_the_exact_commit(self):
+        sha = self.h.target
+        class Opener:
+            def __init__(self, payload): self.payload, self.urls = payload, []
+            def open(self, url, timeout=None):
+                self.urls.append(url)
+                return io.BytesIO(json.dumps(self.payload).encode())
+        run = {'name': 'verify', 'head_sha': sha, 'status': 'completed', 'conclusion': 'success',
+               'html_url': 'https://github.com/o/r/runs/2', 'completed_at': '2026-10-30T05:00:00Z'}
+        opener = Opener({'check_runs': [run]})
+        result = deploy.ci_verification('o/r', sha, opener=opener)
+        self.assertEqual(result['url'], run['html_url'])
+        self.assertIn('/commits/' + sha + '/check-runs', opener.urls[0])
+        for payload in ({'check_runs': []}, {'check_runs': [{**run, 'conclusion': 'failure'}]},
+                        {'check_runs': [{**run, 'status': 'in_progress', 'conclusion': None}]},
+                        {'check_runs': [{**run, 'head_sha': self.h.previous}]},
+                        {'check_runs': [run, {**run, 'conclusion': 'failure'}]}):
+            with self.assertRaisesRegex(deploy.DeployError, 'has not passed'):
+                deploy.ci_verification('o/r', sha, opener=Opener(payload))
+        with self.assertRaisesRegex(deploy.DeployError, 'owner/repo'):
+            deploy.ci_verification('not a slug', sha, opener=opener)
+        class Broken:
+            def open(self, url, timeout=None): raise OSError('offline')
+        with self.assertRaisesRegex(deploy.DeployError, 'not skipped'):
+            deploy.ci_verification('o/r', sha, opener=Broken())
+
     def test_dirty_source_blocks_before_checks_or_service_changes(self):
         (self.h.repo / 'source.txt').write_text('operator edit')
         with self.assertRaisesRegex(deploy.DeployError, 'Tracked changes'):

@@ -31,6 +31,34 @@ class DeployError(RuntimeError):
         self.output = output
 
 
+CI_CHECK = 'verify'
+SLUG = re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+
+
+def ci_verification(slug, sha, *, opener=None):
+    """Ask GitHub directly whether this exact commit passed the off-server `verify` check.
+
+    Server-side tests are skipped only when this returns; a flag alone never skips them.
+    """
+    if not SLUG.match(slug or '') or not re.fullmatch(r'[0-9a-f]{40}', sha or ''):
+        raise DeployError('CI verification needs owner/repo and a full 40-character SHA.')
+    opener = opener or build_opener()
+    url = 'https://api.github.com/repos/' + slug + '/commits/' + sha + '/check-runs?check_name=' + CI_CHECK + '&per_page=20'
+    try:
+        with opener.open(url, timeout=15) as response:
+            payload = json.load(response)
+    except (OSError, ValueError) as error:
+        raise DeployError('Could not read the GitHub verification result; server tests were not skipped.') from error
+    runs = [run for run in payload.get('check_runs', []) if run.get('name') == CI_CHECK and run.get('head_sha') == sha]
+    passed = [run for run in runs if run.get('status') == 'completed' and run.get('conclusion') == 'success']
+    failed = [run for run in runs if run.get('status') == 'completed' and run.get('conclusion') != 'success']
+    if not passed or failed:
+        state = ', '.join(sorted({str(run.get('conclusion') or run.get('status')) for run in runs})) or 'missing'
+        raise DeployError('GitHub verification has not passed for this commit (' + state + '); nothing was deployed.')
+    best = max(passed, key=lambda run: run.get('completed_at') or '')
+    return {'source': 'github-actions', 'check': CI_CHECK, 'repo': slug, 'url': best.get('html_url'), 'completed_at': best.get('completed_at')}
+
+
 def run(command, *, cwd, env=None):
     try:
         result = subprocess.run([str(part) for part in command], cwd=cwd, env=env, capture_output=True,
@@ -55,8 +83,10 @@ def isolated_env(parent, folder):
 
 
 class Deployment:
-    def __init__(self, repo, state, target, *, runner=run, lock_type=None, identity=None):
+    def __init__(self, repo, state, target, *, runner=run, lock_type=None, identity=None, ci=None):
         self.repo, self.state, self.target = Path(repo).resolve(), Path(state).resolve(), target.lower()
+        # ci: the result of ci_verification() for this exact target. When present, tests ran off-server.
+        self.ci = ci
         self.app = self.repo / APP_PATH
         if self.state.is_relative_to(self.repo) or self.app.resolve() != self.app:
             raise DeployError('State must be outside the checkout and the app path must not escape it.')
@@ -177,14 +207,19 @@ class Deployment:
             raise DeployError('Existing Linux venv Python and Node must already be installed.')
         with tempfile.TemporaryDirectory(prefix='office-deploy-check-') as isolated:
             env = isolated_env(self.env, Path(isolated))
-            backend = self.check('backend', [python, '-m', 'pytest', '-q'], app / 'backend', env)
-            if (app / 'scripts/tests/test_deploy_ec2.py').is_file():
-                self.check('deployment', [python, '-m', 'unittest', 'discover', '-s', str(app / 'scripts/tests'), '-p', 'test_deploy_ec2.py'], stage, env)
-            self.check('typecheck', [node, 'node_modules/typescript/bin/tsc', '--noEmit', '--incremental', 'false'], app / 'frontend', env)
-            frontend = self.check('frontend', [node, '--experimental-strip-types', '--test', *sorted((app / 'frontend/tests').glob('*.test.ts'))], app / 'frontend', env)
-            world = sorted((stage / 'sites/office-world/tests').glob('*.test.mjs'))
-            if world:
-                self.check('world', [node, '--test', *world], stage, env)
+            if self.ci:
+                # The same exact commit already passed every test off-server; only build what will run here.
+                (self.release / 'tests.skipped').write_text('Tests ran off-server: ' + json.dumps(self.ci, ensure_ascii=False) + '\n', encoding='utf-8')
+                backend = frontend = ''
+            else:
+                backend = self.check('backend', [python, '-m', 'pytest', '-q'], app / 'backend', env)
+                if (app / 'scripts/tests/test_deploy_ec2.py').is_file():
+                    self.check('deployment', [python, '-m', 'unittest', 'discover', '-s', str(app / 'scripts/tests'), '-p', 'test_deploy_ec2.py'], stage, env)
+                self.check('typecheck', [node, 'node_modules/typescript/bin/tsc', '--noEmit', '--incremental', 'false'], app / 'frontend', env)
+                frontend = self.check('frontend', [node, '--experimental-strip-types', '--test', *sorted((app / 'frontend/tests').glob('*.test.ts'))], app / 'frontend', env)
+                world = sorted((stage / 'sites/office-world/tests').glob('*.test.mjs'))
+                if world:
+                    self.check('world', [node, '--test', *world], stage, env)
             self.check('build', [node, 'node_modules/next/dist/bin/next', 'build', '--webpack'], app / 'frontend', env)
         if not (app / 'frontend/.next/BUILD_ID').is_file():
             raise DeployError('The staged production build has no BUILD_ID.')
@@ -237,7 +272,7 @@ class Deployment:
                 resume.append('OFFICE_ENV_FILE=' + self.env['OFFICE_ENV_FILE'])
             resume += [str(self.app / 'backend/.venv/bin/python'), str(helper), '<reviewed-40-character-SHA>', '--repo', str(self.repo)]
             self.record('checking', previous=previous, business_hash=fingerprint, repo=str(self.repo), state_dir=str(self.state),
-                        preserved_helper=str(helper), next_deploy_command=resume)
+                        preserved_helper=str(helper), next_deploy_command=resume, ci=self.ci)
             build = self.app / 'frontend/.next'
             before = build.with_name('.next.before-' + run_id)
             candidate = build.with_name('.next.candidate-' + run_id)
@@ -273,7 +308,7 @@ class Deployment:
                 front_counts = {word: int(n) for word, n in re.findall(r'(?:# |ℹ )(pass|fail) (\d+)', frontend)}
                 build_info = {'commit': self.target, 'deployed_at': datetime.now(timezone.utc).isoformat(),
                               'raw': {'backend': backend[-300:], 'frontend': frontend[-300:]},
-                              'tests': {'backend': counts, 'frontend': {'passed': front_counts.get('pass', 0), 'failed': front_counts.get('fail', 0)}}}
+                              'tests': {'ci': self.ci} if self.ci else {'backend': counts, 'frontend': {'passed': front_counts.get('pass', 0), 'failed': front_counts.get('fail', 0)}}}
                 self.validate_state_paths()
                 info.write_text(json.dumps(build_info, ensure_ascii=False), encoding='utf-8')
                 self.record('deployed', actual_head=self.clean_head(self.target), previous_build=str(before), business_unchanged=True)
@@ -315,6 +350,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('target', help='Reviewed full 40-character Git commit SHA; fetch separately first')
     parser.add_argument('--repo', type=Path, help='Explicit live repository root when using the preserved recovery helper')
+    parser.add_argument('--ci-verified-repo', metavar='OWNER/REPO',
+                        help='Skip server-side tests only if GitHub reports the `verify` check passed for this exact commit')
     args = parser.parse_args()
     app = Path(__file__).resolve().parents[1]
     repo = args.repo.resolve() if args.repo else Path(run(['git', 'rev-parse', '--show-toplevel'], cwd=app).strip()).resolve()
@@ -323,7 +360,8 @@ def main():
     state = Path(os.environ.get('OFFICE_STATE_DIR', str(Path.home() / '.local/state/heobrain-content-office')))
     operation = None
     try:
-        operation = Deployment(repo, state, args.target)
+        ci = ci_verification(args.ci_verified_repo, args.target.lower()) if args.ci_verified_repo else None
+        operation = Deployment(repo, state, args.target, ci=ci)
         path = operation.execute()
         print('Deployed exact commit ' + args.target + '; verification artifacts: ' + str(path))
     except (DeployError, OSError, ValueError) as error:

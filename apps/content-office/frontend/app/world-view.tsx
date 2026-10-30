@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
+import { api } from "../lib/api";
+import { isDevAction, parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
 
 type View = "news" | "studio" | "delivery" | "activity" | "world";
 
@@ -52,8 +53,14 @@ export function WorldView({
       } else if (message.type === "action") {
         inFlight.current = true;
         try {
-          await current.onAction(message.action, message.itemId);
-          post({ type: "result", ok: true, message: "요청했습니다" });
+          if (isDevAction(message.action)) {
+            const on = message.action === "auto-deploy-on";
+            await api.setAutoDeploy(on);
+            post({ type: "result", ok: true, message: on ? "자동 배포를 켰습니다" : "자동 배포를 껐습니다" });
+          } else {
+            await current.onAction(message.action, message.itemId);
+            post({ type: "result", ok: true, message: "요청했습니다" });
+          }
           post({ type: "refresh" });
         } catch (cause) {
           post({

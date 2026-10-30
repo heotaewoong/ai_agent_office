@@ -21,3 +21,12 @@ test("라우팅: 처리 중·미연결·진행 중 요청은 응답", () => {
   assert.deepEqual(routeWorldMessage(m, { ...idle, inFlight: true }), { kind: "reply", ok: false, message: "이미 처리 중입니다" });
   assert.deepEqual(routeWorldMessage(m, { ...idle, connected: false }), { kind: "reply", ok: false, message: "연결을 확인해 주세요" });
 });
+
+test("개발 팀 자동 배포 스위치 신호는 통과하고 콘텐츠 작업과 구분된다", async () => {
+  const { isDevAction } = await import("../lib/world-bridge.ts");
+  const on = parseWorldMessage({ source: "office-world", type: "action", action: "auto-deploy-on", itemId: "dev-auto" });
+  assert.deepEqual(on, { type: "action", action: "auto-deploy-on", itemId: "dev-auto" });
+  assert.equal(parseWorldMessage({ source: "office-world", type: "action", action: "deploy-now", itemId: "dev-auto" }), null);
+  assert.equal(isDevAction("auto-deploy-off"), true);
+  assert.equal(isDevAction("draft"), false);
+});

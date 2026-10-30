@@ -1,10 +1,16 @@
 export type WorldMessage =
   | { type: "ready" }
   | { type: "open"; view: "news" | "studio" | "delivery" | "activity"; itemId: string }
-  | { type: "action"; action: "draft" | "produce"; itemId: string };
+  | { type: "action"; action: WorldAction; itemId: string };
 
+export type WorldAction = "draft" | "produce" | "auto-deploy-on" | "auto-deploy-off";
 const VIEWS = ["news", "studio", "delivery", "activity"];
-const ACTIONS = ["draft", "produce"];
+const ACTIONS: WorldAction[] = ["draft", "produce", "auto-deploy-on", "auto-deploy-off"];
+
+/** 개발 팀 스위치는 콘텐츠 작업이 아니므로 작업 선택·진행 중 상태와 무관하게 처리한다. */
+export function isDevAction(action: WorldAction): action is "auto-deploy-on" | "auto-deploy-off" {
+  return action === "auto-deploy-on" || action === "auto-deploy-off";
+}
 
 export function parseWorldMessage(data: unknown): WorldMessage | null {
   if (!data || typeof data !== "object") return null;
@@ -14,8 +20,8 @@ export function parseWorldMessage(data: unknown): WorldMessage | null {
   if (typeof d.itemId !== "string") return null;
   if (d.type === "open" && typeof d.view === "string" && VIEWS.includes(d.view))
     return { type: "open", view: d.view as "news", itemId: d.itemId };
-  if (d.type === "action" && typeof d.action === "string" && ACTIONS.includes(d.action))
-    return { type: "action", action: d.action as "draft", itemId: d.itemId };
+  if (d.type === "action" && typeof d.action === "string" && (ACTIONS as string[]).includes(d.action))
+    return { type: "action", action: d.action as WorldAction, itemId: d.itemId };
   return null;
 }
 
