@@ -888,10 +888,10 @@ test("모바일 출고함 중간 구역으로 이동하면 현재 위치도 같�
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/publish?job=contract-test-job");
   const select = page.getByRole("combobox", { name: "목차 바로 이동", exact: true });
-  const option = select.locator("option").filter({ hasText: "현재 제작물 미리보기" });
+  const option = select.locator("option").filter({ hasText: "출고 승인" });
   const value = await option.getAttribute("value");
   await select.selectOption(value!);
-  await expect(page.locator(".outline-location")).toContainText("현재 제작물 미리보기");
+  await expect(page.locator(".outline-location")).toContainText("출고 승인");
   await expect(select).toHaveValue(value!);
   const target = page.locator(`[id="${value}"]`);
   await expect(target).toBeFocused();
@@ -913,6 +913,20 @@ test("목차를 오가도 저장하지 않은 원고가 유지되고 숨긴 구�
   expect(fixture.writes).toEqual([]);
 });
 
+
+test("출고함은 현재 제작물부터 네 구역으로 안내하고 탐색만으로 승인하지 않는다", async ({ page }) => {
+  const fixture = await harness(page, true, true);
+  await page.goto("/publish?job=contract-test-job");
+  const links = page.getByRole("navigation", { name: "이 페이지 목차", exact: true }).locator(".outline-links a");
+  await expect(links).toHaveText(["01현재 제작물", "02출고 승인", "03채널 전달", "04편집본·이전 기록"]);
+  await expect(page.getByRole("region", { name: "출고 준비 요약" })).toBeVisible();
+  for (const title of ["출고 승인", "채널 전달", "편집본·이전 기록", "현재 제작물"]) {
+    await links.filter({ hasText: title }).click();
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeFocused();
+    await expect(page.locator(".outline-location")).toContainText(title);
+  }
+  expect(fixture.writes).toEqual([]);
+});
 
 test("작업실 목차는 핵심 제작물 6개만 표시하고 세부 패널을 펼쳐도 늘어나지 않는다", async ({ page }) => {
   const fixture = await harness(page, true);
