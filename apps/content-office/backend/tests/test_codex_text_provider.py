@@ -43,3 +43,28 @@ def test_cli_path_includes_node_sibling_for_service_process(monkeypatch,tmp_path
     binary=tmp_path/"bin"/"codex"
     monkeypatch.setenv("PATH","/usr/bin")
     assert cp.cli_environment(str(binary))["PATH"].split(cp.os.pathsep)[0]==str(binary.parent)
+
+
+def test_optional_nested_scene_schema_restores_absence_without_mutation():
+    from office.editorial import DRAFT_SCHEMA
+    import copy
+    original=copy.deepcopy(DRAFT_SCHEMA)
+    wire=cp.codex_schema(DRAFT_SCHEMA)
+    scene=wire['properties']['video']['properties']['scenes']['items']
+    assert 'footage' in scene['required']
+    assert {'type':'null'} in scene['properties']['footage']['anyOf']
+    assert DRAFT_SCHEMA==original
+    value={'video':{'scenes':[{'caption':'확인','footage':None}]}}
+    assert cp.restore_optional_fields(value,DRAFT_SCHEMA)=={'video':{'scenes':[{'caption':'확인'}]}}
+    assert cp.restore_optional_fields({'answer':None},SCHEMA)=={'answer':None}
+
+
+def test_known_schema_rejection_is_not_an_unknown_model_result(tmp_path,monkeypatch):
+    s=ready(tmp_path)
+    def fail(*args):raise cp.CodexSchemaRejected('schema rejected')
+    monkeypatch.setattr(cp,'run_codex',fail)
+    with pytest.raises(cp.CodexSchemaRejected):Provider(s).generate('gen',[],SCHEMA)
+    with s.connection() as db:
+        row=db.execute('SELECT state,actual_krw,data FROM costs').fetchone()
+    assert row['state']=='settled' and row['actual_krw']==0
+    assert 'schema_rejected_before_generation' in row['data']
