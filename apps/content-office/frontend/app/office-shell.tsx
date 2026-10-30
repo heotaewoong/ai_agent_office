@@ -58,6 +58,7 @@ import { QuestionsPanel } from "./questions-panel";
 import { OwnedSourceIntake } from "./owned-source-intake";
 import { EditorialAssetsPanel } from "./editorial-assets-panel";
 import { ImprovementPanel } from "./improvement-panel";
+import { JobClipProfile } from "./job-clip-profile";
 import { productionNext } from "../lib/production-next";
 import { NewsletterPanel } from "./newsletter-panel";
 import { withoutOAuthParams, youtubeOAuthResult } from "../lib/youtube-oauth";
@@ -1550,6 +1551,7 @@ function Studio({
             <div className="approval-actions">
               {["source_approved", "release_review", "partial_release_review"].includes(job.state) ? (
                 <ProduceButton
+                  key={`produce-${job.source_hash}-${job.clip_profile_override?.selected_at??'global'}`}
                   jobId={job.id}
                   className={job.state === "source_approved" ? "button primary" : "button secondary"}
                   disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
@@ -1718,6 +1720,7 @@ function Studio({
       <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       <EditorialAssetsPanel job={job} />
       <ImprovementPanel key={job.id} job={job} />
+      <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
       <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
     </>
@@ -2048,6 +2051,7 @@ function Delivery({
       )}
       <EditorialAssetsPanel job={job} />
       <ImprovementPanel key={job.id} job={job} />
+      <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
       {files.length === 0 ? (
         <Empty
           title={
@@ -2064,6 +2068,7 @@ function Delivery({
           </Link>}
           {job.state === "source_approved" && (
             <ProduceButton
+              key={`produce-${job.source_hash}-${job.clip_profile_override?.selected_at??'global'}`}
               jobId={job.id}
               className="button primary"
               disabled={busy || Boolean(requestBlockedReason)}

@@ -98,9 +98,33 @@ def set_clip_limits(store, *, max_clips_per_video, daily_paid_clips, actor):
     return clip_limits(store)
 
 
+def profile_for_job(store, job):
+    override = job.get('clip_profile_override')
+    if override is None:
+        return profile_summary(store)
+    if not isinstance(override, dict) or override.get('id') != 'none':
+        raise WorkflowError('작업별 영상 프로필을 확인하세요')
+    return {'id': 'none', **PROFILES['none'], 'paid': False, 'scope': 'this_job_only', 'automatic_fallback': False}
+
+
+def set_job_clip_profile(store, job_id, profile, source_hash, override_hash, actor):
+    from .store import digest
+    if profile not in ('none', 'global'):
+        raise WorkflowError('작업별 선택은 추가 유료 클립 없음 또는 전역 설정입니다')
+    with store.connection(transaction=True) as db:
+        job = store._job(db, job_id)
+        if job.get('source_hash') != source_hash or digest(job.get('clip_profile_override')) != override_hash:
+            raise WorkflowError('원고 또는 작업별 영상 설정이 바뀌었습니다. 다시 확인하세요')
+        if db.execute("SELECT 1 FROM tasks WHERE kind='produce' AND state IN ('queued','running','unknown') AND json_extract(payload,'$.job_id')=?", (job_id,)).fetchone():
+            raise WorkflowError('제작 대기·실행·결과 불명 작업이 있습니다. 설정을 바꾸기 전에 결과를 확인하세요')
+        job['clip_profile_override'] = {'id':'none','selected_by':actor,'selected_at':now()} if profile == 'none' else None
+        store._event(db, 'job_clip_profile_selected', {'profile':profile,'actor':actor,'source_hash':source_hash}, job_id)
+        return store._write_job(db, job)
+
+
 def paid_clip_estimate(store, job):
     """What a production of this job may pay for generated clips, shown before the operator confirms."""
-    profile = profile_summary(store)
+    profile = profile_for_job(store, job)
     scenes = (job.get('source_packet') or {}).get('video', {}).get('scenes', []) or []
     if not profile['paid'] or not job.get('selections', {}).get('video') or not scenes:
         return {'paid': False, 'clips': 0, 'credits': 0, 'reservation_krw': 0, 'label': ''}
@@ -119,7 +143,7 @@ def paid_clip_estimate(store, job):
 
 
 def clip_renderer_for_job(store, job):
-    profile = profile_summary(store)
+    profile = profile_for_job(store, job)
     if profile['id'] == 'none' or not job.get('selections', {}).get('video'):
         return None
     scenes = (job.get('source_packet') or {}).get('video', {}).get('scenes', [])

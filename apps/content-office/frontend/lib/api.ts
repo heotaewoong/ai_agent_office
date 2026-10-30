@@ -114,6 +114,8 @@ async function request<T>(
 }
 
 export const api = {
+  jobClipProfile: (jobId: string) => request<{source_hash:string|null;override_hash:string;effective:{id:string;paid:boolean};global_profile_id:string}>(`/jobs/${encodeURIComponent(jobId)}/clip-profile`),
+  setJobClipProfile: (jobId: string, body: {source_hash:string;profile:"none"|"global";override_hash:string}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/clip-profile`,"PUT",body),
   improvementWorkspace: (jobId: string) => request<import("./improvements").ImprovementWorkspace>(`/jobs/${encodeURIComponent(jobId)}/improvements`),
   saveQualityReview: (jobId: string, body: Record<string, unknown>) => request(`/jobs/${encodeURIComponent(jobId)}/quality-reviews`, "POST", body),
   addExperience: (body: Record<string, unknown>) => request("/experiences", "POST", body),

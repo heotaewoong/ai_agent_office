@@ -204,6 +204,7 @@ export type Job = {
     decision?: string;
   };
   source_approval?: {version?: string; decision?: string; selections?: Selections} | null;
+  clip_profile_override?: {id:string;selected_at?:string;selected_by?:string} | null;
   brief?: Brief | null;
   brief_hash?: string;
   offer?: Offer | null;

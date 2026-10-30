@@ -22,6 +22,11 @@ class Revision(Input):
     expected_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
+class JobClip(Versioned):
+    profile: Literal['none', 'global']
+    override_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
 class Review(Versioned):
     case_id: str = Field(default='', pattern=r'^(?:[AB](?:0[1-9]|10))?$')
     target_id: str = Field(min_length=1, max_length=100)
@@ -68,6 +73,17 @@ class Outcome(Versioned):
 
 
 def register(app: FastAPI, store):
+    @app.get('/api/jobs/{job_id}/clip-profile')
+    def clip_profile(job_id: str):
+        from .video_selection import profile_for_job
+        job = store.job(job_id)
+        return {'source_hash':job.get('source_hash'),'override_hash':digest(job.get('clip_profile_override')),'effective':profile_for_job(store,job),'global_profile_id':(store.setting('clip_profile') or {}).get('id','none')}
+
+    @app.put('/api/jobs/{job_id}/clip-profile')
+    def choose_clip_profile(job_id: str, request: JobClip):
+        from .video_selection import set_job_clip_profile
+        return set_job_clip_profile(store,job_id,request.profile,request.source_hash,request.override_hash,'local-operator')
+
     @app.get('/api/jobs/{job_id}/improvements')
     def get_workspace(job_id: str):
         return workspace(store, job_id)

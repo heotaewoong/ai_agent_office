@@ -156,3 +156,26 @@ def test_registered_local_photos_render_in_safe_draft_preview(context,tmp_path):
     response=client.get(f'/api/jobs/{job["id"]}/drafts/{draft["id"]}/preview')
     assert response.status_code==200 and f'/drafts/{draft["id"]}/files/original.png' in response.text
     assert '<script>alert(1)</script>' not in response.text and "script-src 'none'" in response.headers['content-security-policy']
+
+
+def test_job_can_skip_paid_clips_without_changing_global_profile_or_approval(context):
+    store,job,client,headers=context
+    from office.video_selection import paid_clip_estimate,clip_renderer_for_job
+    store.set_setting('clip_profile',{'id':'runway-grok-lite'})
+    before=store.job(job['id']); budget=store.budget()
+    path=f'/api/jobs/{job["id"]}/clip-profile'
+    settings=client.get(path).json()
+    assert settings['effective']['id']=='runway-grok-lite'
+    body={'source_hash':job['source_hash'],'override_hash':settings['override_hash'],'profile':'none'}
+    assert client.put(path,json=body).status_code==403
+    r=client.put(path,json=body,headers=headers)
+    assert r.status_code==200
+    current=store.job(job['id'])
+    assert current['clip_profile_override']['id']=='none' and clip_renderer_for_job(store,current) is None
+    assert paid_clip_estimate(store,current)['paid'] is False
+    assert store.setting('clip_profile')=={'id':'runway-grok-lite'} and store.budget()==budget
+    assert all(current.get(k)==before.get(k) for k in ['source_hash','source_packet','source_approval','release_approval','manifest','selections'])
+    assert client.put(path,json=body,headers=headers).status_code==409
+    fresh=client.get(path).json()
+    task=store.enqueue('produce',{'job_id':job['id'],'source_hash':job['source_hash']},key='clip-scope-test')
+    assert client.put(path,json={**body,'profile':'global','override_hash':fresh['override_hash']},headers=headers).status_code==409
