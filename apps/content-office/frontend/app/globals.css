@@ -4412,6 +4412,8 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
   .outline-links { display: none; }
   .outline-select { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 10px; }
   .outline-select select { flex: 1; min-width: 0; max-width: 100%; min-height: 44px; padding: 8px; border: 1px solid #aab8a3; border-radius: 6px; background: var(--white); }
+  .outline-select label { white-space: nowrap; }
+  .outline-select button { flex-shrink: 0; min-height: 44px; padding: 8px 12px; border: 1px solid #365b3f; border-radius: 6px; background: #365b3f; color: white; font-size: 13px; cursor: pointer; }
   .outline-location { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .outline-target { scroll-margin-top: 182px; }
   .outline-panel { padding: 17px; margin-block: 20px; border-radius: 10px; }

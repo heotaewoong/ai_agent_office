@@ -564,9 +564,9 @@ a { color: var(--accent); }
   .panel,.results-view .panel,.roster-panel,.build-panel { top:calc(82px + var(--department-offset)); max-height:calc(100dvh - 100px - var(--department-offset)); }
 }
 @media(max-width:720px) {
-  :root { --department-offset:100px; }
-  .department-nav { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
-  .department-nav button { font-size:12px; padding:6px 3px; }
+  :root { --department-offset:56px; }
+  .department-nav { display:flex; overflow-x:auto; gap:6px; padding:3px 3px 6px; scroll-snap-type:x proximity; scrollbar-width:thin; scrollbar-color:#719ba8 #102033; }
+  .department-nav button { flex:0 0 168px; min-height:46px; font-size:13px; padding:7px 10px; scroll-snap-align:start; }
   .layer-nav { top:auto; }
   .results-view .panel,.roster-panel { top:calc(98px + var(--department-offset)); max-height:calc(100dvh - 114px - var(--department-offset)); }
 }

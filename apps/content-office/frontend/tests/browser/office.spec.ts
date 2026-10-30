@@ -499,11 +499,12 @@ test("원고수정중승인을차단하고저장은같은packet을보존하며�
     page.getByRole("button", { name: "원고 승인", exact: true }),
   ).toBeDisabled();
   await page.getByRole("link", { name: "오늘의 뉴스", exact: true }).click();
-  await page.goto("/scripts/contract-test-job");
+  await page.getByRole("link", { name: /^콘텐츠 작업실/ }).click();
   await expect(page.getByLabel("본문 · Markdown")).toHaveValue(
     "검증 전용 수정 원고입니다.",
   );
   await page.getByRole("button", { name: "저장하고 재검수" }).click();
+  await page.getByText("원고 검수 결과 · 확인 필요", { exact: true }).click();
   await expect(page.getByText("검수 미완료", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "원고 승인", exact: true }),
@@ -526,7 +527,7 @@ test("승인확인중서버버전변경은읽지않은새원고승인을차단�
   await page.getByRole("button", { name: "원고 승인", exact: true }).click();
   context.replaceJob({ ...context.getJob(), source_hash: "new-unreviewed-v2" });
   await expect(
-    page.getByRole("button", { name: "이 버전 승인하기" }),
+    page.getByRole("button", { name: "이 원고 승인·자동 제작", exact: true }),
   ).toBeDisabled({ timeout: 8000 });
   expect(context.writes).toEqual([]);
 });
@@ -691,6 +692,8 @@ for (const viewport of [{ width: 1440, height: 1050 }, { width: 390, height: 844
     await page.goto("/publish?job=contract-test-job");
     const preview = page.locator(".artifact-preview iframe");
     await expect(preview).toHaveAttribute("src", "/api/jobs/contract-test-job/blog-preview");
+    if(viewport.width<768)await page.getByRole("combobox",{name:"목차 바로 이동",exact:true}).selectOption({label:"1. 현재 제작물"});
+    else await page.getByRole("navigation",{name:"이 페이지 목차",exact:true}).getByRole("link",{name:/현재 제작물/}).click();
     const blog = page.getByRole("button", { name: "블로그 읽기", exact: true });
     await expect(blog).toHaveAttribute("aria-pressed", "true");
     await expect(blog).toBeInViewport();
@@ -1075,6 +1078,11 @@ test("모바일 제작물 목차 이동은 편집 내용을 보존하고 큰 구
     await expect(page.locator(".outline-location")).toContainText(title);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
+  await page.getByRole("link", { name: "맨 위로 ↑", exact: true }).click();
+  await expect(select).toHaveValue("studio-setup-contract-test-job");
+  await page.getByRole("button", { name: "선택한 목차로 이동", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "제작 설정", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "제작 설정", exact: true })).toBeInViewport();
   await expect(body).toHaveValue("저장하지 않은 원고를 유지합니다.");
 
   expect(fixture.writes).toEqual([]);

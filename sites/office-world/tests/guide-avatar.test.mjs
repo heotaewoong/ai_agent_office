@@ -42,7 +42,7 @@ test('low quality and overview make no guide asset request',async()=>{
 });
 test('walking appearance retains the movement rig, independent limbs, root visibility and original fallback',async()=>{
   const f=fixture();try{
-    const originals=f.avatar.root.getChildMeshes().filter(m=>m!==f.avatar.marker),hidden=originals[0];hidden.isVisible=false;
+    const originals=f.avatar.root.getChildMeshes().filter(m=>m!==f.avatar.marker),hidden=originals[0],casters=new Set(f.shadows.getShadowMap().renderList);hidden.isVisible=false;
     f.space.view='walk';f.controller.sync();f.controller.sync();await flush();assert.equal(f.pending.length,1);
     assert(originals.slice(1).every(m=>m.isVisible));const c=await f.finish();assert.equal(f.controller.status().phase,'ready');
     assert(originals.every(m=>!m.isVisible));assert.equal(c.meshes.length,14);
@@ -55,6 +55,7 @@ test('walking appearance retains the movement rig, independent limbs, root visib
     f.avatar.root.setEnabled(false);assert(c.meshes.every(m=>!m.isEnabled()));f.avatar.root.setEnabled(true);
     f.controller.dispose();assert(originals.slice(1).every(m=>m.isVisible));assert.equal(hidden.isVisible,false);
     assert(c.meshes.every(m=>m.isDisposed()));
+    assert.deepEqual(new Set(f.shadows.getShadowMap().renderList),casters,'imported casters are released without removing default-player shadows');
   }finally{f.dispose();}
 });
 test('a failed request preserves the default player instead of retrying forever',async()=>{
