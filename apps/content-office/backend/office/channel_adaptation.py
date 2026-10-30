@@ -1,6 +1,7 @@
 """One detailed source, separately reviewed social copies. Never approves or publishes."""
 import re
 from urllib.parse import unquote, urlsplit, urlunsplit
+from .store import WorkflowError
 
 VERSION = "channel-copy-1"
 CHANNEL_COPY = {
@@ -21,6 +22,15 @@ def copy_schema(language='ko'):
 
 
 COPY_SCHEMA = copy_schema()
+
+
+def title_overrides(value):
+    if value is None:
+        return {}
+    if (not isinstance(value, dict) or set(value) - {'blog', 'shorts'}
+            or any(not isinstance(text, str) or not text.strip() or len(text) > 200 for text in value.values())):
+        raise WorkflowError('선택한 매체별 제목은 blog·shorts의 1~200자 문자열이어야 합니다')
+    return dict(value)
 
 
 def source_link(packet):
@@ -56,6 +66,7 @@ def adaptation_prompt(packet=None):
             "channel_posts에는 각 채널에 맞게 새로 편집한 요약 본문을 작성한다. 원문의 첫 문단을 반복 발췌하거나 상세 블로그를 SNS 요약으로 덮어쓰지 않는다. "
             "개인 경험·효과·비교 우위·필수 선택 이유를 지어내지 않고 원문에 있는 조건과 한계를 보존한다. "
             "같은 요약을 모든 매체에 복사하지 않는다. 한국어 원고는 한국어 채널만 작성하고 자동 영문 번역은 하지 않는다. "
+            "검수 과정·원고/출고 승인 상태·내부 편집 메모는 quality에만 남기고 SNS 본문과 영상 설명란에 노출하지 않는다. 독자에게 필요한 실제 사용 조건과 한계만 게시 문구에 쓴다. "
             "출처 URL과 캠페인 문구는 서버가 덧붙이므로 channel_posts 본문에는 URL을 쓰지 않는다. "
             + limits + ". 영상은 선택 이유 → 핵심 방법 → 대표 문제해결 하나로 4~6장면, 내레이션 합계 180~280자. "
             "구체적이고 검색 가능한 블로그 제목과 간결한 영상 제목을 별도로 쓴다.")
