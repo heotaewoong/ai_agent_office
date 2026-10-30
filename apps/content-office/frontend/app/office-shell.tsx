@@ -1236,7 +1236,9 @@ function Studio({
         setDirty(false);
         setBaseHash(updated.source_hash);
       },
-      "새 원고를 저장하고 독립 검수를 요청했습니다. 이전 승인은 현재 원고에 적용되지 않습니다.",
+      requestBlockedReason
+        ? "편집한 원고를 새 버전으로 저장했습니다. 원본은 그대로입니다. 작업 시간을 시작한 뒤 같은 원고 재검수를 눌러 주세요."
+        : "편집한 원고를 새 버전으로 저장하고 재검수를 요청했습니다. 원본은 그대로이며 이전 승인은 해제됩니다.",
     );
   }
 
@@ -1380,12 +1382,12 @@ function Studio({
                 id="draft-body"
                 value={body}
                 disabled={locked}
-                readOnly={job.article?.preserve_original === true}
+                readOnly={false}
                 aria-describedby={job.article?.preserve_original === true ? `original-edit-${job.id}` : undefined}
                 spellCheck={false}
-                onChange={(event) => { if (job.article?.preserve_original !== true) edit(title, event.target.value); }}
+                onChange={(event) => edit(title, event.target.value)}
               />
-              {job.article?.preserve_original === true && <p className="muted" id={`original-edit-${job.id}`}>원문 보존 모드에서는 본문을 직접 고치지 않습니다. 본문 수정은 위의 공개 원문 입력에 전체 글을 다시 등록하세요. 제목과 영상 대본은 별도로 검토·수정할 수 있습니다.</p>}
+              {job.article?.preserve_original === true && <p className="muted" id={`original-edit-${job.id}`}>가져온 원문과 원래 게시물·파일은 변경하지 않습니다. 여기서 수정한 내용은 별도 제작 원고로 저장됩니다. 재검수 후 원고 승인①을 하면 수정본으로 선택한 글·영상·카드를 제작합니다.</p>}
               <div className="editor-foot">
                 <p>
                   변경 내용을 저장하면 같은 원고를 다시 검수하고, 이전 승인은
@@ -1398,7 +1400,7 @@ function Studio({
                   }
                   onClick={() => void save()}
                 >
-                  저장하고 재검수
+                  {requestBlockedReason ? "새 버전 저장" : "저장하고 재검수"}
                 </button>
               </div>
             </div>

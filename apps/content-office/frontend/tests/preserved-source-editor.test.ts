@@ -51,19 +51,15 @@ function fixture(preserveOriginal: boolean | undefined) {
   return { original, job, changes, render };
 }
 
-test("원문 보존 본문은 읽기 전용이며 직접 change 호출도 상태와 입력 캐시를 바꾸지 않는다", () => {
+test("가져온 원문을 변경하지 않고 별도 제작 본문을 편집한다", () => {
   const view = fixture(true), initial = view.render();
-  assert.equal(initial.body.props.readOnly, true);
+  assert.equal(initial.body.props.readOnly, false);
   assert.equal(initial.body.props.disabled, false);
-  assert.equal(initial.body.props.value, view.original);
-  const help = initial.nodes.find(node => node.props.id === initial.body.props["aria-describedby"]);
-  assert.ok(help); assert.match(initial.text, /전체 글을 다시 등록/);
-  initial.body.props.onChange({ target: { value: "직접 바꾸려는 본문" } });
-  assert.deepEqual(view.changes, []);
-  const current = view.render();
-  assert.equal(current.body.props.value, view.original);
-  assert.equal(current.title.props.value, view.job.title);
-  assert.doesNotMatch(current.text, /저장하지 않은 변경/);
+  assert.match(initial.text, /원래 게시물·파일은 변경하지 않습니다/);
+  initial.body.props.onChange({ target: { value: "수정한 제작 본문" } });
+  assert.deepEqual(view.changes, [{ id: view.job.id, draft: { title: view.job.title, body: "수정한 제작 본문", baseHash: view.job.source_hash } }]);
+  assert.equal(view.render().body.props.value, "수정한 제작 본문");
+  assert.equal(view.job.article.operator_source_text, view.original);
 });
 
 test("원문 보존 모드에서도 제목 편집은 원문 본문과 판본을 유지해 입력 캐시에 반영한다", () => {
@@ -74,7 +70,7 @@ test("원문 보존 모드에서도 제목 편집은 원문 본문과 판본을 
   const current = view.render();
   assert.equal(current.title.props.value, "새 파생 제목");
   assert.equal(current.body.props.value, view.original);
-  assert.equal(current.body.props.readOnly, true);
+  assert.equal(current.body.props.readOnly, false);
   assert.match(current.text, /저장하지 않은 변경/);
 });
 

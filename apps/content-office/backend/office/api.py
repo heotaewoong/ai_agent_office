@@ -493,22 +493,31 @@ def create_app(store: Store | None = None):
 
     @app.put("/api/jobs/{job_id}/source")
     def edit_source(job_id: str, edit: SourceEdit):
-        require_open_window()
         current = store.job(job_id)
+        if current["state"] in ("drafting", "production_queued", "producing", "needs_reconciliation"):
+            raise WorkflowError("처리 중에는 원고를 저장할 수 없습니다. 완료 후 다시 저장하세요")
         packet = {**edit.packet, "evidence": current["article"].get("evidence", []), "quality": {"status": "unverified", "critical": False, "reviews": [], "refine_count": 0}, "audience": (current.get("source_packet") or {}).get("audience", {})}
+        for field in ("editorial_copy", "original_source_hash"):
+            packet.pop(field, None)
         if current["article"].get("preserve_original") is True:
             original = current["article"].get("operator_source_text")
-            if not isinstance(original, str) or edit.packet.get("body") != original:
-                raise WorkflowError("원문 보존 모드의 본문은 원문 입력에서 수정·재등록하세요. 편집 내용은 저장하지 않았습니다")
-            packet.update(preserve_original=True, source_input_hash=digest(original),
+            body = edit.packet.get("body")
+            if not isinstance(original, str) or not isinstance(body, str) or not body.strip():
+                raise WorkflowError("보존할 원문과 편집한 본문이 필요합니다")
+            # Only the production copy changes; the imported article remains immutable here.
+            packet.update(preserve_original=True, source_input_hash=digest(body),
+                          editorial_copy=True, original_source_hash=digest(original),
                           reference_evidence_ids=(current.get("source_packet") or {}).get("reference_evidence_ids", []))
+            if body != (current.get("source_packet") or {}).get("body"):
+                packet["video"] = {}  # Rebuild derived scenes during review instead of reusing the old script.
         else:
             for field in ("preserve_original", "source_input_hash", "reference_evidence_ids"):
                 packet.pop(field, None)
         if len(canonical(packet)) > 100000:
             raise WorkflowError("원고 입력이 너무 큽니다")
         saved = store.save_source(job_id, packet, expected_hash=edit.version)
-        store.enqueue("evaluate", {"job_id": job_id, "source_hash": saved["source_hash"]}, key=f"evaluate:{job_id}:{saved['source_hash']}")
+        if window_open(store):
+            store.enqueue("evaluate", {"job_id": job_id, "source_hash": saved["source_hash"]}, key=f"evaluate:{job_id}:{saved['source_hash']}")
         return saved
 
     @app.post("/api/jobs/{job_id}/evidence")

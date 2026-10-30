@@ -372,17 +372,13 @@ def test_long_original_markdown_is_passed_through_with_hash_and_no_approval(cont
     assert stale.status_code == 409 and store.job(job["id"])["article"]["preserve_original"] is True
 
 
-def test_preserved_body_cannot_be_edited_but_title_video_and_server_contract_are_kept(context):
+def test_preserved_source_edits_only_production_copy_and_keeps_server_contract(context):
     store, client, headers = context
     job = store.create_job(store.article("one"))
     original = "# 합성 원문\n\n본인이 쓴 원문 보존 API 검사입니다.  \n" * 20
     saved = store.register_source_input(job["id"], original, job["source_hash"], preserve_original=True)
     packet = {**saved["source_packet"], "reference_evidence_ids": ["E1"]}
     saved = store.save_source(job["id"], packet)
-    before, events, tasks = store.job(job["id"]), store.events(), store.tasks()
-    changed = client.put(f"/api/jobs/{job['id']}/source", json={"version": saved["source_hash"], "packet": {**packet, "body": original + "변경"}}, headers=headers)
-    assert changed.status_code == 409 and "원문 입력" in changed.json()["detail"]
-    assert store.job(job["id"]) == before and store.events() == events and store.tasks() == tasks
     edited = {**packet, "title": "제목만 수정", "video": {"title": "별도 영상", "scenes": []},
               "preserve_original": False, "source_input_hash": "forged", "reference_evidence_ids": ["FORGED"]}
     accepted = client.put(f"/api/jobs/{job['id']}/source", json={"version": saved["source_hash"], "packet": edited}, headers=headers)
@@ -392,6 +388,33 @@ def test_preserved_body_cannot_be_edited_but_title_video_and_server_contract_are
     assert result["preserve_original"] is True and result["source_input_hash"] == digest(original)
     assert result["reference_evidence_ids"] == ["E1"] and result["quality"]["status"] == "unverified"
     assert store.tasks(job["id"])[0]["kind"] == "evaluate"
+    before = store.job(job["id"])
+    changed_body = original + "사용자가 고친 제작 원고"
+    changed = client.put(f"/api/jobs/{job['id']}/source", json={"version": before["source_hash"], "packet": {**result, "body": changed_body}}, headers=headers)
+    assert changed.status_code == 200
+    updated = changed.json()
+    assert updated["article"] == before["article"]
+    assert updated["article"]["operator_source_text"] == original
+    assert updated["source_packet"]["body"] == changed_body
+    assert updated["source_packet"]["source_input_hash"] == digest(changed_body)
+    assert updated["source_packet"]["original_source_hash"] == digest(original)
+    assert updated["source_packet"]["editorial_copy"] is True
+    assert updated["source_packet"]["video"] == {}
+    assert updated["source_approval"] is None and updated["release_approval"] is None
+    stale = client.put(f"/api/jobs/{job['id']}/source", json={"version": before["source_hash"], "packet": result}, headers=headers)
+    assert stale.status_code == 409
+    assert store.job(job["id"]) == updated
+
+
+def test_closed_window_saves_edit_without_starting_ai_or_production(context):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    store.set_setting("work_window", {"status": "closed"})
+    response = client.put(f"/api/jobs/{job['id']}/source", json={"version": None, "packet": {"title": "수정본", "body": "사용자 수정본"}}, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["source_packet"]["quality"]["status"] == "unverified"
+    assert store.tasks() == []
+    assert client.post(f"/api/jobs/{job['id']}/evaluate", headers=headers).status_code == 409
 
 
 def test_summary_source_edit_cannot_inject_original_preservation_contract(context):

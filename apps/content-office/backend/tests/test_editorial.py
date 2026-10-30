@@ -331,3 +331,21 @@ def test_scene_schema_offers_english_footage_keywords_for_stock_search():
     assert SCENE_SCHEMA["properties"]["footage"] == {"type": "string"}
     # Optional: older approved scripts without it still validate and fall back to a keyword map.
     assert "footage" not in SCENE_SCHEMA["required"]
+
+
+def test_edited_production_copy_survives_evaluation_and_refinement(tmp_path, monkeypatch):
+    from office.editorial import prepare_source
+    from office.store import digest
+    original = original_markdown()
+    store, job = preservation_job(tmp_path, monkeypatch, original)
+    first = prepare_source(store, job["id"], provider=OriginalPreservingProvider(original))
+    edited = original + "\n사용자가 추가한 별도 제작 원고예요."
+    packet = {**first["source_packet"], "body": edited, "source_input_hash": digest(edited),
+              "original_source_hash": digest(original), "editorial_copy": True, "video": {}}
+    store.save_source(job["id"], packet, expected_hash=first["source_hash"])
+    result = prepare_source(store, job["id"], provider=OriginalPreservingProvider(edited), evaluate_only=True)
+    assert result["article"]["operator_source_text"] == original
+    assert result["source_packet"]["body"] == edited
+    assert result["source_packet"]["video"]["scenes"]
+    assert result["source_packet"]["quality"]["status"] == "passed"
+    assert result["source_approval"] is None

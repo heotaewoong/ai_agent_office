@@ -208,6 +208,10 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
         packet = job.get("source_packet")
         if not packet:
             raise WorkflowError("검수할 원고가 없습니다")
+        if original_markdown is not None and packet.get("editorial_copy") is True:
+            if packet.get("original_source_hash") != digest(original_markdown) or packet.get("source_input_hash") != digest(packet.get("body", "")):
+                raise WorkflowError("보존 원문 또는 편집 원고의 판본이 달라졌습니다. 다시 저장하세요")
+            original_markdown = packet["body"]
         audience = packet.get("audience")
         source_language = audience.get("language") if isinstance(audience, dict) else None
         if source_language not in ("ko", "en") or source_language != brief["language"]:
