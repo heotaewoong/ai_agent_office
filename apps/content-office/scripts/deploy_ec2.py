@@ -32,7 +32,9 @@ class DeployError(RuntimeError):
 
 
 CI_CHECK = 'verify'
-SLUG = re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
+# 화면이 열려 있으면 몇 분마다 다시 쓰는 조회 캐시. 업무 기록이 아니므로 배포 전후 비교에서 뺀다.
+VOLATILE_SETTINGS = frozenset({'runway_credit_cache'})
+SLUG =re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$')
 
 
 def ci_verification(slug, sha, *, opener=None):
@@ -144,7 +146,8 @@ class Deployment:
             for name, schema in tables:
                 fingerprint.update(json.dumps([name, schema], ensure_ascii=False).encode())
                 quoted = '"' + name.replace('"', '""') + '"'
-                rows = sorted(json.dumps(row, ensure_ascii=False, separators=(',', ':')) for row in db.execute('SELECT * FROM ' + quoted))
+                rows = sorted(json.dumps(row, ensure_ascii=False, separators=(',', ':')) for row in db.execute('SELECT * FROM ' + quoted)
+                              if not (name == 'settings' and row and row[0] in VOLATILE_SETTINGS))
                 for row in rows:
                     fingerprint.update(row.encode())
             return fingerprint.hexdigest()
