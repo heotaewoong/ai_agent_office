@@ -45,7 +45,10 @@ def register(app, store):
             params = {"youtube": "error", "reason": failure.reason}
             if failure.channel_key:
                 params["channel"] = failure.channel_key
-                store.event("youtube_channel_connect_failed", {"channel_key": failure.channel_key, "reason": failure.reason})
+                # 공개 채널 ID만 진단에 남긴다. 토큰·Google 계정 정보는 포함하지 않는다.
+                if failure.reason == "channel_mismatch":
+                    params.update(actual_channel=failure.actual_channel_id, expected_channel=failure.expected_channel_id)
+                store.event("youtube_channel_connect_failed", {"channel_key": failure.channel_key, **{k: v for k, v in params.items() if k not in ("youtube", "channel")}})
         response = RedirectResponse("/?" + urlencode(params), status_code=303, headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
         response.delete_cookie(BINDING_COOKIE, path=COOKIE_PATH, secure=True, httponly=True, samesite="lax")
         return response

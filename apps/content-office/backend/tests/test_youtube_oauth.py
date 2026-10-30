@@ -248,10 +248,13 @@ def test_channel_id_mismatch_stores_nothing(oauth):
     oauth["transport"].channels = {"items": [{"id": "UCother000000000000000000"[:24], "snippet": {"title": "다른 채널"}}]}
     _, state, _ = start(oauth, "youtube_english")
     result = location(callback(oauth, state))
-    assert result == {"youtube": "error", "reason": "channel_mismatch", "channel": "youtube_english"}
+    assert result == {"youtube": "error", "reason": "channel_mismatch", "channel": "youtube_english", "actual_channel": "UCother000000000000000000"[:24], "expected_channel": ENGLISH_ID}
     assert not oauth["secrets"].exists() and youtube_credentials("youtube_english") is None
     failed = next(e for e in oauth["store"].events(limit=20) if e["kind"] == "youtube_channel_connect_failed")
     assert failed["data"]["reason"] == "channel_mismatch" and REFRESH not in json.dumps(failed)
+    assert failed["data"]["actual_channel"] == result["actual_channel"]
+    assert failed["data"]["expected_channel"] == ENGLISH_ID
+    assert ACCESS not in json.dumps(failed) and SECRET not in json.dumps(failed)
 
 
 def test_channel_registered_to_another_key_is_rejected(oauth):

@@ -52,6 +52,19 @@ test("YouTube 외 권한과 이전 연결 요청은 안전하게 다시 안내�
 test("결과 파라미터만 주소에서 지운다", () => {
   assert.equal(withoutOAuthParams("https://office.example.com/?youtube=connected&channel=youtube_main_ko"), "/");
   assert.equal(withoutOAuthParams("https://office.example.com/?youtube=error&reason=state&view=x#top"), "/?view=x#top");
+  assert.equal(withoutOAuthParams("https://office.example.com/?youtube=error&reason=channel_mismatch&actual_channel=x&expected_channel=y&view=x"), "/?view=x");
+});
+
+test("채널 불일치는 유효한 두 공개 ID만 표시한다", () => {
+  const actual = "UCc2CaOrPo-1dezowe7kklZA";
+  const expected = "UCh9Oa74qc9mOvgmgMTXBFVw";
+  const result = youtubeOAuthResult(`?youtube=error&reason=channel_mismatch&actual_channel=${actual}&expected_channel=${expected}`);
+  assert.ok(result?.message.includes(actual) && result.message.includes(expected));
+  assert.ok(result?.message.includes("토큰을 저장하지 않았습니다"));
+  const invalid = youtubeOAuthResult(`?youtube=error&reason=channel_mismatch&actual_channel=%3Cscript%3E&expected_channel=${expected}`);
+  assert.ok(!invalid?.message.includes("<script>"));
+  const unrelated = youtubeOAuthResult(`?youtube=error&reason=state&actual_channel=${actual}&expected_channel=${expected}`);
+  assert.ok(!unrelated?.message.includes(actual));
 });
 
 test("연결 버튼을 막는 이유는 설정 여부만 말한다", () => {

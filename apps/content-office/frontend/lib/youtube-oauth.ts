@@ -21,7 +21,7 @@ export type YoutubeOAuthStatus = {
 
 export type YoutubeOAuthResult = { kind: "success" | "error"; message: string; channel: string | null };
 
-const RESULT_PARAMS = ["youtube", "reason", "channel"];
+const RESULT_PARAMS = ["youtube", "reason", "channel", "actual_channel", "expected_channel"];
 
 const REASONS: Record<string, string> = {
   state: "연결 요청이 만료됐거나 이미 사용됐습니다. 설정 화면에서 'YouTube 연결'을 다시 누르세요.",
@@ -60,7 +60,12 @@ export function youtubeOAuthResult(search: string): YoutubeOAuthResult | null {
   }
   if (outcome === "error") {
     const reason = params.get("reason") ?? "";
-    const detail = REASONS[reason] ?? "YouTube 연결에 실패했습니다. 저장한 것은 없습니다.";
+    let detail = REASONS[reason] ?? "YouTube 연결에 실패했습니다. 저장한 것은 없습니다.";
+    const actual = params.get("actual_channel") ?? "";
+    const expected = params.get("expected_channel") ?? "";
+    if (reason === "channel_mismatch" && /^UC[\w-]{22}$/.test(actual) && /^UC[\w-]{22}$/.test(expected)) {
+      detail = `Google이 돌려준 채널: ${actual} / 오피스 등록 채널: ${expected}. 서로 달라 토큰을 저장하지 않았습니다. Google의 YouTube 채널 선택 단계에서 등록된 채널을 선택하세요. 선택이 맞았다면 이 두 ID로 확인할 수 있습니다.`;
+    }
     return { kind: "error", channel, message: channel ? `${channel}: ${detail}` : detail };
   }
   return null;

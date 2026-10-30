@@ -44,10 +44,12 @@ MAX_PENDING = 20
 class OAuthFailure(Exception):
     """콜백 실패. reason은 화면이 문구로 바꾸는 짧은 코드이고 비밀값을 담지 않는다."""
 
-    def __init__(self, reason, channel_key=None):
+    def __init__(self, reason, channel_key=None, *, actual_channel_id=None, expected_channel_id=None):
         super().__init__(reason)
         self.reason = reason
         self.channel_key = channel_key
+        self.actual_channel_id = actual_channel_id
+        self.expected_channel_id = expected_channel_id
 
 
 def _hash(value):
@@ -189,7 +191,7 @@ def finish(store, *, origin, state, code, error, binding, transport=None):
     channel_id, title = _mine(transport, access, key)
     expected = channel(store, key).get("external_account_id")
     if expected and expected != channel_id:
-        raise OAuthFailure("channel_mismatch", key)
+        raise OAuthFailure("channel_mismatch", key, actual_channel_id=channel_id, expected_channel_id=expected)
     if any(row["key"] != key and row["platform"] == "youtube" and row.get("external_account_id") == channel_id for row in registry(store)):
         raise OAuthFailure("channel_in_use", key)
     try:
