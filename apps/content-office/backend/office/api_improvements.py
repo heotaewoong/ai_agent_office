@@ -23,6 +23,7 @@ class Revision(Input):
 
 
 class Review(Versioned):
+    case_id: str = Field(default='', pattern=r'^(?:[AB](?:0[1-9]|10))?$')
     target_id: str = Field(min_length=1, max_length=100)
     target_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
     scores: dict[str, StrictInt]
@@ -76,6 +77,20 @@ def register(app: FastAPI, store):
         if not request.note.strip():
             raise WorkflowError('직접 확인한 평가 사유를 적어 주세요')
         return save_review(store, job_id, request.model_dump())
+
+    @app.get('/api/jobs/{job_id}/quality-reviews.csv')
+    def reviews_csv(job_id: str):
+        import csv
+        import io
+        from .improvements import records, RUBRIC
+        store.job(job_id)
+        columns = ['id','job_id','source_hash','case_id','dataset_split','target_id','target_hash','critical','quality_passed',*RUBRIC]
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=columns, extrasaction='ignore')
+        writer.writeheader()
+        for r in records(store, 'review', job_id):
+            writer.writerow({**r, **r['scores']})
+        return Response('\ufeff' + output.getvalue(), media_type='text/csv', headers={'Cache-Control':'no-store','Content-Disposition':'attachment; filename="quality-reviews.csv"','X-Content-Type-Options':'nosniff'})
 
     @app.post('/api/experiences')
     def experience(request: Experience):

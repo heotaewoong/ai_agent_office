@@ -61,6 +61,18 @@ def test_quality_write_requires_csrf_and_rejects_wrong_target(context):
     assert client.post(path,json=body,headers=headers).status_code==422
 
 
+def test_representative_case_has_explicit_split_and_never_invents_reference_approval(context):
+    _,job,client,headers=context
+    body={**review_payload(job),'case_id':'B08'}
+    result=client.post(f'/api/jobs/{job["id"]}/quality-reviews',json=body,headers=headers)
+    assert result.status_code==200 and result.json()['dataset_split']=='holdout'
+    assert result.json()['scope']=='human_observation_not_approval'
+    wrong=client.post(f'/api/jobs/{job["id"]}/quality-reviews',json={**body,'case_id':'A01'},headers=headers)
+    assert wrong.status_code==409
+    exported=client.get(f'/api/jobs/{job["id"]}/quality-reviews.csv')
+    assert exported.status_code==200 and 'B08' in exported.text and 'holdout' in exported.text
+
+
 def test_only_confirmed_opted_in_relevant_experiences_are_selected(context):
     store,job,client,headers=context
     base={'title':'옵시디언 실제 관측','axis':'B','facts':'합성 테스트용 경험 데이터이며 실제 경험 주장이 아닙니다.','evidence_note':'기능 테스트','checked_on':'2026-01-01','tags':['옵시디언'],'confirmed':True,'use_in_content':False}

@@ -62,6 +62,10 @@ def candidates(job, drafts):
 
 def save_review(store, job_id, payload):
     job = store.job(job_id)
+    case = payload.get('case_id', '')
+    source_axis = (job.get('source_packet') or {}).get('audience', {}).get('axis')
+    if case and source_axis in ('A', 'B') and case[0] != source_axis:
+        raise WorkflowError('현재 원고의 축과 평가 사례의 축이 다릅니다')
     target = next((r for r in candidates(job, store.drafts(job_id)) if r['id'] == payload['target_id']), None)
     if not target or target['hash'] != payload['target_hash']:
         raise WorkflowError('평가 대상 파일/원고가 바뀌었습니다. 최신 판본을 다시 확인하세요')
@@ -71,7 +75,7 @@ def save_review(store, job_id, payload):
         raise WorkflowError('지원하지 않는 반려 사유입니다')
     if payload['critical'] and not payload['reasons']:
         raise WorkflowError('중대 오류의 반려 사유를 선택하세요')
-    payload = {**payload, 'scope': 'human_observation_not_approval', 'quality_passed': not payload['critical'] and min(payload['scores'].values()) >= 4}
+    payload = {**payload, 'dataset_split': ('holdout' if int(case[1:]) > 7 else 'development') if case else 'unassigned', 'scope': 'human_observation_not_approval', 'quality_passed': not payload['critical'] and min(payload['scores'].values()) >= 4}
     # Verify artifact versions again under the same lock as the write.
     with store.connection(transaction=True) as db:
         current = store._job(db, job_id)

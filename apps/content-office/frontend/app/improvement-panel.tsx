@@ -28,6 +28,7 @@ export function ImprovementPanel({job}:{job:Job}) {
     return()=>{active=false;};
   },[job.id,job.source_hash,job.manifest?.hash,job.quiz?.version,job.quiz?.generated_at,job.drafts?.length]);
   const current=workspaceIsCurrent(data,job.id,job.source_hash)&&boundVersion===reviewBinding(job);
+  const sourceAxis=(job.source_packet?.audience as {axis?:string}|undefined)?.axis;
   async function save(run:()=>Promise<unknown>,message:string) {
     if(busy)return;
     setBusy(true);setError("");setSaved("");
@@ -46,12 +47,14 @@ export function ImprovementPanel({job}:{job:Job}) {
     {data.source_hash&&boundVersion!==reviewBinding(job)&&<button className="button secondary" disabled={busy} onClick={()=>{setBoundVersion(reviewBinding(job));setFormEpoch(n=>n+1);setSaved("");}}>평가·집계 입력 초기화 후 현재 판본으로 다시 시작</button>}
     <details><summary>1. 기존판·개선판 품질 비교 · 평가 {data.reviews.length}건</summary>
       <p>같은 내용·목적의 결과를 읽고 들은 뒤 기록하세요. 1점은 부족, 5점은 충분입니다. 사실 오류는 평균 점수로 상쇄하지 않습니다.</p>
+      <a className="button secondary" href={`/api/jobs/${encodeURIComponent(job.id)}/quality-reviews.csv`} download>판본별 품질 평가 CSV 내려받기</a>
       <label><input type="checkbox" checked={reveal} onChange={e=>setReveal(e.target.checked)}/> 평가 대상 이름 공개</label>
       <form key={`review-${formEpoch}`} onSubmit={e=>{e.preventDefault();const f=new FormData(e.currentTarget);const target=data.candidates.find(c=>c.id===text(f,"target"));if(!target)return;
         const scores=Object.fromEntries(Object.keys(QUALITY_LABELS).map(k=>[k,Number(f.get(k))]));
-        void save(()=>api.saveQualityReview(job.id,{source_hash:data.source_hash,target_id:target.id,target_hash:target.hash,scores,critical:f.has("critical"),reasons:f.getAll("reasons"),note:text(f,"note")}),"품질 평가를 기록했습니다. 콘텐츠 승인은 바뀌지 않았습니다.");}}>
+        void save(()=>api.saveQualityReview(job.id,{source_hash:data.source_hash,case_id:text(f,"case_id"),target_id:target.id,target_hash:target.hash,scores,critical:f.has("critical"),reasons:f.getAll("reasons"),note:text(f,"note")}),"품질 평가를 기록했습니다. 콘텐츠 승인은 바뀌지 않았습니다.");}}>
         <fieldset className="editor-fields" disabled={busy||!current}>
           <label>평가 대상<select name="target" required>{data.candidates.map((c,n)=><option key={c.id} value={c.id}>{reveal?c.label:`비교 대상 ${String.fromCharCode(65+n)}`}</option>)}</select></label>
+          <label>대표 사례 연결<select name="case_id" defaultValue=""><option value="">일반 평가 · 사례 연결 안 함</option>{data.casebook.filter(c=>!sourceAxis||c.axis===sourceAxis).map(c=><option key={c.id} value={c.id}>{c.id} · {c.topic} · {c.split==="holdout"?"최종 확인용":"개발용"}</option>)}</select></label>
           {Object.entries(QUALITY_LABELS).map(([key,label])=><label key={key}>{label}<select name={key} required defaultValue=""><option value="" disabled>직접 확인 후 선택</option>{[1,2,3,4,5].map(n=><option key={n} value={n}>{n}점</option>)}</select></label>)}
           <label><input type="checkbox" name="critical"/> 근거 없는 사실·틀린 정답 등 중대 오류가 있음</label>
           <fieldset><legend>수정이 필요한 부분</legend>{Object.entries(REJECTION_LABELS).map(([key,label])=><label key={key}><input type="checkbox" name="reasons" value={key}/>{label}</label>)}</fieldset>
@@ -60,7 +63,7 @@ export function ImprovementPanel({job}:{job:Job}) {
         </fieldset>
       </form>
       {data.reviews.slice(0,8).map(r=><p key={r.id}>{r.source_hash===data.source_hash?"현재 원고":"이전 원고"} · {r.critical?"중대 오류 있음":r.quality_passed?"기록한 기준 충족":"개선 필요"} · {r.note}</p>)}
-      <details><summary>A/B축 대표 사례 20개 · 평가 전 시나리오</summary><p>완성된 평가 결과가 아닙니다. 실제 원고·기대 결과와 사람 검토를 채워야 합니다. 개발용14개/최종 확인용6개로 나눴습니다.</p><ul>{data.casebook.map(c=><li key={c.id}>{c.id} · {c.topic} · {c.split==="holdout"?"최종 확인용":"개발용"}</li>)}</ul></details>
+      <details><summary>A/B축 대표 사례 20개 · 시작용 시나리오</summary><p>완성된 평가 결과가 아닙니다. 실제 원고·기대 결과와 사람 검토를 채워야 합니다. 개발용14개/최종 확인용6개로 나눴습니다.</p><ul>{data.casebook.map(c=><li key={c.id}>{c.id} · {c.topic} · {c.split==="holdout"?"최종 확인용":"개발용"}</li>)}</ul></details>
     </details>
     <details><summary>2. 영상이 설명하는 관계 점검 · {data.storyboard.scenes.length}장면</summary>
       <p>{data.storyboard.note}</p>
