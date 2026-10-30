@@ -1283,7 +1283,7 @@ function Studio({
       />
         </details>
       {job.article?.origin === "idea" && (
-        <div ref={packagingPanel} tabIndex={-1} aria-label="제목·썸네일·후크 기획">
+        <div ref={packagingPanel} className="outline-target" tabIndex={-1} aria-label="제목·썸네일·후크 기획">
           <PackagingPanel
             key={job.packaging?.packaging_hash ?? "new"}
             job={job}
