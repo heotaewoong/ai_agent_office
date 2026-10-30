@@ -134,7 +134,7 @@ export function keyChips(provider: ProviderStatus | undefined): { label: string;
     { label: "OpenAI", env: "OPENAI_API_KEY", ok: Boolean(text.env === "OPENAI_API_KEY" ? text.configured : p.image?.openai_configured ?? (p.image?.id === "codex-subscription" ? false : p.image?.configured)) },
     { label: "Runway", env: "RUNWAYML_API_SECRET", ok: Boolean(p.clip?.runway_configured ?? (p.clip?.id === "pexels-stock" ? false : p.clip?.configured)) },
     { label: "Pexels", env: "PEXELS_API_KEY", ok: Boolean(p.clip?.pexels_configured) },
-    { label: "YouTube", env: "YOUTUBE_CLIENT_ID 등", ok: Boolean(p.youtube?.configured) },
+    { label: "YouTube", env: "Google 계정 연결", ok: Boolean(p.youtube?.configured) },
   ];
   if(p.text?.id === "codex-subscription-text" || p.image?.id === "codex-subscription") chips.push({label:"Codex 구독",env:"앱 계정의 ChatGPT 로그인",ok:Boolean(p.text?.id === "codex-subscription-text" ? p.text.configured : p.image?.configured)});
   return chips;
