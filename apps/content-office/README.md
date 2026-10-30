@@ -240,6 +240,18 @@ apps/content-office/backend/.venv/bin/python -m unittest discover \
   -s apps/content-office/scripts/tests -p test_deploy_ec2.py -v
 ```
 
+### 개발 팀 자동 배포 (검증 → 배포 → 확인)
+
+- **① 검증은 서버 밖에서** 합니다. 모든 브랜치 푸시마다 GitHub Actions의 `verify`(`.github/workflows/verify.yml`)가 백엔드·배포 스크립트·화면 타입 검사·화면 테스트·3D 오피스 테스트·화면 빌드를 돌립니다. 검사 목록은 `deploy_ec2.py`의 격리 검사와 같습니다.
+- **② 배포는 서버 감시기**가 합니다. cron이 10분마다 `scripts/auto_deploy.py`를 부르고, `origin/main`의 새 커밋이 `verify`를 통과했을 때만 `deploy-ec2.sh <SHA> --ci-verified-repo heotaewoong/ai_agent_office`를 낮은 우선순위(`nice`)로 실행합니다. 이 옵션은 배포 스크립트가 GitHub에 그 커밋의 `verify` 결과를 직접 확인한 경우에만 서버 안 테스트를 생략하고 빌드·상태 확인·자동 되돌리기는 그대로 합니다. 옵션 없이 부르면 기존처럼 전체 검사를 돌립니다.
+- **③ 확인**은 기존 배포 스크립트의 상태 확인과 자동 되돌리기입니다. 빌드에서 실패하거나 되돌린 커밋은 다시 시도하지 않고 다음 커밋을 기다립니다. `manual_recovery_required`가 나오면 감시기가 스위치를 끄고 사람을 기다립니다. 의존성 목록이 바뀐 커밋은 배포하지 않고 `needs_dependencies`로 멈춥니다. 작업 시간이 열려 있거나 다른 배포가 잠금을 쥐면 다음 주기에 다시 봅니다.
+- **스위치**는 3D 오피스 개발 팀 방의 "자동 배포 켜기/끄기" 또는 `POST /api/dev/auto-deploy {"enabled": true|false}`(운영자 세션 필요)입니다. 처음 설치 상태는 꺼짐입니다. 상태는 `GET /api/dev`, 기록은 상태 폴더의 `runtime/auto-deploy.json`과 `runtime/auto-deploy.log`에 있습니다. 콘텐츠 승인 ⓪①②③과는 별개입니다.
+
+```bash
+# 서버 cron (ubuntu 사용자). 스위치가 꺼져 있으면 상태만 기록하고 배포하지 않습니다.
+*/10 * * * * cd /home/ubuntu/ai_agent_office/apps/content-office && OFFICE_ENV_FILE=$HOME/office.env backend/.venv/bin/python scripts/auto_deploy.py >> $HOME/.local/state/heobrain-content-office/runtime/auto-deploy.log 2>&1
+```
+
 ## 의존성과 설정
 
 이 작업공간에는 Python 가상환경·Node 의존성과 FFmpeg가 준비됐습니다. 새 환경에 설치할 때는 Python3.12+, Node22+, FFmpeg/ffprobe, 한국어 TTF 폰트를 준비합니다. Windows 기본 음성 경로에는 PowerShell과 `Microsoft Heami Desktop` ko-KR 음성이 필요합니다.

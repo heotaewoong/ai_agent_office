@@ -1,0 +1,79 @@
+# 개발 팀 ① 검증: 서버 밖에서 서버와 같은 검사를 돌린다.
+# 서버의 자동 배포 감시기(apps/content-office/scripts/auto_deploy.py)는 이 `verify` 체크를
+# 통과한 main 커밋만 배포하고, 배포 때 서버 안 테스트를 다시 돌리지 않는다.
+# 검사 목록은 scripts/deploy_ec2.py의 stage()와 같게 유지한다.
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      LANG: C.UTF-8
+      NEXT_TELEMETRY_DISABLED: "1"
+      NODE_OPTIONS: --max-old-space-size=3072
+      # 실제 API 키 없이 돈다. 비밀값을 쓰지 않는다.
+    defaults:
+      run:
+        working-directory: apps/content-office
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 시스템 도구 (FFmpeg·나눔 폰트) — 서버와 같은 렌더링 조건
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg fonts-nanum
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: apps/content-office/backend/requirements-lock.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/content-office/frontend/package-lock.json
+
+      - name: 의존성 설치
+        run: |
+          python -m venv backend/.venv
+          backend/.venv/bin/python -m pip install -q -r backend/requirements-lock.txt
+          cd frontend && npm ci --no-audit --no-fund
+
+      - name: 백엔드 테스트
+        working-directory: apps/content-office/backend
+        run: .venv/bin/python -m pytest -q
+
+      - name: 배포·자동 배포 스크립트 테스트
+        run: backend/.venv/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
+
+      - name: 화면 타입 검사
+        working-directory: apps/content-office/frontend
+        run: node node_modules/typescript/bin/tsc --noEmit --incremental false
+
+      - name: 화면 테스트
+        working-directory: apps/content-office/frontend
+        run: npm test
+
+      - name: 3D 오피스 테스트
+        working-directory: .
+        run: node --test sites/office-world/tests/*.test.mjs
+
+      - name: 화면 빌드
+        working-directory: apps/content-office/frontend
+        run: node node_modules/next/dist/bin/next build --webpack

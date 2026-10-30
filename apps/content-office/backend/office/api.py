@@ -140,6 +140,11 @@ class WindowRequest(BaseModel):
     minutes: int
 
 
+class AutoDeploySwitch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    enabled: bool
+
+
 class ThumbnailChoice(BaseModel):
     artifact_id: str
 
@@ -384,7 +389,22 @@ def create_app(store: Store | None = None):
 
     @app.get("/api/space")
     def space():
-        return JSONResponse(project_space(store, office_url=os.environ.get("OFFICE_URL", "http://localhost:3110"), agents=AGENTS), headers={"Cache-Control": "no-store"})
+        from .devteam import dev_status
+        payload = project_space(store, office_url=os.environ.get("OFFICE_URL", "http://localhost:3110"), agents=AGENTS)
+        payload["dev"] = dev_status(store.root)
+        return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/dev")
+    def dev_team():
+        from .devteam import dev_status
+        return JSONResponse(dev_status(store.root), headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/dev/auto-deploy")
+    def dev_auto_deploy(body: AutoDeploySwitch):
+        from .devteam import dev_status, set_switch
+        value = set_switch(store.root, body.enabled)
+        store.event("auto_deploy_switch", {"role": "개발 팀", "enabled": value["enabled"], "actor": value["actor"]})
+        return dev_status(store.root)
 
     @app.post("/api/refresh", status_code=202)
     def refresh_feed():

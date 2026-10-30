@@ -119,6 +119,8 @@ export const api = {
     request<ProfileSummaries>("/settings/profiles", "POST", { kind, profile }),
   startWindow: (minutes: number) =>
     request<WindowStart>("/session/window", "POST", { minutes }),
+  setAutoDeploy: (enabled: boolean) =>
+    request<{ enabled: boolean }>("/dev/auto-deploy", "POST", { enabled }),
   deliveries: (id: string) =>
     request<{ deliveries: Delivery[]; youtube_configured: boolean }>(`/jobs/${encodeURIComponent(id)}/deliveries`),
   deliverYoutube: (id: string, channelKey = "youtube_main_ko") =>

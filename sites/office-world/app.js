@@ -180,6 +180,7 @@
         agents: [],
         events: Array.isArray(raw.events) ? raw.events.slice(0, 40) : [],
         flows: Array.isArray(raw.flows) ? raw.flows : [],
+        dev: raw.dev && raw.dev.version === 1 ? raw.dev : null,
       };
       const seen = new Set();
       (raw.stages || []).forEach((s, i) => {
@@ -237,6 +238,34 @@
 
   // 기존 공간 ID는 지리 탐험 기록을 보존하고, 팀과 콘텐츠 공정은 별도로 투영한다.
   const organization = {
+    // 개발 팀: GitHub 검증 → 서버 배포 → 확인. 서버의 /api/space가 dev 상태를 줄 때만 연결된 팀으로 바뀐다.
+    devTeam(dev) {
+      const w = dev.watcher;
+      const ci = w && w.ci ? w.ci.state : null;
+      const ciLabel = { success:'통과', pending:'진행 중', failure:'실패', unknown:'확인 불가' }[ci] || '기록 없음';
+      const when = (iso) => { const t = new Date(iso); return Number.isNaN(t.getTime()) ? '' : t.toLocaleString('ko-KR', { hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }); };
+      const toggle = dev.enabled ? { id:'auto-deploy-off', label:'자동 배포 끄기' } : { id:'auto-deploy-on', label:'자동 배포 켜기' };
+      const attention = new Set(['needs_dependencies', 'emergency_stop', 'failed']);
+      const items = [
+        { id:'dev-auto', title: dev.enabled ? '자동 배포 켜짐' : '자동 배포 꺼짐',
+          state: dev.enabled ? 'running' : 'info',
+          stateLabel: dev.enabled ? 'GitHub 검증을 통과한 main 커밋만 서버에 올립니다' : '검증 결과만 기록하고 서버에는 올리지 않습니다',
+          needsHuman:false, actions:[toggle] },
+        { id:'dev-main', title: w ? `main ${String(w.origin || '').slice(0, 10)}` : '서버 감시기 설치 전',
+          state: ci === 'failure' ? 'failed' : ci === 'pending' ? 'research' : 'info',
+          stateLabel: w ? `GitHub 검증 ${ciLabel} · ${w.label || ''}${w.reason ? ' · ' + w.reason : ''}` : '자동 배포 감시기가 아직 한 번도 돌지 않았어요',
+          needsHuman: !!(w && attention.has(w.decision)), actions:[] },
+        { id:'dev-running', title: dev.running.commit ? `서버 운영 버전 ${dev.running.commit}` : '서버 운영 버전 확인 불가',
+          state:'info', stateLabel: `${dev.running.deployed_at ? when(dev.running.deployed_at) + ' 배포 · ' : ''}${dev.running.ci_verified ? 'GitHub에서 검증한 커밋' : '서버에서 검증한 커밋'}`,
+          needsHuman:false, actions:[] },
+        ...(dev.deployments || []).slice(0, 4).map(r => ({ id:'dev-deploy-' + r.id, title:`배포 ${r.commit}`,
+          state: r.status === 'deployed' ? 'info' : 'failed',
+          stateLabel:`${r.label}${r.ci_verified ? ' · GitHub 검증' : ''} · ${r.id.slice(4, 6)}/${r.id.slice(6, 8)} ${r.id.slice(9, 11)}:${r.id.slice(11, 13)} UTC`,
+          needsHuman:false, actions:[] })),
+      ];
+      return { connection:'dev', items, approval: dev.enabled ? '검증 → 배포 → 확인 자동 진행' : '검증 → 배포 → 확인 · 자동 배포 꺼짐' };
+    },
+
     project(d) {
       const legacy = ['inbox', 'scripts', 'creative', 'outbox', 'ops'];
       if (d.organizationVersion === 1 || d.stages.length !== 5 || !legacy.every(id => d.stages.some(st => st.id === id))) return d;
@@ -259,6 +288,8 @@
       ];
       const workflowStages = d.stages;
       const stages = workflowStages.map(st => ({ ...teams.find(team => team.id === st.id), url:'', view:'', items:[], workflowStages:[] }));
+      const devTeam = stages.find(team => team.teamId === 'dev');
+      if (d.dev) Object.assign(devTeam, organization.devTeam(d.dev));
       const content = stages.find(team => team.teamId === 'content');
       const studio = workflowStages.find(st => st.id === 'scripts');
       content.url = studio.url;
@@ -2125,14 +2156,14 @@
         const acts = embed.enabled ? `<div class="item-actions">${(data.source === 'live' ? it.actions : []).map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['action', it.id, a.id]))}"${data.error || space.pendingActions.has(it.id + ':' + a.id) ? ' disabled' : ''}>${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['open', it.id, it.view]))}">오피스에서 열기</button>` : ''}</div>` : '';
         return `<div class="item${space.embedFocus === it.id ? ' active' : ''}" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div>${it.workflowStageName ? `<div class="item-agent">${esc(it.workflowStageName)}</div>` : ''}<div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
       }).join('') : `<p class="panel-note">${st.teamId ? '실제 업무 연결 전입니다. 등록된 실행 작업은 없습니다.' : '이 단계에 등록된 작업이 없습니다.'}</p>`;
-      const goals = st.teamId ? `<section class="team-goals"><p>${esc(st.description)}</p><ul>${st.goals.map(goal => `<li>${esc(goal)}</li>`).join('')}</ul>${st.connection === 'content' ? '<p class="panel-note">아래 상태는 기존 콘텐츠 앱의 기록입니다. Hermes 비서 연결이나 모든 채널 업로드 완료를 뜻하지 않습니다.</p>' : '<p class="panel-note">메일·파일 조회나 비서 실행을 이 화면에서 시작하지 않습니다.</p>'}</section>` : '';
+      const goals = st.teamId ? `<section class="team-goals"><p>${esc(st.description)}</p><ul>${st.goals.map(goal => `<li>${esc(goal)}</li>`).join('')}</ul>${st.connection === 'content' ? '<p class="panel-note">아래 상태는 기존 콘텐츠 앱의 기록입니다. Hermes 비서 연결이나 모든 채널 업로드 완료를 뜻하지 않습니다.</p>' : st.connection === 'dev' ? '<p class="panel-note">검증은 GitHub에서 하고, 검증을 통과한 커밋만 서버 감시기가 10분마다 배포합니다. 실패하면 이전 버전으로 되돌립니다.</p>' : '<p class="panel-note">메일·파일 조회나 비서 실행을 이 화면에서 시작하지 않습니다.</p>'}</section>` : '';
       const workflow = st.workflowStages?.length ? `<section class="workflow-map"><h3>콘텐츠 팀 내부 공정</h3>${st.workflowStages.map(step => {
         const safeUrl = /^(https?:\/\/|\/(?!\/))/.test(step.url || '') ? step.url : '';
         const key = esc(JSON.stringify(['workflow', step.id]));
         const link = embed.enabled && step.view ? `<button type="button" class="item-link" data-open="${esc(step.view)}" data-item="" data-focus-key="${key}">공정 열기</button>` : safeUrl ? `<a class="item-link" href="${esc(safeUrl)}" target="_blank" rel="noopener" data-focus-key="${key}">공정 열기</a>` : '';
         return `<div><span>${esc(step.name)} · ${step.items.length}건</span>${link}</div>`;
       }).join('')}</section>` : '';
-      const stageNote = st.teamId && st.connection !== 'content' ? '팀의 업무 범위만 정리한 상태입니다. 실제 비서 연결·실행 전입니다.' : embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.';
+      const stageNote = st.connection === 'dev' ? '이 화면에서는 자동 배포를 켜고 끄기만 합니다. 콘텐츠 승인(⓪·①·②·③)과는 별개입니다.' : st.teamId && st.connection !== 'content' ? '팀의 업무 범위만 정리한 상태입니다. 실제 비서 연결·실행 전입니다.' : embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.';
       const footHtml = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}" data-focus-key="${esc(JSON.stringify(['enter', st.id]))}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener" data-focus-key="${esc(JSON.stringify(['stage-link', st.id]))}">${data.source === 'live' ? '오피스에서 열기' : '플레이북에서 보기'}</a>` : ''}<span class="panel-note">${esc(stageNote)}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
       const teamBody = goals + workflow + bodyHtml;
       this.replaceContent($('panel-body'), teamBody, () => { $('panel-body').innerHTML = teamBody; });
