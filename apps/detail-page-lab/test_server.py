@@ -155,6 +155,16 @@ class LabTests(unittest.TestCase):
             self.assertEqual(response.status, 200)
             self.assertEqual(json.loads(response.read())["state"], "plan_review")
             connection.close()
+            draft = body()
+            draft["comparison_draft"] = True
+            project = self.lab.create(draft)
+            connection = HTTPConnection(*server.server_address)
+            connection.request("GET", f"/api/projects/{project['id']}/draft.zip")
+            response = connection.getresponse()
+            self.assertEqual(response.status, 200)
+            with zipfile.ZipFile(io.BytesIO(response.read())) as archive:
+                self.assertIn("UNREVIEWED-DRAFT.txt", archive.namelist())
+            connection.close()
         finally:
             server.shutdown()
             server.server_close()

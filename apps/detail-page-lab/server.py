@@ -28,6 +28,7 @@ MAX_STORAGE = 256 * 1024 * 1024
 JOB_ID = re.compile(r"dp_[a-f0-9]{24}")
 LOCK = threading.Lock()
 SLOTS = threading.BoundedSemaphore(1)
+READ_SLOTS = threading.BoundedSemaphore(4)
 ROLES = ("히어로", "사용 상황", "핵심 기능", "장점", "구성·스펙", "FAQ")
 
 
@@ -316,7 +317,8 @@ def handler(lab, origin):
             self.wfile.write(raw)
 
         def dispatch(self, method):
-            if not SLOTS.acquire(blocking=False):
+            slots = SLOTS if method == "POST" else READ_SLOTS
+            if not slots.acquire(timeout=5):
                 return self.reply(503, b'{"error":"Busy; retry later"}')
             try:
                 self.connection.settimeout(15)
@@ -337,7 +339,7 @@ def handler(lab, origin):
                     value = [{k: p[k] for k in ("id", "brief", "state", "created_at")} for p in (lab.read(d.name) for d in sorted(lab.state.glob("dp_*")) if (d / "project.json").is_file()) ]
                 elif path == "/api/projects" and method == "POST":
                     value = lab.create(body)
-                elif match := re.fullmatch(r"/api/projects/(dp_[a-f0-9]{24})(?:/(plan|review|images|review-images|request.zip|results.zip|assets/[^/]+))?", path):
+                elif match := re.fullmatch(r"/api/projects/(dp_[a-f0-9]{24})(?:/(plan|review|images|review-images|request.zip|results.zip|draft.zip|assets/[^/]+))?", path):
                     ident, action = match.groups()
                     if method == "GET" and action is None:
                         value = lab.read(ident)
@@ -364,7 +366,7 @@ def handler(lab, origin):
             except Exception:
                 self.reply(500, b'{"error":"Independent lab request failed"}')
             finally:
-                SLOTS.release()
+                slots.release()
 
         def do_GET(self):
             self.dispatch("GET")
