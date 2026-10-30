@@ -517,6 +517,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
             <div className="heading-actions">
               <KnowledgeDrawer />
+              {(view === "studio" || view === "delivery") && <a className="button secondary" href="/detail-lab/" target="_blank" rel="noopener noreferrer">상세페이지 만들기 ↗</a>}
               {view === "news" && (
                 <button
                   className="button secondary"
