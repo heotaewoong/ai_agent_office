@@ -10,12 +10,13 @@ const POLL_MS = 4_000;
 const POLL_LIMIT = 30;
 
 /** 승인 원고 → 카드뉴스 6~8장. 넘침·오탈자 검사 결과를 함께 보여줍니다. */
-export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; action: Action }) {
+export function CardsPanel({ job, busy, action, blockedReason }: { job: Job; busy: boolean; action: Action; blockedReason?: string | null }) {
   const [cards, setCards] = useState<Cards | null>(null);
   const [loadError, setLoadError] = useState("");
   const [pending, setPending] = useState<{ before: string } | null>(null);
   const [images, setImages] = useState(true);
-  const approved = sourceApproved(job.state);
+  const [unavailableImages, setUnavailableImages] = useState<string[]>([]);
+  const approved = sourceApproved(job.state) && job.source_approval?.decision === "approved" && job.source_approval.version === job.source_hash;
 
   const load = useCallback(async () => {
     try {
@@ -72,10 +73,10 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
             <input type="checkbox" checked={images} onChange={(event) => setImages(event.target.checked)} />
             제작 설정의 배경 이미지 프로필 사용 (이미지 없음이면 글자 카드)
           </label>
-          <button className="button secondary small" type="button" disabled={busy || !approved || Boolean(pending)} onClick={() => void generate()}>
-            {cards ? "다시 생성" : "카드뉴스 생성"}
+          <button className="button secondary small" type="button" disabled={busy || Boolean(blockedReason) || !approved || Boolean(pending)} onClick={() => void generate()}>
+            {pending ? "생성 중" : stale ? "현재 원고로 다시 생성" : cards ? "다시 생성" : "카드뉴스 생성"}
           </button>
-          <button className="button text small" type="button" disabled={busy} onClick={() => void load()} aria-label="카드뉴스 새로고침">
+          <button className="button text small" type="button" disabled={busy} onClick={() => { setUnavailableImages([]); void load(); }} aria-label="카드뉴스 새로고침">
             <Icon name="refresh" size={14} className={pending ? "spin" : ""} />
             새로고침
           </button>
@@ -92,19 +93,20 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
       <p className="muted">카드뉴스만 전체 ZIP으로 받거나 글·영상과 함께 통합 검토 ZIP으로 받을 수 있습니다. 검사 이슈도 포함되며, 출고 승인②와 플랫폼 업로드는 별도입니다.</p>
       <p className="muted">원고 승인에서 카드뉴스를 선택하면 검사에 통과한 현재 원고의 6~8장을 정식 제작물에 넣습니다. 여기서 별도로 다시 만든 카드는 기존 출고 승인본을 바꾸지 않습니다.</p>
       {approved && job.manifest?.hash && <a className="button secondary small" href={`/api/jobs/${encodeURIComponent(job.id)}/review-package`}>글·영상·카드 검토 ZIP 받기</a>}
-      {!approved && <p className="muted">① 원고 승인 뒤에만 만들 수 있습니다. 배경 이미지는 제작 설정을 따르고, 한국어 글자는 로컬에서 크게 얹습니다.</p>}
+      {!approved && <div className="notice" role="status"><span>현재 원고의 승인①이 없어 새 카드를 만들 수 없습니다. 수정한 원고를 확인하고, 제작 항목에서 카드뉴스를 선택해 승인하세요. <a href={`/scripts/${encodeURIComponent(job.id)}`}>현재 원고 검토·승인①으로 이동</a></span></div>}
+      {approved && blockedReason && <p className="notice" role="status">{blockedReason}</p>}
       {pending && <p className="muted">생성 요청을 받았습니다. 작업자가 저장하면 자동으로 표시됩니다.</p>}
       {loadError && <p className="field-error">{loadError}</p>}
       {stale && (
-        <div className="notice error">
+        <div className="notice">
           <Icon name="alert" size={16} />
-          <span>이 카드뉴스는 이전 원고 버전({cards?.source_hash.slice(0, 8)})으로 만들었습니다. 현재 원고로 다시 생성하세요.</span>
+          <span>이전 원고({cards?.source_hash.slice(0, 8)})로 만든 카드 미리보기입니다. {approved ? "현재 승인 원고로 다시 생성할 수 있습니다." : "새 카드는 현재 원고를 승인①한 뒤 만들 수 있습니다."}</span>
         </div>
       )}
       {cards && (
         <>
           <div className="derived-meta">
-            <span className={`badge ${cards.checks.passed ? "green" : "orange"}`}>{cards.checks.passed ? "검사 통과" : `검사 이슈 ${cards.checks.issues.length}개`}</span>
+            <span className={`badge ${cards.checks.passed ? "green" : "orange"}`}>{stale ? "이전 원고 · " : ""}{cards.checks.passed ? "검사 통과" : `검사 이슈 ${cards.checks.issues.length}개`}</span>
             <span className={`badge ${count >= 6 && count <= 8 ? "neutral" : "orange"}`}>{count}장</span>
             <span className="muted">
               버전 {cards.version} · {formatDate(cards.generated_at, true)} · 원고 {cards.source_hash.slice(0, 8)}
@@ -123,7 +125,7 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
               return (
                 <article className="card-slide" key={slide.index}>
                   <div className="card-slide-image">
-                    {url ? <img src={url} alt={`${slide.index}장 · ${slide.title}`} loading="lazy" /> : <span className="muted">이미지 없음</span>}
+                    {url && !unavailableImages.includes(url) ? <img src={url} alt={`${slide.index}장 · ${slide.title}`} loading="lazy" onError={() => setUnavailableImages((previous) => previous.includes(url) ? previous : [...previous, url])} /> : <span className="muted">{url ? "이미지를 불러오지 못했습니다. 새로고침으로 다시 확인하세요." : "이미지 없음"}</span>}
                   </div>
                   <span className="thumbnail-number">{String(slide.index).padStart(2, "0")}</span>
                   <h4>{slide.title}</h4>

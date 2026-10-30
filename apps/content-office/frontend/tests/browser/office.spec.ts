@@ -852,3 +852,43 @@ test("목차를 오가도 저장하지 않은 원고가 유지되고 숨긴 구�
   await expect(page.getByRole("button", { name: "원고 승인", exact: true })).toBeDisabled();
   expect(fixture.writes).toEqual([]);
 });
+
+test("작업실 목차는 핵심 제작물 6개만 표시하고 세부 패널을 펼쳐도 늘어나지 않는다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  await page.goto("/scripts/contract-test-job");
+  const outline = page.getByRole("navigation", { name: "이 페이지 목차", exact: true });
+  const links = outline.locator(".outline-links a");
+  await expect(links).toHaveCount(6);
+  await expect(links).toHaveText(["01제작 설정", "02블로그 글·제목", "03카드뉴스", "04영상", "05퀴즈", "06버전·작업 기록"]);
+  await page.getByText("제작 비용과 상한 확인", { exact: true }).click();
+  await page.getByText("원고 검수 결과 · 통과", { exact: true }).click();
+  await page.getByRole("button", { name: "근거 0", exact: true }).click();
+  await expect(links).toHaveCount(6);
+  await expect(page.locator(".studio-section")).toHaveCount(6);
+  await links.filter({ hasText: "영상" }).click();
+  await expect(page.getByRole("heading", { name: "영상", exact: true })).toBeFocused();
+  await expect(page.locator(".outline-location")).toContainText("영상");
+  await links.filter({ hasText: "블로그 글·제목" }).click();
+  await expect(page.locator(".outline-location")).toContainText("블로그 글·제목");
+  await expect(page.getByText("검증용 영상 계획", { exact: true })).toBeVisible();
+  expect(fixture.writes).toEqual([]);
+});
+
+test("모바일 제작물 목차 이동은 편집 내용을 보존하고 큰 구역과 현재 위치를 일치시킨다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/scripts/contract-test-job");
+  const body = page.getByLabel("본문 · Markdown", { exact: true });
+  await body.fill("저장하지 않은 원고를 유지합니다.");
+  const select = page.getByRole("combobox", { name: "목차 바로 이동", exact: true });
+  for (const title of ["카드뉴스", "영상", "퀴즈", "블로그 글·제목"]) {
+    await select.selectOption({ label: `${({"카드뉴스": 3, "영상": 4, "퀴즈": 5, "블로그 글·제목": 2})[title]}. ${title}` });
+    const heading = page.getByRole("heading", { name: title, exact: true });
+    await expect(heading).toBeFocused();
+    await expect(heading).toBeInViewport();
+    await expect(page.locator(".outline-location")).toContainText(title);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await expect(body).toHaveValue("저장하지 않은 원고를 유지합니다.");
+  expect(fixture.writes).toEqual([]);
+});

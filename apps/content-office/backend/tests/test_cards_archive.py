@@ -95,3 +95,31 @@ def test_archive_rejects_changed_incomplete_or_unsafe_inputs(bundle, change, tmp
     response = client.get(url)
     assert response.status_code in {404, 409}
     assert response.headers.get("content-type", "").startswith("application/json")
+
+
+def test_stale_card_preview_is_readable_without_becoming_current_or_approved(bundle):
+    store, client, job, cards, archive_url = bundle
+    store.update_job(job["id"], source_hash="new-source", state="source_rejected", source_approval=None)
+    before = store.job(job["id"])
+    record = cards["slides"][0]["artifact"]
+    response = client.get(f"/api/artifacts/{record['id']}")
+    assert response.status_code == 200
+    assert response.content == (store.artifacts / record["path"]).read_bytes()
+    assert response.headers["content-type"] == "image/png"
+    assert client.get(archive_url).status_code == 409
+    token = client.get("/api/session").json()["csrf"]
+    assert client.post(f"/api/jobs/{job['id']}/cards", headers={"Origin": "http://localhost:3110", "X-Office-CSRF": token}, json={"images": False}).status_code == 409
+    assert store.job(job["id"]) == before
+
+
+@pytest.mark.parametrize("change", ["tampered", "missing", "escape", "unknown"])
+def test_stale_card_preview_still_checks_registered_paths_and_hashes(bundle, change):
+    store, client, job, cards, _ = bundle
+    record = cards["slides"][0]["artifact"]
+    path = store.artifacts / record["path"]
+    if change == "tampered": path.write_bytes(b"changed")
+    elif change == "missing": path.unlink()
+    elif change == "escape": record["path"] = "../private.png"
+    store.update_job(job["id"], cards=cards, source_hash="new-source")
+    asset_id = "asset_unknown" if change == "unknown" else record["id"]
+    assert client.get(f"/api/artifacts/{asset_id}").status_code == (409 if change == "tampered" else 404)

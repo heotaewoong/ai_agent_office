@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 type Entry = { id: string; title: string };
 
 /** Navigation follows the rendered panels, including asynchronously loaded ones. */
-export function PageOutline({ scope }: { scope: string }) {
+export function PageOutline({ scope, curated = false }: { scope: string; curated?: boolean }) {
   const nav = useRef<HTMLElement>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [active, setActive] = useState("");
@@ -20,7 +20,10 @@ export function PageOutline({ scope }: { scope: string }) {
     const panels = new Set<HTMLElement>();
     const updatePosition = () => {
       frame = 0;
-      const edge = (nav.current?.getBoundingClientRect().bottom ?? 0) + 48;
+      const edge = Math.max(
+        (nav.current?.getBoundingClientRect().bottom ?? 0) + 48,
+        (nodes[0] ? parseFloat(getComputedStyle(nodes[0]).scrollMarginTop) || 0 : 0) + 8,
+      );
       const atBottom = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
       const current = atBottom ? nodes.at(-1) : nodes.filter((node) => node.getBoundingClientRect().top <= edge).at(-1) ?? nodes[0];
       setActive(current?.id ?? "");
@@ -29,7 +32,7 @@ export function PageOutline({ scope }: { scope: string }) {
       if (!frame) frame = requestAnimationFrame(updatePosition);
     };
     const collect = () => {
-      nodes = Array.from(root.querySelectorAll<HTMLElement>("h2, h3")).filter((node) =>
+      nodes = Array.from(root.querySelectorAll<HTMLElement>(curated ? "[data-outline-title]" : "h2, h3")).filter((node) =>
         !node.closest(".page-outline, .job-sidebar, .job-heading, [hidden], details:not([open]), [role=dialog]") &&
         node.getClientRects().length > 0 && Boolean(node.textContent?.trim()),
       );
@@ -45,7 +48,7 @@ export function PageOutline({ scope }: { scope: string }) {
           panel.classList.add("outline-panel");
           panels.add(panel);
         }
-        return { id: node.id, title: node.textContent!.trim().replace(/\s+/g, " ") };
+        return { id: node.id, title: node.dataset.outlineTitle || node.textContent!.trim().replace(/\s+/g, " ") };
       });
       setEntries((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
       schedulePosition();
@@ -66,7 +69,7 @@ export function PageOutline({ scope }: { scope: string }) {
       for (const node of nodes) node.classList.remove("outline-target");
       for (const panel of panels) panel.classList.remove("outline-panel");
     };
-  }, [scope]);
+  }, [scope, curated]);
 
   function moveTo(id: string) {
     const target = document.getElementById(id);
