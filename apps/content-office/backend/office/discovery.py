@@ -73,7 +73,11 @@ def feeds_for(value):
 
 def queue(store):
     value = config(store)
-    return store.enqueue('discover', {'config_hash': digest(value)}, key=f'discover:{digest(value)}:{int(time.time())//900}')
+    prefix = f'discover:{digest(value)}:{int(time.time())//900}'
+    with store.connection() as db:
+        finished = db.execute("SELECT COUNT(*) FROM tasks WHERE kind='discover' AND dedup_key LIKE ? AND state NOT IN ('queued','running')", (prefix + '%',)).fetchone()[0]
+    # Public metadata is safe to request again after cancellation; model/cost retries stay untouched.
+    return store.enqueue('discover', {'config_hash': digest(value)}, key=f'{prefix}:{finished}')
 
 
 def restore_cached(store, value):
@@ -111,17 +115,21 @@ def record(store, value, articles, report):
         candidates = [r for r in articles if r.get('segment') == 'ai' and relevant(r['title'] + ' ' + r.get('summary', ''), value['topic'])]
         def weight(row):
             kind = row.get('source_kind', 'official')
-            return (len(kinds) - kinds.index(kind) if kind in kinds else 0, row.get('score', 0))
+            metric = {'youtube': 'youtube_views', 'community': 'hn_points'}.get(kind)
+            measured = row.get('signals', {}).get(metric) if metric else None
+            # Different units are compared only after source-kind priority, never summed together.
+            popularity = measured if type(measured) is int and measured >= 0 else -1
+            return (len(kinds) - kinds.index(kind) if kind in kinds else 0, popularity, row.get('score', 0))
         candidates.sort(key=weight, reverse=True)
         recommendations[platform] = [{'id': r['id'], 'title': r['title'], 'url': r['url'], 'feed_name': r.get('feed_name'),
                                       'kind': r.get('source_kind', 'official'), 'signals': r.get('signals', {}),
                                       'published_at': r.get('published_at'), 'observed_at': r.get('retrieved_at'),
                                       'date_note': r.get('date_note'), 'signal_note': r.get('signal_note'),
-                                      'reason': f"{PLATFORMS[platform]} 조사 우선 출처 + 주제 일치. 반응 수치는 사실 확인이나 흥행 보장이 아닙니다"}
+                                      'reason': f"{PLATFORMS[platform]} 출처 우선순위 → 같은 출처 종류의 누적 반응 → 날짜·편집 점수. 사실 확인이나 흥행 보장은 별도입니다"}
                                      for r in candidates[:6]]
     snapshot = {'config_hash': digest(value), 'config': value, 'checked_at': report['checked_at'],
                 'sources': report['feeds'], 'feed_report': report, 'recommendations': recommendations, 'paid_calls': 0,
-                'method': '출처 종류·주제 일치·발행일에 따른 규칙 추천. AI 예측이나 플랫폼 전체 트렌드 순위가 아님'}
+                'method': '주제 일치 후보에서 출처 우선순위·동일 종류의 누적 반응·날짜를 비교한 규칙 추천. AI 예측·증가율·플랫폼 전체 순위가 아님'}
     store.set_setting('discovery_report', snapshot)
     store.set_setting('discovery_report:' + digest(value), snapshot)
     return snapshot
