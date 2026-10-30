@@ -66,8 +66,10 @@ export function installPlayHub(doc = document, office = () => window.__officeWor
     if (opened && event.target.closest('button,summary') && !event.target.closest('#btn-play-hub')) setOpen(false);
   }, true);
   doc.addEventListener('click', event => {
-    if (opened && event.target.closest('.free-drive-ride,.tour-start,.alien-game-start') &&
-        office()?.space.view === 'walk') {
+    const action = event.target.closest('.free-drive-ride,.tour-start,.alien-game-start');
+    const current = office();
+    const started = action?.matches('.alien-game-start') ? current?.space.view === 'walk' : current?.controls.vehicleSpeed > 0;
+    if (opened && action && started) {
       setOpen(false);
       // Escape returns to the menu; starting gameplay returns keys to the world.
       const canvas = doc.getElementById('scene');
