@@ -1915,7 +1915,7 @@
     onKey(e, down) {
       const k = e.key.toLowerCase();
       if (!down) this.keys.delete(k);
-      if (space.rosterOpen || space.buildingOpen || space.resultsOpen) return;
+      if (space.rosterOpen || space.buildingOpen || space.resultsOpen || space.playHubOpen) return;
       if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       if (down && k === 'escape') {
         if (space.view === 'walk') { this.exitSpace(); return; }
