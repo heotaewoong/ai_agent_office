@@ -12,8 +12,9 @@ export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
     { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite · 가벼움", paid: true, hint: "입력 $0.30 · 출력 $2.50 / 100만 토큰" },
   ],
   voice: [
-    { id: "windows-heami", label: "Windows Heami · 로컬", paid: false, hint: "Windows PC에서만 생성됩니다. EC2(Linux)에서는 Gemini 음성을 고르세요." },
-    { id: "gemini-kore", label: "Gemini Flash TTS · Kore", paid: true, hint: "원고 승인① 뒤 승인 장면 대본만 합성 · 원고당 1,000원 상한" },
+    { id: "windows-heami", label: "Windows Heami · 로컬", paid: false, hint: "Windows PC에서만 생성됩니다. EC2(Linux)에서는 OpenAI 또는 Gemini 음성을 고르세요." },
+    { id: "gemini-kore", label: "Gemini Flash TTS · Kore", paid: true, hint: "원고 승인① 뒤 승인 장면 대본만 합성 · 원고당 1,000원 상한 · 수요 폭주 시 503으로 멈출 수 있음" },
+    { id: "openai-tts", label: "OpenAI gpt-4o-mini-tts · 한국어", paid: true, hint: "원고 승인① 뒤 승인 장면 대본만 합성 · 텍스트 $0.60 · 오디오 $12 / 100만 토큰 · 원고당 1,000원 상한" },
   ],
   image: [
     { id: "none", label: "생성 배경 없음 · 글자 카드", paid: false, hint: "지금처럼 로컬에서 글자 카드만 그립니다." },
@@ -53,6 +54,8 @@ export function settingsWarnings(provider: ProviderStatus | undefined): string[]
     warnings.push(`선택 글 모델(${text.model})에 필요한 ${text.env} 연결이 없습니다. 글 모델을 사용하는 근거 요약·원고·비평·평가·국어 검수 요청을 시작할 수 없습니다.`);
   if (p.voice?.id === "gemini-kore" && !geminiConfigured)
     warnings.push("Gemini 음성을 골랐지만 GEMINI_API_KEY가 없어 영상 음성을 만들 수 없습니다.");
+  if (p.voice?.id === "openai-tts" && p.voice.configured === false)
+    warnings.push("OpenAI 음성을 골랐지만 OPENAI_API_KEY가 서버에 없어 영상 음성을 만들 수 없습니다.");
   if (p.image?.id === "codex-subscription" && !p.image.configured)
     warnings.push("Codex 구독 배경을 골랐지만 서버의 앱 계정에 codex 설치·로그인이 없습니다. 영상·카드 제작이 실패합니다.");
   else if (p.image?.id && p.image.id !== "none" && !p.image.configured)

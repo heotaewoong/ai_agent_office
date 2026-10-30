@@ -14,7 +14,7 @@ import {
 } from "../lib/settings.ts";
 
 test("프로필 선택지는 서버 등록값과 같다", () => {
-  assert.deepEqual(PROFILE_OPTIONS.voice.map((o) => o.id), ["windows-heami", "gemini-kore"]);
+  assert.deepEqual(PROFILE_OPTIONS.voice.map((o) => o.id), ["windows-heami", "gemini-kore", "openai-tts"]);
   assert.deepEqual(PROFILE_OPTIONS.image.map((o) => o.id), ["none", "openai-gpt-image", "codex-subscription"]);
   assert.deepEqual(PROFILE_OPTIONS.clip.map((o) => o.id), ["none", "runway-gen4-turbo", "runway-gen4.5"]);
   assert.ok(PROFILE_OPTIONS.image.find((o) => o.id === "openai-gpt-image")!.paid);
@@ -44,6 +44,17 @@ test("켠 유료 프로필의 키가 없으면 경고, 생성 영상은 배경�
     settingsWarnings({ configured: true, voice: { id: "gemini-kore" }, image: { id: "openai-gpt-image", configured: true }, clip: { id: "none" } }),
     [],
   );
+});
+
+test("OpenAI 음성은 OPENAI_API_KEY 연결을 경고하고 단가를 안내한다", () => {
+  const openai = PROFILE_OPTIONS.voice.find((o) => o.id === "openai-tts")!;
+  assert.ok(openai.paid && openai.hint.includes("$12") && openai.hint.includes("1,000원"));
+  assert.ok(PROFILE_OPTIONS.voice.find((o) => o.id === "windows-heami")!.hint.includes("OpenAI"));
+  const base = { configured: true, image: { id: "none", configured: false }, clip: { id: "none" } };
+  const missing = settingsWarnings({ ...base, voice: { id: "openai-tts", configured: false } });
+  assert.equal(missing.length, 1);
+  assert.ok(missing[0].includes("OPENAI_API_KEY") && missing[0].includes("음성"));
+  assert.deepEqual(settingsWarnings({ ...base, voice: { id: "openai-tts", configured: true } }), []);
 });
 
 test("키 연결 표시는 값이 아니라 연결 여부만", () => {

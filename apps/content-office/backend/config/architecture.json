@@ -242,6 +242,18 @@
     },
     {
       "state": "warn",
+      "label": "검증 중",
+      "text": "OpenAI 음성(gpt-4o-mini-tts) 영상 내레이션",
+      "note": "2026-10-30 구현, EC2 실제 영상 제작으로 확인 예정"
+    },
+    {
+      "state": "warn",
+      "label": "연결 대기",
+      "text": "YouTube 채널 연결 버튼(Google 로그인)",
+      "note": "2026-10-30 구현. Google OAuth 클라이언트(YOUTUBE_CLIENT_ID·SECRET)와 리디렉션 주소 등록 후 사용 가능"
+    },
+    {
+      "state": "warn",
       "label": "미확인",
       "text": "영상 제작·② 출고·뉴스레터 자동 초안",
       "note": "코드와 테스트는 있음, 실제 원고로는 아직 안 돌림"

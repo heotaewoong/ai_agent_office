@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { deliveryLabel, localeLabel, validChannelId } from "../lib/channels";
+import { connectBlockedReason, connectionLabel, type YoutubeOAuthStatus } from "../lib/youtube-oauth";
 import type { Action, Channel } from "../lib/types";
 import { Icon } from "./icons";
 
@@ -11,6 +12,9 @@ export function ChannelsPanel({ busy, action }: { busy: boolean; action: Action 
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loadError, setLoadError] = useState("");
   const [accounts, setAccounts] = useState<Record<string, string>>({});
+  const [oauth, setOauth] = useState<YoutubeOAuthStatus | null>(null);
+  const [oauthError, setOauthError] = useState("");
+  const [connecting, setConnecting] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -21,7 +25,33 @@ export function ChannelsPanel({ busy, action }: { busy: boolean; action: Action 
     } catch (cause) {
       setLoadError(cause instanceof Error ? cause.message : "채널 목록을 불러오지 못했습니다.");
     }
+    try {
+      setOauth(await api.youtubeOAuthStatus());
+    } catch {
+      setOauth(null);
+    }
   }, []);
+
+  const blocked = connectBlockedReason(oauth);
+
+  /** Google 로그인 화면으로 이동합니다. 돌아오면 첫 화면이 결과를 알립니다. 연결은 발행이 아닙니다. */
+  async function connect(channel: Channel) {
+    setConnecting(channel.key);
+    setOauthError("");
+    try {
+      const { authorize_url } = await api.youtubeOAuthStart(channel.key);
+      if (!authorize_url.startsWith("https://accounts.google.com/")) throw new Error("예상하지 못한 로그인 주소입니다. 연결을 중단했습니다.");
+      window.location.assign(authorize_url);
+    } catch (cause) {
+      setOauthError(cause instanceof Error ? cause.message : "YouTube 연결을 시작하지 못했습니다.");
+      setConnecting("");
+    }
+  }
+
+  async function disconnect(channel: Channel) {
+    const ok = await action("YouTube 연결 해제", () => api.youtubeOAuthDisconnect(channel.key), `${channel.label}의 로그인 연결 토큰을 서버 비밀 파일에서 지웠습니다. 실행 환경 파일의 토큰과 등록된 채널 ID는 그대로입니다.`);
+    if (ok === true) await load();
+  }
 
   useEffect(() => {
     void load();
@@ -47,9 +77,19 @@ export function ChannelsPanel({ busy, action }: { busy: boolean; action: Action 
     <section className="settings-card" aria-label="채널">
       <h2>채널</h2>
       <p className="settings-help">
-        오너가 준 공개 주소와 계정 ID만 적습니다. 주소 존재·소유권·발행 권한·실제 게시 성공은 각각 별개이며, 토큰은 서버 환경 파일에만 있고 화면에 표시하거나 입력받지 않습니다. 발행 허용은 기본으로 꺼져 있습니다.
+        오너가 준 공개 주소와 계정 ID만 적습니다. 주소 존재·소유권·발행 권한·실제 게시 성공은 각각 별개이며, 토큰은 서버 환경 파일이나 상태 폴더 밖 비밀 파일에만 있고 화면에 표시하거나 입력받지 않습니다. 발행 허용은 기본으로 꺼져 있습니다.
       </p>
       {loadError && <p className="field-error">{loadError}</p>}
+      <p className="settings-help">
+        YouTube 채널은 &lsquo;YouTube 연결&rsquo;로 채널 소유 계정에 로그인하면 서버가 토큰을 상태 폴더 밖 비밀 파일에 저장합니다. 연결은 발행이 아니며 업로드는 출고 승인② 뒤 비공개로만 올라갑니다.
+        {oauth?.redirect_uri && (
+          <>
+            {" "}Google Cloud OAuth 클라이언트의 승인된 리디렉션 URI: <code>{oauth.redirect_uri}</code>
+          </>
+        )}
+      </p>
+      {blocked && <p className="field-error">{blocked}</p>}
+      {oauthError && <p className="field-error" role="alert">{oauthError}</p>}
       {channels.length > 0 && (
         <div className="channel-table-wrap">
           <table className="channel-table">
@@ -71,6 +111,7 @@ export function ChannelsPanel({ busy, action }: { busy: boolean; action: Action 
                 const valid = validChannelId(draft);
                 const changed = draft.trim() !== (channel.external_account_id ?? "");
                 const editable = channel.platform === "youtube";
+                const oauthEntry = oauth?.channels.find((entry) => entry.key === channel.key);
                 return (
                   <tr key={channel.key}>
                     <td>
@@ -117,10 +158,26 @@ export function ChannelsPanel({ busy, action }: { busy: boolean; action: Action 
                     </td>
                     <td>
                       {channel.delivery === "youtube_api" ? (
-                        <span className={channel.credentials_configured ? "cred ok" : "cred missing"}>
-                          <Icon name={channel.credentials_configured ? "check" : "alert"} size={13} />
-                          {channel.credentials_configured ? "연결됨" : "토큰 없음"}
-                        </span>
+                        <div className="channel-account">
+                          <span className={channel.credentials_configured ? "cred ok" : "cred missing"}>
+                            <Icon name={channel.credentials_configured ? "check" : "alert"} size={13} />
+                            {oauth ? connectionLabel(oauthEntry) : channel.credentials_configured ? "연결됨" : "토큰 없음"}
+                          </span>
+                          <button
+                            className="button secondary"
+                            type="button"
+                            disabled={busy || Boolean(connecting) || Boolean(blocked) || oauthEntry?.source === "env"}
+                            title={oauthEntry?.source === "env" ? "실행 환경 파일의 토큰이 우선합니다. 로그인 연결을 쓰려면 환경 파일에서 이 채널의 토큰을 지우세요." : (blocked ?? undefined)}
+                            onClick={() => void connect(channel)}
+                          >
+                            {connecting === channel.key ? "Google로 이동 중…" : oauthEntry?.source === "file" ? "다시 연결" : "YouTube 연결"}
+                          </button>
+                          {oauthEntry?.file_stored && (
+                            <button className="button text" type="button" disabled={busy || Boolean(connecting)} onClick={() => void disconnect(channel)}>
+                              연결 해제
+                            </button>
+                          )}
+                        </div>
                       ) : (
                         <span className="muted">해당 없음</span>
                       )}

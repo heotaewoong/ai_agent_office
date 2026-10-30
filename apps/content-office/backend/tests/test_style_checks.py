@@ -51,3 +51,17 @@ def test_brand_config_carries_voice_rules_and_overclaims():
     assert {"무조건 합격", "3일 완성", "뇌과학으로 입증"} <= set(brand["banned"])
     prompt = brand_system_prompt("BASE", brand)
     assert "해요체" in prompt and "뇌과학으로 입증" in prompt
+
+
+def test_korean_brief_rejects_english_only_scene_captions():
+    from office.editorial import deterministic_checks
+    good = packet(GOOD_BODY)
+    good["video"]["scenes"][1] = {"narration": "세 가지만 기억해요", "caption": "1~400 independent questions", "visual": "표"}
+    checks = deterministic_checks(good)
+    assert any("장면 제목이 한국어가 아니에요" in issue for issue in checks["issues"])
+    good["video"]["scenes"][1]["caption"] = "독립 질문 1~400개(independent questions)"
+    assert not any("장면 제목" in issue for issue in deterministic_checks(good)["issues"])
+    english = packet(GOOD_BODY)
+    english["audience"] = {"language": "en"}
+    english["video"]["scenes"][1] = {"narration": "x", "caption": "independent questions", "visual": "표"}
+    assert not any("장면 제목" in issue for issue in deterministic_checks(english)["issues"])
