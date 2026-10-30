@@ -44,6 +44,7 @@ import { Icon } from "./icons";
 import { PageOutline } from "./page-outline";
 import deliveryStyles from "./delivery-view.module.css";
 import { WorldView } from "./world-view";
+import { reuseUnchangedJob } from "../lib/job-snapshot";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ArchitectureView } from "./architecture-view";
@@ -285,7 +286,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
     try {
       const data = await api.job(id);
       const current = jobRefresh.current.settle(ticket);
-      if (alive.current && current) setJob(data);
+      if (alive.current && current) setJob(previous => reuseUnchangedJob(previous, data));
     } catch (cause) {
       if (jobRefresh.current.settle(ticket) && alive.current) throw cause;
     }

@@ -1395,11 +1395,13 @@
         if (!template || template.isDisposed()) {
           template = B.Mesh.MergeMeshes(parts, true, true, undefined, false, false);
           template.name = 'desk-template-' + name; template.isVisible = false; template.isPickable = false;
+          template.freezeWorldMatrix();
           this.deskDetailTemplates.set(key, template);
         } else parts.forEach(mesh => mesh.dispose());
         const instance = template.createInstance('desk-static-' + name);
         instance.parent = g; instance.isVisible = true;
         instance.metadata = { stageId: st.id }; instance.isPickable = pickable;
+        instance.computeWorldMatrix(true); instance.freezeWorldMatrix();
       }
       const sit = this.local(st, x + Math.sin(rotY) * 1.0, 0, z + Math.cos(rotY) * 1.0);
       st.desks.push({ slot, sitPos: sit, faceY: st.rotY + rotY + Math.PI, screen, taken: null, localX: x, localZ: z, rotY });

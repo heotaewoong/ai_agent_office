@@ -458,7 +458,7 @@ test("실제 RSS 스냅샷의 후보 선택은3개로제한하고CSRF로작업�
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/news?seg=all");
-  const checkboxes = page.getByRole("checkbox");
+  const checkboxes = page.getByRole('region', { name: '오늘 주목할 뉴스' }).getByRole("checkbox");
   await expect(checkboxes).toHaveCount(6);
   await checkboxes.nth(0).check();
   await checkboxes.nth(1).check();
