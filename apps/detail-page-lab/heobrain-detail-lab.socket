@@ -1,0 +1,11 @@
+[Unit]
+Description=HeoBrain independent detail-page lab socket
+
+[Socket]
+ListenStream=/run/heobrain-detail-lab.sock
+SocketUser=root
+SocketGroup=www-data
+SocketMode=0660
+
+[Install]
+WantedBy=sockets.target

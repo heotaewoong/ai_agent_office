@@ -1,0 +1,39 @@
+# 독립 상세페이지 실험실
+
+기존 콘텐츠 오피스와 분리된 검증 공간입니다. Python 표준 라이브러리만 사용하며 기존 DB·승인·예약·키·모델 제공자를 가져오지 않습니다. 작업실에는 `/detail-lab/` 링크만 추가합니다.
+
+## 현재 가능한 작업
+
+1. 사용 권한을 확인한 상품 사진 1~3장과 사실 정보를 등록합니다.
+2. 입력한 사실을 정리한 6장 구성표를 고치고 사람이 확인합니다. 이 단계는 템플릿 정리이며 AI 생성이 아닙니다.
+3. 생성 요청서·사진·구성표 ZIP을 이미지 생성 가능한 Codex/ChatGPT에 전달합니다.
+4. 원본 mini 스킬로 생성한 결과 6장을 가져옵니다. PNG/JPG 형식·중복·1080×2160 규격을 검사합니다.
+5. 제품 모양·문구·사용 권리를 직접 검수한 뒤 결과 ZIP을 받습니다. 기존 출고 승인·스토어 등록은 실행하지 않습니다.
+
+## 원본 평가와 경계
+
+- 원본: https://github.com/techtreecoltd/machinebot-sangse-maker-mini
+- 버전 1.1.0, 고정 커밋 `f2139f04bc0916e4d8f10bbc257edfca57940c7a`.
+- 원본은 웹앱이나 서버 API가 아니라 호스트 이미지 생성 도구에 의존하는 스킬 묶음입니다. 따라서 **EC2 자동 이미지 생성 엔진은 미연결**입니다.
+- README는 mini 무료 사용을 안내하지만 LICENSE 파일과 재배포·상업적 개작 조건은 명시하지 않습니다. 원본은 EC2에 비공개·무변경 보관하며 이 저장소에 재배포하지 않습니다. 상업적 재배포 전에는 원저작자의 조건 확인이 필요합니다.
+- 원본의 전역 always-on 지침, 빌드 스크립트, 구독을 소비하는 트리거 평가는 실행하지 않습니다. 기존 전역 AGENTS·플러그인·훅을 변경하지 않습니다.
+- 생성 품질은 실제 상품 사진과 이미지 생성 호스트에서 별도 평가해야 합니다. 합성 파일로 통과한 검사는 실제 상품의 이미지 품질 검증을 뜻하지 않습니다.
+
+## 독립 실행과 검사
+
+```sh
+python3 -m unittest -v test_server
+python3 server.py --state /tmp/detail-lab-state --origin http://127.0.0.1:8525
+```
+
+운영 설치는 검토한 커밋의 앱 파일과 고정 원본의 `git archive`를 준비한 뒤 `install_ec2.py`에 명시적으로 전달합니다. 설치기는 기존 Nginx 인증 지시문을 복사하고 원래 location을 보존하며 검사 실패 시 프록시 설정을 복구합니다. 기존 앱을 중지하거나 재시작하지 않습니다. 콘텐츠 작업실 UI 링크의 배포는 기존 안전 배포기를 별도로 사용합니다.
+
+운영 구조: `/opt/heobrain-detail-lab/releases/<commit>` / `current` / `upstream/<source-commit>`, 상태 `/var/lib/heobrain-detail-lab`, 소켓 `/run/heobrain-detail-lab.sock`. DynamicUser·ProtectHome·PrivateNetwork·AF_UNIX 제한으로 외부 통신과 기존 홈 접근을 차단합니다. 기본 HTTP 인증은 기존 Nginx와 같습니다. root/sudo 관리자는 데이터를 읽을 수 있습니다.
+
+자원 한도: 메모리 384MB, CPU 한 코어의 25%, 32 tasks, 업로드 5MB/장, 자체 보관 256MB·30실험. 같은 EC2 하드웨어를 사용하므로 자원 영향이 절대 0이라는 보장은 하지 않습니다. 기존 키·데이터·대기열과의 논리적 결합은 없습니다.
+
+## 중지·제거·복구
+
+문제 발생 시 `systemctl stop heobrain-detail-lab.socket heobrain-detail-lab.service`로 실험실만 중지합니다. `/opt/heobrain-detail-lab/nginx-before-*.conf`와 현재 설정의 다른 운영자 변경을 비교하고 **실험실 location만 제거한 뒤** `nginx -t`와 graceful reload를 실행합니다. 기존 DB나 프로필은 복원·덮어쓰기하지 않습니다. 실험 자료는 보존하며 삭제는 별도 요청을 받습니다.
+
+원본을 업데이트할 때는 새 커밋·이용조건·스킬 동작을 다시 검토하고 새 버전 디렉터리에 넣습니다. 자동 pull/업데이트를 하지 않습니다. 별도 의존성 설치는 없으며 제거할 패키지도 없습니다.

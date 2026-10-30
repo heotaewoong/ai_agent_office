@@ -1,0 +1,28 @@
+[Unit]
+Description=HeoBrain independent detail-page pilot
+Requires=heobrain-detail-lab.socket
+After=heobrain-detail-lab.socket
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/heobrain-detail-lab/current/server.py --state /var/lib/heobrain-detail-lab --upstream /opt/heobrain-detail-lab/upstream/f2139f04bc0916e4d8f10bbc257edfca57940c7a --origin https://77-114-15-207.sslip.io
+DynamicUser=yes
+StateDirectory=heobrain-detail-lab
+StateDirectoryMode=0700
+WorkingDirectory=/opt/heobrain-detail-lab/current
+UMask=0077
+MemoryMax=384M
+CPUQuota=25%
+TasksMax=32
+LimitNOFILE=256
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+Restart=on-failure
+RestartSec=3

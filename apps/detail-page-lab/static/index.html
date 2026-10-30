@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>상세페이지 실험실 · HeoBrain</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script></head>
+<body><a class="skip" href="#main">본문으로 이동</a><header><a class="brand" href="/scripts">HeoBrain <span>콘텐츠 작업실로</span></a><span class="tag">독립 실험실</span></header>
+<main id="main"><section class="hero"><p class="eyebrow">사진 한 장에서, 구매를 돕는 설명까지</p><h1>상세페이지 실험실<span>먼저 작게 만들어 비교하세요.</span></h1><p>기존 콘텐츠의 원고·승인·예약과 분리된 공간입니다. 상품 사진과 확인된 정보로 구성표를 만들고, 이미지 생성 환경에 전달한 뒤 결과를 검수합니다.</p><p id="engine" class="notice" role="status">원본 패키지 상태를 확인하고 있어요.</p></section>
+<div id="error" class="error" role="alert" hidden></div><ol class="steps" aria-label="상세페이지 검증 순서"><li>상품 등록</li><li>구성표 확인</li><li>생성 요청서 전달</li><li>이미지 검수</li></ol>
+<div class="layout"><aside><h2>내 실험</h2><button id="new" type="button" class="secondary">새 실험 만들기</button><div id="projects"></div></aside><section>
+<form id="brief"><h2>무엇을 소개할까요?</h2><p>원본 사진은 변경하지 않습니다. 사용 권한이 있고 개인정보가 없는 상품 사진을 넣으세요.</p>
+<label for="product">상품 이름</label><input id="product" required maxlength="120" placeholder="예: 나의 전자책 또는 실물 상품">
+<label for="audience">누구에게 필요한가요?</label><input id="audience" maxlength="240" placeholder="어떤 상황의 고객인지 한 문장으로">
+<label for="features">확인된 특징</label><textarea id="features" required maxlength="4000" rows="4" placeholder="제공되는 구성과 특징을 한 줄에 하나씩 적어 주세요. 확인되지 않은 효능·성과는 넣지 마세요."></textarea>
+<label for="specs">구성·규격·사용 조건</label><textarea id="specs" maxlength="2000" rows="3" placeholder="파일 수, 크기, 재질, 사용법 등 확인한 정보"></textarea>
+<label for="faq">구매 전 질문과 답</label><textarea id="faq" maxlength="2000" rows="3" placeholder="아직 모르는 답은 비워 두고 구성표에서 확인하세요."></textarea>
+<label for="references">참조 사진 1~3장 · PNG/JPG · 파일당 5MB</label><input id="references" type="file" accept="image/png,image/jpeg" multiple required><div id="reference-preview" class="thumbs"></div>
+<label class="check"><input id="rights" type="checkbox" required>이 사진과 문구를 사용할 권한이 있으며, 인물·개인정보를 포함하지 않았습니다.</label>
+<button id="create" type="submit">무료 구성표 만들기</button><p class="hint">상품 정보를 그대로 정리하는 단계입니다. AI 호출·이미지 생성·게시 비용은 발생하지 않습니다.</p></form>
+<section id="work" hidden><div class="work-heading"><div><p class="eyebrow" id="stage"></p><h2 id="project-title"></h2></div><span class="tag">1080 × 2160 · 6장</span></div>
+<p id="next" class="notice"></p><div id="refs" class="thumbs"></div><div id="panels" class="panels"></div>
+<div class="actions"><button id="save-plan" class="secondary" type="button">구성표 수정 저장</button><label class="check"><input id="plan-confirm" type="checkbox">현재 구성표의 문구·사실·순서를 읽었습니다.</label><button id="approve-plan" type="button">이 구성으로 생성 요청 준비</button><a id="request" class="button secondary" hidden>생성 요청서 ZIP 받기</a></div>
+<section class="import"><h3>생성한 이미지 6장 가져오기</h3><p>이미지 생성 기능이 있는 Codex/ChatGPT에서 원본 mini 스킬과 요청서를 사용하세요. 생성 후 1080×2160px 이미지 6장을 순서대로 골라 주세요. 이 실험실은 원격 모델·기존 오피스 키와 자동 연결되지 않습니다.</p><label for="results">결과 이미지 · PNG/JPG · 파일당 5MB</label><input id="results" type="file" accept="image/png,image/jpeg" multiple><button id="import" class="secondary" type="button">6장 규격·중복 검사하고 가져오기</button></section>
+<div id="result-images" class="results"></div><div id="final-review" hidden><label class="check"><input id="image-confirm" type="checkbox">6장의 제품 모양·문구·순서·사용 권리를 직접 확인했습니다.</label><button id="approve-images" type="button">실험 결과 검수 완료</button><a id="result-zip" class="button" hidden>검수 결과 ZIP 받기</a><p class="hint">검수 완료는 기존 출고 승인이나 스토어 게시를 뜻하지 않습니다.</p></div></section>
+</section></div><footer><p>원본: <a href="https://github.com/techtreecoltd/machinebot-sangse-maker-mini" target="_blank" rel="noopener noreferrer">머신봇 상세 메이커 mini 1.1.0</a> · 원본은 버전을 고정해 별도 보관합니다.</p><p>재배포 라이선스 미명시 · 자동 이미지 생성 미연결 · 기존 콘텐츠로 자동 전송하지 않는 검증 공간</p></footer></main></body></html>
