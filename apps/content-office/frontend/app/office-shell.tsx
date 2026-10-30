@@ -735,6 +735,13 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 </>
               )}
 
+              {view === "studio" && (
+                <section className="notice" aria-label="상세페이지 실험실">
+                  <h2>상품 상세페이지를 따로 시험해 보세요</h2>
+                  <p>상품 사진과 정보로 6장 구성을 검토하고, 외부 AI에서 만든 이미지를 검사·다운로드합니다. 기존 콘텐츠 작업과 저장 공간이 분리된 실험실입니다. 자동 이미지 생성은 아직 연결되지 않았어요.</p>
+                  <a className="button" href="/detail-lab/" target="_blank" rel="noopener noreferrer">독립 상세페이지 실험실 열기 ↗</a>
+                </section>
+              )}
               {(view === "studio" || view === "delivery") && (
                 <div className="studio-layout">
                   <section
