@@ -1358,7 +1358,7 @@
       });
       // 방 안 모든 물체가 그림자를 드리우고 받는다
       st.node.getChildMeshes().forEach((m) => { if (m.name !== 'edge' && !/glow|screen|bulb|board-bar/.test(m.name)) this.castShadow(m); this.receiveShadow(m); });
-      if(idx===0)this.buildArchitecture('atrium',st.node);
+      if(idx===0)st.atriumArchitecture=this.buildArchitecture('atrium',st.node);
     },
 
     buildDesk(st, x, z, rotY, slot) {

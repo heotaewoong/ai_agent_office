@@ -4,6 +4,26 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Article, Dashboard, Job } from "../../lib/types";
 
+for (const width of [1440, 390]) {
+  test(`독자 브리프 ${width}px에서 편집칸을 읽고 펼침 전환 후 입력을 유지한다`, async ({ page }) => {
+    const fixture = await harness(page, true);
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/scripts/contract-test-job");
+    await page.getByText("대상 독자·해결할 문제·기대 결과", { exact: true }).click();
+    const panel = page.getByRole("region", { name: "독자 브리프", exact: true });
+    await panel.getByText("브리프 바꾸기", { exact: true }).click();
+    const reader = panel.getByLabel("독자 (비우면 프리셋 값)", { exact: true });
+    await reader.fill("직접 지정한 독자를 보존합니다");
+    const size = await reader.evaluate(el => ({ font: parseFloat(getComputedStyle(el).fontSize), height: el.getBoundingClientRect().height, width: el.getBoundingClientRect().width }));
+    expect(size.font).toBeGreaterThanOrEqual(16);expect(size.height).toBeGreaterThanOrEqual(48);expect(size.width).toBeGreaterThan(200);
+    await panel.getByText("브리프 바꾸기", { exact: true }).click();
+    await panel.getByText("브리프 바꾸기", { exact: true }).click();
+    await expect(reader).toHaveValue("직접 지정한 독자를 보존합니다");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(fixture.writes).toEqual([]);
+  });
+}
+
 test("숨겨진 작업실은 원고 조회를 쉬고 화면 복귀 시 수정 내용을 보존하며 갱신한다", async ({ page }) => {
   const fixture = await harness(page, true);
   let reads = 0;
