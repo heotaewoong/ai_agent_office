@@ -304,7 +304,7 @@ if (typeof document !== 'undefined') {
   mobileActions.querySelector('.mobile-ride').onclick = toggleRide;
   window.addEventListener('keydown', event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input,textarea,select,button,summary,a[href],[contenteditable="true"]')) return;
-    if (!active || office()?.space.view !== 'walk') return;
+    if (!active || office()?.space.view !== 'walk' || office()?.space.playHubOpen) return;
     if (event.key.toLowerCase() === 'f') { event.preventDefault(); catchNearest(); }
     if (event.key.toLowerCase() === 'v') { event.preventDefault(); toggleRide(); }
   });

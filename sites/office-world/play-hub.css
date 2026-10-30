@@ -1,0 +1,25 @@
+/* Existing controls live in one drawer; no new 3D scene or render loop. */
+.play-hub[hidden],.play-hub section[hidden]{display:none!important}
+.play-hub{position:fixed;z-index:65;top:140px;right:18px;bottom:76px;width:390px;max-width:calc(100vw - 36px);box-sizing:border-box;overflow:auto;overscroll-behavior:contain;padding:18px;color:#e9f4f7;background:#102333fa;border:1px solid #587b8d;border-radius:18px;box-shadow:0 20px 70px #0008;font:13px/1.6 system-ui,'Malgun Gothic',sans-serif}
+.play-hub-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.play-hub h2{font-size:17px;margin:0 0 5px}.play-hub-heading p{font-size:11px;color:#adc3ce;margin:0 0 14px}
+.play-hub button{cursor:pointer;font:inherit}.play-hub button:focus-visible,.play-hub summary:focus-visible{outline:3px solid #ffe3a1;outline-offset:3px}
+.play-hub-close{min-height:40px;padding:5px 12px;border:1px solid #587b8d;border-radius:9px;background:#203c4c;color:#fff;white-space:nowrap}
+.play-hub-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-bottom:12px}
+.play-hub-tabs button{min-height:42px;border:1px solid #47697c;border-radius:9px;color:#c3d9e4;background:#182f40;padding:7px 3px;font-size:12px}
+.play-hub-tabs button[aria-pressed=true]{color:#142d35;background:#a5e4d8;border-color:#c9f3e9;font-weight:700}
+.play-hub-note{font-size:11px;color:#b7ccd7;line-height:1.7;margin:0 0 12px}
+.play-hub-ready:not(.play-hub-open) #explore,.play-hub-ready:not(.play-hub-open) .city-activities,.play-hub-ready:not(.play-hub-open) .alien-game,.play-hub-ready:not(.play-hub-open) .free-drive{display:none!important}
+.play-hub #explore,.play-hub .city-activities,.play-hub .alien-game,.play-hub .free-drive,.play-hub .free-drive[open]{position:static!important;inset:auto!important;transform:none!important;width:100%!important;max-width:none!important;max-height:none!important;box-sizing:border-box;box-shadow:none;margin:0 0 12px}
+.play-hub .free-drive[open]{padding:12px}
+.play-hub .free-drive>summary{display:none}
+.play-hub-open .alien-game-pad,.play-hub-open .alien-game-mobile-actions{display:none!important}
+.play-hub .alien-game-panel{position:static!important;inset:auto!important;width:auto!important;max-height:none!important}
+.play-hub .city-activities-body{max-height:none}
+.play-hub #play-section-explore:not([hidden]) .city-activities{display:block!important}
+.play-hub .free-drive-controls{grid-template-columns:minmax(0,1fr)}
+.play-hub .free-drive-ride{width:100%}
+.play-hub-ready.free-drive-open .ticker{bottom:20px;max-width:420px;left:50%;right:auto;transform:translateX(-50%)}
+.play-hub-ready.free-drive-open .layer-nav{bottom:18px}
+@media(max-width:720px){.play-hub{top:142px;right:10px;bottom:max(12px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px);width:390px;padding:14px}.play-hub-heading h2{font-size:15px}.play-hub-ready.free-drive-open .ticker{display:none}.play-hub .free-drive select{font-size:16px}}
+@media(max-height:580px){.play-hub{top:85px;bottom:10px}}
