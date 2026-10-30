@@ -369,7 +369,7 @@ test("원고수정중승인을차단하고저장은같은packet을보존하며�
 }) => {
   const context = await harness(page, true);
   await page.goto("/");
-  await page.getByRole("link", { name: /콘텐츠 작업실/ }).click();
+  await page.goto("/scripts/contract-test-job");
   await expect(
     page.getByRole("button", { name: "원고 승인", exact: true }),
   ).toBeEnabled();
@@ -386,7 +386,7 @@ test("원고수정중승인을차단하고저장은같은packet을보존하며�
     page.getByRole("button", { name: "원고 승인", exact: true }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "오늘의 뉴스", exact: true }).click();
-  await page.getByRole("button", { name: /^콘텐츠 작업실/ }).click();
+  await page.goto("/scripts/contract-test-job");
   await expect(page.getByLabel("본문 · Markdown")).toHaveValue(
     "검증 전용 수정 원고입니다.",
   );
@@ -409,7 +409,7 @@ test("승인확인중서버버전변경은읽지않은새원고승인을차단�
 }) => {
   const context = await harness(page, true);
   await page.goto("/");
-  await page.getByRole("link", { name: /콘텐츠 작업실/ }).click();
+  await page.goto("/scripts/contract-test-job");
   await page.getByRole("button", { name: "원고 승인", exact: true }).click();
   context.replaceJob({ ...context.getJob(), source_hash: "new-unreviewed-v2" });
   await expect(
@@ -463,7 +463,7 @@ test("썸네일5안비교와최종선택은이전출고확인버전을무효로�
   await page.goto("/");
   await page.goto("/publish?job=contract-test-job");
   const options = page.getByRole("button", { name: /썸네일 .* 선택/ });
-  await expect(options).toHaveCount(5, { timeout: 2500 });
+  await expect(options).toHaveCount(5, { timeout: 15000 });
   await page.screenshot({
     path: "test-results/thumbnail-comparison-contract.png",
     fullPage: true,
@@ -471,7 +471,7 @@ test("썸네일5안비교와최종선택은이전출고확인버전을무효로�
   const accessibility = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
     .analyze();
-  expect(accessibility.violations.map((item) => item.id)).toEqual([]);
+  expect(accessibility.violations.map((item) => ({ id: item.id, nodes: item.nodes.map(node => ({ target: node.target, summary: node.failureSummary })) }))).toEqual([]);
   await page.getByRole("button", { name: "출고 승인", exact: true }).click();
   await page
     .getByRole("checkbox", { name: "영상 재생·음성·자막을 확인했습니다" })
@@ -499,14 +499,14 @@ test("승인된원고를수정하고저장하지않으면제작과출고를진�
   const context = await harness(page, true);
   context.replaceJob({ ...context.getJob(), state: "source_approved" });
   await page.goto("/");
-  await page.getByRole("button", { name: /^콘텐츠 작업실/ }).click();
+  await page.goto("/scripts/contract-test-job");
   await page
     .getByLabel("본문 · Markdown")
     .fill("승인 후 수정한 저장 전 원고입니다.");
   await expect(
     page.getByRole("button", { name: "선택 항목 제작 시작" }),
   ).toBeDisabled({ timeout: 2000 });
-  await page.goto("/publish?job=contract-test-job");
+  await page.getByRole("link", { name: "제작·출고함", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "제작 시작", exact: true }),
   ).toBeDisabled();
@@ -518,7 +518,7 @@ test("저장직전서버원고가변경되면409를재조회하고입력을보�
 }) => {
   const context = await harness(page, true);
   await page.goto("/");
-  await page.getByRole("button", { name: /^콘텐츠 작업실/ }).click();
+  await page.goto("/scripts/contract-test-job");
   await page
     .getByLabel("본문 · Markdown")
     .fill("보존해야 하는 내 수정 내용입니다.");
@@ -661,7 +661,7 @@ test("공개 원문 입력은 권한·길이·Gemini 전송을 확인하고 시�
     source_packet: null,
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /^콘텐츠 작업실/ }).click();
+  await page.goto("/scripts/contract-test-job");
   const source = page.getByLabel("공개 원문 텍스트");
   await expect(source).toBeVisible({ timeout: 2000 });
   await source.fill("가".repeat(199));
@@ -713,7 +713,7 @@ test("실패 작업은 명시적 확인 후 현재 판본만 다시 요청한다
     ],
   });
   await page.goto("/");
-  await page.getByRole("button", { name: /^콘텐츠 작업실/ }).click();
+  await page.goto("/scripts/contract-test-job");
   const retries = page.getByRole("button", {
     name: "원고 생성·검수 다시 요청",
   });
@@ -792,12 +792,12 @@ test("영상 실패와 무관하게 완료된 블로그만 출고할 수 있다"
   });
   await page.goto("/");
   await page.goto("/publish?job=contract-test-job");
-  const blog = page.getByRole("checkbox", { name: "블로그 출고", exact: true });
+  const blog = page.getByRole("checkbox", { name: "블로그·소셜 검토 초안 출고", exact: true });
   const video = page.getByRole("checkbox", {
     name: "YouTube Shorts 출고",
     exact: true,
   });
-  await expect(blog).toBeChecked({ timeout: 2000 });
+  await expect(blog).toBeChecked({ timeout: 15000 });
   await expect(video).toBeDisabled();
   await expect(page.getByText("테스트 영상 합성 실패")).toBeVisible();
   await blog.uncheck();

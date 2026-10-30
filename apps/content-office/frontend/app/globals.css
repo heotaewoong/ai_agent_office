@@ -4341,6 +4341,7 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .outline-links a span { color: var(--muted); font-size: 10px; }
 .outline-links a:hover { background: var(--green-light); border-color: #a4b8a6; }
 .outline-links a[aria-current] { background: #e5eee3; border-color: #6c8d71; color: #214b32; font-weight: 700; }
+.outline-links a[aria-current] span { color: #31543b; }
 .outline-location { font-size: 11px; color: #56624f; margin-top: 8px; overflow-wrap: anywhere; }
 .outline-select { display: none; }
 .outline-target { scroll-margin-top: 242px; }
