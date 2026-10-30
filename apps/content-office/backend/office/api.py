@@ -303,6 +303,8 @@ def create_app(store: Store | None = None):
     secret = secret_path.read_bytes()
     public = public_origin()
     allowed_origins = ALLOWED_ORIGINS | ({public} if public else set())
+    from .public_leads import PUBLIC_ROUTES, lead_allowed_origins
+    lead_origins = allowed_origins | lead_allowed_origins()  # 공개 신청 경로에만 쓰는 출처 목록
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "testserver"])
 
     def sign(value):
@@ -325,6 +327,11 @@ def create_app(store: Store | None = None):
     @app.middleware("http")
     async def local_session_guard(request: Request, call_next):
         origin = request.headers.get("Origin")
+        if (request.method, request.url.path) in PUBLIC_ROUTES:
+            # 운영자 세션 없이 여는 유일한 경로(공개 리드 신청·공개 자료 목록). 쓰기는 허용 출처를 반드시 요구한다.
+            if (origin or request.method != "GET") and origin not in lead_origins:
+                return JSONResponse({"detail": "허용되지 않은 화면의 요청입니다"}, status_code=403)
+            return await call_next(request)
         if origin and origin not in allowed_origins:
             return JSONResponse({"detail": "허용되지 않은 화면의 요청입니다"}, status_code=403)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
@@ -765,8 +772,10 @@ def create_app(store: Store | None = None):
         return store.review_lesson(lesson_id, review.decision, "local-operator")
 
     from .api_leads_newsletter import register as register_leads_newsletter; register_leads_newsletter(app, store)  # 리드 동의 장부·뉴스레터③·오퍼
+    from .public_leads import register as register_public_leads; register_public_leads(app, store, secret=secret, public_origin=public)  # 독자 공개 신청(세션 예외는 PUBLIC_ROUTES 두 경로뿐)
     from .api_calendar_questions import register as register_calendar_questions; register_calendar_questions(app, store)  # 시험 일정·시의성, 독자 질문 수집
     from .api_youtube_oauth import register as register_youtube_oauth; register_youtube_oauth(app, store)  # YouTube 채널 연결(OAuth) — 토큰은 상태 폴더 밖 비밀 파일
+    from .api_daily_collect import register as register_daily_collect; register_daily_collect(app, store)  # 매일 아침 뉴스 자동 수집 설정 — 저장만, 실행은 cron
 
     @app.get("/api/architecture")
     def architecture_overview():

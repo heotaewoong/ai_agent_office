@@ -36,6 +36,19 @@ def window_open(store, current=None):
     return not window.get("authorized_end") or current < aware_time(window["authorized_end"])
 
 
+def close_work_window(store, stopped_at, *, window_id=None, **marks):
+    """Mark the saved work window closed. With `window_id`, only that window is closed (None otherwise),
+    so a closer never closes a window someone else issued in the meantime."""
+    with store.connection(transaction=True) as db:
+        row = db.execute("SELECT value FROM settings WHERE key='work_window'").fetchone()
+        window = json.loads(row[0]) if row else {}
+        if window_id is not None and window.get("id") != window_id:
+            return None
+        window.update(status="closed", actual_stopped_at=stopped_at, automatic_research_stopped_at=stopped_at, **marks)
+        db.execute("INSERT OR REPLACE INTO settings VALUES('work_window',?)", (canonical(window),))
+        return window
+
+
 class AlreadyRunning(WorkflowError):
     pass
 
@@ -439,11 +452,7 @@ class WindowWatcher:
     def close(self):
         stopped = aware_time(self.clock()).astimezone(SEOUL).isoformat()
         outcome = self.stop_worker()
-        with self.store.connection(transaction=True) as db:
-            row = db.execute("SELECT value FROM settings WHERE key='work_window'").fetchone()
-            window = json.loads(row[0]) if row else {}
-            window.update(status="closed", actual_stopped_at=stopped, automatic_research_stopped_at=stopped)
-            db.execute("INSERT OR REPLACE INTO settings VALUES('work_window',?)", (canonical(window),))
+        close_work_window(self.store, stopped)
         self.status("stopped", stopped_at=stopped, worker_stop=outcome)
         self.emit("window_stopped", stopped_at=stopped, worker_stop=outcome)
 

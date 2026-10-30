@@ -1,5 +1,7 @@
 import type { ArchitectureOverview } from "./architecture";
 import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
+import type { DailyCollectPatch, DailyCollectStatus } from "./daily-collect";
+import type { PublicLeadFormInfo } from "./public-lead";
 import type {
   Dashboard,
   Job,
@@ -130,6 +132,10 @@ export const api = {
   channels: () => request<{ channels: Channel[] }>("/channels"),
   updateChannel: (key: string, patch: ChannelPatch) =>
     request<Channel>(`/channels/${encodeURIComponent(key)}`, "PUT", patch),
+  // 매일 아침 뉴스 자동 수집: 설정 저장만 하며 작업 시간을 열지 않습니다(실행은 서버 cron).
+  dailyCollect: () => request<DailyCollectStatus>("/settings/daily-collect"),
+  updateDailyCollect: (patch: Partial<DailyCollectPatch>) =>
+    request<DailyCollectStatus>("/settings/daily-collect", "PUT", patch),
   // YouTube 채널 연결(OAuth): 시작하면 Google 동의 화면 주소만 받고, 토큰은 서버 비밀 파일에만 남습니다.
   youtubeOAuthStatus: () => request<YoutubeOAuthStatus>("/youtube/oauth/status"),
   youtubeOAuthStart: (channelKey: string) =>
@@ -247,6 +253,8 @@ export const api = {
     request<unknown>(`/leads/${encodeURIComponent(id)}/withdraw`, "POST", {}),
   markLeadSent: (id: string) =>
     request<unknown>(`/leads/${encodeURIComponent(id)}/sent`, "POST", {}),
+  // 공개 신청 링크 재료(공개 주소·공개 자료·출처). 건수·이메일은 없음
+  publicLeadForm: () => request<PublicLeadFormInfo>("/leads/public-form"),
   // 뉴스레터 ③: 승인은 발송이 아니며 발송은 오너 메일러에서 수동
   buildNewsletter: (jobId: string, body: { issue_key: string; subject: string }) =>
     request<NewsletterIssue>(`/jobs/${encodeURIComponent(jobId)}/newsletter`, "POST", body),

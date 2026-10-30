@@ -1,0 +1,117 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 32px 16px 48px;
+  background: var(--paper);
+}
+.card {
+  width: 100%;
+  max-width: 480px;
+  display: grid;
+  gap: 16px;
+  padding: 28px 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+.brand {
+  color: var(--orange);
+  font-size: 13px;
+  font-weight: 700;
+}
+.title {
+  font-size: 22px;
+  line-height: 1.35;
+}
+.description {
+  color: var(--ink);
+  font-size: 15px;
+}
+.muted {
+  color: var(--muted);
+}
+.form {
+  display: grid;
+  gap: 12px;
+}
+.label {
+  font-weight: 700;
+}
+.input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #c9cabd;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 16px;
+}
+.input[aria-invalid="true"] {
+  border-color: var(--red);
+}
+.consentBox {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--paper);
+  font-size: 13px;
+}
+.consentText {
+  white-space: pre-line;
+}
+.version {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 14px;
+  cursor: pointer;
+}
+.check input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  flex-shrink: 0;
+}
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.error {
+  color: var(--red);
+  font-weight: 700;
+}
+.submit {
+  min-height: 48px;
+  border-radius: 8px;
+  background: var(--orange);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+.submit:hover:not(:disabled) {
+  background: #d65a2b;
+}
+.note {
+  color: var(--muted);
+  font-size: 12px;
+}
+.choices {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+.choices a {
+  color: var(--orange);
+  text-decoration: underline;
+}
