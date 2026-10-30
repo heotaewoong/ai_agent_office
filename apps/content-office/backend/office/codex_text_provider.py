@@ -88,6 +88,8 @@ def run_codex(messages, schema):
 
 def generate(provider, role, messages, schema, options):
     store = provider.store
+    from .content_api_mode import require_subscription_allowed
+    require_subscription_allowed(store)
     key = digest({"provider": PROFILE_ID, "messages": messages, "schema": codex_schema(schema), "options": options, "contract": "codex-text-v1"})
     cached = store.cache_get(key)
     if cached is not None:

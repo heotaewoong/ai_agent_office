@@ -45,6 +45,10 @@ def availability(store=None):
     result = {}
     for identity in PROFILES:
         if identity == "codex-subscription-text":
+            if store is not None and store.setting('content_api_only', False):
+                from .content_api_mode import REASON
+                result[identity] = {'available': False, 'reason': REASON, 'retired': True}
+                continue
             from .codex_text_provider import subscription_status
             ok = bool(subscription_status().get("configured"))
             result[identity] = {'available': ok, 'reason': '' if ok else '앱 실행 계정에 Codex(ChatGPT) 로그인이 없습니다'}
@@ -56,6 +60,9 @@ def availability(store=None):
 
 
 def select_profile(store, identity, *, actor):
+    if identity == 'codex-subscription-text':
+        from .content_api_mode import require_subscription_allowed
+        require_subscription_allowed(store)
     if identity not in PROFILES or not isinstance(actor, str) or not actor.strip():
         raise WorkflowError('등록된 프로필과 선택한 운영자 정보가 필요합니다')
     record = {'id': identity, 'selected_by': actor[:120], 'selected_at': now()}

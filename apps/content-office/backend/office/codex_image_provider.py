@@ -116,6 +116,8 @@ class CodexImageProvider(ImageProvider):
     """Same approval, version and asset rules as the API provider; only generation and accounting differ."""
 
     def __init__(self, store, *, job_id, runner=None):
+        from .content_api_mode import require_subscription_allowed
+        require_subscription_allowed(store)
         super().__init__(store, job_id=job_id, allow_paid=True)  # Selecting this profile is the explicit opt-in.
         self.runner = runner or run_codex
         config = {**json.loads(self._config_json), "provider": PROFILE_ID, "model": MODEL, "quality": "auto",
@@ -132,6 +134,8 @@ class CodexImageProvider(ImageProvider):
         return "codex-image-asset:" + digest({"provider": PROFILE_ID, "model": MODEL, "size": self.config["size"], "prompt_style": STYLE, "prompt_version": PROMPT_VERSION})
 
     def _generate(self, key, payload, prompt, out_path, receipt_extra, reauthorize, request_kind, cap, size, disclosure):
+        from .content_api_mode import require_subscription_allowed
+        require_subscription_allowed(self.store)
         self.assets.mkdir(parents=True, exist_ok=True)
         with _lock(self.assets / (self.config["budget_scope_id"] + ".lock")):
             image_path, receipt_path = self.assets / (key[6:] + ".png"), self.assets / (key[6:] + ".json")

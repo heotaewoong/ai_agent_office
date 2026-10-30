@@ -101,6 +101,8 @@ class Provider:
     def generate(self, role, messages, schema, options=None):
         options = {"max_tokens": 8192, "temperature": 0.5, **(options or {})}
         if self.model == "codex-subscription-text":
+            from .content_api_mode import require_subscription_allowed
+            require_subscription_allowed(self.store)
             from .codex_text_provider import generate
             return generate(self, role, messages, schema, options)
         provider = provider_for(self.model)

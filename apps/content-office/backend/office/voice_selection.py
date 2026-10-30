@@ -27,7 +27,7 @@ def profile_summary(store):
 
 def availability(store=None):
     """Whether each voice would actually run on this server right now."""
-    windows = os.name == 'nt'
+    windows = os.name == 'nt' and not (store is not None and store.setting('content_api_only', False))
     gemini, openai = bool(os.environ.get('GEMINI_API_KEY')), bool(os.environ.get('OPENAI_API_KEY'))
     return {'windows-heami': {'available': windows, 'reason': '' if windows else 'Windows PC에서만 동작합니다. 이 서버(Linux)에서는 OpenAI 또는 Gemini 음성을 고르세요'},
             'gemini-kore': {'available': gemini, 'reason': '' if gemini else 'GEMINI_API_KEY가 서버에 없습니다'},
@@ -35,6 +35,8 @@ def availability(store=None):
 
 
 def select_profile(store, identity, *, actor):
+    if identity == 'windows-heami' and store.setting('content_api_only', False):
+        raise WorkflowError('콘텐츠 제작은 API 전용입니다. OpenAI 또는 Gemini 음성을 선택하세요')
     if identity not in PROFILES or not isinstance(actor, str) or not actor.strip():
         raise WorkflowError('등록된 프로필과 선택한 운영자 정보가 필요합니다')
     record = {'id': identity, 'selected_by': actor[:120], 'selected_at': now()}

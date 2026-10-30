@@ -722,7 +722,7 @@ def create_app(store: Store | None = None):
         from .video_selection import profile_summary as clip_summary
         from .text_selection import profile_summary as text_summary
         return {"voice": voice_summary(store), "image": image_summary(store), "clip": clip_summary(store), "text": text_summary(store),
-                "availability": profile_availability()}
+                "availability": profile_availability(), "content_api_only": bool(store.setting('content_api_only', False))}
 
     @app.get("/api/settings/profiles")
     def read_profiles():
