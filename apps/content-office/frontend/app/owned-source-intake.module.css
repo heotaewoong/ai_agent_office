@@ -22,7 +22,7 @@
 .importRow { display: flex; gap: 10px; align-items: stretch; margin-top: 10px; }
 .input, .body { box-sizing: border-box; display: block; width: 100%; max-width: 100%; min-width: 0; border: 1px solid #c6d2c3; border-radius: 9px; padding: 13px 15px; background: #fff; color: #233d34; font: inherit; font-size: 16px; line-height: 1.7; }
 .input { min-height: 50px; }
-.input::placeholder, .body::placeholder { color: #748174; opacity: 1; }
+.input::placeholder, .body::placeholder { color: #657461; opacity: 1; }
 .importButton { flex-shrink: 0; border: 1px solid #9ab092; border-radius: 8px; padding: 10px 16px; background: #fff; color: #36513d; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .importBox p, .hint { font-size: 12px; line-height: 1.85; color: #5e705b; margin-top: 10px; overflow-wrap: anywhere; }
 .hint button { color: #315d3b; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }
