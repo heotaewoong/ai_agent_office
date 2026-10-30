@@ -1,7 +1,7 @@
 """Local, paste-safe exports of the approved source. Never publishes content."""
 from __future__ import annotations
 
-from html import escape
+from html import escape, unescape
 import hashlib
 from io import BytesIO
 import json
@@ -339,6 +339,11 @@ def blog_reader_html(title: str, content: str, format: str = 'html') -> str:
     if format not in labels:
         raise WorkflowError('지원하지 않는 블로그 형식입니다')
     body = content if format in ('html', 'draft') else '<pre class="source-text">' + escape(content) + '</pre>'
+    if format in ('html', 'draft'):
+        # The reader supplies its own title; only suppress an identical leading body heading.
+        heading = re.search(r'(<article\b[^>]*>\s*)<h([1-3])>(.*?)</h\2>\s*', body, re.S)
+        if heading and " ".join(unescape(re.sub(r'<[^>]+>', '', heading[3])).split()) == " ".join(title.split()):
+            body = body[:heading.start()] + heading[1] + body[heading.end():]
     return f'''<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{escape(title)} · HeoBrain</title>
