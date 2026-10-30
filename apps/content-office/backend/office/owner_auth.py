@@ -63,7 +63,7 @@ def export_pending(store):
     from .youtube_delivery import _released_video, video_metadata
     from .channels import channel
     from .runtime import window_open
-    if not window_open(store):
+    if not enabled() or not window_open(store):
         return []
     rows = []
     for record in store.setting("deliveries", {}).values():

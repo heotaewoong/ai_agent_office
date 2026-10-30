@@ -89,6 +89,20 @@ def test_closed_work_window_prevents_new_owner_delivery(tmp_path, monkeypatch):
         owner_auth.stage_delivery(store, job_id, 'youtube_main_ko', 'fixture')
 
 
+def test_disabling_owner_mode_stops_exporting_previously_queued_uploads(tmp_path, monkeypatch):
+    store, job_id = ready(tmp_path, monkeypatch)
+    owner_auth.stage_delivery(store, job_id, 'youtube_main_ko', 'fixture')
+    assert len(owner_auth.export_pending(store)) == 1
+    before = store.setting('deliveries', {})
+    from office import channels
+    configured = channels.channel(store, 'youtube_main_ko')
+    # Server credentials may still resolve to the same public channel configuration.
+    monkeypatch.setattr(channels, 'channel', lambda *_: configured)
+    monkeypatch.delenv('OFFICE_SOCIAL_AUTH_MODE')
+    assert owner_auth.export_pending(store) == []
+    assert store.setting('deliveries', {}) == before
+
+
 def test_tampered_asset_is_not_sent_to_owner(tmp_path, monkeypatch):
     store, job_id = ready(tmp_path, monkeypatch)
     owner_auth.stage_delivery(store, job_id, 'youtube_main_ko', 'fixture')
