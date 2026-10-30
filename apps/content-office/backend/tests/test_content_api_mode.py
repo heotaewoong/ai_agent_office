@@ -47,6 +47,20 @@ def test_running_or_queued_work_blocks_switch_and_missing_key_does_not_partially
     assert store.setting('content_api_only') is None
 
 
+def test_explicit_dormant_reservations_and_queued_refresh_are_preserved(tmp_path,monkeypatch):
+    monkeypatch.setenv('OPENAI_API_KEY','synthetic')
+    store=Store(tmp_path)
+    cost=store.reserve_cost('model',7,{'model':'gemini-3.5-flash-lite'})
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE costs SET updated_at='2026-10-28T00:00:00+00:00' WHERE id=?",(cost['id'],))
+    store.set_setting('work_window',{'authorized_start':'2026-10-29T00:00:00+00:00','authorized_end':'2026-10-29T01:00:00+00:00'})
+    store.enqueue('refresh',{},'refresh')
+    before=protected_rows(store);budget=store.budget()
+    with pytest.raises(WorkflowError,match='응답'):activate(store,text_model='gpt-5.4-mini',actor='human')
+    activate(store,text_model='gpt-5.4-mini',actor='human',preserve_dormant_cost_ids=[cost['id']])
+    assert protected_rows(store)==before and store.budget()==budget
+
+
 def test_retired_choices_are_hidden_by_availability_and_rejected_by_api(tmp_path,monkeypatch):
     monkeypatch.setenv('OPENAI_API_KEY','synthetic')
     store=Store(tmp_path);activate(store,text_model='gpt-5.4-mini',actor='human')
