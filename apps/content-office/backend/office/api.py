@@ -126,6 +126,8 @@ class Review(BaseModel):
     decision: Literal["approved", "rejected"]
     selections: dict[str, bool] | None = None
     media_reviewed: bool = False
+    auto_produce: bool = Field(default=False, strict=True)
+    private_delivery_channel: Literal['youtube_main_ko','youtube_english'] | None = None
     outputs: list[Literal['blog', 'video', 'cards', 'pdf']] | None = None
 
 
@@ -474,7 +476,20 @@ def create_app(store: Store | None = None):
 
     @app.post("/api/jobs/{job_id}/reviews/source")
     def review_source(job_id: str, review: Review):
-        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections)
+        contract = None
+        if review.auto_produce:
+            require_open_window()
+            if review.decision != 'approved':
+                raise WorkflowError('원고 승인 때에만 자동 제작을 요청할 수 있습니다')
+            from .media import production_contract
+            from .voice_selection import renderer_for_job
+            from .image_selection import background_renderer_for_job
+            from .video_selection import clip_renderer_for_job
+            from .channels import registry
+            job=store.job(job_id)
+            selections={key:bool((review.selections if review.selections is not None else job['selections']).get(key,False)) for key in ('blog','video','pdf','cards')}
+            contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None)['hash']
+        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract)
 
     @app.post("/api/jobs/{job_id}/produce", status_code=202)
     def produce(job_id: str):
@@ -538,7 +553,13 @@ def create_app(store: Store | None = None):
         manifest = verify_files(job, review.outputs)
         if not manifest or review.version != manifest.get("hash"):
             raise WorkflowError("출고 대상 버전이 변경되었습니다")
-        saved = store.review_release(job_id, review.version, review.decision, "local-operator", review.media_reviewed, review.outputs)
+        private_channel=None
+        if review.private_delivery_channel:
+            require_open_window()
+            if review.decision!='approved':raise WorkflowError('출고 승인 때에만 비공개 전송을 요청할 수 있습니다')
+            from .delivery_queue import target
+            private_channel=target(store,review.private_delivery_channel,job)
+        saved = store.review_release(job_id, review.version, review.decision, "local-operator", review.media_reviewed, review.outputs,private_channel=private_channel)
         if review.decision == "approved":
             from .staging import auto_prepare_staging
             auto_prepare_staging(store, job_id, "local-operator")
@@ -782,6 +803,8 @@ def create_app(store: Store | None = None):
         # 구조도 화면: 저장소 문서 + 실행 사실(커밋·배포·테스트·키 연결 여부·실측 비용). 읽기 전용.
         from .architecture import overview
         return overview(store)
+    from .api_owned_source import register as register_owned_source
+    register_owned_source(app, store)
     return app
 
 

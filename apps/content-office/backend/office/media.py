@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 from .exports import korean_font, write_blog_exports, write_reference_pdf, write_rights_manifest, write_video_exports
-from .store import WorkflowError, digest
+from .store import WorkflowError, digest, canonical
 RENDER_VERSION = 'office-media-5-preserved-source-photos'
 VOICE_CACHE_VERSION = 'office-media-1'
 
@@ -136,6 +136,9 @@ def production_contract(voice_renderer, selections, image_renderer=None, clip_re
               'clip': background_identity(clip_renderer) if selections.get('video') else None,
               'clip_asset_key': str(getattr(clip_renderer, 'asset_cache_key', background_identity(clip_renderer))) if (selections.get('video') and clip_renderer is not None) else None,
               'selections': dict(selections)}
+    if selections.get('cards'):
+        config['cards_implementation_sha256']=file_hash(Path(__file__).with_name('cards.py'))
+        config['cards_pipeline_sha256']=file_hash(Path(__file__).with_name('social_production.py'))
     return {**config, 'hash': digest(config)}
 
 def wrap_text(draw, text, font, width):
@@ -741,6 +744,10 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                         for record in old_records:
                             path = (root / record['path']).resolve()
                             valid = valid and path.is_relative_to(root) and path.is_file() and file_hash(path) == record['sha256']
+                        if valid and kind=='cards':
+                            metadata=next((r for r in old_records if r['name'].startswith('card-news-') and r['name'].endswith('.json')),None)
+                            current_cards=store.job(job_id).get('cards') or {}
+                            valid=bool(metadata and metadata['sha256']==hashlib.sha256(canonical(current_cards).encode('utf-8')).hexdigest())
                         if valid:
                             output_files[kind] = [root / record['path'] for record in old_records]
                             output_status[kind] = {'state': 'completed', 'files': len(output_files[kind])}
@@ -775,22 +782,11 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 return exports + rendered['files']
 
             def card_output():
-                nonlocal backgrounds
-                paths = []
-                drawn = []
-                scenes = packet.get('video', {}).get('scenes', [])
-                for index, scene in enumerate(scenes):
-                    check_current()
-                    path = folder / f'scene-{index + 1:02}.png'
-                    background, background_meta = scene_background(background_renderer, folder, index)
-                    draw_scene(packet['video'], scene, index, len(scenes), path, background=background, background_meta=background_meta)
-                    paths.extend([path, path.with_suffix('.json')] + ([background] if background else []))
-                    if background_meta:
-                        drawn.append(background_meta)
-                if not paths:
-                    raise WorkflowError('카드로 제작할 승인 장면이 없습니다')
-                backgrounds = backgrounds or drawn
-                return paths
+                from .social_production import card_paths
+                check_current()
+                if contract['font_status']!='ready':
+                    raise WorkflowError('한국어 폰트를 확인한 뒤 카드뉴스 제작을 다시 요청하세요. 새 유료 호출은 하지 않았습니다')
+                return card_paths(store,job_id,source_hash,folder)
 
             from .channel_handoff import write_channel_handoffs
             run_output('blog', lambda: write_blog_exports(packet, folder, job.get('offer')) + write_channel_handoffs(packet, folder, job.get('offer'), source_hash=source_hash, language=(packet.get('audience') or {}).get('language'), channels=channel_registry))

@@ -42,6 +42,7 @@ export function YoutubePanel({
   const sourceLanguage = packetLanguage(job);
   const readiness = youtubePreflight(job, channel, requestBlockedReason);
   const mismatch = channel ? sourceChannelMismatch(job, channel) : null;
+  const queuedDeliveryState=(job.tasks??[]).filter(t=>t.kind==='private_delivery').map(t=>t.id+':'+t.state).join('|');
 
   useEffect(() => {
     let alive = true;
@@ -72,7 +73,10 @@ export function YoutubePanel({
 
   useEffect(() => {
     void load();
-  }, [load, job.release_approval?.version]);
+    if (!(job.tasks??[]).some(t=>t.kind==='private_delivery'&&['queued','running'].includes(t.state??''))) return;
+    const timer=setInterval(()=>void load(),4_000);
+    return ()=>clearInterval(timer);
+  }, [load, job.release_approval?.version, queuedDeliveryState]);
 
   async function upload() {
     if (!readiness.ok || busy) return;

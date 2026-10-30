@@ -205,7 +205,7 @@ class Store:
             self._event(db, "source_saved", {"version": version, "role": "편집"}, job_id)
             return self._write_job(db, job)
 
-    def review_source(self, job_id, version, decision, actor, selections=None):
+    def review_source(self, job_id, version, decision, actor, selections=None, *, production_contract=None):
         from .offers import require_campaign_packet, require_offer_ready
         if decision not in ("approved", "rejected") or not actor.strip():
             raise WorkflowError("유효한 검토 판정과 검토자가 필요합니다")
@@ -233,6 +233,19 @@ class Store:
             record = {"id": identifier("approval"), "version": version, "decision": decision, "actor": actor, "selections": job["selections"], "created_at": now()}
             db.execute("INSERT INTO approvals VALUES(?,?,?,?,?,?,?,?)", (record["id"], job_id, "source", version, decision, actor, canonical(record), now()))
             job.update(source_approval=record, state="source_approved" if decision == "approved" else "source_rejected")
+            if production_contract is not None:
+                if decision != 'approved' or not isinstance(production_contract, str) or len(production_contract) != 64 or any(c not in '0123456789abcdef' for c in production_contract):
+                    raise WorkflowError('자동 제작 요청의 판본을 확인해 주세요')
+                key=f'produce:{job_id}:{version}:{production_contract}'
+                if db.execute("SELECT 1 FROM tasks WHERE kind='produce' AND state='unknown' AND json_extract(payload,'$.job_id')=? AND json_extract(payload,'$.source_hash')=?",(job_id,version)).fetchone():
+                    raise WorkflowError('같은 원고의 결과 불명 제작이 있습니다. 결과를 먼저 확인해 주세요')
+                if db.execute('SELECT 1 FROM tasks WHERE dedup_key=?',(key,)).fetchone():
+                    raise WorkflowError('같은 판본의 제작 요청이 이미 있습니다. 현재 제작 상태를 확인하세요')
+                payload={'job_id':job_id,'source_hash':version,'production_contract':production_contract}
+                task_id=identifier('task')
+                db.execute("INSERT INTO tasks VALUES(?,?,?,'queued',?,NULL,NULL,?,?)",(task_id,'produce',canonical(payload),key,now(),now()))
+                job['state']='production_queued'
+                self._event(db,'production_queued_after_source_approval',{'task_id':task_id,'source_hash':version,'production_contract':production_contract},job_id)
             self._event(db, "source_" + decision, record, job_id)
             return self._write_job(db, job)
 
@@ -260,13 +273,17 @@ class Store:
             self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "preserve_original": preserve_original, "role": "연구"}, job_id)
             return self._write_job(db, job)
 
-    def add_draft(self, job_id, draft):
+    def add_draft(self, job_id, draft, *, expected_source_hash=_UNSET):
         """Keep an editorial draft beside the job. It never changes source, approvals or outputs."""
         if not draft.get("title") or not draft.get("body"):
             raise WorkflowError("초안 제목과 본문이 필요합니다")
-        draft_id = "draft_" + digest({"job_id": job_id, "title": draft["title"], "body": draft["body"], "video": draft.get("video")})[:16]
+        identity={"job_id": job_id, "title": draft["title"], "body": draft["body"], "video": draft.get("video")}
+        if draft.get('assets'):identity.update(assets=draft['assets'],source_hash_snapshot=draft.get('source_hash_snapshot'))
+        draft_id = "draft_" + digest(identity)[:16]
         with self.connection(transaction=True) as db:
-            self._job(db, job_id)
+            current=self._job(db, job_id)
+            if expected_source_hash is not _UNSET and current.get('source_hash')!=expected_source_hash:
+                raise WorkflowError('편집 결과를 연결하는 동안 원고 판본이 변경되었습니다')
             row = db.execute("SELECT data FROM drafts WHERE id=?", (draft_id,)).fetchone()
             if row:
                 return json.loads(row[0])
@@ -338,7 +355,7 @@ class Store:
             self._event(db, "thumbnail_selected", {"artifact_id": artifact_id, "actor": actor, "manifest_hash": manifest["hash"]}, job_id)
             return self._write_job(db, job)
 
-    def review_release(self, job_id, manifest_hash, decision, actor, media_reviewed=False, outputs=None):
+    def review_release(self, job_id, manifest_hash, decision, actor, media_reviewed=False, outputs=None, *, private_channel=None):
         from .offers import require_campaign_packet, require_offer_ready
         if decision not in ("approved", "rejected") or not actor.strip():
             raise WorkflowError("유효한 출고 판정과 검토자가 필요합니다")
@@ -365,6 +382,15 @@ class Store:
                 if not media_reviewed:
                     raise WorkflowError("영상·음성·자막을 실제로 검토했다는 확인이 필요합니다")
             record = {"version": manifest_hash, "decision": decision, "actor": actor, "created_at": now(), "outputs": sorted(selected), "target": "manual-handoff", "media_reviewed": bool(media_reviewed), "external_published": False}
+            if private_channel is not None:
+                if decision!='approved' or 'video' not in selected or private_channel.get('key') not in ('youtube_main_ko','youtube_english'):
+                    raise WorkflowError('검토한 영상의 출고 승인과 YouTube 대상이 필요합니다')
+                key=f'private-delivery:{job_id}:{manifest_hash}:{private_channel["key"]}'
+                if db.execute('SELECT 1 FROM tasks WHERE dedup_key=?',(key,)).fetchone():
+                    raise WorkflowError('같은 제작물의 전송 요청이 이미 있습니다. 전송 기록을 먼저 확인해 주세요')
+                record['private_delivery']={'channel_key':private_channel['key'],'channel_hash':digest(private_channel),'privacy':'private'}
+                payload={'job_id':job_id,'source_hash':job['source_hash'],'manifest_hash':manifest_hash,'release_hash':digest(record),'channel_key':private_channel['key'],'channel_hash':digest(private_channel)}
+                db.execute("INSERT INTO tasks VALUES(?,?,?,'queued',?,NULL,NULL,?,?)",(identifier('task'),'private_delivery',canonical(payload),key,now(),now()))
             db.execute("INSERT INTO approvals VALUES(?,?,?,?,?,?,?,?)", (identifier("approval"), job_id, "release", manifest_hash, decision, actor, canonical(record), now()))
             self._event(db, "release_" + decision, record, job_id)
             job.update(release_approval=record, state="release_approved" if decision == "approved" else "release_review")

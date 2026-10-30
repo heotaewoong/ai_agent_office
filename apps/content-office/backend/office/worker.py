@@ -15,6 +15,9 @@ def process_task(store, task):
     if task["kind"] == "refresh":
         return refresh(store)
     job_id = payload.get("job_id")
+    if task['kind']=='private_delivery':
+        from .delivery_queue import process
+        return process(store,payload)
     if task["kind"] in ("draft", "evaluate"):
         if "source_hash" in payload and store.job(job_id).get("source_hash") != payload["source_hash"]:
             raise WorkflowError("대기 중인 원고 작업의 버전이 변경되었습니다")
@@ -75,7 +78,7 @@ def run_once(store, owner):
         store.finish_task(task["id"], owner, {"error": message, "automatic_retry": False}, state="unknown" if uncertain else "failed")
         job_id = task["payload"].get("job_id")
         # 퀴즈·카드뉴스는 부가 산출물이라 실패해도 작업 상태(출고 흐름)를 막지 않는다. 실패 기록은 작업·이벤트에 남는다.
-        if job_id and task["kind"] not in ("quiz", "cards"):
+        if job_id and task["kind"] not in ("quiz", "cards", "private_delivery"):
             with store.connection(transaction=True) as db:
                 current = store._job(db, job_id)
                 if current.get("source_hash") == task["payload"].get("_source_hash_at_claim"):

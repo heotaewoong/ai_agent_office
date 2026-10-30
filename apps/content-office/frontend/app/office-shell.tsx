@@ -53,6 +53,8 @@ import { QuizPanel } from "./quiz-panel";
 import { CardsPanel } from "./cards-panel";
 import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
+import { OwnedSourceIntake } from "./owned-source-intake";
+import { EditorialAssetsPanel } from "./editorial-assets-panel";
 import { NewsletterPanel } from "./newsletter-panel";
 import { withoutOAuthParams, youtubeOAuthResult } from "../lib/youtube-oauth";
 import { sourceApproved } from "../lib/workflow";
@@ -588,6 +590,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               {view === "home" && <DecisionHome dashboard={dashboard} />}
+              <div hidden={view!=="plans"}><OwnedSourceIntake onCreated={(j)=>{selectJob(j.id);setView("studio");void loadDashboard(true);}} /></div>
               {view === "plans" && <>
                   <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
@@ -1602,7 +1605,8 @@ function Studio({
               role="region"
               aria-label="원고 승인 최종 확인"
             >
-              <h3>현재 원고와 제작 항목을 승인할까요?</h3>
+              <h3>현재 원고를 승인하고 선택한 항목을 제작할까요?</h3>
+              <p>승인하면 현재 제작 프로필과 기존 작업별·전체 비용 상한으로 자동 제작합니다. 실행 시간이 열려 있어야 하며, 플랫폼 전달은 출고 승인②에서 별도로 정합니다.</p>
               <p>
                 원고 {approvalVersion.slice(0, 12)} ·{" "}
                 {Object.entries(selections)
@@ -1648,14 +1652,16 @@ function Studio({
                           approvalVersion,
                           "approved",
                           selections,
+                          true,
                         );
                         setApprovalVersion(undefined);
+                        onDelivery();
                       },
-                      "현재 원고와 제작 선택을 승인했습니다. 제작 시작을 눌러 이어 가세요.",
+                      "원고 승인과 제작 요청을 함께 저장했습니다. 제작·출고함에서 진행 상황을 확인하세요.",
                     )
                   }
                 >
-                  이 버전 승인하기
+                  이 원고 승인·자동 제작
                 </button>
               </div>
             </div>
@@ -1701,6 +1707,7 @@ function Studio({
         </p>
       )}
       <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      <EditorialAssetsPanel job={job} />
       <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
     </>
@@ -1966,6 +1973,7 @@ function Delivery({
 }) {
   const [preview, setPreview] = useState<string>();
   const [releaseVersion, setReleaseVersion] = useState<string>();
+  const [privateChannel,setPrivateChannel]=useState<""|"youtube_main_ko"|"youtube_english">("");
   const [mediaReviewed, setMediaReviewed] = useState(false);
   const [releaseOutputs, setReleaseOutputs] = useState<OutputKind[]>(() =>
     completedOutputs(job),
@@ -2262,10 +2270,18 @@ function Delivery({
               <h3>현재 파일 버전을 출고 승인할까요?</h3>
               <p>
                 파일 목록과 버전 {releaseVersion.slice(0, 12)}에 대한
-                승인입니다. 외부 업로드·공개 계정 연결은 포함되지 않습니다. 출고
+                승인입니다. 아래에서 연결된 YouTube 채널의 비공개 전송을 함께 선택할 수 있습니다. 출고
                 항목:{" "}
                 {confirmedOutputs.map((key) => outputNames[key]).join(", ")}
               </p>
+              <label>승인 뒤 전달 방식
+                <select value={privateChannel} onChange={e=>setPrivateChannel(e.target.value as typeof privateChannel)} disabled={busy}>
+                  <option value="">오피스 안에 준비 · 외부 전송 안 함</option>
+                  <option value="youtube_main_ko">YouTube 메인 · 비공개 업로드</option>
+                  <option value="youtube_english">YouTube 영어 · 비공개 업로드</option>
+                </select>
+              </label>
+              <p className="muted">YouTube는 계정 연결·채널 전송 허용·영상 검토가 필요합니다. 티스토리·Instagram의 오피스 준비 기록은 외부 플랫폼 임시저장과 다릅니다. 자동 공개 게시를 하지 않습니다.</p>
               {!approvalIsCurrent(releaseVersion, job.manifest?.hash) && (
                 <p className="critical-issue">
                   파일 버전이 변경됐습니다. 새 파일을 확인한 뒤 다시 승인하세요.
@@ -2315,10 +2331,11 @@ function Delivery({
                           "approved",
                           mediaReviewed,
                           confirmedOutputs,
+                          privateChannel||undefined,
                         );
                         setReleaseVersion(undefined);
                       },
-                      "현재 파일 패키지의 출고를 승인했습니다. 내려받아 직접 게시할 수 있습니다.",
+                      privateChannel?"출고 승인과 비공개 전송 요청을 저장했습니다. 전송 기록에서 외부 ID와 실제 상태를 확인하세요.":"현재 파일의 출고를 승인하고 채널별 준비 기록을 저장했습니다. 외부 플랫폼 저장 상태와는 별개입니다.",
                     )
                   }
                 >

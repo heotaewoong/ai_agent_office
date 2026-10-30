@@ -45,6 +45,15 @@ class FakeCardsProvider:
         return json.loads(json.dumps(self.responses.pop(0)))
 
 
+def test_failed_production_text_plan_never_calls_paid_background_renderer(tmp_path):
+    store=Store(tmp_path);job=approved_job(store)
+    bad=good_slides();bad['slides'][1]['body']='긴 문장 '*30
+    def paid(*args):pytest.fail('검사 실패 원고에 배경 이미지를 구매하면 안 됩니다')
+    result=plan_cards(store,job['id'],provider=FakeCardsProvider([bad,bad]),background_renderer=paid,require_passed=True)
+    assert result['checks']['passed'] is False
+    assert result['images']==[]
+
+
 def test_cards_schema_fixes_six_to_eight_slides():
     slides = CARDS_SCHEMA["properties"]["slides"]
     assert (slides["minItems"], slides["maxItems"]) == (6, 8)

@@ -97,6 +97,8 @@ export type SourcePacket = {
   [key: string]: unknown;
 };
 export type EditorialDraft = {
+  assets?: {name:string;media_type:string;sha256:string;size:number}[];
+  source_hash_snapshot?: string;
   id: string;
   job_id: string;
   title: string;
