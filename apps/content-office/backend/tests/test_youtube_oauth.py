@@ -104,7 +104,7 @@ def test_start_builds_google_authorize_url_and_binds_browser(oauth):
     assert query["redirect_uri"] == PUBLIC + "/api/youtube/oauth/callback"
     assert query["response_type"] == "code" and query["access_type"] == "offline"
     assert set(query["scope"].split()) == {"https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"}
-    assert "consent" in query["prompt"].split() and query["include_granted_scopes"] == "true"
+    assert "consent" in query["prompt"].split() and query["include_granted_scopes"] == "false"
     assert len(state) >= 32
     assert SECRET not in response.text and SECRET not in url
     cookie = response.headers["set-cookie"].lower()
@@ -266,6 +266,7 @@ def test_channel_registered_to_another_key_is_rejected(oauth):
     (FakeTransport(token_status=400, token={"error": "invalid_grant"}), "token_exchange"),
     (FakeTransport(token={"access_token": ACCESS, "scope": SCOPES}), "no_refresh_token"),
     (FakeTransport(token={"access_token": ACCESS, "refresh_token": REFRESH, "scope": "https://www.googleapis.com/auth/youtube.readonly"}), "scope_missing"),
+    (FakeTransport(token={"access_token": ACCESS, "refresh_token": REFRESH, "scope": SCOPES + " https://www.googleapis.com/auth/gmail.send"}), "scope_unexpected"),
     (FakeTransport(channels_status=403, channels={"error": {}}), "channel_lookup"),
     (FakeTransport(channels={"items": []}), "no_channel"),
     (FakeTransport(channels={"items": [{"id": MAIN_ID}, {"id": "UCsecond0000000000000000"}]}), "channel_ambiguous"),
@@ -276,6 +277,25 @@ def test_google_failures_store_nothing(oauth, transport, reason):
     assert location(callback(oauth, state))["reason"] == reason
     assert not oauth["secrets"].exists()
     assert REFRESH not in everything_visible(oauth)
+    if reason == "scope_unexpected":
+        assert [call[:2] for call in transport.calls] == [("post", "https://oauth2.googleapis.com/token")]
+
+
+def test_old_pending_request_cannot_exchange_or_replace_existing_token(oauth):
+    from office.youtube_oauth import STATE_SETTING
+    from office.youtube_tokens import save_token
+    save_token("youtube_main_ko", {"refresh_token": "existing-office-token", "channel_id": MAIN_ID})
+    original = oauth["secrets"].read_bytes()
+    _, state, _ = start(oauth)
+    with oauth["store"].connection(transaction=True) as db:
+        pending = json.loads(db.execute("SELECT value FROM settings WHERE key=?", (STATE_SETTING,)).fetchone()[0])
+        for record in pending.values():
+            record.pop("scope_policy", None)
+        db.execute("UPDATE settings SET value=? WHERE key=?", (json.dumps(pending), STATE_SETTING))
+    assert location(callback(oauth, state))["reason"] == "scope_changed"
+    assert oauth["transport"].calls == []
+    assert oauth["secrets"].read_bytes() == original
+    assert location(callback(oauth, state))["reason"] == "state"
 
 
 def test_disconnect_removes_only_the_stored_token(oauth, monkeypatch):

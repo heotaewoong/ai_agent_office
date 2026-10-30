@@ -2,7 +2,7 @@
 
 근거(2026-10-30 확인): https://developers.google.com/identity/protocols/oauth2/web-server
 - 인증: https://accounts.google.com/o/oauth2/v2/auth (response_type=code, access_type=offline, prompt=consent,
-  include_granted_scopes=true, state). refresh token은 offline 첫 교환 또는 prompt=consent일 때 돌려준다.
+  include_granted_scopes=false, state). 기존 Hermes 등 같은 프로젝트의 권한을 합치지 않는다.
 - 교환: POST https://oauth2.googleapis.com/token (grant_type=authorization_code) → access_token·refresh_token·scope.
 - 리디렉션 URI는 https이고 콘솔에 등록한 값과 정확히 같아야 한다.
 - 동의 화면이 'Testing' 상태면 refresh token은 7일 뒤 만료된다(https://developers.google.com/identity/protocols/oauth2).
@@ -32,6 +32,7 @@ AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 SCOPES = ("https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly")
+SCOPE_POLICY = "youtube-only-v1"
 CALLBACK_PATH = "/api/youtube/oauth/callback"
 COOKIE_PATH = "/api/youtube/oauth"
 BINDING_COOKIE = "hb_youtube_oauth"
@@ -91,12 +92,12 @@ def begin(store, channel_key, origin):
         row = db.execute("SELECT value FROM settings WHERE key=?", (STATE_SETTING,)).fetchone()
         pending = json.loads(row[0]) if row else {}
         pending = {k: v for k, v in pending.items() if isinstance(v, dict) and v.get("expires_at", 0) > current}
-        pending[_hash(state)] = {"channel_key": channel_key, "binding_hash": _hash(binding), "created_at": now(), "expires_at": current + STATE_TTL}
+        pending[_hash(state)] = {"channel_key": channel_key, "binding_hash": _hash(binding), "scope_policy": SCOPE_POLICY, "created_at": now(), "expires_at": current + STATE_TTL}
         newest = sorted(pending.items(), key=lambda item: item[1]["expires_at"])[-MAX_PENDING:]
         db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (STATE_SETTING, canonical(dict(newest))))
     params = {"client_id": os.environ["YOUTUBE_CLIENT_ID"], "redirect_uri": redirect_uri(origin), "response_type": "code",
               "scope": " ".join(SCOPES), "access_type": "offline", "prompt": "consent select_account",
-              "include_granted_scopes": "true", "state": state}
+              "include_granted_scopes": "false", "state": state}
     store.event("youtube_oauth_started", {"channel_key": channel_key, "actor": "local-operator"})
     return AUTHORIZE_URL + "?" + urlencode(params), binding
 
@@ -133,6 +134,9 @@ def _exchange(transport, code, origin, key):
     granted = set(str(body.get("scope") or "").split())
     if not set(SCOPES) <= granted:
         raise OAuthFailure("scope_missing", key)
+    if granted != set(SCOPES):
+        # 공유 프로젝트의 토큰을 revoke하면 기존 Hermes 연결까지 끊길 수 있다. 저장만 거부한다.
+        raise OAuthFailure("scope_unexpected", key)
     refresh = body.get("refresh_token")
     if not isinstance(refresh, str) or not refresh:
         raise OAuthFailure("no_refresh_token", key)
@@ -173,6 +177,8 @@ def finish(store, *, origin, state, code, error, binding, transport=None):
         raise OAuthFailure("session", key)
     if error:
         raise OAuthFailure("denied" if error == "access_denied" else "google_error", key)
+    if record.get("scope_policy") != SCOPE_POLICY:
+        raise OAuthFailure("scope_changed", key)
     if not code or len(code) > 2000:
         raise OAuthFailure("google_error", key)
     try:

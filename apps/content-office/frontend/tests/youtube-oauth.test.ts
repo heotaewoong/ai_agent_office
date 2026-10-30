@@ -38,6 +38,17 @@ test("이상한 채널 값은 표시하지 않는다", () => {
   assert.ok(!result?.message.includes("<script>"));
 });
 
+test("YouTube 외 권한과 이전 연결 요청은 안전하게 다시 안내한다", () => {
+  for (const reason of ["scope_unexpected", "scope_changed", "no_refresh_token"]) {
+    const result = youtubeOAuthResult(`?youtube=error&reason=${reason}`);
+    assert.equal(result?.kind, "error");
+    assert.ok(result?.message.includes("Hermes"));
+    assert.ok(!result?.message.includes("앱을 지운 뒤"));
+  }
+  assert.ok(youtubeOAuthResult("?youtube=error&reason=scope_unexpected")?.message.includes("저장하지 않았습니다"));
+  assert.ok(youtubeOAuthResult("?youtube=error&reason=scope_changed")?.message.includes("다시 시작"));
+});
+
 test("결과 파라미터만 주소에서 지운다", () => {
   assert.equal(withoutOAuthParams("https://office.example.com/?youtube=connected&channel=youtube_main_ko"), "/");
   assert.equal(withoutOAuthParams("https://office.example.com/?youtube=error&reason=state&view=x#top"), "/?view=x#top");
