@@ -72,6 +72,9 @@ def test_metadata_run_adds_news_and_platform_results_and_uses_cache_without_mode
     s.set_setting('discovery_config',{**discovery.DEFAULT,'platforms':['x']})
     assert discovery.status(s)['stale']
     with pytest.raises(WorkflowError,match='조사 조건'):discovery.run(s,digest(discovery.DEFAULT))
+    s.set_setting('discovery_config',{**discovery.DEFAULT,'platforms':['youtube','linkedin']})
+    assert discovery.run(s)['cached'] and len(calls)==1
+    assert not discovery.status(s)['stale']
 
 
 def test_hn_public_api_scan_is_bounded_and_deleted_non_ai_items_are_not_news():

@@ -106,12 +106,13 @@ def record(store, value, articles, report):
                 'sources': report['feeds'], 'recommendations': recommendations, 'paid_calls': 0,
                 'method': '출처 종류·주제 일치·발행일에 따른 규칙 추천. AI 예측이나 플랫폼 전체 트렌드 순위가 아님'}
     store.set_setting('discovery_report', snapshot)
+    store.set_setting('discovery_report:' + digest(value), snapshot)
     return snapshot
 
 
 def status(store):
     value = config(store)
-    snapshot = store.setting('discovery_report')
+    snapshot = store.setting('discovery_report:' + digest(value)) or store.setting('discovery_report')
     with store.connection() as db:
         row = db.execute("SELECT state,updated_at,result FROM tasks WHERE kind='discover' AND json_extract(payload,'$.config_hash')=? ORDER BY created_at DESC LIMIT 1", (digest(value),)).fetchone()
     activity = {'state': row[0], 'updated_at': row[1], 'error': (json.loads(row[2]) if row[2] else {}).get('error')} if row else None
@@ -131,7 +132,7 @@ def run(store, expected_hash=None):
     value = config(store)
     if expected_hash and digest(value) != expected_hash:
         raise WorkflowError('조사 조건이 바뀌어 이전 대기 작업을 실행하지 않았습니다')
-    previous = store.setting('discovery_report') or {}
+    previous = store.setting('discovery_report:' + digest(value)) or store.setting('discovery_report') or {}
     if previous.get('config_hash') == digest(value) and previous.get('checked_at'):
         age = (datetime.now(timezone.utc) - datetime.fromisoformat(previous['checked_at'])).total_seconds()
         if 0 <= age < 900:
