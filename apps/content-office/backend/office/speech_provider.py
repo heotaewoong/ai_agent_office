@@ -108,7 +108,10 @@ class SpeechProvider:
         self.source_store = source_store or store
         self.allow_paid, self.synthetic_only = allow_paid, synthetic_only
         self.transport = transport or requests.post
-        source = self.source_store.require_source_approval(job_id)
+        # Metadata is also used before atomic approval; _authorized still guards every synthesis.
+        source = self.source_store.job(job_id)
+        if not source.get("source_hash") or not isinstance(source.get("source_packet"), dict):
+            raise WorkflowError("음성 제작 설정을 확인하려면 현재 원고가 필요합니다")
         self.source_hash = source["source_hash"]
         narrations = [scene.get("narration") for scene in source["source_packet"].get("video", {}).get("scenes", [])]
         profile = voice_profile_config(voice=voice, style=style, synthetic_only=synthetic_only,

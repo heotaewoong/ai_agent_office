@@ -67,11 +67,15 @@ def test_paid_voice_requires_explicit_opt_in_and_key(tmp_path, monkeypatch):
     assert not (store.root / "out.wav").exists()
 
 
-def test_requires_source_approval_before_construction(tmp_path, monkeypatch):
+def test_requires_source_approval_before_generation(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-placeholder")
     store, job_id = approved_fixture(tmp_path, approve=False)
+    transport = Recorder()
+    render = renderer_for(store, job_id, transport)
     with pytest.raises(WorkflowError, match="승인"):
-        renderer_for(store, job_id, Recorder())
+        render(NARRATIONS[0], store.root / 'must-not-exist.wav')
+    assert transport.calls == [] and cost_rows(store) == []
+    assert not (store.root / 'must-not-exist.wav').exists()
 
 
 def test_success_writes_24khz_mono_wav_settles_estimate_and_reuses_cache(tmp_path, monkeypatch):

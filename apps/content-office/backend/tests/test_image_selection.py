@@ -40,8 +40,10 @@ def test_openai_factory_requires_approval_and_visual_selection(tmp_path, monkeyp
     store = Store(tmp_path)
     job = fixture(store)
     select_profile(store, 'openai-gpt-image', actor='test-operator')
+    renderer = background_renderer_for_job(store, job)
     with pytest.raises(WorkflowError, match='승인'):
-        background_renderer_for_job(store, job)
+        renderer(0, store.root / 'must-not-exist.png')
+    assert not (store.root / 'must-not-exist.png').exists()
     store.review_source(job['id'], job['source_hash'], 'approved', 'fixture-operator', {'blog': True})
     assert background_renderer_for_job(store, store.job(job['id'])) is None
     store.review_source(job['id'], job['source_hash'], 'approved', 'fixture-operator', {'cards': True})
