@@ -61,14 +61,16 @@ def _markdown(node):
 
 def extract_tistory(markup):
     parser=ArticleTree();parser.feed(markup)
+    candidates=[]
     def find(node):
-        if isinstance(node,str):return None
-        if set((node[1].get('class') or '').split()) & {'contents_style','tt_article_useless_p_margin','article_rep_desc','blogview_content'}:return node
+        if isinstance(node,str):return
+        classes=set((node[1].get('class') or '').split())
+        priority=max((score for name,score in [('contents_style',1),('article_rep_desc',2),('blogview_content',2),('tt_article_useless_p_margin',3)] if name in classes),default=0)
+        if priority:candidates.append((priority,node))
         for child in node[2]:
-            result=find(child)
-            if result is not None:return result
-        return None
-    article=find(parser.root)
+            find(child)
+    find(parser.root)
+    article=max(candidates,key=lambda item:item[0])[1] if candidates else None
     if article is None:raise WorkflowError('공개 글 본문을 찾지 못했습니다. 로그인 글은 직접 붙여 넣어 주세요')
     body=re.sub(r'\n[ \t]*\n(?:[ \t]*\n)+','\n\n',_markdown(article)).strip()
     if not 100<=len(body)<=50000:raise WorkflowError('본문은 100~50,000자로 확인해 주세요. 긴 글은 직접 나누어 등록하세요')

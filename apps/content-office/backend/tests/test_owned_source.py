@@ -18,6 +18,13 @@ def test_disallowed_import_never_fetches(monkeypatch,url):
     monkeypatch.setattr('office.owned_source.fetch_public',lambda *a,**k:pytest.fail('must not fetch'))
     with pytest.raises(WorkflowError):preview_tistory(url)
 
+def test_inner_tistory_article_excludes_theme_related_posts():
+    markup = '<div class="contents_style"><div class="tt_article_useless_p_margin contents_style"><h2>실제 본문</h2><p>' + BODY + '</p></div><table><tr><td>카테고리의 다른 글</td></tr></table></div>'
+    result = extract_tistory(markup)
+    assert BODY.strip() in result['body'] and '실제 본문' in result['body']
+    assert '카테고리의 다른 글' not in result['body']
+
+
 def test_no_body_and_oversized_body_fail_without_silent_truncation():
     with pytest.raises(WorkflowError):extract_tistory('<p>로그인 화면</p>')
     with pytest.raises(WorkflowError):extract_tistory('<div class="contents_style">'+'글'*50001+'</div>')

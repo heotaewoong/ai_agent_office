@@ -59,7 +59,7 @@ def korean_font(weight: str = "regular") -> Path:
 
 def write_text(folder: Path, name: str, text: str) -> Path:
     path = folder / name
-    path.write_text(text, encoding="utf-8")
+    path.write_text(text, encoding="utf-8", newline="")
     return path
 
 
