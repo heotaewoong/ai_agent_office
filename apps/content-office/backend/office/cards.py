@@ -198,7 +198,7 @@ def _save_instagram_portrait(image, path):
     portrait.save(path, "PNG")
 
 
-def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None, background=None):
+def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None, background=None, promotion=None):
     """표지(1장)·본문(사진형)·마무리(마지막 장) 템플릿. 반환값은 어떤 템플릿과 배경을 썼는지."""
     title, body = str(slide.get("title", "")), str(slide.get("body", ""))
     template = "cover" if index == 1 else "cta" if index == total else "body"
@@ -212,11 +212,13 @@ def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None
         draw.rectangle((72, 250, 232, 262), fill=accent)
         text_box(draw, title, (72, 300, 936, 250), 104, "#1f1a14", minimum_size=72, font_path=bold, line_gap=16)
         text_box(draw, body, (72, 570, 936, 240), 54, "#3d3528", minimum_size=42, font_path=bold, line_gap=14)
-        if cta:
+        if promotion:
+            text_box(draw, promotion, (72, 840, 936, 145), 40, "#b83230", minimum_size=26, font_path=bold)
+        elif cta:
             _pill(draw, (72, 850), str(cta), accent, "#ffffff", 44)
         text_box(draw, "자료 안내는 게시물 본문에서 확인하세요", (72, 1000, 936, 50), 26, "#8a7d69", font_path=korean_font())
         _save_instagram_portrait(image, path)
-        return {"template": template, "background": "solid", "cta": str(cta) if cta else None}
+        return {"template": template, "background": "solid", "cta": promotion or (str(cta) if cta else None)}
     if background is not None:
         image, used = _legibility(_fill(background)), "generated"
     else:
@@ -270,11 +272,13 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
     """images: True면 카드마다 주제 이미지를 생성(유료), False면 그라데이션, None이면 제작 설정의 배경 이미지 프로필을 따른다."""
     job = store.require_source_approval(job_id)
     packet = job["source_packet"] or {}
+    from .offers import offer_card_cta, offer_snapshot, require_offer_ready
+    require_offer_ready(job.get("offer"))
     brand = load_brand()
     brief = brief_for_job(job)
     provider = provider or Provider(store, job_id=job_id)
     system = brand_system_prompt(BASE, brand)
-    context = {"packet": packet_context(packet), "audience": brief, "instructions": INSTRUCTIONS}
+    context = {"packet": packet_context(packet), "audience": brief, "campaign_offer": offer_snapshot(job.get("offer")), "instructions": INSTRUCTIONS}
     options = {"max_tokens": 12000, "temperature": 0.5, "reasoning_effort": "low"}
     plan = provider.generate("cards", [{"role": "system", "content": system}, {"role": "user", "content": canonical(context)}], CARDS_SCHEMA, options)
     checks = card_checks(plan, brand)
@@ -314,7 +318,8 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
                 notes.append(f"{index}번부터 주제 이미지 없이 만들었어요: {error}")
                 renderer = None
         try:
-            drawn = render_slide(record, index, len(raw), path, BRAND_LABEL, cta=brief.get("cta") if index == len(raw) else None, background=background)
+            drawn = render_slide(record, index, len(raw), path, BRAND_LABEL, cta=brief.get("cta") if index == len(raw) else None, background=background,
+                                 promotion=offer_card_cta(job.get("offer")) if index == len(raw) else None)
             artifact = artifact_record(root, path)
             record.update(artifact_id=artifact["id"], artifact=artifact, **drawn)
         except Exception as error:

@@ -1262,6 +1262,14 @@ function Studio({
         </div>
       )}
       <BriefPanel key={`brief-${job.id}`} job={job} busy={locked} action={action} cached={cachedBrief} onDraftChange={onBriefDraftChange} />
+      <OfferPanel
+        key={`offer-${job.id}`}
+        job={job}
+        cached={cachedOffer}
+        onDraftChange={onOfferDraftChange}
+        busy={locked}
+        action={action}
+      />
       {job.article?.origin === "idea" && (
         <div ref={packagingPanel} tabIndex={-1} aria-label="제목·썸네일·후크 기획">
           <PackagingPanel
@@ -1691,14 +1699,6 @@ function Studio({
         </>
       )}
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 원고 읽기·기획 편집·승인은 계속할 수 있습니다.</p>}
-      <OfferPanel
-        key={`offer-${job.id}`}
-        job={job}
-        cached={cachedOffer}
-        onDraftChange={onOfferDraftChange}
-        busy={locked}
-        action={action}
-      />
       {sourceApproved(job.state) && (
         <p className="derived-note" role="status">
           <Icon name="check" size={14} />

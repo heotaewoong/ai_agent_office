@@ -43,10 +43,18 @@ class NewsletterSent(BaseModel):
 
 
 class CouponInput(BaseModel):
+    usage_limit: int | None = Field(default=None, ge=1, le=10**9, strict=True)
+    user_usage_limit: int | None = Field(default=None, ge=1, le=10**9, strict=True)
     code: str | None = Field(default=None, max_length=64)
     discount_percent: int | None = Field(default=None, ge=1, le=100, strict=True)
     expires_at: str | None = Field(default=None, max_length=50)
     terms: str | None = Field(default=None, max_length=500)
+    verified: bool = Field(default=False, strict=True)
+
+
+class FreePdfInput(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    url: str = Field(min_length=1, max_length=500)
     verified: bool = Field(default=False, strict=True)
 
 
@@ -57,6 +65,7 @@ class OfferInput(BaseModel):
     url: str | None = Field(default=None, max_length=500)
     note: str | None = Field(default=None, max_length=500)
     coupon: CouponInput | None = None
+    free_pdf: FreePdfInput | None = None
 
 
 def dashboard_counts(store):
