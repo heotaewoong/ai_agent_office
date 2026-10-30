@@ -37,6 +37,7 @@ import {
   toggleArticle,
   draftStatus,
   workWindowBlockedReason,
+  mainVideoFile,
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
@@ -1175,6 +1176,7 @@ function Studio({
     "write",
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
+  const [approvalError, setApprovalError] = useState("");
   const packagingPanel = useRef<HTMLDivElement>(null);
   const stale = baseHash !== job.source_hash && dirty;
   useEffect(() => {
@@ -1592,7 +1594,7 @@ function Studio({
                   <button
                     className="button primary"
                     disabled={locked || !passed || selectionCount === 0}
-                    onClick={() => setApprovalVersion(job.source_hash)}
+                    onClick={() => { setApprovalError(""); setApprovalVersion(job.source_hash); }}
                   >
                     <Icon name="check" size={17} />
                     원고 승인
@@ -1608,6 +1610,7 @@ function Studio({
               aria-label="원고 승인 최종 확인"
             >
               <h3>현재 원고를 승인하고 선택한 항목을 제작할까요?</h3>
+              {approvalError && <p className="critical-issue" role="alert">{approvalError}</p>}
               <p>승인하면 현재 제작 프로필과 기존 작업별·전체 비용 상한으로 자동 제작합니다. 실행 시간이 열려 있어야 하며, 플랫폼 전달은 출고 승인②에서 별도로 정합니다.</p>
               <p>
                 원고 {approvalVersion.slice(0, 12)} ·{" "}
@@ -1645,8 +1648,9 @@ function Studio({
                     !passed ||
                     !approvalIsCurrent(approvalVersion, job.source_hash)
                   }
-                  onClick={() =>
-                    void action(
+                  onClick={async () => {
+                    setApprovalError("");
+                    const result = await action(
                       "원고 승인",
                       async () => {
                         await api.reviewSource(
@@ -1660,8 +1664,9 @@ function Studio({
                         onDelivery();
                       },
                       "원고 승인과 제작 요청을 함께 저장했습니다. 제작·출고함에서 진행 상황을 확인하세요.",
-                    )
-                  }
+                    );
+                    if (result !== true) setApprovalError(typeof result === "string" ? result : "승인 결과를 확인하지 못했습니다. 현재 작업 상태와 운영 기록을 확인해 주세요.");
+                  }}
                 >
                   이 원고 승인·자동 제작
                 </button>
@@ -2004,9 +2009,7 @@ function Delivery({
     const file = files.find((file) => file.name === format.name);
     return file ? [{ ...format, file }] : [];
   });
-  const videoFile = files.find(
-    (file) => file.kind === "video" || /\.mp4$/i.test(file.name),
-  );
+  const videoFile = mainVideoFile(files);
   const selected =
     files.find((file) => file.id === preview) ??
     blogFormats[0]?.file ??

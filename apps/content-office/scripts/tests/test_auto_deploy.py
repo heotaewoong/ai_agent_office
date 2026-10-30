@@ -49,7 +49,8 @@ class DecideTests(unittest.TestCase):
 
     def test_classify_results(self):
         self.assertEqual(auto.classify('deployed', '')[0], 'deployed')
-        self.assertEqual(auto.classify('checks_failed', '')[0], 'failed')
+        self.assertEqual(auto.classify('checks_failed', '', ('build',))[0], 'failed')
+        self.assertEqual(auto.classify('checks_failed', 'Business records changed during checks')[0], 'deferred')
         self.assertEqual(auto.classify('rolled_back', '')[0], 'failed')
         self.assertEqual(auto.classify('manual_recovery_required', '')[0], 'emergency_stop')
         self.assertEqual(auto.classify(None, 'The work window is open')[0], 'deferred')
@@ -62,7 +63,7 @@ class WatcherTests(unittest.TestCase):
         self.state = Path(self.folder.name) / 'state'
         (self.state / 'runtime' / 'deployments').mkdir(parents=True)
         (self.state / 'runtime' / 'build-info.json').write_text(json.dumps({'commit': OLD}))
-        self.deploy_result, self.commands, self.diff = 'deployed', [], ''
+        self.deploy_result, self.commands, self.diff, self.failed_file = 'deployed', [], '', None
 
     def runner(self, command, cwd, env=None):
         self.commands.append([str(c) for c in command])
@@ -72,6 +73,8 @@ class WatcherTests(unittest.TestCase):
         release.mkdir()
         if self.deploy_result:
             (release / 'deployment.json').write_text(json.dumps({'status': self.deploy_result}))
+        if self.failed_file:
+            (release / (self.failed_file + '.failed')).write_text('Command failed in isolated staging.')
         if self.deploy_result == 'deployed':
             (self.state / 'runtime' / 'build-info.json').write_text(json.dumps({'commit': NEW}))
         return (0 if self.deploy_result == 'deployed' else 1), 'output'
@@ -106,7 +109,7 @@ class WatcherTests(unittest.TestCase):
 
     def test_failed_commit_is_not_retried(self):
         self.switch(True)
-        self.deploy_result = 'checks_failed'
+        self.deploy_result, self.failed_file = 'checks_failed', 'build'
         self.assertEqual(self.watcher().run_once()['decision'], 'failed')
         self.assertEqual(self.watcher().run_once()['decision'], 'skip_failed')
         self.assertEqual(len(self.deploy_calls()), 1)
@@ -147,6 +150,24 @@ class WatcherTests(unittest.TestCase):
         for _ in range(3):
             record = self.watcher().run_once()
         self.assertEqual(len(record['history']), 1)
+
+
+    def test_transient_check_stop_is_retried_then_capped(self):
+        self.switch(True)
+        self.deploy_result = 'checks_failed'  # 실패 파일 없음 = 빌드 중 업무 기록 변경 같은 일시적 이유
+        decisions = [self.watcher().run_once()['decision'] for _ in range(auto.DEFER_LIMIT)]
+        self.assertEqual(decisions[:-1], ['deferred'] * (auto.DEFER_LIMIT - 1))
+        self.assertEqual(decisions[-1], 'failed')
+        self.assertEqual(self.watcher().run_once()['decision'], 'skip_failed')
+
+    def test_transient_stop_then_success_clears_the_counter(self):
+        self.switch(True)
+        self.deploy_result = 'checks_failed'
+        self.assertEqual(self.watcher().run_once()['decision'], 'deferred')
+        self.deploy_result = 'deployed'
+        record = self.watcher().run_once()
+        self.assertEqual(record['decision'], 'deployed')
+        self.assertNotIn(NEW, record['deferrals'])
 
 
 if __name__ == '__main__':

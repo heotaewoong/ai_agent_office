@@ -68,8 +68,11 @@ def test_unapproved_source_is_rejected_before_any_cost(tmp_path, monkeypatch):
     from office.image_provider import make_openai_background_renderer
     monkeypatch.setenv('OPENAI_API_KEY', 'test-placeholder')
     store, job_id = approved_fixture(tmp_path, approve=False)
+    transport = recording_transport(ImageResponse())
+    renderer = make_openai_background_renderer(store, job_id=job_id, allow_paid=True, transport=transport)
     with pytest.raises(WorkflowError, match='승인'):
-        make_openai_background_renderer(store, job_id=job_id, allow_paid=True, transport=recording_transport(ImageResponse()))
+        renderer(0, store.root / 'bg.png')
+    assert transport.calls == []
     assert store.budget()['reserved_krw'] == store.budget()['spent_krw'] == 0
 
 
