@@ -32,7 +32,7 @@ function fixture(preserveOriginal: boolean | undefined, requestBlockedReason?: s
   const useRef = (initial: any) => { const index = cursor++; return hooks[index] ??= { current: initial }; };
   const useEffect = (effect: () => void, deps: any[]) => { const index = cursor++, previous = hooks[index]; if (!previous || deps.some((value, i) => !Object.is(value, previous[i]))) { hooks[index] = deps; effects.push(effect); } };
   // Child panels are outside this editor test; Studio and its event handlers execute unchanged.
-  const scope = { require, exports: {}, useState, useRef, useEffect, ...workflow, packagingRequired,
+  const scope = { require, exports: {}, useState, useRef, useEffect, ...workflow, packagingRequired, requestAnimationFrame: () => 0,
     ...Object.fromEntries([...components].map(name => [name, () => null])) };
   const Studio = Function(...Object.keys(scope), `${compiled}\nreturn Studio;`)(...Object.values(scope));
   const props = { job, busy: false, requestBlockedReason, onDraftChange: (id: string, draft: Record<string, unknown>) => changes.push({ id, draft }),
@@ -96,4 +96,17 @@ test("작업 시간이 닫혀도 편집·새 버전 저장 버튼을 제공한�
   assert.ok(save);
   assert.equal(save.props.disabled, false);
   assert.equal(view.job.article.operator_source_text, view.original);
+});
+
+
+test("별도 검토본을 불러오면 편집 입력만 바뀌고 원문·서버 작업은 바뀌지 않는다", () => {
+  const view = fixture(true);
+  const panel = view.render().nodes.find(node => typeof node.props.onLoadDraft === "function");
+  assert.ok(panel);
+  panel.props.onLoadDraft({ id: "draft-test", title: "새 검토 제목", body: "새 검토 본문" });
+  assert.deepEqual(view.changes, [{id:view.job.id,draft:{title:"새 검토 제목",body:"새 검토 본문",baseHash:view.job.source_hash}}]);
+  assert.equal(view.job.article.operator_source_text, view.original);
+  const current = view.render();
+  assert.equal(current.body.props.value, "새 검토 본문");
+  assert.equal(current.nodes.find(node => typeof node.props.onLoadDraft === "function")?.props.editLocked, true);
 });

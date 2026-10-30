@@ -387,3 +387,17 @@ def test_original_export_keeps_photos_original_file_and_title_options_together(t
     assert (tmp_path / "title-options.txt").read_text(encoding="utf-8").splitlines() == source["titles"]
     html = (tmp_path / "tistory.html").read_text(encoding="utf-8")
     assert 'src="source-photo-01.png"' in html and "#원문 #사진 #보존 #학습 #기록" in html
+
+
+def test_reader_shows_title_once_without_changing_stored_export():
+    from office.exports import blog_reader_html, safe_fragment
+    title = "같은 제목 & 확인"
+    fragment = safe_fragment("## " + title + "\n\n본문은 그대로예요.\n\n## 다른 소제목\n\n다음 내용이에요.")
+    before = fragment
+    preview = blog_reader_html(title, fragment, "draft")
+    assert fragment == before
+    assert preview.count("<h1>") == 1
+    assert "<h2>같은 제목 &amp; 확인</h2>" not in preview
+    assert "<h2>다른 소제목</h2>" in preview
+    other = blog_reader_html("다른 제목", fragment, "draft")
+    assert "<h2>같은 제목 &amp; 확인</h2>" in other

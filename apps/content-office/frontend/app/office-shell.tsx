@@ -1737,7 +1737,12 @@ function Studio({
       )}
       <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       <VersionHistoryPanel key={`history-${job.id}`} job={job} />
-      <EditorialAssetsPanel job={job} />
+      <EditorialAssetsPanel job={job} editLocked={locked || dirty} onLoadDraft={(draft) => {
+        if (locked || dirty) return;
+        edit(draft.title, draft.body);
+        setEditorTab("write");
+        requestAnimationFrame(() => document.getElementById("draft-body")?.focus());
+      }} />
       <ImprovementPanel key={job.id} job={job} />
       <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
       <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
