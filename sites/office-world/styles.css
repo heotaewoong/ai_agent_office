@@ -582,3 +582,7 @@ a { color: var(--accent); }
   .panel { max-height:min(55vh,calc(100dvh - var(--world-header-bottom) - 220px)); }
   .results-view .panel,.roster-panel { top:calc(var(--world-header-bottom) + 12px); max-height:calc(100dvh - var(--world-header-bottom) - 28px); }
 }
+@media(max-width:720px) and (max-height:500px) {
+  .panel:not([hidden]) { bottom:12px; max-height:calc(100dvh - var(--world-header-bottom) - 24px); z-index:55; }
+  .world-status { display:none; }
+}
