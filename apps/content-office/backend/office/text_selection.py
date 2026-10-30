@@ -44,6 +44,11 @@ def availability(store=None):
     """Each text model runs only when its provider key is present on this server."""
     result = {}
     for identity in PROFILES:
+        if identity == "codex-subscription-text":
+            from .codex_text_provider import subscription_status
+            ok = bool(subscription_status().get("configured"))
+            result[identity] = {'available': ok, 'reason': '' if ok else '앱 실행 계정에 Codex(ChatGPT) 로그인이 없습니다'}
+            continue
         env = KEY_ENV[provider_for(identity)]
         ok = bool(os.environ.get(env))
         result[identity] = {'available': ok, 'reason': '' if ok else f'{env}가 서버에 없습니다'}
