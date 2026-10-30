@@ -127,6 +127,7 @@ def production_contract(voice_renderer, selections, image_renderer=None, clip_re
               'export_implementation_sha256': file_hash(Path(__file__).with_name('exports.py')),
               'offer_implementation_sha256': file_hash(Path(__file__).with_name('offers.py')),
               'channel_handoff_implementation_sha256': file_hash(Path(__file__).with_name('channel_handoff.py')),
+              'channel_adaptation_implementation_sha256': file_hash(Path(__file__).with_name('channel_adaptation.py')),
               'channel_registry': channel_registry if selections.get('blog') else None,
               'font_sha256': font_sha, 'font_status': font_status,
               'voice': (voice_identity(renderer) if renderer is local_voice else str(getattr(renderer, 'cache_key', voice_identity(renderer)))) if selections.get('video') else None,

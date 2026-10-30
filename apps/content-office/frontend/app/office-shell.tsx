@@ -1333,7 +1333,7 @@ function Studio({
               onClick={() => setEditorTab("video")}
             >
               <Icon name="play" size={15} />
-              영상 대본
+              영상·SNS 대본
             </button>
           </div>
           <span className="editor-save-state">
@@ -1410,7 +1410,17 @@ function Studio({
             </div>
           )
         ) : editorTab === "video" ? (
-          <VideoPlan packet={job.source_packet} />
+          <>
+            <VideoPlan packet={job.source_packet} />
+            {job.source_packet?.channel_posts && <section className="panel">
+              <h3>매체별 SNS 요약본</h3>
+              <p className="muted">블로그는 상세 원문을 유지합니다. 아래 요약본과 숏폼 대본도 승인① 전에 확인하세요. 원문 링크는 출고 파일에 덧붙입니다.</p>
+              {Object.entries(job.source_packet.channel_posts).map(([key, text]) => <details key={key}>
+                <summary>{({threads_main: "Threads", linkedin_personal: "LinkedIn", instagram_main: "Instagram", x_main: "X"} as Record<string, string>)[key] ?? key} · {text.length}자</summary>
+                <p style={{whiteSpace: "pre-wrap", overflowWrap: "anywhere"}}>{text}</p>
+              </details>)}
+            </section>}
+          </>
         ) : (
           <div className="evidence-list">
             {evidenceItems.length ? (
