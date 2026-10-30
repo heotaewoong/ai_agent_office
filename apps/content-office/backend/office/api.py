@@ -16,7 +16,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -542,6 +542,16 @@ def create_app(store: Store | None = None):
         job = store.require_source_approval(job_id)
         manifest = verify_files(job, ['video'])
         return store.select_thumbnail(job_id, choice.artifact_id, manifest.get("hash"), "local-operator")
+
+    @app.get('/api/jobs/{job_id}/review-package')
+    def download_review_package(job_id: str):
+        from .review_bundle import build_review_bundle
+        job = store.require_source_approval(job_id)
+        data = build_review_bundle(job, store.artifacts)
+        return Response(data, media_type='application/zip', headers={
+            'Content-Disposition': f'attachment; filename="{job["id"]}-review.zip"',
+            'Cache-Control': 'no-store',
+        })
 
     @app.get("/api/jobs/{job_id}/package")
     def download_package(job_id: str):
