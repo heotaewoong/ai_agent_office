@@ -766,7 +766,7 @@ for (const hasVideo of [true, false]) {
   });
 }
 
-test("공개 원문 입력은 권한·길이·Gemini 전송을 확인하고 시작 버전을 보낸다", async ({
+test("공개 원문 입력은 권한·길이·현재 원고 모델 전송을 확인하고 시작 버전을 보낸다", async ({
   page,
 }) => {
   const context = await harness(page, true);
@@ -785,7 +785,7 @@ test("공개 원문 입력은 권한·길이·Gemini 전송을 확인하고 시�
     page.getByRole("button", { name: "근거 등록하고 새 원고 만들기" }),
   ).toBeDisabled();
   await source.fill("공개 원문 근거 문장입니다. ".repeat(20));
-  await expect(page.getByText(/Gemini.*전송/)).toBeVisible();
+  await expect(page.getByText(/입력한 텍스트는 현재 설정된 원고 모델.*전송됩니다/)).toBeVisible();
   await page
     .getByRole("checkbox", { name: /공개 원문이며 재사용할 권한/ })
     .check();
