@@ -1733,7 +1733,7 @@ function Studio({
       </section>
       <section className="studio-section" aria-labelledby={`studio-cards-${job.id}`}>
         <header className="studio-section-heading"><span className="studio-section-number">03</span><div><h2 id={`studio-cards-${job.id}`} data-outline-title="카드뉴스">카드뉴스</h2><p>이미지와 문구를 검토하고 내려받으세요. 제작·재제작에는 승인 원고가 필요해요.</p></div></header>
-        <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+        <CardsPanel job={job} busy={locked} action={action} blockedReason={requestBlockedReason} />
       </section>
       <section className="studio-section" aria-labelledby={`studio-video-${job.id}`}>
         <header className="studio-section-heading"><span className="studio-section-number">04</span><div><h2 id={`studio-video-${job.id}`} data-outline-title="영상">영상</h2><p>장면별 대본과 추가 클립 설정을 확인하세요. 완성 영상은 제작·출고함에서 재생해요.</p></div><button className="button secondary small" onClick={onDelivery}>완성 영상 확인</button></header>
