@@ -295,6 +295,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
     if (!activeId) return;
     let current = true;
     const fetchJob = async () => {
+      if (!current || document.hidden) return;
       try {
         await loadJob(activeId);
       } catch (cause) {
@@ -306,10 +307,12 @@ export default function Office({ children }: { children: React.ReactNode }) {
     };
     setJob(null);
     void fetchJob();
+    document.addEventListener("visibilitychange", fetchJob);
     const timer = setInterval(() => void fetchJob(), 4_000);
     return () => {
       current = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", fetchJob);
     };
   }, [activeId, loadJob]);
 

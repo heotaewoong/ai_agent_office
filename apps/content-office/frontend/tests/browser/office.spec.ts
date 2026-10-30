@@ -4,6 +4,33 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Article, Dashboard, Job } from "../../lib/types";
 
+test("숨겨진 작업실은 원고 조회를 쉬고 화면 복귀 시 수정 내용을 보존하며 갱신한다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  let reads = 0;
+  page.on("request", request => {
+    if (new URL(request.url()).pathname === "/api/jobs/contract-test-job" && request.method() === "GET") reads++;
+  });
+  await page.goto("/scripts/contract-test-job");
+  const body = page.getByLabel("본문 · Markdown", { exact: true });
+  await expect(body).toBeVisible();
+  await body.fill("화면 복귀 후에도 보존할 편집 원고");
+  await page.clock.install();
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const before = reads;
+  await page.clock.runFor(12_000);
+  expect(reads).toBe(before);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect.poll(() => reads).toBe(before + 1);
+  await expect(body).toHaveValue("화면 복귀 후에도 보존할 편집 원고");
+  expect(fixture.writes).toEqual([]);
+});
+
 for (const width of [1440, 390]) {
   test(`원고 시작 폼 ${width}px에서 넓은 편집칸과 입력 보존·진행 조건을 제공한다`, async ({ page }) => {
     const fixture = await harness(page, true);

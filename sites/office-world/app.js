@@ -1484,13 +1484,23 @@
         detail('boot',.305,.22,.38,gear,0,-hipY+.11,.025,leg);
         detail('boot-toe',.31,.1,.15,gear,0,-hipY+.065,.17,leg);
       });
-      // Merge only unparented local details, then attach them to their animated pivot.
+      // Hidden templates outlive individual avatars; instances share each rigid part's draw call.
+      this.avatarDetailTemplates ||= new Map();
       for(const [parent,materials] of groups)for(const parts of materials.values()){
         const detailName=parts[0].name;
-        const mesh=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);
-        if(mesh){mesh.name=detailName+'-detail';mesh.parent=parent;mesh.isPickable=false;}
+        const limb=parent===root?'root':parent===armL||parent===armR?'arm':'leg';
+        const key=QUALITY+':'+limb+':'+parts[0].material.uniqueId;
+        let template=this.avatarDetailTemplates.get(key);
+        if(!template||template.isDisposed()){
+          template=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);
+          if(!template)continue;
+          template.name='avatar-template-'+key;template.isVisible=false;template.isPickable=false;
+          this.avatarDetailTemplates.set(key,template);
+        }else parts.forEach(mesh=>mesh.dispose());
+        const mesh=template.createInstance(detailName+'-detail');
+        mesh.parent=parent;mesh.isVisible=true;mesh.isPickable=false;
       }
-      root.getChildMeshes().forEach(mesh=>{if(mesh!==marker&&!mesh.material?.disableLighting){this.castShadow(mesh);this.receiveShadow(mesh);}});
+      root.getChildMeshes().forEach(mesh=>{if(mesh!==marker&&!mesh.material?.disableLighting){this.castShadow(mesh);this.receiveShadow(mesh.sourceMesh||mesh);}});
       return {root,legL,legR,armL,armR,head,body,marker,hipY,phase:Math.random()*6};
     },
 
