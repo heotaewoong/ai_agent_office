@@ -224,3 +224,10 @@ test("키 연결이 사라져도 OpenAI·Runway 선택지를 숨기지 않고 �
  assert.ok(clip);assert.equal(clip.disabled,true);assert.match(clip.hint,/RUNWAYML_API_SECRET/);
  assert.equal(visibleProfileOptions(provider,"clip").find(o=>o.id==="none")?.disabled,undefined);
 });
+
+test("API 전환으로 종료한 구독 경로는 연결 오류 선택지와 달리 제외한다", () => {
+ const provider={availability:{text:{"codex-subscription-text":{available:false,retired:true,reason:"API 전용"}},image:{"codex-subscription":{available:false,retired:true,reason:"API 전용"}}}};
+ assert.equal(visibleProfileOptions(provider,"text").some(o=>o.subscription),false);
+ assert.equal(visibleProfileOptions(provider,"image").some(o=>o.subscription),false);
+ assert.ok(visibleProfileOptions(provider,"text").some(o=>o.id==="gpt-5.4-mini"));
+});

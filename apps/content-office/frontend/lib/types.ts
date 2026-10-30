@@ -280,7 +280,7 @@ export type ProviderProfile = {
   paid_clips_today?: number;
   clip_limits?: { max_clips_per_video?: number; daily_paid_clips?: number; hard_max_clips_per_video?: number; hard_max_daily_paid_clips?: number };
 };
-export type ProfileAvailability = Partial<Record<"text" | "voice" | "image" | "clip", Record<string, { available: boolean; reason: string }>>>;
+export type ProfileAvailability = Partial<Record<"text" | "voice" | "image" | "clip", Record<string, { available: boolean; reason: string; retired?: boolean }>>>;
 export type ClipEstimate = { paid: boolean; clips: number; credits: number; reservation_krw: number; usd?: number; model?: string; label: string; daily_cap?: number; used_today?: number; note?: string };
 export type ProviderStatus = {
   model?: string;

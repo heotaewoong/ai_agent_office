@@ -89,7 +89,7 @@ function selectedId(p: ProviderStatus, kind: ProfileKind): string | undefined {
 // Keep registered choices discoverable when a key or platform connection is unavailable.
 export function visibleProfileOptions(provider: ProviderStatus | undefined, kind: ProfileKind): ProfileOption[] {
   const states = provider?.availability?.[kind];
-  return PROFILE_OPTIONS[kind].filter(option => option.id === "none" || !option.disabled).map(option => {
+  return PROFILE_OPTIONS[kind].filter(option => option.id === "none" || (!option.disabled && !states?.[option.id]?.retired)).map(option => {
     const state = states?.[option.id];
     return option.id !== "none" && state?.available === false
       ? {...option, disabled:true, hint:`${option.hint} 현재 실행 불가: ${state.reason}`}
