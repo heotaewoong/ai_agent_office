@@ -4046,71 +4046,152 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 
 .card-image-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted, #666); margin-right: 8px; }
 
-/* 구조도 */
-.arch { display: grid; gap: 36px; }
-.arch .mono, .arch-commits .mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
-.arch-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-.arch-fact { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
-.arch-fact span { font-size: 12px; color: var(--muted); }
-.arch-fact strong { font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.arch-fact strong.bad, .arch-fact em.warn { color: var(--red); }
-.arch-fact em { font-style: normal; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
-.arch-section { display: grid; gap: 14px; }
-.arch-section h2 { font-size: 20px; margin: 0; }
-.arch-lede { max-width: 70ch; }
-.arch-flow { display: grid; grid-template-columns: repeat(11, auto); overflow-x: auto; padding-bottom: 6px; }
-.arch-stage { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px; width: 172px; display: grid; gap: 8px; align-content: start; }
-.arch-stage h3 { font-size: 14px; margin: 0; }
-.arch-stage ul { margin: 0; padding-left: 16px; font-size: 12.5px; color: var(--muted); display: grid; gap: 3px; }
-.arch-num { font-size: 11px; color: var(--orange); font-weight: 600; letter-spacing: .04em; }
-.arch-who { font-size: 11px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 8px; }
-.arch-gate { position: relative; width: 60px; display: grid; justify-items: center; align-content: center; gap: 6px; }
-.arch-gate::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px solid var(--line); }
-.arch-mark { position: relative; z-index: 1; width: 40px; height: 40px; border-radius: 50%; background: var(--orange-light); border: 2px solid var(--orange); color: var(--orange); font-weight: 700; font-size: 18px; display: grid; place-items: center; }
-.arch-glabel { position: relative; z-index: 1; font-size: 11px; font-weight: 600; color: var(--orange); background: var(--paper); text-align: center; padding: 0 2px; }
-.arch-gate.plain .arch-mark { width: 26px; height: 26px; font-size: 13px; background: var(--white); border-color: var(--line); color: var(--muted); }
-.arch-legend { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin: 0; }
-.arch-dot.gate { width: 10px; height: 10px; border-radius: 50%; background: var(--orange); display: inline-block; }
-.arch-diagram { background: var(--white); border: 1px solid var(--line); border-radius: 12px; overflow-x: auto; }
-.arch-diagram svg { display: block; width: 100%; min-width: 960px; height: auto; }
-.arch-diagram text.t { font-size: 14.5px; font-weight: 600; fill: var(--ink); }
-.arch-diagram text.s { font-size: 12px; fill: var(--muted); }
-.arch-diagram text.m { font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; fill: var(--muted); }
-.arch-diagram text.f { font-family: ui-monospace, Consolas, monospace; font-size: 12px; fill: var(--orange); }
-.arch-diagram text.e { font-size: 13.5px; font-weight: 600; fill: var(--ink); }
-.arch-box { fill: var(--white); stroke: var(--line); stroke-width: 1.2; }
-.arch-box.strong { stroke: var(--orange); stroke-width: 1.5; }
-.arch-frame { fill: var(--paper); stroke: var(--orange); stroke-width: 1.2; stroke-dasharray: 5 4; }
-.arch-ext { fill: var(--green-light); stroke: var(--green); stroke-width: 1; }
-.arch-off { fill: #fbeceb; stroke: var(--red); stroke-width: 1; stroke-dasharray: 4 3; }
-.arch-wire { stroke: var(--muted); stroke-width: 1.4; fill: none; }
-.arch-wire.ext { stroke-dasharray: 4 3; }
-.arch-head { fill: var(--muted); }
-.arch-table { overflow-x: auto; background: var(--white); border: 1px solid var(--line); border-radius: 12px; }
-.arch-table table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
-.arch-table th, .arch-table td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.arch-table th { font-size: 12px; color: var(--muted); font-weight: 600; }
-.arch-table tr:last-child td { border-bottom: 0; }
+/* 콘텐츠 파이프라인: 기본 문장 크기를 유지하고 좁은 화면에서는 세로 흐름으로 읽는다. */
+.arch { display: grid; gap: 42px; --arch-green: #254f40; --arch-muted: #58675e; --arch-amber: #865016; }
+.arch > *, .arch article, .arch section, .arch dl, .arch li { min-width: 0; }
+.arch p { margin: 0; }
+.arch .muted, .arch-footnote { color: var(--arch-muted); }
+.arch .mono { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; overflow-wrap: anywhere; }
+.arch-hero { padding: 28px 30px; border: 1px solid #cbd8cc; border-radius: 20px; background: linear-gradient(120deg, #eef4eb, #fffefa 75%); display: grid; gap: 17px; }
+.arch-eyebrow, .arch-kicker { color: #42624f; font-size: 12px; font-weight: 700; letter-spacing: .07em; }
+.arch-hero-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 18px; }
+.arch-hero h2 { font-size: clamp(25px, 2.4vw, 34px); line-height: 1.25; margin: 0; letter-spacing: -.055em; color: #193f32; }
+.arch-hero > p:not(.arch-freshness) { max-width: 78ch; font-size: 15px; line-height: 1.85; color: #435449; word-break: keep-all; overflow-wrap: anywhere; }
+.arch-export { display: inline-flex; gap: 18px; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 1px solid #b4c9b9; border-radius: 10px; background: #fffefa; color: #254f40; font-size: 13px; font-weight: 650; }
+.arch-export:hover, .arch-jump a:hover { background: #e8f0e7; border-color: #42624f; }
+.arch-intro-facts, .arch-jump { display: flex; flex-wrap: wrap; gap: 8px; }
+.arch-intro-facts span { font-size: 12px; color: #365444; background: #e5eee3; padding: 4px 10px; border-radius: 6px; }
+.arch-jump { padding-top: 8px; }
+.arch-jump a { display: inline-flex; align-items: center; gap: 14px; padding: 9px 12px; min-height: 42px; border-radius: 8px; background: #fffefa; border: 1px solid #d5dfd3; font-size: 13px; font-weight: 600; color: #254f40; }
+.arch-freshness, .arch-footnote { font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.arch-freshness { color: #58675e; border-top: 1px solid #dce5d9; padding-top: 13px; }
+.arch-section { display: grid; gap: 20px; scroll-margin-top: 24px; }
+.arch-section-heading { display: flex; align-items: start; gap: 12px; }
+.arch-index { flex-shrink: 0; font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; color: #42624f; border: 1px solid #bccfbe; border-radius: 7px; padding: 4px 7px; margin-top: 1px; }
+.arch-section h2 { font-size: 21px; line-height: 1.45; margin: 0 0 5px; letter-spacing: -.035em; word-break: keep-all; overflow-wrap: anywhere; }
+.arch-section-heading p { color: #58675e; font-size: 14px; line-height: 1.75; }
+.arch-overview { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; list-style: none; padding: 0; margin: 0; }
+.arch-overview a { display: grid; align-content: start; gap: 9px; height: 100%; padding: 16px 13px; background: #fffefa; border: 1px solid #d1dcd0; border-radius: 12px; }
+.arch-overview a:hover { border-color: #42624f; background: #f0f5ed; }
+.arch-step-index { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: #e5eee3; color: #254f40; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.arch-overview strong { color: #254f40; font-size: 16px; }
+.arch-overview a > span:not(.arch-step-index) { font-size: 12.5px; color: #58675e; line-height: 1.7; }
+.arch-overview small { padding-top: 9px; border-top: 1px solid #e0e6dc; color: #865016; font-size: 11.5px; line-height: 1.7; }
+.arch-approval-key { border-left: 3px solid #b98845; background: #fff6e6; padding: 15px 18px; border-radius: 0 10px 10px 0; display: grid; gap: 9px; color: #6c441a; }
+.arch-approval-key > strong { font-size: 14px; }
+.arch-approval-key > div { display: flex; flex-wrap: wrap; gap: 12px 22px; font-size: 13px; }
+.arch-approval-key b { font-size: 17px; margin-right: 4px; }
+.arch-approval-key p { font-size: 12.5px; }
+.arch-stage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.arch-process { background: #fffefa; border: 1px solid #d7dfd3; border-radius: 15px; padding: 22px; display: flex; flex-direction: column; gap: 16px; scroll-margin-top: 24px; }
+.arch-process > header { display: flex; align-items: start; gap: 12px; }
+.arch-process h3 { font-size: 19px; line-height: 1.55; margin: 3px 0 0; letter-spacing: -.035em; word-break: keep-all; overflow-wrap: anywhere; }
+.arch-io { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 10px; font-size: 13.5px; padding: 12px 13px; background: #f3f4ef; border-radius: 9px; line-height: 1.75; }
+.arch-io > span { color: #58675e; font-size: 12px; font-weight: 700; padding-top: 1px; }
+.arch-io.result { background: #eaf2e8; color: #254f40; }
+.arch-io.result > span { color: #365d46; }
+.arch-checklist { display: grid; gap: 8px; padding-left: 19px; margin: 0; font-size: 14px; line-height: 1.85; color: #38463d; }
+.arch-checklist li::marker { color: #537b61; }
+.arch-owner, .arch-entry { font-size: 12px; color: #58675e; line-height: 1.8; overflow-wrap: anywhere; }
+.arch-owner strong, .arch-entry strong { font-weight: 650; margin-right: 8px; color: #435e4d; }
+.arch-owner { margin-top: auto !important; padding-top: 4px; }
+.arch-human-gate { display: flex; align-items: start; gap: 12px; padding: 14px; background: #fff4df; border: 1px solid #ead5ad; border-radius: 10px; color: #784715; }
+.arch-human-gate > span { display: grid; place-items: center; width: 33px; height: 33px; flex-shrink: 0; background: #f4e3bf; border-radius: 50%; font-weight: 700; font-size: 20px; }
+.arch-human-gate strong { font-size: 13px; }
+.arch-human-gate p { margin-top: 3px; font-size: 12.5px; line-height: 1.75; }
+.arch-continue { padding: 12px 14px; color: #365d46; background: #f0f4eb; border-radius: 9px; font-size: 12.5px; }
+.arch-lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.arch-lane { background: #fffefa; border: 1px solid #d7dfd3; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+.arch-lane h3 { font-size: 18px; line-height: 1.6; margin: 11px 0 6px; word-break: keep-all; overflow-wrap: anywhere; }
+.arch-lane-heading > p { font-size: 12.5px; color: #58675e; line-height: 1.8; }
+.arch-lane ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.arch-lane li { display: flex; gap: 10px; align-items: start; font-size: 14px; line-height: 1.8; }
+.arch-lane li > span { color: #42624f; font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 700; padding-top: 4px; }
+.arch-boundary { margin-top: auto !important; padding-top: 15px; border-top: 1px solid #e2e7dc; color: #58675e; font-size: 12.5px; line-height: 1.85; }
+.arch-boundary strong { display: block; color: #784715; font-size: 12px; margin-bottom: 4px; }
+.arch-runtime { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.arch-runtime-access, .arch-runtime-providers { border: 1px solid #d6dfd1; border-radius: 14px; background: #fffefa; padding: 20px; }
+.arch-runtime h3 { margin: 6px 0; font-size: 15px; line-height: 1.65; }
+.arch-runtime p { font-size: 13px; color: #58675e; line-height: 1.85; }
+.arch-route-arrow { display: block; margin: 14px 0; color: #42624f; font-size: 24px; }
+.arch-deploy-note { margin-top: 20px; padding-top: 18px; border-top: 1px dashed #cbd6c7; font-size: 13px; }
+.arch-deploy-note small { display: block; margin-top: 8px; color: #58675e; line-height: 1.8; }
+.arch-runtime-core { border: 1px solid #a5c2ac; border-radius: 14px; background: #eff5eb; padding: 20px; }
+.arch-runtime-label { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; padding-bottom: 18px; border-bottom: 1px solid #d0ddca; font-size: 13px; }
+.arch-services { list-style: none; padding: 0; margin: 18px 0; display: grid; gap: 15px; }
+.arch-services > li { display: flex; align-items: start; gap: 10px; background: #fffefa; border: 1px solid #d0ddca; padding: 12px; border-radius: 9px; }
+.arch-services > li > b { color: #42624f; border: 1px solid #ccdac5; border-radius: 6px; padding: 0 6px; margin-top: 4px; font-size: 11px; }
+.arch-services h3 { margin: 0 0 4px; font-size: 14px; }
+.arch-services code { display: inline-block; font-weight: 400; font-size: 11px; color: #58675e; }
+.arch-storage { border-top: 1px solid #d0ddca; padding-top: 13px; }
+.arch-storage dl, .arch-runtime-providers dl { margin: 10px 0 0; display: grid; gap: 12px; }
+.arch-storage dl > div { display: grid; gap: 2px; }
+.arch-storage dt, .arch-runtime-providers dt { color: #365d46; font-weight: 650; font-size: 12px; }
+.arch-storage dd, .arch-runtime-providers dd { margin: 0; color: #58675e; font-size: 12.5px; line-height: 1.75; overflow-wrap: anywhere; }
+.arch-runtime-providers dl > div { border-bottom: 1px solid #e2e7dc; padding-bottom: 12px; }
+.arch-runtime-providers > p { margin-top: 16px; font-size: 11.5px; }
+.arch-runtime-separate { border: 1px dashed #b9c5b9; border-radius: 11px; background: #f1f2ed; padding: 16px 20px; display: grid; gap: 5px; }
+.arch-runtime-separate strong { color: #435449; font-size: 13px; }
+.arch-runtime-separate p { font-size: 13px; color: #58675e; line-height: 1.85; }
+.arch-rails { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.arch-rail { background: #fffefa; border: 1px solid #d7dfd3; border-radius: 11px; padding: 18px 20px; display: grid; gap: 6px; }
+.arch-rail h3 { font-size: 14px; margin: 0; color: #254f40; }
+.arch-rail p { font-size: 13px; color: #58675e; line-height: 1.85; }
+.arch-selected { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; background: #eef4eb; border: 1px solid #c6d6c5; border-radius: 12px; padding: 19px 22px; }
+.arch-selected > div { display: grid; gap: 5px; }
+.arch-selected span { color: #58675e; font-size: 12px; }
+.arch-selected strong { font-size: 15px; color: #254f40; }
+.arch-selected small { color: #58675e; font-size: 12px; }
+.arch-selected > p { grid-column: 1 / -1; border-top: 1px solid #d1ddca; padding-top: 12px; font-size: 12.5px; color: #58675e; }
+.arch-table { overflow-x: auto; background: #fffefa; border: 1px solid #d7dfd3; border-radius: 12px; }
+.arch-table table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13px; }
+.arch-table caption { text-align: left; font-size: 12px; line-height: 1.8; color: #58675e; padding: 14px 16px; background: #f0f3eb; }
+.arch-table th, .arch-table td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #e2e7dc; vertical-align: top; }
+.arch-table thead th { font-size: 12px; color: #58675e; font-weight: 650; white-space: nowrap; }
+.arch-table tbody th { font-size: 13px; font-weight: 500; min-width: 120px; }
+.arch-table tr:last-child th, .arch-table tr:last-child td { border-bottom: 0; }
 .arch-table td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.arch-table td.mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
-.arch-rails { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-.arch-rail { background: var(--white); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; display: grid; gap: 6px; }
-.arch-rail h3 { font-size: 14px; margin: 0; }
-.arch-rail p { font-size: 13px; color: var(--muted); margin: 0; }
+.arch-table td.mono { font-size: 12px; max-width: 220px; }
+.arch-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.arch-fact { background: #fffefa; border: 1px solid #d7dfd3; border-radius: 11px; padding: 16px; display: grid; gap: 5px; align-content: start; }
+.arch-fact > span { color: #58675e; font-size: 12px; }
+.arch-fact strong { font-size: 15px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.arch-fact em { font-style: normal; color: #58675e; font-size: 12px; overflow-wrap: anywhere; }
+.arch-fact strong.bad, .arch-fact em.warn { color: #9b352e; }
 .arch-status { display: grid; gap: 8px; }
-.arch-status-row { display: grid; grid-template-columns: 84px 1fr; gap: 12px; align-items: baseline; background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
-.arch-status-row p { margin: 0; font-size: 13.5px; min-width: 0; }
-.arch-pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; justify-self: start; white-space: nowrap; }
-.arch-pill.ok { background: var(--green-light); color: var(--green); }
-.arch-pill.warn { background: var(--orange-light); color: var(--orange); }
-.arch-pill.off { background: #fbeceb; color: var(--red); }
-.arch-commits { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.arch-commits li { display: grid; grid-template-columns: 76px 1fr auto; gap: 12px; font-size: 13px; background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
-.arch-commits li span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
-@media (max-width: 720px) {
-  .arch-flow { grid-template-columns: 1fr; overflow-x: visible; }
-  .arch-stage { width: auto; }
-  .arch-gate { width: auto; grid-auto-flow: column; justify-content: start; gap: 10px; padding: 8px 0 8px 14px; }
-  .arch-gate::before { left: 26px; right: auto; top: 0; bottom: 0; border-top: 0; border-left: 2px solid var(--line); }
-  .arch-status-row, .arch-commits li { grid-template-columns: 1fr; gap: 4px; }
+.arch-status-row { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; align-items: start; padding: 13px 16px; border: 1px solid #d7dfd3; border-radius: 10px; background: #fffefa; }
+.arch-status-row p { font-size: 13px; line-height: 1.85; overflow-wrap: anywhere; }
+.arch-pill { display: inline-block; align-self: start; justify-self: start; font-size: 11.5px; font-weight: 650; border-radius: 6px; padding: 3px 9px; line-height: 1.7; white-space: normal; }
+.arch-pill.ok { background: #e4efe1; color: #28513b; }
+.arch-pill.warn { background: #fff0d5; color: #784715; }
+.arch-pill.off { background: #eeeee7; color: #515d51; }
+.arch-subheading { font-size: 15px; margin: 4px 0 -5px; }
+.arch-audit { background: #fffefa; border: 1px solid #d7dfd3; border-radius: 12px; padding: 16px; }
+.arch-audit summary { cursor: pointer; font-size: 13px; font-weight: 650; color: #365d46; min-height: 28px; }
+.arch-commits { margin: 16px 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.arch-commits li { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 12px; font-size: 12px; padding: 8px 0; border-bottom: 1px solid #e2e7dc; overflow-wrap: anywhere; }
+.arch :is(a, button, summary, [tabindex]):focus-visible { outline: 3px solid #426c58; outline-offset: 4px; }
+@media (max-width: 1180px) { .arch-lanes { grid-template-columns: 1fr; } .arch-lane { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); } .arch-boundary { grid-column: 1 / -1; } .arch-overview { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1050px) { .arch-runtime { grid-template-columns: 1fr; } .arch-runtime-providers dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } .arch-runtime-access { display: block; } .arch-runtime-access > .arch-kicker, .arch-runtime-access > .arch-deploy-note { grid-column: 1 / -1; } .arch-runtime-access > .arch-route-arrow { display: none; } }
+@media (max-width: 960px) { .arch-stage-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) {
+  .arch { gap: 32px; }
+  .arch-hero { padding: 21px 18px; border-radius: 14px; }
+  .arch-export { width: 100%; }
+  .arch-jump { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .arch-jump a { justify-content: space-between; gap: 5px; font-size: 12px; padding: 9px; }
+  .arch-overview { grid-template-columns: 1fr; gap: 9px; }
+  .arch-overview a { grid-template-columns: 32px minmax(0, 1fr); padding: 13px 15px; gap: 3px 12px; }
+  .arch-overview .arch-step-index { grid-row: 1 / span 3; margin-top: 3px; }
+  .arch-overview small { border: 0; padding: 2px 0 0; }
+  .arch-section h2 { font-size: 19px; }
+  .arch-process { padding: 19px 16px; }
+  .arch-process h3 { font-size: 18px; }
+  .arch-lane { display: flex; padding: 18px; }
+  .arch-rails, .arch-selected { grid-template-columns: 1fr; }
+  .arch-selected { padding: 18px; }
+  .arch-runtime-core, .arch-runtime-providers, .arch-runtime-access { padding: 17px; }
+  .arch-runtime-providers dl { grid-template-columns: 1fr; }
+  .arch-status-row { grid-template-columns: 1fr; gap: 7px; }
+  .arch-commits li { grid-template-columns: 1fr; gap: 4px; }
 }

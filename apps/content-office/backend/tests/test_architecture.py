@@ -69,3 +69,18 @@ def test_api_route(tmp_path):
     client.get("/api/session")
     body = client.get("/api/architecture").json()
     assert body["doc"]["headline"] and "usage" in body and "keys" in body
+
+
+def test_pipeline_document_distinguishes_parallel_outputs_offers_and_consent():
+    from office.architecture import load_doc
+    doc = load_doc()
+    stages = [s for s in doc["flow"] if s["kind"] == "stage"]
+    assert [s["id"] for s in stages] == ["collect", "plan", "draft", "produce", "deliver", "learn"]
+    assert all(s["input"] and s["output"] and s["entry"] for s in stages)
+    assert all(s["checks"] for s in doc["flow"] if s["kind"] == "gate")
+    lanes = {lane["id"]: lane for lane in doc["lanes"]}
+    assert set(lanes) == {"outputs", "offer", "audience"}
+    assert "독립" in lanes["offer"]["phase"]
+    assert "미연결" in lanes["audience"]["boundary"]
+    assert any(s["state"] == "off" and "Hermes" in s["text"] for s in doc["status"])
+    assert {"작업 시간", "예산 상한", "자동 재시도·대체 없음", "사람만 승인", "키와 개인정보", "버전 고정", "부분 성공 보존", "발급·발송 경계"} <= {rail["title"] for rail in doc["rails"]}

@@ -2,269 +2,146 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { costRows, shortCommit, testSummary, type ArchitectureOverview } from "../lib/architecture";
+import { costRows, flowStages, imageRoute, pipelineSvg, shortCommit, testSummary, type ArchitectureOverview } from "../lib/architecture";
 import { formatDate } from "../lib/workflow";
 
-const ROLE_LABEL: Record<string, string> = { image: "영상 장면 배경", card_image: "카드 이미지" };
-
-/** 지금 EC2에서 돌아가는 오피스의 구조도. 그림은 저장소 문서, 숫자는 서버가 배포·실행 기록으로 채운다. */
+/** 공정 정의와 실행 사실을 분리해 읽는, 제작을 실행하지 않는 안내 화면. */
 export function ArchitectureView() {
   const [data, setData] = useState<ArchitectureOverview | null>(null);
   const [error, setError] = useState("");
-
+  const [loadedAt, setLoadedAt] = useState("");
   const load = useCallback(async () => {
     try {
       setData(await api.architecture());
+      setLoadedAt(new Date().toISOString());
       setError("");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "구조도를 불러오지 못했습니다.");
+      setError(cause instanceof Error ? cause.message : "공정도를 불러오지 못했습니다.");
     }
   }, []);
-
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), 30_000);
     return () => clearInterval(timer);
   }, [load]);
 
-  if (error) return <div className="notice error" role="alert">{error}</div>;
-  if (!data) return <p className="muted">구조도를 불러오는 중입니다.</p>;
-
-  const tests = testSummary(data.build);
+  if (!data) return error ? <div className="notice error" role="alert">{error} <button onClick={() => void load()}>다시 불러오기</button></div> : <p className="muted" role="status">공정도와 운영 기록을 불러오는 중입니다.</p>;
+  const stages = flowStages(data.doc.flow);
+  const gates = stages.flatMap((row) => row.gates);
   const rows = costRows(data.doc.unit_costs, data.usage);
+  const tests = testSummary(data.build);
   const windowOpen = data.window.status === "active" && data.window.authorized_end && Date.parse(data.window.authorized_end) > Date.now();
+  const downloadMap = () => {
+    const url = URL.createObjectURL(new Blob([pipelineSvg(data.doc)], { type: "image/svg+xml;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "heobrain-content-pipeline.svg";
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   return (
     <div className="arch">
-      <section className="arch-facts" aria-label="지금 실행판">
-        <div className="arch-fact">
-          <span>실행 중인 커밋</span>
-          <strong className="mono">{shortCommit(data.git.commit)}</strong>
-          <em>{data.git.subject ?? ""}</em>
+      {error && <div className="notice error" role="alert">갱신하지 못해 마지막 조회 내용을 표시합니다. {error} <button onClick={() => void load()}>다시 불러오기</button></div>}
+      <section className="arch-hero" aria-labelledby="pipeline-title">
+        <div className="arch-eyebrow">HEOBRAIN / CONTENT OPERATIONS</div>
+        <div className="arch-hero-heading">
+          <h2 id="pipeline-title">{data.doc.headline}</h2>
+          <button className="arch-export" onClick={downloadMap}>전체 공정도 SVG 내려받기 <span aria-hidden="true">↗</span></button>
         </div>
-        <div className="arch-fact">
-          <span>배포 시각</span>
-          <strong>{data.build ? formatDate(data.build.deployed_at, true) : "기록 없음"}</strong>
-          <em className={data.build_matches_running_code ? "" : "warn"}>{data.build_matches_running_code ? "실행 코드와 일치" : "배포 기록과 실행 코드가 다름"}</em>
-        </div>
-        <div className="arch-fact">
-          <span>테스트</span>
-          <strong className={tests.failed ? "bad" : ""}>{tests.text}</strong>
-          <em>배포할 때 EC2에서 실행</em>
-        </div>
-        <div className="arch-fact">
-          <span>작업 시간</span>
-          <strong>{windowOpen ? `열림 · ${formatDate(data.window.authorized_end ?? undefined, true)}까지` : "닫힘"}</strong>
-          <em>작업자 {data.worker.state === "online" ? "실행 중" : "멈춤"}</em>
-        </div>
-        <div className="arch-fact">
-          <span>누적 비용</span>
-          <strong className="mono">{Math.round(data.budget.spent_krw).toLocaleString("ko-KR")}원</strong>
-          <em>한도 {data.budget.cap_krw.toLocaleString("ko-KR")}원 · 남음 {Math.round(data.budget.remaining_krw).toLocaleString("ko-KR")}원</em>
-        </div>
+        <p>{data.doc.summary}</p>
+        <div className="arch-intro-facts"><span>{stages.length}개 공정</span><span>{gates.length}개 사람 승인</span><span>선택 제작 · 완료 출력별 출고</span><span>실행과 안내를 구분</span></div>
+        <nav className="arch-jump" aria-label="파이프라인 내용 바로가기">
+          <a href="#pipeline-flow">공정별 자세히 <span aria-hidden="true">↓</span></a>
+          <a href="#pipeline-branches">병렬·별도 흐름 <span aria-hidden="true">↓</span></a>
+          <a href="#pipeline-runtime">서버·연결 경계 <span aria-hidden="true">↓</span></a>
+          <a href="#pipeline-cost">비용·운영 기록 <span aria-hidden="true">↓</span></a>
+        </nav>
+        <p className="arch-freshness">정의 {data.doc.definition_version ?? "저장소 문서"} · 운영 기록 마지막 조회 {formatDate(loadedAt, true)} · 읽기 전용 안내</p>
       </section>
 
-      <section className="arch-section">
-        <h2>{data.doc.headline}</h2>
-        <p className="muted arch-lede">{data.doc.summary}</p>
-        <div className="arch-flow" role="list">
-          {data.doc.flow.map((step, i) =>
-            step.kind === "stage" ? (
-              <article className="arch-stage" role="listitem" key={i}>
-                <span className="arch-num">{step.num}</span>
-                <h3>{step.title}</h3>
-                <ul>
-                  {step.items.map((item) => (
-                    <li key={item}>{item}</li>
-                  ))}
-                </ul>
-                <span className="arch-who">{step.who}</span>
-              </article>
-            ) : step.kind === "gate" ? (
-              <div className="arch-gate" role="listitem" key={i}>
-                <span className="arch-mark">{step.mark}</span>
-                <span className="arch-glabel">{step.label}</span>
-              </div>
-            ) : (
-              <div className="arch-gate plain" role="listitem" key={i} aria-hidden="true">
-                <span className="arch-mark">→</span>
-              </div>
-            ),
-          )}
-        </div>
-        <p className="arch-legend"><span className="arch-dot gate" />사람이 결정하는 관문 · AI가 대신 통과시킬 수 없음</p>
-      </section>
-
-      <section className="arch-section">
-        <h2>어디에서 무엇이 돌아가나</h2>
-        <div className="arch-diagram">
-          <InfraDiagram keys={data.keys} text={data.profiles.text} />
-        </div>
-      </section>
-
-      <section className="arch-section">
-        <h2>어떤 모델을 쓰고 얼마가 드나</h2>
-        <p className="muted">EC2에서 실제로 호출한 기록을 모아 계산합니다. 공식 단가 × 사용량 추정이며 1달러 = 2,000원으로 예약합니다.</p>
-        <div className="arch-table">
-          <table>
-            <thead>
-              <tr><th>하는 일</th><th>실제로 쓴 모델</th><th>단위</th><th>호출</th><th>1회 평균</th><th>설정 위치</th></tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.role}>
-                  <td>{row.task}</td>
-                  <td className="mono">{row.models.length ? row.models.join(", ") : <span className="muted">기록 없음</span>}</td>
-                  <td>{row.unit}</td>
-                  <td className="num">{row.calls}</td>
-                  <td className="num">{row.perCall == null ? "—" : `${row.perCall}원`}</td>
-                  <td>{row.where}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="arch-section">
-        <h2>돈과 사고를 막는 장치</h2>
-        <div className="arch-rails">
-          {data.doc.rails.map((rail) => (
-            <div className="arch-rail" key={rail.title}>
-              <h3>{rail.title}</h3>
-              <p>{rail.text}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="arch-section">
-        <h2>지금 상태</h2>
-        <div className="arch-status">
-          {(["openai", "gemini", "runway", "youtube"] as const).map((key) => (
-            <div className="arch-status-row" key={key}>
-              <span className={`arch-pill ${data.keys[key] ? "ok" : "off"}`}>{data.keys[key] ? "연결됨" : "미연결"}</span>
-              <p>{{ openai: "OpenAI 키 (글·이미지)", gemini: "Gemini 키 (기사 요약·음성)", runway: "Runway 키 (생성 영상)", youtube: "YouTube 업로드 자격" }[key]} <span className="muted">· EC2 환경 파일 기준, 값은 표시하지 않음</span></p>
-            </div>
-          ))}
-          {data.doc.status.map((item) => (
-            <div className="arch-status-row" key={item.text}>
-              <span className={`arch-pill ${item.state}`}>{item.label}</span>
-              <p>{item.text} <span className="muted">· {item.note}</span></p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="arch-section">
-        <h2>최근 변경</h2>
-        <ol className="arch-commits">
-          {data.git.recent.map((c) => (
-            <li key={c.commit}>
-              <span className="mono">{c.commit}</span>
-              <span>{c.subject}</span>
-              <span className="muted">{c.author} · {formatDate(c.at, true)}</span>
-            </li>
-          ))}
+      <section className="arch-section" aria-labelledby="pipeline-overview-title">
+        <div className="arch-section-heading"><span className="arch-index">01</span><div><h2 id="pipeline-overview-title">한눈에 보는 제작 순서</h2><p>위에서 아래로, 번호 순서대로 진행합니다. 단계 이름을 누르면 세부 내용으로 이동합니다.</p></div></div>
+        <ol className="arch-overview" aria-label="콘텐츠 파이프라인 전체 순서">
+          {stages.map(({ stage, gates: next }, i) => <li key={stage.id ?? i}>
+            <a href={`#pipeline-stage-${i + 1}`}><span className="arch-step-index">{String(i + 1).padStart(2, "0")}</span><strong>{stage.num.split("·").pop()?.trim() ?? stage.title}</strong><span>{stage.output ?? stage.title}</span><small>{next.length ? next.map((g) => `${g.mark} ${g.label}`).join(" · ") : i === stages.length - 1 ? "검토한 교훈을 기획으로" : "다음 공정으로"}</small></a>
+          </li>)}
         </ol>
-        <p className="muted">이 화면은 30초마다 다시 읽고, 배포할 때마다 커밋·테스트 결과가 자동으로 바뀝니다. 그림은 <span className="mono">backend/config/architecture.json</span>을 고치면 바뀝니다.</p>
+        <div className="arch-approval-key"><strong>사람이 결정하는 4개의 관문</strong><div>{gates.map((gate) => <span key={gate.mark}><b>{gate.mark}</b> {gate.label}</span>)}</div><p>AI가 승인을 만들지 않습니다. 승인 기록은 외부 게시·발급·발송 완료를 뜻하지 않습니다.</p></div>
+      </section>
+
+      <section id="pipeline-flow" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-flow-title">
+        <div className="arch-section-heading"><span className="arch-index">02</span><div><h2 id="pipeline-flow-title">각 공정에서 무엇을 받고, 무엇을 남기나</h2><p>입력 → 처리 → 산출물 → 사람 확인을 같은 순서로 읽습니다.</p></div></div>
+        <div className="arch-stage-grid">
+          {stages.map(({ stage, gates: after }, i) => <article className="arch-process" id={`pipeline-stage-${i + 1}`} key={stage.id ?? i} tabIndex={-1} aria-labelledby={`pipeline-stage-title-${i + 1}`}>
+            <header><span className="arch-step-index">{String(i + 1).padStart(2, "0")}</span><div><span className="arch-kicker">{stage.num}</span><h3 id={`pipeline-stage-title-${i + 1}`}>{stage.title}</h3></div></header>
+            {stage.input && <div className="arch-io"><span>입력</span><p>{stage.input}</p></div>}
+            <ul className="arch-checklist">{stage.items.map((item) => <li key={item}>{item}</li>)}</ul>
+            {stage.output && <div className="arch-io result"><span>산출물</span><p>{stage.output}</p></div>}
+            <p className="arch-owner"><strong>담당·도구</strong> {stage.who}</p>
+            {stage.entry && <p className="arch-entry"><strong>앱에서 찾기</strong> {stage.entry}</p>}
+            {after.map((gate) => <div className="arch-human-gate" key={gate.mark}><span aria-hidden="true">{gate.mark}</span><div><strong>사람 확인 · {gate.label}</strong><p>{gate.checks ?? "이 관문은 사람이 직접 확인합니다."}</p></div></div>)}
+            {!after.length && <p className="arch-continue">{i === stages.length - 1 ? "↺ 검토·승인한 교훈을 다음 기획에 반영" : "→ 위 결과를 다음 공정의 입력으로 전달"}</p>}
+          </article>)}
+        </div>
+      </section>
+
+      {!!data.doc.lanes?.length && <section id="pipeline-branches" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-branches-title">
+        <div className="arch-section-heading"><span className="arch-index">03</span><div><h2 id="pipeline-branches-title">한 줄로 묶으면 안 되는 병렬·별도 흐름</h2><p>제작 분기, 상품 혜택, 동의·발송을 구분해야 선행조건과 실제 실행을 혼동하지 않습니다.</p></div></div>
+        <div className="arch-lanes">{data.doc.lanes.map((lane) => <article className="arch-lane" key={lane.id}>
+          <div className="arch-lane-heading"><span className={`arch-pill ${lane.state}`}>{lane.label}</span><h3>{lane.title}</h3><p>{lane.phase}</p></div>
+          <ol>{lane.steps.map((step, i) => <li key={step}><span>{String(i + 1).padStart(2, "0")}</span><p>{step}</p></li>)}</ol>
+          <p className="arch-boundary"><strong>실행 경계</strong>{lane.boundary}</p>
+        </article>)}</div>
+      </section>}
+
+      <section id="pipeline-runtime" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-runtime-title">
+        <div className="arch-section-heading"><span className="arch-index">04</span><div><h2 id="pipeline-runtime-title">같은 서버 안에서도 실행 책임은 나뉩니다</h2><p>화면·API·작업자·저장소와, 외부 서비스의 실제 호출 경로를 분리해 봅니다.</p></div></div>
+        <RuntimeMap data={data} />
+        <div className="arch-runtime-separate"><strong>같은 EC2의 다른 도구</strong><p>Hermes · n8n · magma 사이트가 같은 서버에 있어도 이 콘텐츠 앱의 작업 큐와 자동 연결된 것은 아닙니다. Hermes 비서팀의 업무 전달·결과 회수는 보류된 별도 작업입니다.</p></div>
+      </section>
+
+      <section className="arch-section" aria-labelledby="pipeline-safety-title">
+        <div className="arch-section-heading"><span className="arch-index">05</span><div><h2 id="pipeline-safety-title">실패해도 남겨야 할 것, 넘지 말아야 할 것</h2><p>원고 판본·완료 자산·비용 예약·실제 외부 결과를 보존합니다.</p></div></div>
+        <div className="arch-rails">{data.doc.rails.map((rail) => <article className="arch-rail" key={rail.title}><h3>{rail.title}</h3><p>{rail.text}</p></article>)}</div>
+      </section>
+
+      <section id="pipeline-cost" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-cost-title">
+        <div className="arch-section-heading"><span className="arch-index">06</span><div><h2 id="pipeline-cost-title">선택한 경로와 집계된 비용</h2><p>설정·호출 기록·키 존재는 서로 다른 정보입니다. 키가 있다고 실제 호출 성공으로 표시하지 않습니다.</p></div></div>
+        <div className="arch-selected"><div><span>현재 글 모델</span><strong className="mono">{data.profiles.text}</strong></div><div><span>현재 이미지 프로필</span><strong>{imageRoute(data.profiles.image)}</strong><small className="mono">{data.profiles.image}</small></div><p>구독 경로와 API 경로의 비용은 다릅니다. 선택된 프로필과 호출 영수증을 확인하세요. 키·토큰 값은 표시하지 않습니다.</p></div>
+        <div className="arch-table" role="region" aria-label="모델별 집계 비용 표 · 좁은 화면에서는 가로로 이동" tabIndex={0}><table>
+          <caption>원고 모델 이벤트와 완료 이미지 영수증의 집계입니다. 음성·클립·청구서 전체의 완전한 합계가 아니며, 기록 없음은 무료라는 뜻이 아닙니다.</caption>
+          <thead><tr><th scope="col">하는 일</th><th scope="col">기록된 모델</th><th scope="col">집계 단위</th><th scope="col">호출</th><th scope="col">1회 평균</th><th scope="col">설정 위치</th></tr></thead>
+          <tbody>{rows.map((row) => <tr key={row.role}><th scope="row">{row.task}</th><td className="mono">{row.models.length ? row.models.join(", ") : <span className="muted">집계 기록 없음</span>}</td><td>{row.unit}</td><td className="num">{row.calls}</td><td className="num">{row.perCall == null ? "—" : `${row.perCall}원`}</td><td>{row.where}</td></tr>)}</tbody>
+        </table></div>
+        <p className="arch-footnote">원화 예약은 내부 환산 기준 1달러 = 2,000원을 사용합니다. 사용량×단가 추정과 제공자의 최종 청구는 구분합니다.</p>
+      </section>
+
+      <section className="arch-section" aria-labelledby="pipeline-status-title">
+        <div className="arch-section-heading"><span className="arch-index">07</span><div><h2 id="pipeline-status-title">실행판·설정·검증 기록</h2><p>아래 숫자는 서버가 읽은 운영 기록입니다. 문서에 저장된 검증 메모와 지금 실행한 결과를 구분합니다.</p></div></div>
+        <div className="arch-facts" aria-label="지금 실행판">
+          <div className="arch-fact"><span>실행 중인 커밋</span><strong className="mono">{shortCommit(data.git.commit)}</strong><em>{data.git.subject ?? ""}</em></div>
+          <div className="arch-fact"><span>배포 기록</span><strong>{data.build ? formatDate(data.build.deployed_at, true) : "기록 없음"}</strong><em className={data.build_matches_running_code ? "" : "warn"}>{data.build_matches_running_code ? "실행 코드와 일치" : data.build ? "배포 기록과 실행 코드가 다름" : "배포 검증 기록 없음"}</em></div>
+          <div className="arch-fact"><span>배포 시 검사</span><strong className={tests.failed ? "bad" : ""}>{tests.text}</strong><em>실제 사용자 제작·게시의 성공을 뜻하지 않음</em></div>
+          <div className="arch-fact"><span>작업 시간</span><strong>{windowOpen ? `열림 · ${formatDate(data.window.authorized_end ?? undefined, true)}까지` : "닫힘"}</strong><em>작업자 상태 기록: {data.worker.state === "online" ? "온라인" : data.worker.state ?? "없음"}</em></div>
+          <div className="arch-fact"><span>장부의 누적 비용</span><strong className="mono">{Math.round(data.budget.spent_krw).toLocaleString("ko-KR")}원</strong><em>한도 {data.budget.cap_krw.toLocaleString("ko-KR")}원 · 남음 {Math.round(data.budget.remaining_krw).toLocaleString("ko-KR")}원</em></div>
+        </div>
+        <div className="arch-status">{(["openai", "gemini", "runway", "youtube"] as const).map((key) => <div className="arch-status-row" key={key}><span className={`arch-pill ${data.keys[key] ? "ok" : "off"}`}>{data.keys[key] ? "설정 존재" : "설정 없음"}</span><p>{{ openai: "OpenAI API 키", gemini: "Gemini API 키", runway: "Runway API 키", youtube: "YouTube 클라이언트 ID" }[key]} <span className="muted">· 환경변수 존재 여부만 확인. 실제 인증·채널 연결·호출 성공은 별도 검증.</span></p></div>)}</div>
+        <h3 className="arch-subheading">저장소에 기록된 검증 메모</h3>
+        <div className="arch-status">{data.doc.status.map((item) => <div className="arch-status-row" key={item.text}><span className={`arch-pill ${item.state}`}>{item.label}</span><p>{item.text} <span className="muted">· {item.note}</span></p></div>)}</div>
+        <details className="arch-audit"><summary>최근 커밋과 문서 원본 확인</summary><ol className="arch-commits">{data.git.recent.map((c) => <li key={c.commit}><span className="mono">{c.commit}</span><span>{c.subject}</span><span className="muted">{c.author} · {formatDate(c.at, true)}</span></li>)}</ol><p className="arch-footnote">공정 정의는 backend/config/architecture.json, 운영 기록은 서버에서 읽습니다. 30초마다 갱신하며 SVG도 같은 정의에서 만듭니다.</p></details>
       </section>
     </div>
   );
 }
 
-function InfraDiagram({ keys, text }: { keys: ArchitectureOverview["keys"]; text: string }) {
-  const ext = (on: boolean) => (on ? "arch-ext" : "arch-off");
-  return (
-    <svg viewBox="0 0 1200 640" role="img" aria-label="서버 배치도">
-      <defs>
-        <marker id="arch-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" className="arch-head" /></marker>
-      </defs>
-      <rect className="arch-box" x="20" y="70" width="170" height="86" rx="10" />
-      <text className="t" x="36" y="100">운영자 브라우저</text>
-      <text className="s" x="36" y="122">PC · 휴대폰</text>
-      <text className="m" x="36" y="142">77-114-15-207.sslip.io</text>
-      <rect className="arch-box" x="20" y="214" width="170" height="96" rx="10" />
-      <text className="t" x="36" y="244">nginx</text>
-      <text className="s" x="36" y="266">HTTPS(Let&apos;s Encrypt)</text>
-      <text className="s" x="36" y="286">로그인(기본 인증)</text>
-      <rect className="arch-box" x="20" y="470" width="170" height="104" rx="10" />
-      <text className="t" x="36" y="500">GitHub main</text>
-      <text className="s" x="36" y="522">heotaewoong/</text>
-      <text className="s" x="36" y="540">ai_agent_office</text>
-      <text className="m" x="36" y="562">pull·test·build·restart</text>
-      <path className="arch-wire" d="M105 156 L105 210" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire" d="M190 262 L292 262 L292 120 L320 120" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire" d="M190 522 L320 522" markerEnd="url(#arch-arr)" />
-      <text className="m" x="206" y="512">배포</text>
-
-      <rect className="arch-frame" x="320" y="20" width="560" height="600" rx="14" />
-      <text className="f" x="340" y="46">AWS EC2 · us-east-2 · t3.small · Ubuntu</text>
-      <rect className="arch-box strong" x="345" y="70" width="230" height="96" rx="10" />
-      <text className="t" x="361" y="100">화면 (Next.js)</text>
-      <text className="m" x="361" y="122">:3110</text>
-      <text className="s" x="361" y="144">뉴스·작업실·출고함·설정·구조도</text>
-      <rect className="arch-box strong" x="345" y="214" width="230" height="110" rx="10" />
-      <text className="t" x="361" y="244">API (FastAPI)</text>
-      <text className="m" x="361" y="266">:8510</text>
-      <text className="s" x="361" y="288">승인 기록 · 작업 큐 등록</text>
-      <text className="s" x="361" y="308">세션·CSRF·작업 시간 확인</text>
-      <rect className="arch-box strong" x="625" y="214" width="230" height="110" rx="10" />
-      <text className="t" x="641" y="244">작업자 (worker)</text>
-      <text className="s" x="641" y="268">큐에서 꺼내 실행</text>
-      <text className="s" x="641" y="288">원고·제작·퀴즈·카드·업로드</text>
-      <text className="s" x="641" y="308">마감 시각에 스스로 종료</text>
-      <rect className="arch-box strong" x="625" y="70" width="230" height="96" rx="10" />
-      <text className="t" x="641" y="100">감시자 (watcher)</text>
-      <text className="s" x="641" y="122">작업 시간 마감 감시</text>
-      <text className="s" x="641" y="144">끝나면 시간을 닫음</text>
-      <rect className="arch-box" x="345" y="380" width="510" height="214" rx="10" />
-      <text className="t" x="361" y="410">상태 저장소 (~/.local/state/heobrain-content-office)</text>
-      <text className="m" x="361" y="440">office.sqlite</text>
-      <text className="s" x="480" y="440">작업 · 승인 ⓪①②③ · 작업 큐 · 비용 장부 · 이벤트</text>
-      <text className="m" x="361" y="468">artifacts/</text>
-      <text className="s" x="480" y="468">블로그 · 영상 · 썸네일 · PDF · 퀴즈 · 카드 PNG</text>
-      <text className="m" x="361" y="496">image-assets/</text>
-      <text className="s" x="480" y="496">생성 이미지와 비용 영수증(재사용 캐시)</text>
-      <text className="m" x="361" y="524">runtime/</text>
-      <text className="s" x="480" y="524">프로세스 장부 · 로그 · 배포 기록</text>
-      <text className="m" x="361" y="552">~/office.env</text>
-      <text className="s" x="480" y="552">API 키 · 화면·Git에 노출 안 됨</text>
-      <path className="arch-wire" d="M460 166 L460 210" markerEnd="url(#arch-arr)" />
-      <text className="m" x="468" y="194">/api</text>
-      <path className="arch-wire" d="M575 270 L621 270" markerEnd="url(#arch-arr)" />
-      <text className="m" x="579" y="262">큐</text>
-      <path className="arch-wire" d="M460 324 L460 376" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire" d="M740 324 L740 376" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire" d="M740 166 L740 210" markerEnd="url(#arch-arr)" />
-
-      <text className="f" x="912" y="46">외부 서비스 (작업자만 호출)</text>
-      <rect className={ext(keys.openai)} x="912" y="64" width="270" height="70" rx="10" />
-      <text className="e" x="928" y="92">OpenAI · 글</text>
-      <text className="m" x="928" y="116">{text.startsWith("gpt-") ? `${text} (현재 글 모델)` : "선택 가능"}</text>
-      <rect className={ext(keys.openai)} x="912" y="148" width="270" height="70" rx="10" />
-      <text className="e" x="928" y="176">OpenAI · 이미지</text>
-      <text className="m" x="928" y="200">gpt-image-2.5-flare</text>
-      <rect className={ext(keys.gemini)} x="912" y="232" width="270" height="70" rx="10" />
-      <text className="e" x="928" y="260">Gemini</text>
-      <text className="m" x="928" y="284">{text.startsWith("gemini") ? `${text} (현재 글 모델)` : "Flash-Lite 기사 요약 · TTS"}</text>
-      <rect className="arch-ext" x="912" y="316" width="270" height="70" rx="10" />
-      <text className="e" x="928" y="344">RSS 피드</text>
-      <text className="m" x="928" y="368">공식 블로그 · arXiv 등</text>
-      <rect className={ext(keys.youtube)} x="912" y="400" width="270" height="70" rx="10" />
-      <text className="e" x="928" y="428">YouTube Data API</text>
-      <text className="m" x="928" y="452">{keys.youtube ? "연결됨 · 비공개 업로드" : "미연결 · 비공개 업로드 전용"}</text>
-      <rect className={ext(keys.runway)} x="912" y="484" width="270" height="70" rx="10" />
-      <text className="e" x="928" y="512">Runway</text>
-      <text className="m" x="928" y="536">{keys.runway ? "연결됨 · 짧은 생성 영상" : "미연결 · 짧은 생성 영상"}</text>
-      <path className="arch-wire ext" d="M855 250 L885 250 L885 99 L908 99" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire ext" d="M885 183 L908 183" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire ext" d="M885 250 L885 267 L908 267" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire ext" d="M885 267 L885 351 L908 351" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire ext" d="M885 351 L885 435 L908 435" markerEnd="url(#arch-arr)" />
-      <path className="arch-wire ext" d="M885 435 L885 519 L908 519" markerEnd="url(#arch-arr)" />
-      <rect className="arch-box" x="912" y="572" width="270" height="48" rx="10" />
-      <text className="s" x="928" y="601">같은 EC2: n8n · Hermes · magma 사이트</text>
-    </svg>
-  );
+function RuntimeMap({ data }: { data: ArchitectureOverview }) {
+  return <div className="arch-runtime" aria-label="운영자에서 저장소와 외부 서비스까지의 실행 경로">
+    <div className="arch-runtime-access"><span className="arch-kicker">접근 경로</span><h3>운영자 브라우저</h3><p>PC · 휴대폰</p><span className="arch-route-arrow" aria-hidden="true">↓</span><h3>nginx</h3><p>HTTPS 인증서 · 기본 인증<br />공개 화면과 API의 앞단</p><span className="arch-route-arrow" aria-hidden="true">→</span><div className="arch-deploy-note"><strong>GitHub main</strong><p>코드 검토 → 검사 → 빌드 → 정확한 커밋 배포</p><small>모델 실행이나 콘텐츠 발행과 별개</small></div></div>
+    <div className="arch-runtime-core"><div className="arch-runtime-label"><span className="arch-pill ok">현재 운영</span><strong>AWS EC2 · 콘텐츠 오피스</strong></div>
+      <ol className="arch-services"><li><b>1</b><div><h3>화면 · Next.js <code>:3110</code></h3><p>뉴스·기획·원고·출고·설정·파이프라인 읽기</p></div></li><li><b>2</b><div><h3>API · FastAPI <code>:8510</code></h3><p>승인·현재 판본·세션·Origin/CSRF·시간·예산 확인 → 업무 큐 등록</p></div></li><li><b>3</b><div><h3>작업자 · Python worker</h3><p>큐의 원고·제작·퀴즈·카드·전달 업무 실행. watcher는 마감 시간을 감시합니다.</p></div></li></ol>
+      <div className="arch-storage"><h3>하나의 상태·비용 장부</h3><dl><div><dt>SQLite</dt><dd>작업·승인⓪①②③·업무 큐·예약 비용·이벤트</dd></div><div><dt>artifacts/</dt><dd>블로그·영상·음성·자막·썸네일·PDF·퀴즈·카드</dd></div><div><dt>image-assets/</dt><dd>완료 이미지·비용 영수증·재사용 캐시</dd></div><div><dt>runtime/</dt><dd>프로세스 장부·로그·배포 기록</dd></div><div><dt>비공개 설정</dt><dd>API 키·구독 로그인. 화면·Git·도해에는 값 미노출</dd></div></dl></div>
+    </div>
+    <div className="arch-runtime-providers"><span className="arch-kicker">업무별로 선택·호출</span><h3>입력과 외부 서비스</h3><dl><div><dt>원고·검수 모델</dt><dd className="mono">{data.profiles.text}</dd></div><div><dt>장면·카드 이미지</dt><dd>{imageRoute(data.profiles.image)}</dd></div><div><dt>요약·음성</dt><dd>선택한 Gemini·음성 프로필</dd></div><div><dt>RSS/Atom</dt><dd>공식 블로그·arXiv 등 공개 피드</dd></div><div><dt>YouTube</dt><dd>자격·채널·승인 대조가 필요한 비공개 전달</dd></div><div><dt>Runway</dt><dd>별도 키·프로필이 필요한 생성 클립</dd></div></dl><p className="arch-footnote">선택된 모델·프로필과 자격 설정, 실제 외부 성공은 별개입니다.</p></div>
+  </div>;
 }

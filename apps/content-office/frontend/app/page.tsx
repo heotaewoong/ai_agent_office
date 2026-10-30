@@ -75,7 +75,7 @@ const views: { id: View; title: string; icon: string; en: string }[] = [
   { id: "world", title: "오피스 월드", icon: "map", en: "OFFICE WORLD" },
   { id: "settings", title: "제작 설정", icon: "grid", en: "SETTINGS & CONNECTIONS" },
   { id: "activity", title: "운영 기록", icon: "activity", en: "OFFICE LOG" },
-  { id: "architecture", title: "구조도", icon: "grid", en: "ARCHITECTURE" },
+  { id: "architecture", title: "파이프라인", icon: "grid", en: "PIPELINE" },
 ];
 const defaultSelections: Selections = {
   blog: true,
@@ -456,7 +456,7 @@ export default function Office() {
                         : view === "settings"
                           ? "음성·배경 이미지·생성 영상과 키 연결, 작업 시간을 한곳에서 정하세요."
                           : view === "architecture"
-                            ? "지금 EC2에서 돌아가는 오피스 전체 그림입니다. 배포할 때마다 자동으로 갱신됩니다."
+                            ? "제작 순서와 사람 승인, 서버 연결과 실제 운영 기록을 함께 확인하세요."
                             : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
               </p>
             </div>

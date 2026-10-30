@@ -31,3 +31,52 @@ test("testSummary reads backend and frontend counts and flags failures", () => {
   assert.equal(shortCommit("5938967abcdef"), "5938967");
   assert.equal(shortCommit(null), "확인 불가");
 });
+
+import { readFileSync } from "node:fs";
+import { flowStages, imageRoute, pipelineSvg, type ArchitectureOverview, type FlowStep } from "../lib/architecture.ts";
+
+const document = JSON.parse(readFileSync(new URL("../../backend/config/architecture.json", import.meta.url), "utf8")) as ArchitectureOverview["doc"];
+
+test("pipeline keeps six stages, all four human approvals and actionable input/output contracts", () => {
+  const before = JSON.stringify(document.flow);
+  const rows = flowStages(document.flow);
+  assert.equal(rows.length, 6);
+  assert.deepEqual(rows.flatMap((row) => row.gates.map((gate) => gate.mark)), ["⓪", "①", "②", "③"]);
+  assert.deepEqual(rows.map((row) => row.stage.id), ["collect", "plan", "draft", "produce", "deliver", "learn"]);
+  for (const { stage } of rows) assert.ok(stage.input && stage.output && stage.entry && stage.items.length >= 4 && stage.who);
+  assert.equal(JSON.stringify(document.flow), before);
+  const gate = { kind: "gate", mark: "①", label: "원고 승인" } as FlowStep;
+  assert.throws(() => flowStages([gate]), /공정/);
+});
+
+test("parallel outputs, independent coupon offers and consent/mail boundaries remain explicit", () => {
+  assert.deepEqual(document.lanes?.map((lane) => lane.id), ["outputs", "offer", "audience"]);
+  assert.match(document.lanes![0].boundary, /블로그.*영상/);
+  assert.match(document.lanes![1].boundary, /발급.*가격\/주문/);
+  assert.match(document.lanes![2].boundary, /미연결/);
+  assert.ok(document.status.some((item) => item.text.includes("Hermes") && item.state === "off"));
+  assert.deepEqual(document.unit_costs.map((row) => row.role), ["card_ko", "gen", "critique", "eval", "korean", "cards", "cards_review", "quiz", "card_image", "image"]);
+  assert.equal(imageRoute("codex-subscription"), "Codex 구독 로그인");
+  assert.equal(imageRoute("none"), "생성 이미지 끔");
+  assert.equal(imageRoute("unknown-selection"), "unknown-selection");
+});
+
+test("editable SVG uses the same complete content and escapes document strings", () => {
+  const svg = pipelineSvg(document);
+  assert.equal((svg.match(/data-card="stage-/g) ?? []).length, 6);
+  assert.equal((svg.match(/data-card="lane-/g) ?? []).length, 3);
+  const text = svg.replace(/<[^>]+>/g, "");
+  for (const step of document.flow) {
+    if (step.kind === "stage") {
+      assert.ok(text.includes(step.title), step.title);
+      for (const item of step.items) assert.ok(text.includes(item), item);
+    }
+    if (step.kind === "gate") assert.ok(text.includes(step.mark + " " + step.label));
+  }
+  for (const lane of document.lanes ?? []) assert.ok(text.includes(lane.boundary));
+  const hostile = { ...document, headline: '<script>alert("x")</script> & "test"' };
+  const safe = pipelineSvg(hostile);
+  assert.ok(!safe.includes("<script>"));
+  assert.ok(safe.includes("&lt;script&gt;"));
+  assert.ok(!/<image|<foreignObject|<script|https?:\/\//.test(svg.replace('xmlns="http://www.w3.org/2000/svg"', "")));
+});
