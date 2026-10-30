@@ -21,7 +21,7 @@ STATE_LABELS = {
     "research_ready": "근거 준비", "drafting": "원고·검수 중", "source_review": "사람 승인 대기 ①",
     "source_approved": "원고 승인", "source_rejected": "원고 거절", "production_queued": "제작 대기",
     "producing": "제작 중", "release_review": "사람 승인 대기 ②", "partial_release_review": "일부 제작 완료",
-    "release_approved": "출고 승인 ② 완료 · 수동 전달 대기", "blocked": "확인 필요",
+    "release_approved": "출고 승인 ② 완료 · 채널별 전달 기록 확인", "blocked": "확인 필요",
     "needs_reconciliation": "호출 결과 확인 필요", "failed": "실패",
 }
 NEEDS_HUMAN = {"source_review", "release_review", "partial_release_review", "blocked", "needs_reconciliation", "failed"}
@@ -29,7 +29,7 @@ ROOM_AGENTS = {
     "inbox": ["research"], "scripts": ["editor", "critique", "eval"], "creative": ["video", "qa"],
     "outbox": ["release", "marketing"], "ops": ["director"],
 }
-TASK_AGENT = {"draft": "editor", "evaluate": "critique", "produce": "video", "refresh": "research"}
+TASK_AGENT = {"draft": "editor", "evaluate": "critique", "produce": "video", "refresh": "research", "private_delivery": "release"}
 MODEL_AGENTS = {"editor", "critique", "eval"}
 EVENT_TEXT = {
     "job_created": "작업 생성", "idea_saved": "기획 저장", "idea_selected": "⓪ 기획 선택", "packaging_selected": "패키지 확정",

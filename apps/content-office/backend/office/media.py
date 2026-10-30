@@ -136,6 +136,8 @@ def production_contract(voice_renderer, selections, image_renderer=None, clip_re
               'clip': background_identity(clip_renderer) if selections.get('video') else None,
               'clip_asset_key': str(getattr(clip_renderer, 'asset_cache_key', background_identity(clip_renderer))) if (selections.get('video') and clip_renderer is not None) else None,
               'selections': dict(selections)}
+    if selections.get('cards'):
+        config['cards_implementation_sha256']=file_hash(Path(__file__).with_name('cards.py'))
     return {**config, 'hash': digest(config)}
 
 def wrap_text(draw, text, font, width):
@@ -775,22 +777,11 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 return exports + rendered['files']
 
             def card_output():
-                nonlocal backgrounds
-                paths = []
-                drawn = []
-                scenes = packet.get('video', {}).get('scenes', [])
-                for index, scene in enumerate(scenes):
-                    check_current()
-                    path = folder / f'scene-{index + 1:02}.png'
-                    background, background_meta = scene_background(background_renderer, folder, index)
-                    draw_scene(packet['video'], scene, index, len(scenes), path, background=background, background_meta=background_meta)
-                    paths.extend([path, path.with_suffix('.json')] + ([background] if background else []))
-                    if background_meta:
-                        drawn.append(background_meta)
-                if not paths:
-                    raise WorkflowError('카드로 제작할 승인 장면이 없습니다')
-                backgrounds = backgrounds or drawn
-                return paths
+                from .social_production import card_paths
+                check_current()
+                if contract['font_status']!='ready':
+                    raise WorkflowError('한국어 폰트를 확인한 뒤 카드뉴스 제작을 다시 요청하세요. 새 유료 호출은 하지 않았습니다')
+                return card_paths(store,job_id,source_hash,folder)
 
             from .channel_handoff import write_channel_handoffs
             run_output('blog', lambda: write_blog_exports(packet, folder, job.get('offer')) + write_channel_handoffs(packet, folder, job.get('offer'), source_hash=source_hash, language=(packet.get('audience') or {}).get('language'), channels=channel_registry))

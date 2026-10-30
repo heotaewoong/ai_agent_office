@@ -134,6 +134,8 @@ def enqueue_missing_outputs(store, job):
     """제작(produce) 때 자동으로 호출한다. 현재 원고 버전의 퀴즈·카드가 이미 있으면 건너뛴다(멱등)."""
     queued = {}
     for kind in ("quiz", "cards"):
+        if kind=='cards' and job.get('selections',{}).get('cards'):
+            continue  # Production now creates/validates the selected 6–8 social cards itself.
         if (job.get(kind) or {}).get("source_hash") == job["source_hash"]:
             continue
         try:

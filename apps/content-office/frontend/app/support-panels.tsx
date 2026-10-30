@@ -258,6 +258,7 @@ const taskNames: Record<string, string> = {
   draft: "원고 생성·검수",
   evaluate: "독립 재검수",
   produce: "콘텐츠 제작",
+  private_delivery: "출고 승인 영상 · YouTube 비공개 전송",
   refresh: "RSS 수집",
 };
 const taskStates: Record<string, string> = {

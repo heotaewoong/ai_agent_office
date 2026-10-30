@@ -28,6 +28,17 @@ def approved_job(tmp_path, *, blog=True, video=True, cards=False, pdf=False):
     return store, job["id"]
 
 
+def cache_social_cards(store, job_id):
+    from PIL import Image
+    from office.quiz import artifact_record
+    root=store.artifacts; job=store.job(job_id); slides=[]
+    for n in range(7):
+        path=root/f'card-{n+1:02}.png'
+        Image.new('RGB',(1080,1350),(n*30,60,90)).save(path)
+        slides.append({'artifact':artifact_record(root,path),'index':n+1})
+    store.update_job(job_id,cards={'source_hash':job['source_hash'],'slides':slides,'checks':{'passed':True,'issues':[]},'images':[]})
+
+
 def tone_renderer(seconds=.65):
     def render(text, out_path):
         with wave.open(str(out_path), "wb") as audio:
@@ -52,6 +63,7 @@ def test_real_mp4_subtitles_thumbnails_and_manifest_are_bound_to_source(tmp_path
     from office.media import produce, probe
     from PIL import Image
     store, job_id = approved_job(tmp_path, cards=True, pdf=True)
+    cache_social_cards(store,job_id)
     manifest = produce(store, job_id, voice_renderer=tone_renderer())
     files = {x["name"]: store.artifacts / x["path"] for x in manifest["files"]}
     info = probe(files["short.mp4"])
@@ -110,6 +122,7 @@ def test_blog_can_be_released_independently_when_selected_video_fails(tmp_path, 
 def test_retry_keeps_verified_successful_blog_when_other_output_is_retried(tmp_path, monkeypatch):
     from office import media
     store, job_id = approved_job(tmp_path, video=False, cards=True)
+    cache_social_cards(store,job_id)
     first = media.produce(store, job_id)
     def must_reuse(*args):
         raise WorkflowError('성공한 글을 다시 생성하지 않아야 합니다')
@@ -518,33 +531,30 @@ def test_background_renderer_changes_production_contract_deterministically(tmp_p
     assert media.production_contract(None, {'blog': True})['background'] is None
 
 
-def test_cards_use_background_renderer_per_scene_and_manifest_discloses_it(tmp_path):
+def test_production_exports_checked_social_cards_without_regenerating_backgrounds(tmp_path):
     from office.media import produce
     from PIL import Image
     store, job_id = approved_job(tmp_path, blog=False, video=False, cards=True)
+    cache_social_cards(store,job_id)
     renderer = background_renderer()
     manifest = produce(store, job_id, background_renderer=renderer)
-    assert renderer.calls == [0, 1]
+    assert renderer.calls == []
     files = {x['name']: store.artifacts / x['path'] for x in manifest['files']}
-    assert Image.open(files['scene-01.png']).size == (1080, 1920)
-    scene_meta = json.loads(files['scene-01.json'].read_text(encoding='utf-8'))
-    assert scene_meta['background_provider'] == 'test-background'
-    assert manifest['production_contract']['background'] == 'test-background-#7a2e1e'
-    assert manifest['background'] == {'provider': 'test-background', 'model': 'fake-image', 'disclosure': '테스트 배경', 'scenes': 2}
+    assert Image.open(files['card-01.png']).size == (1080,1350)
+    assert len([n for n in files if n.startswith('card-') and n.endswith('.png')])==7
+    assert 'card-news.json' in files
+    assert manifest['completed_outputs']==['cards']
 
 
-def test_background_failure_fails_only_visual_output_and_keeps_blog(tmp_path):
+def test_social_card_planning_failure_preserves_independent_blog(tmp_path,monkeypatch):
     from office.media import produce
     store, job_id = approved_job(tmp_path, blog=True, video=False, cards=True)
-
-    def failing(scene_index, out_path):
-        raise WorkflowError('OPENAI_API_KEY가 설정되지 않았습니다')
-    failing.cache_key = failing.asset_cache_key = 'failing-background'
-    manifest = produce(store, job_id, background_renderer=failing)
-    assert manifest['output_status']['blog']['state'] == 'completed'
-    assert manifest['output_status']['cards']['state'] == 'failed'
-    assert 'OPENAI_API_KEY' in manifest['output_status']['cards']['error']
-    assert 'background' not in manifest
+    def unavailable(*args,**kwargs):raise WorkflowError('카드 계획 도구 연결이 필요합니다')
+    monkeypatch.setattr('office.cards.plan_cards',unavailable)
+    manifest=produce(store,job_id)
+    assert manifest['output_status']['blog']['state']=='completed'
+    assert manifest['output_status']['cards']['state']=='failed'
+    assert '계획 도구' in manifest['output_status']['cards']['error']
 
 
 def test_overlay_only_scene_is_transparent_outside_text_panels(tmp_path):

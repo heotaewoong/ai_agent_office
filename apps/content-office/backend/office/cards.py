@@ -266,7 +266,7 @@ def _card_renderer(store, job_id, images, background_renderer, notes):
         return None
 
 
-def plan_cards(store: Store, job_id, provider=None, background_renderer=None, images=None):
+def plan_cards(store: Store, job_id, provider=None, background_renderer=None, images=None, *, require_passed=False):
     """images: True면 카드마다 주제 이미지를 생성(유료), False면 그라데이션, None이면 제작 설정의 배경 이미지 프로필을 따른다."""
     job = store.require_source_approval(job_id)
     packet = job["source_packet"] or {}
@@ -293,7 +293,8 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
             checks = {"passed": False, "issues": issues}
     version = int((job.get("cards") or {}).get("version", 0)) + 1
     root, folder = output_folder(store, job, f"cards-v{version}")
-    renderer = _card_renderer(store, job_id, images, background_renderer, notes)
+    # Production never buys six background images for a text plan that still fails checks.
+    renderer = None if require_passed and not checks['passed'] else _card_renderer(store, job_id, images, background_renderer, notes)
     raw = [s for s in (plan.get("slides") or []) if isinstance(s, dict)]
     slides, image_meta = [], []
     for index, slide in enumerate(raw, 1):

@@ -113,6 +113,8 @@ async function request<T>(
 }
 
 export const api = {
+  previewOwnedSource: (url:string) => request<{title:string;body:string;image_count:number}>("/owned-source/preview","POST",{url}),
+  createOwnedSource: (input:{title:string;body:string;source_url:string;owner_confirmed:boolean}) => request<Job>("/owned-source/jobs","POST",input),
   setProfile: (kind: "text" | "voice" | "image" | "clip", profile: string) =>
     request<ProfileSummaries>("/settings/profiles", "POST", { kind, profile }),
   startWindow: (minutes: number) =>
@@ -176,11 +178,13 @@ export const api = {
     version: string,
     decision: "approved" | "rejected",
     selections: Selections,
+    autoProduce = false,
   ) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/reviews/source`, "POST", {
       version,
       decision,
       selections,
+      ...(autoProduce ? {auto_produce:true} : {}),
     }),
   produce: (id: string) =>
     request(`/jobs/${encodeURIComponent(id)}/produce`, "POST", {}),
@@ -190,12 +194,14 @@ export const api = {
     decision: "approved" | "rejected",
     mediaReviewed = false,
     outputs?: OutputKind[],
+    privateDeliveryChannel?: "youtube_main_ko" | "youtube_english",
   ) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/reviews/release`, "POST", {
       version,
       decision,
       media_reviewed: mediaReviewed,
       ...(outputs ? { outputs } : {}),
+      ...(privateDeliveryChannel ? {private_delivery_channel:privateDeliveryChannel} : {}),
     }),
   selectThumbnail: (id: string, artifactId: string) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/thumbnail`, "POST", {
