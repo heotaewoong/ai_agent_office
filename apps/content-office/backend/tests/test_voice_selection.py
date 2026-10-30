@@ -28,8 +28,10 @@ def test_gemini_factory_requires_source_approval_and_binds_its_full_profile(tmp_
     store = Store(tmp_path)
     job = fixture(store)
     select_profile(store, 'gemini-kore', actor='test-operator')
+    renderer = renderer_for_job(store, job)
     with pytest.raises(WorkflowError, match='승인'):
-        renderer_for_job(store, job)
+        renderer(job['source_packet']['video']['scenes'][0]['narration'], store.root / 'must-not-exist.wav')
+    assert not (store.root / 'must-not-exist.wav').exists()
     store.review_source(job['id'], job['source_hash'], 'approved', 'fixture-operator', {'video': True})
     job = store.job(job['id'])
     renderer = renderer_for_job(store, job)
