@@ -76,6 +76,21 @@ def queue(store):
     return store.enqueue('discover', {'config_hash': digest(value)}, key=f'discover:{digest(value)}:{int(time.time())//900}')
 
 
+def restore_cached(store, value):
+    with store.connection(transaction=True) as db:
+        current = db.execute("SELECT value FROM settings WHERE key='discovery_config'").fetchone()
+        if digest(json.loads(current[0]) if current else DEFAULT) != digest(value):
+            raise WorkflowError('조사 조건이 바뀌었습니다. 현재 설정으로 다시 요청하세요')
+        row = db.execute('SELECT value FROM settings WHERE key=?', ('discovery_report:' + digest(value),)).fetchone()
+        snapshot = json.loads(row[0]) if row else None
+        if snapshot and snapshot.get('checked_at') and snapshot.get('feed_report'):
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(snapshot['checked_at'])).total_seconds()
+            if 0 <= age < 900:
+                db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', ('feed_report', canonical(snapshot['feed_report'])))
+                return snapshot
+    return None
+
+
 def save(store, value, expected_hash):
     value = validate(value)
     with store.connection(transaction=True) as db:
@@ -85,6 +100,7 @@ def save(store, value, expected_hash):
             raise WorkflowError('다른 화면에서 조사 조건이 바뀌었습니다. 입력을 보존하고 현재 설정을 다시 읽으세요')
         db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', ('discovery_config', canonical(value)))
         store._event(db, 'discovery_config_saved', {'config_hash': digest(value), 'platforms': value['platforms'], 'paid_call_made': False})
+    restore_cached(store, value)
     return queue(store)
 
 
@@ -103,7 +119,7 @@ def record(store, value, articles, report):
                                       'reason': f"{PLATFORMS[platform]} 조사 우선 출처 + 주제 일치. 반응 수치는 사실 확인이나 흥행 보장이 아닙니다"}
                                      for r in candidates[:6]]
     snapshot = {'config_hash': digest(value), 'config': value, 'checked_at': report['checked_at'],
-                'sources': report['feeds'], 'recommendations': recommendations, 'paid_calls': 0,
+                'sources': report['feeds'], 'feed_report': report, 'recommendations': recommendations, 'paid_calls': 0,
                 'method': '출처 종류·주제 일치·발행일에 따른 규칙 추천. AI 예측이나 플랫폼 전체 트렌드 순위가 아님'}
     store.set_setting('discovery_report', snapshot)
     store.set_setting('discovery_report:' + digest(value), snapshot)
@@ -132,11 +148,9 @@ def run(store, expected_hash=None):
     value = config(store)
     if expected_hash and digest(value) != expected_hash:
         raise WorkflowError('조사 조건이 바뀌어 이전 대기 작업을 실행하지 않았습니다')
-    previous = store.setting('discovery_report:' + digest(value)) or store.setting('discovery_report') or {}
-    if previous.get('config_hash') == digest(value) and previous.get('checked_at'):
-        age = (datetime.now(timezone.utc) - datetime.fromisoformat(previous['checked_at'])).total_seconds()
-        if 0 <= age < 900:
-            return {'cached': True, 'checked_at': previous['checked_at'], 'paid_calls': 0}
+    previous = restore_cached(store, value)
+    if previous:
+        return {'cached': True, 'checked_at': previous['checked_at'], 'paid_calls': 0}
     from .bootstrap import refresh
     result = refresh(store, metadata_only=True)
     return {'checked_at': result['checked_at'], 'sources': len(result['feeds']), 'articles': result['eligible_items'], 'paid_calls': 0}
