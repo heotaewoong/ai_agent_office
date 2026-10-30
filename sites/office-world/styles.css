@@ -553,7 +553,7 @@ a { color: var(--accent); }
 @media(max-width:720px){.topbar{padding-block:4px}}
 
 /* 부서 이름은 접힌 목록 밖에서도 읽고 같은 번호의 건물로 이동한다. */
-:root { --department-offset:56px; }
+:root { --world-header-bottom:132px; }
 .topbar { flex-wrap:wrap; }
 .department-nav { flex:0 0 100%; min-width:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; }
 .department-nav:empty { display:none; }
@@ -564,17 +564,21 @@ a { color: var(--accent); }
 .card.stage .card-title,.wide-overview .card.stage .card-title { font-size:16px; }
 .card.stage .card-dot { width:24px; height:24px; display:grid; place-items:center; font-weight:700; color:#071322; }
 .wide-overview .card.stage { max-width:220px; }
-.expedition { top:calc(94px + var(--department-offset)); }
-.layer-nav { top:calc(85px + var(--department-offset)); }
-.rooms-menu,.meadow-layer .rooms-menu { top:calc(151px + var(--department-offset)); }
-.world-tools-body { top:calc(80px + var(--department-offset)); max-height:calc(100dvh - 100px - var(--department-offset)); }
+.expedition { top:calc(var(--world-header-bottom) + 18px); }
+.layer-nav { top:calc(var(--world-header-bottom) + 10px); }
+.rooms-menu,.meadow-layer .rooms-menu { top:calc(var(--world-header-bottom) + 74px); }
+.exit-btn { top:calc(var(--world-header-bottom) + 8px); }
+.help { top:calc(var(--world-header-bottom) + 62px); }
+.world-tools-body { top:calc(var(--world-header-bottom) + 8px); max-height:calc(100dvh - var(--world-header-bottom) - 24px); }
 @media(min-width:721px) {
-  .panel,.results-view .panel,.roster-panel,.build-panel { top:calc(82px + var(--department-offset)); max-height:calc(100dvh - 100px - var(--department-offset)); }
+  .panel,.results-view .panel,.roster-panel,.build-panel { top:calc(var(--world-header-bottom) + 12px); max-height:calc(100dvh - var(--world-header-bottom) - 28px); }
 }
 @media(max-width:720px) {
-  :root { --department-offset:56px; }
   .department-nav { display:flex; overflow-x:auto; gap:6px; padding:3px 3px 6px; scroll-snap-type:x proximity; scrollbar-width:thin; scrollbar-color:#719ba8 #102033; }
   .department-nav button { flex:0 0 168px; min-height:46px; font-size:13px; padding:7px 10px; scroll-snap-align:start; }
   .layer-nav { top:auto; }
-  .results-view .panel,.roster-panel { top:calc(98px + var(--department-offset)); max-height:calc(100dvh - 114px - var(--department-offset)); }
+  .exit-btn { font-size:12px; padding:8px 10px; }
+  .exit-btn .kbd { display:none; }
+  .panel { max-height:min(55vh,calc(100dvh - var(--world-header-bottom) - 220px)); }
+  .results-view .panel,.roster-panel { top:calc(var(--world-header-bottom) + 12px); max-height:calc(100dvh - var(--world-header-bottom) - 28px); }
 }

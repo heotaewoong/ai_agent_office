@@ -512,7 +512,7 @@
       this.buildHub();
 
       scene.onBeforeRenderObservable.add(() => this.tick());
-      window.addEventListener('resize', () => { this.applyDpr(); this.engine.resize(); });
+      window.addEventListener('resize', () => { this.applyDpr(); this.engine.resize(); controls.syncCameraFraming(); });
       this.renderFrame = () => scene.render();
       this.renderPaused = true;
       document.addEventListener('visibilitychange', () => this.syncRendering());
@@ -1810,6 +1810,12 @@
       hud.closePanel();
     },
 
+    syncCameraFraming() {
+      if (!this.walk) return;
+      this.walk.fovMode = world.engine.getAspectRatio(this.walk) < 1
+        ? B.Camera.FOVMODE_HORIZONTAL_FIXED : B.Camera.FOVMODE_VERTICAL_FIXED;
+    },
+
     init() {
       const s = world.scene, canvas = world.canvas;
       this.overview = new B.ArcRotateCamera('overview', -Math.PI / 2, 1.15, 430, new B.Vector3(0, -18, 0), s);
@@ -1824,6 +1830,7 @@
       this.walk = new B.UniversalCamera('walk', new B.Vector3(0, 3, -8), s);
       this.walk.inputs.clear();
       this.walk.minZ = 0.3; this.walk.maxZ = 4500;
+      this.syncCameraFraming();
 
       if (QUALITY !== 'low') {
         // 화면 공간 주변광 차폐: 블록 틈과 가구 밑을 어둡게 (톤 매핑보다 먼저 적용되도록 먼저 만든다)
@@ -2037,7 +2044,18 @@
       return true;
     },
 
+    watchHeader() {
+      const header = document.querySelector('.topbar');
+      if (!header) return;
+      const update = () => document.documentElement.style.setProperty('--world-header-bottom', `${Math.ceil(header.getBoundingClientRect().bottom)}px`);
+      const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+      if (observer) observer.observe(header); else window.addEventListener('resize', update);
+      update();
+      world.scene.onDisposeObservable.addOnce(() => { observer?.disconnect(); window.removeEventListener('resize', update); });
+    },
+
     init() {
+      this.watchHeader();
       $('panel-close').addEventListener('click', () => this.closePanel());
       $('btn-command')?.addEventListener('click', () => this.openBrain());
       $('panel-body').addEventListener('click', (e) => {

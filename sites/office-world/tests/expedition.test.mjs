@@ -3,9 +3,21 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 const source = await readFile(new URL('../expedition.js', import.meta.url), 'utf8');
-const { ALIENS, VEHICLES, credits, readProfile, capture, purchase, canRide, selectVehicle, startTestDrive } =
+const { ALIENS, VEHICLES, credits, readProfile, capture, purchase, canRide, selectVehicle, startTestDrive, creatureObstructsCamera } =
   await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 const profile = () => readProfile(null);
+
+test('only a creature between the camera and player obstructs the view, independent of world height', () => {
+  for(const offset of [0,-82.625]) {
+    const eye={x:0,y:4.8+offset,z:-10},player={x:0,y:offset,z:0};
+    assert.equal(creatureObstructsCamera(eye,player,{x:0,y:offset,z:-5}),true);
+    for(const creature of [{x:0,y:offset,z:5},{x:0,y:offset,z:-20},{x:5,y:offset,z:-5},{x:0,y:offset+20,z:-5}])
+      assert.equal(creatureObstructsCamera(eye,player,creature),false);
+  }
+  assert.equal(creatureObstructsCamera(null,{},{}),false);
+  assert.equal(creatureObstructsCamera({x:NaN,y:0,z:0},{x:0,y:0,z:0},{}),false);
+  assert.equal(creatureObstructsCamera({x:0,y:1.5,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0}),false);
+});
 const context = (alien = ALIENS[0], overrides = {}) => ({
   layer: 'meadow', view: 'walk', grounded: true, mounted: false,
   position: { x: alien.x, z: alien.z }, ...overrides,
