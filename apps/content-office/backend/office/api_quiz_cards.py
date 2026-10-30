@@ -13,6 +13,7 @@ import io
 import json
 import mimetypes
 import zipfile
+from PIL import Image, UnidentifiedImageError
 
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, Response
@@ -125,7 +126,7 @@ def register(app, store):
         slides = cards.get("slides") or []
         if not 6 <= len(slides) <= 8 or [s.get("index") for s in slides] != list(range(1, len(slides) + 1)):
             raise HTTPException(409, "카드 개수와 순서를 다시 확인하세요")
-        files, seen, total = [], set(), 0
+        files, exported, seen, total = [], [], set(), 0
         for slide in slides:
             record = slide.get("artifact")
             if not record:
@@ -143,12 +144,25 @@ def register(app, store):
             if digest in seen:
                 raise HTTPException(409, "같은 이미지가 중복되어 있습니다. 다시 검토하세요")
             seen.add(digest)
+            try:
+                with Image.open(io.BytesIO(content)) as image:
+                    if image.format != "PNG" or image.size not in {(1080, 1080), (1080, 1440)}:
+                        raise HTTPException(409, "카드 이미지 규격을 다시 확인하세요")
+                    if image.size == (1080, 1080):
+                        from .cards import _save_instagram_portrait
+                        portrait = io.BytesIO()
+                        _save_instagram_portrait(image.convert("RGB"), portrait)
+                        content = portrait.getvalue()
+            except (OSError, UnidentifiedImageError) as error:
+                raise HTTPException(409, "카드 이미지를 읽을 수 없어 재검수가 필요합니다") from error
             files.append((f"card-{slide['index']:02d}.png", content))
+            exported.append({"index": slide["index"], "title": slide.get("title"), "body": slide.get("body"),
+                             "sha256": hashlib.sha256(content).hexdigest(), "source_sha256": digest,
+                             "width": 1080, "height": 1440})
         metadata = {"purpose": "review_only", "release_approved": False,
                     "version": version, "source_hash": source_hash,
                     "checks": cards.get("checks"),
-                    "slides": [{"index": s["index"], "title": s.get("title"), "body": s.get("body"),
-                                "sha256": s["artifact"]["sha256"]} for s in slides]}
+                    "slides": exported}
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, content in files:

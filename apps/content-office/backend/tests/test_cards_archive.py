@@ -19,7 +19,7 @@ def bundle(tmp_path):
     slides = []
     for index in range(1, 8):
         path = store.artifacts / f"card-{index:02d}.png"
-        Image.new("RGB", (12, 16), (index * 20, 40, 70)).save(path)
+        Image.new("RGB", (1080, 1440), (index * 20, 40, 70)).save(path)
         record = {"id": f"asset_card{index}", "path": path.name,
                   "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
         slides.append({"index": index, "title": f"제목 {index}", "body": f"본문 {index}",
@@ -47,6 +47,28 @@ def test_archive_contains_ordered_cards_and_review_status_without_changing_appro
         assert review["checks"] == cards["checks"]
         assert [s["title"] for s in review["slides"]] == [f"제목 {i}" for i in range(1, 8)]
     assert store.job(job["id"]) == before
+
+
+def test_archive_pads_old_square_copies_without_modifying_originals(bundle):
+    store, client, job, cards, url = bundle
+    slide = cards["slides"][0]
+    path = store.artifacts / slide["artifact"]["path"]
+    original = Image.new("RGB", (1080, 1080), (14, 170, 60))
+    original.save(path)
+    source = path.read_bytes()
+    slide["artifact"]["sha256"] = hashlib.sha256(source).hexdigest()
+    store.update_job(job["id"], cards=cards)
+    response = client.get(url)
+    assert response.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        png = archive.read("card-01.png")
+        with Image.open(io.BytesIO(png)) as rendered:
+            assert rendered.size == (1080, 1440)
+            assert rendered.crop((0, 180, 1080, 1260)).tobytes() == original.tobytes()
+        meta = json.loads(archive.read("review.json"))["slides"][0]
+        assert meta["sha256"] == hashlib.sha256(png).hexdigest()
+        assert meta["source_sha256"] == hashlib.sha256(source).hexdigest()
+    assert path.read_bytes() == source
 
 
 @pytest.mark.parametrize("change", ["version", "source", "tampered", "missing", "duplicate", "order", "escape"])
