@@ -37,6 +37,7 @@ import {
   toggleArticle,
   draftStatus,
   workWindowBlockedReason,
+  mainVideoFile,
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
@@ -2008,9 +2009,7 @@ function Delivery({
     const file = files.find((file) => file.name === format.name);
     return file ? [{ ...format, file }] : [];
   });
-  const videoFile = files.find(
-    (file) => file.kind === "video" || /\.mp4$/i.test(file.name),
-  );
+  const videoFile = mainVideoFile(files);
   const selected =
     files.find((file) => file.id === preview) ??
     blogFormats[0]?.file ??

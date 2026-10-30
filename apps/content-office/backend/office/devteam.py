@@ -45,7 +45,11 @@ def recent_deployments(root, limit=8):
     for release in sorted((p for p in folder.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)[:limit]:
         info = _read(release / "deployment.json", {})
         status = info.get("status", "unknown")
-        rows.append({"id": release.name, "status": status, "label": DEPLOY_LABELS.get(status, status), "commit": (info.get("target") or "")[:10], "ci_verified": bool(info.get("ci"))})
+        failed = sorted(p.stem for p in release.glob("*.failed"))
+        # 실패 파일 없이 멈춘 checks_failed는 빌드 중 업무 기록 변경 같은 일시적 보류다.
+        transient = status == "checks_failed" and not failed
+        label = "보류·다시 시도" if transient else DEPLOY_LABELS.get(status, status) + (" (" + ", ".join(failed) + ")" if failed else "")
+        rows.append({"id": release.name, "status": status, "label": label, "transient": transient, "commit": (info.get("target") or "")[:10], "ci_verified": bool(info.get("ci"))})
     return rows
 
 
