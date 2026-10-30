@@ -17,7 +17,7 @@ export type ArchitectureOverview = {
     status: { state: "ok" | "warn" | "off"; label: string; text: string; note: string }[];
   };
   git: { commit: string | null; committed_at: string | null; subject: string | null; recent: { commit: string; at: string; author: string; subject: string }[] };
-  build: { commit: string | null; deployed_at: string; tests: { backend: TestCounts; frontend: TestCounts } } | null;
+  build: { commit: string | null; deployed_at: string; tests?: { backend?: TestCounts; frontend?: TestCounts; ci?: { source?: string; check?: string; completed_at?: string; url?: string } } } | null;
   build_matches_running_code: boolean;
   keys: Record<"openai" | "gemini" | "runway" | "youtube", boolean>;
   profiles: { text: string; image: string };
@@ -46,10 +46,19 @@ export function costRows(unitCosts: UnitCost[], usage: UsageRow[]) {
 /** "백엔드 434 통과 · 화면 54 통과" 같은 한 줄 요약과 실패 여부. */
 export function testSummary(build: ArchitectureOverview["build"]): { text: string; failed: boolean } {
   if (!build) return { text: "배포 기록 없음", failed: false };
-  const b = build.tests.backend;
-  const f = build.tests.frontend;
-  const failed = (b.failed ?? 0) + (b.errors ?? 0) + (f.failed ?? 0) > 0;
-  const part = (name: string, t: TestCounts) => `${name} ${t.passed} 통과${t.failed ? ` · ${t.failed} 실패` : ""}`;
+  const b = build.tests?.backend;
+  const f = build.tests?.frontend;
+  const failed = (b?.failed ?? 0) + (b?.errors ?? 0) + (f?.failed ?? 0) + (f?.errors ?? 0) > 0;
+  const ci = build.tests?.ci;
+  if (!b && !f) return {
+    text: ci?.source === "github-actions" && ci.check === "verify" && ci.completed_at
+      ? "GitHub verify 통과 · 개별 검사 건수 미기록"
+      : "검사 결과 미기록",
+    failed,
+  };
+  const part = (name: string, t?: TestCounts) => !t || !Number.isFinite(t.passed)
+    ? `${name} 건수 미기록`
+    : `${name} ${t.passed} 통과${t.failed ? ` · ${t.failed} 실패` : ""}${t.errors ? ` · ${t.errors} 오류` : ""}`;
   return { text: `${part("백엔드", b)} · ${part("화면", f)}`, failed };
 }
 

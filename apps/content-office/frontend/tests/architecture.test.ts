@@ -80,3 +80,13 @@ test("editable SVG uses the same complete content and escapes document strings",
   assert.ok(safe.includes("&lt;script&gt;"));
   assert.ok(!/<image|<foreignObject|<script|https?:\/\//.test(svg.replace('xmlns="http://www.w3.org/2000/svg"', "")));
 });
+
+
+test("CI 검증형·누락·부분 배포 기록을 안전하게 표시하고 없는 검사 건수를 만들지 않는다", () => {
+  const base={commit:"abc",deployed_at:"2026-10-30T10:00:00Z"};
+  assert.deepEqual(testSummary({...base,tests:{ci:{source:"github-actions",check:"verify",completed_at:"2026-10-30T09:59:00Z"}}}),{text:"GitHub verify 통과 · 개별 검사 건수 미기록",failed:false});
+  assert.deepEqual(testSummary(base),{text:"검사 결과 미기록",failed:false});
+  assert.deepEqual(testSummary({...base,tests:{}}),{text:"검사 결과 미기록",failed:false});
+  const partial=testSummary({...base,tests:{backend:{passed:4,failed:1}}});
+  assert.equal(partial.failed,true);assert.match(partial.text,/화면 건수 미기록/);
+});
