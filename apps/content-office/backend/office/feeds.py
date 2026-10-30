@@ -141,6 +141,9 @@ def rank_articles(articles, current=None, days=7):
         article["score"] = round(freshness + 20 + (25 if agent else 8) + (20 if practical else 10), 1)
         article["score_reasons"] = [f"최근 {age_days:.1f}일 이내 발표", "공식 RSS 출처", "에이전트·실무 자동화 관련" if agent else "AI 산업·활용 변화", "실행·영상 설명 소재가 구체적" if practical else "추가 원문 검토 필요"]
         article["score_note"] = "편집 규칙 점수이며 성과 측정치가 아닙니다"
+        if article.get("segment") == "exam":
+            article["score"] = round(freshness + 40, 1)
+            article["score_reasons"] = [f"최근 {age_days:.1f}일 이내 공지", "교육부 공식 공지", "수험·대학·직업교육 관련 제목; 원문 확인 필요"]
         ranked.append(article)
     return deduplicate_events(sorted(ranked, key=lambda a: (a["score"], a["published_at"]), reverse=True))
 
@@ -174,7 +177,11 @@ def collect_feeds(root: Path, feeds=None):
         record = {**feed, "checked_at": now()}
         try:
             raw, resolved, content_type = fetch_public(feed["url"])
-            articles = parse_feed(raw, feed)
+            if feed.get("format") == "moe-board":
+                from .education_sources import parse_moe
+                articles = parse_moe(raw, feed)
+            else:
+                articles = parse_feed(raw, feed)
             path = raw_dir / f"{feed['id']}.xml"
             path.write_bytes(raw)
             record.update(state="ok", count=len(articles), resolved_url=resolved, content_type=content_type, sha256=hashlib.sha256(raw).hexdigest(), error=None)

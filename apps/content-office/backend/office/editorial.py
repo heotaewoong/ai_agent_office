@@ -6,6 +6,7 @@ import re
 
 from .brand import brand_system_prompt, load_brand
 from .gates import run_gates
+from .output_specs import output_issues
 from .korean import CORRECTION_SCHEMA, KOREAN_REVIEW_PROMPT, check_texts
 from .packaging import require_packaging
 from .offers import campaign_packet, offer_snapshot, require_offer_ready
@@ -19,6 +20,9 @@ RUBRIC = {"version": "heobrain-news-2026-10-26-v2-reader-value", "critical": ["�
 
 SCENE_SCHEMA = {"type": "object", "properties": {"narration": {"type": "string"}, "caption": {"type": "string"}, "visual": {"type": "string"}}, "required": ["narration", "caption", "visual"], "additionalProperties": False}
 DRAFT_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string"}, "video": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "scenes": {"type": "array", "items": SCENE_SCHEMA}}, "required": ["title", "description", "tags", "scenes"], "additionalProperties": False}}, "required": ["title", "body", "video"], "additionalProperties": False}
+for key, count in (("titles", 3), ("hashtags", 5)):
+    DRAFT_SCHEMA["properties"][key] = {"type": "array", "minItems": count, "maxItems": count, "items": {"type": "string"}}
+    DRAFT_SCHEMA["required"].append(key)
 REVIEW_SCHEMA = {"type": "object", "properties": {"role": {"type": "string"}, "score": {"type": "number"}, "passed": {"type": "boolean"}, "critical_issues": {"type": "array", "items": {"type": "string"}}, "minor_issues": {"type": "array", "items": {"type": "string"}}, "summary": {"type": "string"}}, "required": ["role", "score", "passed", "critical_issues", "minor_issues", "summary"], "additionalProperties": False}
 KOREAN_REVIEW_SCHEMA = copy.deepcopy(REVIEW_SCHEMA)
 KOREAN_REVIEW_SCHEMA["properties"]["corrections"] = {"type": "array", "maxItems": 40, "items": CORRECTION_SCHEMA}
@@ -44,7 +48,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
         packet = campaign_packet(packet, offer)
         payload = canonical({"packet": content_context(packet), "audience": brief, "rubric": RUBRIC})
         reviews = []
-        for role in REVIEW_ROLES:
+        for role in ([] if output_issues(packet) else REVIEW_ROLES):
             if event:
                 event("editorial_role", {"role": role, "round": round_no, "packet_hash": digest(content_context(packet))})
             if role == "korean":
@@ -58,9 +62,9 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
             review = provider.generate(role, [{"role": "system", "content": BASE + role_prompt + " 총점과 관계없이 중대 오류가 하나라도 있으면 passed=false로 하라."}, {"role": "user", "content": payload}], REVIEW_SCHEMA, {"max_tokens": 4096, "temperature": 0.2})
             review["role"] = role
             reviews.append(review)
-        checks = checks_fn(packet) if checks_fn else {"passed": True, "issues": []}
+        checks = checks_fn(packet) if checks_fn else {"passed": not output_issues(packet), "issues": output_issues(packet)}
         history.append({"round": round_no, "source_content_hash": digest(content_context(packet)), "reviews": reviews, "deterministic_checks": checks})
-        critical = any(bool(r.get("critical_issues")) for r in reviews) or not checks["passed"]
+        critical = any(bool(r.get("critical_issues")) for r in reviews) or not checks["passed"] or bool(output_issues(packet))
         passed = not critical and all(r.get("passed") and float(r.get("score", 0)) >= 80 for r in reviews)
         if passed or round_no == 2:
             korean = next((r for r in reviews if r.get("role") == "korean"), {})
@@ -74,9 +78,10 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
         refine_context = {"packet": content_context(refine_packet), "feedback": reviews, "deterministic_feedback": checks, "audience": brief, "rubric": RUBRIC}
         if packaging is not None:
             refine_context["packaging"] = packaging
-        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. korean 검토의 corrections는 original 문장을 revised로 고치는 국어 교정이니 뜻과 근거 ID를 유지하며 반영하라. body는 1,200자 이상의 완성된 전체 원고이며 수정 요약이 아니다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
-        for key in ("title", "body", "video"):
-            packet[key] = refined[key]
+        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라. korean 검토의 corrections는 original 문장을 revised로 고치는 국어 교정이니 뜻과 근거 ID를 유지하며 반영하라. body는 1,500자±10%의 전체 원고이며 titles 3안·hashtags 5개를 함께 고친다. 영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.4})
+        for key in ("title", "body", "video", "titles", "hashtags"):
+            if key in refined:
+                packet[key] = refined[key]
     raise AssertionError("unreachable")
 
 
@@ -126,7 +131,7 @@ def style_issues(packet, brand=None):
 
 
 def deterministic_checks(packet):
-    issues = []
+    issues = output_issues(packet)
     if len(packet.get("body", "")) < 1200:
         issues.append("원고가 1,200자보다 짧아 설명과 실무 예시를 보완해야 합니다")
     if len(re.findall(r"(?m)^#{2,3} ", packet.get("body", ""))) < 3:
@@ -199,7 +204,7 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
     if evaluate_only:
         packet = {**packet, "audience": brief, "brief_preset": brief["preset"]}
     else:
-        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": brief, "packaging": job.get("packaging"), "operator_confirmed_campaign": offer_snapshot(job.get("offer")), "rubric": RUBRIC, "instructions": "한국어 Markdown 원고 2,000~3,200자. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
+        context = {"article": article, "evidence": evidence, "limitations": article.get("limitations", []), "avoid": article.get("avoid", []), "audience": brief, "packaging": job.get("packaging"), "operator_confirmed_campaign": offer_snapshot(job.get("offer")), "rubric": RUBRIC, "instructions": "한국어 Markdown 본문 1,500자±10%(1350~1650자), 서로 다른 제목 titles 3안과 #해시태그 hashtags 5개. 독자가 겪을 구체적인 질문→핵심 답→입력·판단·다음 행동이 모두 보이는 완결 사례→필요한 비교표→오늘 직접 할 일 순서로 쓴다. 사례가 가상이면 명시하고 실제 실행 성과처럼 쓰지 않는다. 숫자 세 가지 이상을 비교할 때는 표로 분모와 의미를 나란히 보여라. 한계는 해당 주장 옆이나 말미에 정확히 적되 글 전체를 부정·경고 목록으로 만들지 말라. 핵심 주장마다 근거 ID를 붙이고 회사/저자 발표의 범위를 보존하라. 유튜브는 질문 하나를 같은 사례로 끝까지 설명하는 4~6장면, 내레이션 합계 180~280자다. caption은 정상 표기의 간결한 화면 문구, narration은 말하기·숫자 발음용으로 나눈다. visual은 화면에 보일 실제 비교 항목이나 흐름의 단계명을 명시하라. 제목·도해·자막에 같은 문장을 세 번 반복하지 말라. 400개·가격·출시일 등 부차 정보를 한 영상에 모두 욱여넣지 말고 관련 사실은 글과 설명란에서 보존한다. 블로그 공개를 영상 제작의 선행조건으로 쓰지 말고 타인의 이미지 저작물을 긁어오지 말라."}
         packet = provider.generate("gen", [{"role": "system", "content": brand_system_prompt(BASE, brand)}, {"role": "user", "content": canonical(context)}], DRAFT_SCHEMA, {"max_tokens": 8192, "temperature": 0.6})
         packet.update(evidence=evidence, audience=brief, brief_preset=brief["preset"], source_article_url=article["url"], limitations=article.get("limitations", []))
         if job.get("packaging"):

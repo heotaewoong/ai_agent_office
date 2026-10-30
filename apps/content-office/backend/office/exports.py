@@ -133,6 +133,8 @@ def offer_line(offer) -> str:
 
 def blog_markdown(packet: dict, offer: dict | None = None) -> str:
     body = packet["body"]
+    if packet.get("hashtags"):
+        body += "\n\n" + " ".join(packet["hashtags"])
     refs = reference_lines(packet)
     if refs:
         body += "\n\n## 출처와 확인 범위\n\n" + "\n\n".join(refs)
@@ -144,9 +146,12 @@ def blog_markdown(packet: dict, offer: dict | None = None) -> str:
 
 def write_blog_exports(packet: dict, folder: Path, offer: dict | None = None) -> list[Path]:
     body = blog_markdown(packet, offer)
-    return [write_text(folder, "tistory.md", body + "\n"),
+    files = [write_text(folder, "tistory.md", body + "\n"),
             write_text(folder, "tistory.html", safe_fragment(body)),
             write_text(folder, "naver.txt", packet["title"] + "\n\n" + plain_text(body) + "\n")]
+    if packet.get("titles"):
+        files.append(write_text(folder, "title-options.txt", "\n".join(packet["titles"]) + "\n"))
+    return files
 
 
 def blog_reader_html(title: str, content: str, format: str = 'html') -> str:
