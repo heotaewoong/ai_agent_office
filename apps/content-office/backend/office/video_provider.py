@@ -100,13 +100,17 @@ def paid_clips_today(store):
 
 
 BALANCE_CACHE_SECONDS = 300
+# In process memory, not the store: screens poll this, and a business-record write on every refresh made the
+# deploy's "records unchanged during checks" guard fail whenever an office page was open (2026-10-30).
+_BALANCE_CACHE = {}
 
 
 def runway_credit_balance(store, *, session=None, force=False):
-    """creditBalance from GET /v1/organization (free), cached ~5 minutes in the store. None when unreadable."""
+    """creditBalance from GET /v1/organization (free), cached ~5 minutes in memory per state folder. None when unreadable."""
     if not os.environ.get("RUNWAYML_API_SECRET"):
         return None
-    cached = store.setting("runway_credit_cache", {}) or {}
+    cache_key = str(store.root)
+    cached = _BALANCE_CACHE.get(cache_key, {})
     current = datetime.now(timezone.utc)
     try:
         fresh = (current - datetime.fromisoformat(cached["checked_at"])).total_seconds() < BALANCE_CACHE_SECONDS
@@ -122,7 +126,7 @@ def runway_credit_balance(store, *, session=None, force=False):
         balance = value if type(value) in (int, float) and value >= 0 else None
     except (requests.RequestException, ValueError, TypeError, AttributeError):
         balance = None
-    store.set_setting("runway_credit_cache", {"checked_at": current.isoformat(), "balance": balance})
+    _BALANCE_CACHE[cache_key] = {"checked_at": current.isoformat(), "balance": balance}
     return balance
 
 

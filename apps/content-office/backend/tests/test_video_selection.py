@@ -144,4 +144,5 @@ def test_runway_options_need_secret_and_a_positive_balance_cached_for_five_minut
     store.set_setting('image_profile', {'id': 'openai-gpt-image'})
     assert video_provider.runway_credit_balance(store, session=session, force=True) is None
     assert '확인하지 못했습니다' in availability(store)['runway-grok-lite']['reason']
-    assert 'secret' not in str(store.setting('runway_credit_cache'))
+    # Polling screens must not write business records: the deploy compares them and refuses when they change.
+    assert store.setting('runway_credit_cache') is None
