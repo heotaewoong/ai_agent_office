@@ -4360,6 +4360,9 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .studio-section .editor-foot p, .studio-section .muted, .studio-section .approval-panel p { font-size: 13px; line-height: 1.85; }
 .studio-section .tabs button { font-size: 14px; min-height: 48px; }
 .studio-section .editor-save-state { font-size: 11px; }
+.studio-section h3 { font-size: 18px; line-height: 1.6; }
+.studio-section :is(.scene-list li p, .scene-list li > div > span, .quiz-list, .quiz-explanation, .derived-issues, .derived-toggle, .derived-note, .derived-panel details > summary) { font-size: 14px; line-height: 1.85; }
+.studio-section :is(.scene-list li, .quiz-list > li) { padding-block: 12px; }
 .studio-disclosure { border: 1px solid #d9e0d4; border-radius: 9px; background: #f8faf4; margin-block: 14px; overflow: clip; }
 .studio-disclosure > summary { cursor: pointer; padding: 16px 18px; min-height: 48px; font-size: 14px; font-weight: 600; line-height: 1.7; }
 .studio-disclosure[open] > summary { border-bottom: 1px solid #d9e0d4; margin-bottom: 16px; background: #edf3e8; }
