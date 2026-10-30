@@ -391,7 +391,8 @@ a { color: var(--accent); }
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 8px;
-  max-width: 40vw;
+  max-width: min(680px, calc(100vw - 240px));
+  word-break: keep-all;
 }
 .help[hidden] { display: none; }
 
