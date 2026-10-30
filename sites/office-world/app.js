@@ -1243,6 +1243,7 @@
       });
       groups.forEach((parts)=>{const mesh=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);if(mesh){mesh.isPickable=false;mesh.freezeWorldMatrix();this.receiveShadow(mesh);meshes.push(mesh);}});
       const arrival=this.buildArchitecture('arrival');meshes.push(...arrival.meshes);
+      this.arrivalArchitecture=arrival;this.arrivalDetail?.sync();
       this.officeObstacles=[...arrival.obstacles,...[[-43,31,6.8],[0,55,6.8],[43,31,6.8],[-56,4,6.8],[56,4,6.8]].map(([x,z,r])=>({x,z,r})),...this.landscapeObstacles];
       this.terrain={cols,key,meshes,landR:LAND_R,kind:'city-platform'};
       this.portals.office.y=0;
@@ -2941,7 +2942,7 @@
   }
 
   // 디버그·검사용 접근 (비밀값 없음)
-  window.__officeWorld = { space, world, controls, hud, data, embed, workbench };
+  window.__officeWorld = { space, world, controls, hud, data, embed, workbench, quality: QUALITY };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();
