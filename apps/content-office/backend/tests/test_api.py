@@ -743,9 +743,10 @@ def test_paid_clip_production_needs_on_page_confirmation_and_workers_refuse_unco
     video_selection.select_profile(store, "runway-grok-lite", actor="op")
     job = video_job(store)
     estimate = client.get(f"/api/jobs/{job['id']}/production-estimate").json()["clips"]
-    assert estimate["paid"] is True and estimate["clips"] == 1 and estimate["credits"] == 16
+    # Every scene gets a clip sized to its voice; the notice shows the upper bound (2 x 15 s x 3 + 2 start frames).
+    assert estimate["paid"] is True and estimate["clips"] == 2 and estimate["credits"] == 92
     refused = client.post(f"/api/jobs/{job['id']}/produce", json={}, headers=headers)
-    assert refused.status_code == 409 and "유료: 영상 클립 1개" in refused.json()["detail"]
+    assert refused.status_code == 409 and "유료: 영상 클립 2개(장면 길이에 맞춤)" in refused.json()["detail"]
     assert not [t for t in store.tasks() if t["kind"] == "produce"]
     confirmed = client.post(f"/api/jobs/{job['id']}/produce", json={"confirm_paid_clips": True}, headers=headers)
     assert confirmed.status_code == 202 and confirmed.json()["payload"]["paid_clips_confirmed"] is True
@@ -760,4 +761,4 @@ def test_clip_limits_route_validates_operator_input(context):
     store, client, headers = context
     ok = client.post("/api/settings/clip-limits", json={"max_clips_per_video": 2, "daily_paid_clips": 4}, headers=headers)
     assert ok.status_code == 200 and ok.json()["clip"]["clip_limits"]["daily_paid_clips"] == 4
-    assert client.post("/api/settings/clip-limits", json={"max_clips_per_video": 5, "daily_paid_clips": 4}, headers=headers).status_code == 409
+    assert client.post("/api/settings/clip-limits", json={"max_clips_per_video": 13, "daily_paid_clips": 4}, headers=headers).status_code == 409

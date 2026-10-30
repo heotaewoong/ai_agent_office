@@ -93,30 +93,45 @@ def test_unapproved_and_missing_secret_are_rejected_before_cost(tmp_path, monkey
     assert session.posts == [] and store.budget()['reserved_krw'] == 0
 
 
-def test_hook_only_by_default_and_operator_may_raise_to_three(tmp_path, monkeypatch):
+def test_every_scene_by_default_marked_scenes_first_and_operator_may_lower(tmp_path, monkeypatch):
     from office.video_provider import make_runway_clip_renderer, MAX_CLIPS_PER_JOB
     monkeypatch.setenv('RUNWAYML_API_SECRET', 'test-secret')
-    assert MAX_CLIPS_PER_JOB == 3
+    assert MAX_CLIPS_PER_JOB == 12
     store, job_id = approved_fixture(tmp_path)
+    # Default: every scene is a generated clip, so no scene is left as a near-frozen still.
+    assert make(store, job_id, FakeSession()).generated_scenes == [0, 1, 2]
+    unmarked, unmarked_job = approved_fixture(tmp_path / 'unmarked', generated=())
+    assert make(unmarked, unmarked_job, FakeSession()).generated_scenes == [0, 1, 2]
+    # A lower operator limit keeps the marked scene first, else the hook.
+    store.set_setting('clip_limits', {'max_clips_per_video': 1, 'daily_paid_clips': 3})
     session = FakeSession()
     renderer = make(store, job_id, session)
     assert renderer.generated_scenes == [1]
     with pytest.raises(WorkflowError, match='생성 영상으로 지정'):
         renderer(0, plate(store), store.root / 'clip.mp4')
     assert session.posts == []
-    # No scene marked: only the hook (first scene) gets a paid clip.
-    unmarked, unmarked_job = approved_fixture(tmp_path / 'unmarked', generated=())
+    unmarked.set_setting('clip_limits', {'max_clips_per_video': 1, 'daily_paid_clips': 3})
     assert make(unmarked, unmarked_job, FakeSession()).generated_scenes == [0]
-    store2, job2 = approved_fixture(tmp_path / 'four', generated=(0, 1, 2))
-    packet = store2.job(job2)['source_packet']
-    packet['video']['scenes'].append({'narration': '네 번째', 'caption': '네 번째', 'clip': 'generated'})
-    job = store2.save_source(job2, packet)
-    store2.review_source(job2, job['source_hash'], 'approved', 'op', {'video': True})
-    assert make_runway_clip_renderer(store2, job_id=job2, allow_paid=True, session=FakeSession()).generated_scenes == [0]
-    store2.set_setting('clip_limits', {'max_clips_per_video': 3, 'daily_paid_clips': 3})
-    assert make_runway_clip_renderer(store2, job_id=job2, allow_paid=True, session=FakeSession()).generated_scenes == [0, 1, 2]
-    store2.set_setting('clip_limits', {'max_clips_per_video': 9})
-    assert make_runway_clip_renderer(store2, job_id=job2, allow_paid=True, session=FakeSession()).generated_scenes == [0]
+    store.set_setting('clip_limits', {'max_clips_per_video': 2, 'daily_paid_clips': 3})
+    assert make_runway_clip_renderer(store, job_id=job_id, allow_paid=True, session=FakeSession()).generated_scenes == [0, 1]
+    store.set_setting('clip_limits', {'max_clips_per_video': 99})
+    assert make_runway_clip_renderer(store, job_id=job_id, allow_paid=True, session=FakeSession()).generated_scenes == [0, 1, 2]
+
+
+def test_grok_clip_length_follows_the_scene_voice_so_it_never_loops(tmp_path, monkeypatch):
+    from office.video_provider import clip_seconds
+    monkeypatch.setenv('RUNWAYML_API_SECRET', 'test-secret')
+    assert clip_seconds('grok_imagine_1_5_lite', 7.88) == 8 and clip_seconds('grok_imagine_1_5_lite', 9.72) == 10
+    assert clip_seconds('grok_imagine_1_5_lite', 0.4) == 1 and clip_seconds('grok_imagine_1_5_lite', 40) == 15
+    assert clip_seconds('grok_imagine_1_5_lite', None) == 5 and clip_seconds('gen4_turbo', 7.88) == 5
+    store, job_id = approved_fixture(tmp_path)
+    session = FakeSession(credits=25)
+    renderer = make(store, job_id, session, model='grok_imagine_1_5_lite')
+    assert renderer.accepts_seconds is True
+    meta = renderer(1, plate(store), store.root / 'clip.mp4', seconds=7.88)
+    assert session.posts[0]['json']['duration'] == 8 and meta['duration'] == 8
+    # 8s x 3 credits + 1 start frame = 25 credits = 500 KRW reserved and settled without overrun.
+    assert store.budget()['spent_krw'] == 500 and store.budget()['reserved_krw'] == 0
 
 
 def test_success_polls_downloads_settles_credits_and_reuses(tmp_path, monkeypatch):
@@ -152,17 +167,20 @@ def test_success_polls_downloads_settles_credits_and_reuses(tmp_path, monkeypatc
 def test_gen45_profile_reserves_more_and_rejects_over_job_cap(tmp_path, monkeypatch):
     from office.video_provider import JOB_CAP_KRW
     monkeypatch.setenv('RUNWAYML_API_SECRET', 'test-secret')
-    assert JOB_CAP_KRW == 3000
+    assert JOB_CAP_KRW == 5000
     store, job_id = approved_fixture(tmp_path, generated=(0, 1, 2))
-    store.set_setting('clip_limits', {'max_clips_per_video': 3, 'daily_paid_clips': 5})
+    packet = store.job(job_id)['source_packet']
+    packet['video']['scenes'] += [{'narration': f'{n}번째 장면입니다.', 'caption': f'{n}번째'} for n in (4, 5)]
+    job = store.save_source(job_id, packet)
+    store.review_source(job_id, job['source_hash'], 'approved', 'op', {'video': True})
+    store.set_setting('clip_limits', {'max_clips_per_video': 5, 'daily_paid_clips': 15})
     session = FakeSession(credits=60)
     renderer = make(store, job_id, session, model='gen4.5')
-    renderer(0, plate(store), store.root / 'c0.mp4')
-    assert store.budget()['spent_krw'] == 1200
-    renderer(1, plate(store), store.root / 'c1.mp4')
-    assert store.budget()['spent_krw'] == 2400
-    with pytest.raises(WorkflowError, match='3,000원'):
-        renderer(2, plate(store), store.root / 'c2.mp4')
+    for index in range(4):
+        renderer(index, plate(store, f'p{index}.png'), store.root / f'c{index}.mp4')
+    assert store.budget()['spent_krw'] == 4800
+    with pytest.raises(WorkflowError, match='5,000원'):
+        renderer(4, plate(store, 'p4.png'), store.root / 'c4.mp4')
 
 
 def test_failed_task_settles_reported_cost_and_raises_without_asset(tmp_path, monkeypatch):
@@ -248,7 +266,7 @@ def test_credit_preflight_refuses_before_any_paid_call(tmp_path, monkeypatch):
     monkeypatch.setenv('RUNWAYML_API_SECRET', 'test-secret')
     store, job_id = approved_fixture(tmp_path)
     poor = FakeSession(balance=10)
-    with pytest.raises(WorkflowError, match=r'Runway 크레딧이 부족합니다\(잔액 10, 필요 25\)'):
+    with pytest.raises(WorkflowError, match=r'Runway 크레딧이 부족합니다\(잔액 10, 필요 50\)'):
         make(store, job_id, poor)(1, plate(store), store.root / 'clip.mp4')
     assert poor.posts == [] and store.budget()['reserved_krw'] == 0
     assert poor.gets[0]['headers']['Authorization'] == 'Bearer test-secret' and poor.gets[0]['headers']['X-Runway-Version'] == '2024-11-06'

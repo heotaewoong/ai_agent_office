@@ -21,7 +21,7 @@ def test_none_is_default_and_selection_is_free(tmp_path, monkeypatch):
     assert clip_renderer_for_job(store, job) is None
     before = store.budget()
     summary = select_profile(store, 'runway-gen4-turbo', actor='test-operator')
-    assert summary['paid'] is True and summary['job_cap_krw'] == 3000 and summary['model'] == 'gen4_turbo'
+    assert summary['paid'] is True and summary['job_cap_krw'] == 5000 and summary['model'] == 'gen4_turbo'
     assert store.budget() == before
     with pytest.raises(WorkflowError, match='프로필'):
         select_profile(store, 'sora', actor='test-operator')
@@ -44,8 +44,8 @@ def test_factory_requires_approval_video_selection_and_opted_scene(tmp_path, mon
     store2 = Store(tmp_path / 'plain')
     select_profile(store2, 'runway-gen4.5', actor='test-operator')
     store2.review_source(plain['id'], plain['source_hash'], 'approved', 'op', {'video': True})
-    # Hook-only default: with no scene marked, the first scene is the one paid clip.
-    assert clip_renderer_for_job(store2, store2.job(plain['id'])).generated_scenes == [0]
+    # Default: every scene gets a clip, marked or not.
+    assert clip_renderer_for_job(store2, store2.job(plain['id'])).generated_scenes == [0, 1]
 
 
 def test_pexels_stock_profile_is_free_needs_only_its_key_and_covers_every_scene(tmp_path, monkeypatch):
@@ -79,17 +79,19 @@ def test_grok_lite_profile_limits_and_estimate_are_visible_before_any_call(tmp_p
     assert profile_summary(store)['id'] == 'none'
     summary = select_profile(store, 'runway-grok-lite', actor='test-operator')
     assert summary['model'] == 'grok_imagine_1_5_lite' and summary['paid'] is True
-    assert summary['clip_limits']['max_clips_per_video'] == 1 and summary['clip_limits']['daily_paid_clips'] == 3
+    assert summary['clip_limits']['max_clips_per_video'] == 12 and summary['clip_limits']['daily_paid_clips'] == 15
     assert summary['paid_clips_today'] == 0 and summary['credits_per_clip'] == 16 and summary['reservation_krw_per_clip'] == 320
     job = fixture(store)
     store.review_source(job['id'], job['source_hash'], 'approved', 'op', {'video': True})
     current = store.job(job['id'])
     estimate = paid_clip_estimate(store, current)
-    assert estimate == {**estimate, 'paid': True, 'clips': 1, 'credits': 16, 'reservation_krw': 320}
-    assert estimate['label'] == '유료: 영상 클립 1개 · 약 16크레딧($0.16, 예약 320원)'
+    # Both scenes get a clip sized to its voice; voice length is unknown before production, so the notice is an upper
+    # bound: 2 clips x 15s max x 3 credits + 2 start frames = 92 credits.
+    assert estimate == {**estimate, 'paid': True, 'clips': 2, 'credits': 92, 'reservation_krw': 1840}
+    assert estimate['label'] == '유료: 영상 클립 2개(장면 길이에 맞춤) · 최대 92크레딧($0.92, 예약 최대 1,840원)'
     assert clip_renderer_for_job(store, current).clip_provider.config['model'] == 'grok_imagine_1_5_lite'
     with pytest.raises(WorkflowError):
-        set_clip_limits(store, max_clips_per_video=4, daily_paid_clips=3, actor='op')
+        set_clip_limits(store, max_clips_per_video=13, daily_paid_clips=3, actor='op')
     limits = set_clip_limits(store, max_clips_per_video=2, daily_paid_clips=5, actor='op')
     assert limits['max_clips_per_video'] == 2 and limits['daily_paid_clips'] == 5
     select_profile(store, 'none', actor='op')

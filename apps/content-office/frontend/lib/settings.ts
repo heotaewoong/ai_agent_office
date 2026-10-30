@@ -27,9 +27,9 @@ export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
     { id: "codex-video-unsupported", label: "Codex 구독 생성 영상", paid: false, disabled: true, hint: "구독의 영상 자동 생성 연결은 지원하지 않습니다. 정지 이미지 줌·자막 편집은 생성 영상 없이도 가능합니다." },
     { id: "none", label: "일반 영상 · 이미지 줌·자막 편집", paid: false, hint: "별도 생성 영상 API 없이 MP4를 만듭니다. 내레이션은 음성에서 선택한 방식과 비용을 따릅니다." },
     { id: "pexels-stock", label: "Pexels 무료 실사 영상", paid: false, hint: "무료 · 실제 촬영 영상 · PEXELS_API_KEY 필요 · 출처 표기" },
-    { id: "runway-grok-lite", label: "Runway Grok Imagine 1.5 Lite · 추천", paid: true, hint: "가장 저렴 · 720p 5초 16크레딧($0.16, 예약 320원) · 기본 첫 장면 1개만" },
-    { id: "runway-gen4-turbo", label: "Runway Gen-4 Turbo", paid: true, hint: "5초 25크레딧(예약 500원) · 기본 첫 장면 1개만" },
-    { id: "runway-gen4.5", label: "Runway Gen-4.5", paid: true, hint: "5초 60크레딧(예약 1,200원) · 기본 첫 장면 1개만" },
+    { id: "runway-grok-lite", label: "Runway Grok Imagine 1.5 Lite · 추천", paid: true, hint: "가장 저렴 · 720p 초당 3크레딧+장면당 1 · 모든 장면을 장면 길이만큼 실사 영상으로(반복·끊김 없음)" },
+    { id: "runway-gen4-turbo", label: "Runway Gen-4 Turbo", paid: true, hint: "5초 25크레딧(예약 500원) · 모든 장면, 5초 고정" },
+    { id: "runway-gen4.5", label: "Runway Gen-4.5", paid: true, hint: "5초 60크레딧(예약 1,200원) · 모든 장면, 5초 고정" },
   ],
 };
 
@@ -116,8 +116,8 @@ export const PROFILE_CHANGE_NOTE = "다음 제작부터 적용됩니다. 이미 
 export function dailyClipUsage(provider: ProviderStatus | undefined): string | null {
   const clip = provider?.clip;
   if (!clip?.paid) return null;
-  const cap = clip.clip_limits?.daily_paid_clips ?? 3;
-  const perVideo = clip.clip_limits?.max_clips_per_video ?? 1;
+  const cap = clip.clip_limits?.daily_paid_clips ?? 15;
+  const perVideo = clip.clip_limits?.max_clips_per_video ?? 12;
   return `오늘 유료 클립 ${clip.paid_clips_today ?? 0}/${cap}개 사용 · 영상당 최대 ${perVideo}개`;
 }
 

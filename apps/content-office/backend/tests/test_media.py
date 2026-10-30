@@ -703,6 +703,28 @@ def test_generated_clip_requires_background_before_any_paid_call(tmp_path):
     assert scene_clip(None, tmp_path, 1, tmp_path / 'bg.png') == (None, None)
 
 
+def test_scene_voice_length_reaches_renderers_that_size_clips_to_the_scene(tmp_path):
+    from office.media import obtain_clip, scene_clip
+    seen = []
+
+    def sized(scene_index, image_path, out_path, seconds=None):
+        seen.append(seconds)
+        out_path.write_bytes(b'clip')
+        return {'provider': 'runway'}
+    sized.generated_scenes = [0]
+    sized.accepts_seconds = True
+    background = tmp_path / 'bg.png'
+    background.write_bytes(b'png')
+    assert obtain_clip(sized, tmp_path, 0, background, seconds=7.88)[0].name == 'generated-01.mp4'
+    assert seen == [7.88]
+
+    def fixed(scene_index, image_path, out_path):
+        out_path.write_bytes(b'clip')
+        return {}
+    fixed.generated_scenes = [0]
+    assert scene_clip(fixed, tmp_path, 0, background, seconds=7.88)[0].is_file()
+
+
 def test_stock_clip_renderer_runs_without_background_and_falls_back_only_on_declared_errors(tmp_path):
     from office.media import obtain_clip, scene_clip
     calls = []

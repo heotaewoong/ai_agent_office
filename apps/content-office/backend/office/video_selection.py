@@ -51,10 +51,10 @@ def profile_summary(store):
     paid = identity.startswith('runway-')
     runway_configured = bool(os.environ.get('RUNWAYML_API_SECRET'))
     pexels_configured = bool(os.environ.get('PEXELS_API_KEY'))
-    from .video_provider import CREDIT_USD, FX_KRW, clip_limits, credits_per_clip, paid_clips_today
+    from .video_provider import CREDIT_USD, FX_KRW, JOB_CAP_KRW, clip_limits, credits_per_clip, paid_clips_today
     limits = clip_limits(store)
     summary = {**profile, 'name': PROFILES[identity]['name'], 'model': PROFILES[identity]['model'], 'paid': paid,
-               'automatic_fallback': False, 'job_cap_krw': 3000 if paid else 0,
+               'automatic_fallback': False, 'job_cap_krw': JOB_CAP_KRW if paid else 0,
                'max_clips_per_job': limits['max_clips_per_video'] if paid else 0,
                'configured': runway_configured, 'runway_configured': runway_configured, 'pexels_configured': pexels_configured,
                'clip_limits': limits, 'paid_clips_today': paid_clips_today(store),
@@ -104,14 +104,17 @@ def paid_clip_estimate(store, job):
     scenes = (job.get('source_packet') or {}).get('video', {}).get('scenes', []) or []
     if not profile['paid'] or not job.get('selections', {}).get('video') or not scenes:
         return {'paid': False, 'clips': 0, 'credits': 0, 'reservation_krw': 0, 'label': ''}
-    from .video_provider import CREDIT_USD, FX_KRW, clip_limits, credits_per_clip, generated_scene_indexes, paid_clips_today
+    from .video_provider import CREDIT_USD, FX_KRW, MODELS, clip_limits, generated_scene_indexes, max_credits, paid_clips_today
     limits = clip_limits(store)
     clips = len(generated_scene_indexes(scenes, limits['max_clips_per_video']))
-    credits = clips * credits_per_clip(profile['model'])
+    # Voice lengths are unknown before production, so a scene-length model shows its upper bound.
+    credits = max_credits(profile['model'], clips)
+    sized = bool(MODELS[profile['model']].get('max_seconds'))
     krw = int(credits * CREDIT_USD * FX_KRW)
     return {'paid': clips > 0, 'clips': clips, 'credits': credits, 'usd': round(credits * CREDIT_USD, 2), 'reservation_krw': krw,
             'model': profile['model'], 'profile': profile['id'], 'daily_cap': limits['daily_paid_clips'], 'used_today': paid_clips_today(store),
-            'label': f'유료: 영상 클립 {clips}개 · 약 {credits}크레딧(${credits * CREDIT_USD:.2f}, 예약 {krw:,}원)',
+            'label': (f'유료: 영상 클립 {clips}개(장면 길이에 맞춤) · 최대 {credits}크레딧(${credits * CREDIT_USD:.2f}, 예약 최대 {krw:,}원)' if sized
+                      else f'유료: 영상 클립 {clips}개 · 약 {credits}크레딧(${credits * CREDIT_USD:.2f}, 예약 {krw:,}원)'),
             'note': '같은 장면·같은 배경이면 저장된 클립을 다시 써서 추가 비용이 없습니다. 하루 한도와 잔액 확인을 통과해야 호출합니다'}
 
 

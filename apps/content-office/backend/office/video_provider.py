@@ -1,5 +1,7 @@
-"""Opt-in Runway image-to-video clips. Hook-only by default: one clip per video (the first scene marked
-`clip: generated`, else the first scene); an operator setting may raise it to 3.
+"""Opt-in Runway image-to-video clips. Every scene by default (scenes marked `clip: generated` first, then the
+rest in order), so no scene is left as a near-frozen still; an operator setting may lower it to 1.
+Variable-length models (Grok Lite: 1-15 s, confirmed 2026-10-30 from Runway's own validation error) get a clip as
+long as the scene's voice, so the footage never loops or jumps.
 
 Pricing verified 2026-10-28 (gen4) and 2026-10-30 (grok_imagine_1_5_lite: 3 credits/s at 720p + 1 credit
 per image start frame): https://docs.dev.runwayml.com/guides/pricing/ (1 credit = $0.01)
@@ -17,6 +19,7 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timedelta, timezone
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -36,17 +39,18 @@ CREDIT_USD = 0.01
 API_BASE = "https://api.dev.runwayml.com/v1"
 API_VERSION = "2024-11-06"
 MODELS = {"grok_imagine_1_5_lite": {"credits_per_second": 3, "start_frame_credits": 1, "ratio": "auto_720p",
-                                    "name": "Runway Grok Imagine 1.5 Lite", "price_checked": "2026-10-30"},
+                                    "name": "Runway Grok Imagine 1.5 Lite", "price_checked": "2026-10-30", "max_seconds": 15},
           "gen4_turbo": {"credits_per_second": 5, "start_frame_credits": 0, "ratio": "720:1280", "name": "Runway Gen-4 Turbo", "price_checked": "2026-10-28"},
           "gen4.5": {"credits_per_second": 12, "start_frame_credits": 0, "ratio": "720:1280", "name": "Runway Gen-4.5", "price_checked": "2026-10-28"}}
 RATIO = "720:1280"
 KST = timezone(timedelta(hours=9))
-DEFAULT_CLIPS_PER_VIDEO = 1
-DEFAULT_DAILY_PAID_CLIPS = 3
-MAX_DAILY_PAID_CLIPS = 10
+MAX_CLIPS_PER_JOB = 12  # = the most scenes a short may have, i.e. every scene
+DEFAULT_CLIPS_PER_VIDEO = MAX_CLIPS_PER_JOB
+DEFAULT_DAILY_PAID_CLIPS = 15
+MAX_DAILY_PAID_CLIPS = 36
 DURATION = 5
-MAX_CLIPS_PER_JOB = 3
-JOB_CAP_KRW = 3000
+MAX_SHORT_SECONDS = 60
+JOB_CAP_KRW = 5000
 MAX_PROMPT_IMAGE_BYTES = 5_000_000
 MAX_CLIP_BYTES = 60_000_000
 DEFAULT_MAX_POLLS = 90
@@ -62,10 +66,11 @@ class KnownUsageOverrun(WorkflowError):
 
 
 def generated_scene_indexes(scenes, limit=None):
-    """Scenes marked `clip: generated`, else the hook (first scene); at most `limit` of them."""
-    marked = [index for index, scene in enumerate(scenes) if isinstance(scene, dict) and scene.get("clip") == "generated"]
-    chosen = marked or ([0] if scenes and isinstance(scenes[0], dict) else [])
-    return chosen if limit is None else chosen[:limit]
+    """Scenes marked `clip: generated` first, then the others in order (the hook first); at most `limit`, sorted."""
+    valid = [index for index, scene in enumerate(scenes) if isinstance(scene, dict)]
+    marked = [index for index in valid if scenes[index].get("clip") == "generated"]
+    chosen = marked + [index for index in valid if index not in marked]
+    return sorted(chosen if limit is None else chosen[:limit])
 
 
 def clip_limits(store):
@@ -121,9 +126,32 @@ def runway_credit_balance(store, *, session=None, force=False):
     return balance
 
 
-def credits_per_clip(model):
+def clip_seconds(model, scene_seconds=None):
+    """Requested clip length: the scene's voice length rounded up (never shorter, so no loop) for variable-length
+    models, clamped to what the model accepts; fixed-length models and unknown scene lengths get DURATION."""
+    maximum = MODELS[model].get("max_seconds")
+    if not maximum or scene_seconds is None:
+        return DURATION
+    return max(1, min(maximum, math.ceil(float(scene_seconds) + 0.05)))
+
+
+def credits_for(model, seconds=DURATION):
     spec = MODELS[model]
-    return spec["credits_per_second"] * DURATION + spec["start_frame_credits"]
+    return spec["credits_per_second"] * seconds + spec["start_frame_credits"]
+
+
+def credits_per_clip(model):
+    return credits_for(model, DURATION)
+
+
+def max_credits(model, clips):
+    """Upper bound before production, when voice lengths are still unknown: each clip at most the model maximum and
+    all clips together at most the 60 s short (+ rounding up per clip)."""
+    maximum = MODELS[model].get("max_seconds")
+    if not maximum:
+        return clips * credits_per_clip(model)
+    seconds = min(clips * maximum, MAX_SHORT_SECONDS + clips)
+    return MODELS[model]["credits_per_second"] * seconds + clips * MODELS[model]["start_frame_credits"]
 
 
 def clip_prompt(scene):
@@ -144,7 +172,8 @@ def clip_profile_config(*, job_id, source_hash, scenes, model, limit=DEFAULT_CLI
         raise WorkflowError(f"생성 영상은 한 영상에 1~{MAX_CLIPS_PER_JOB}개 장면까지만 허용합니다")
     generated = generated_scene_indexes(scenes, limit)
     credits = credits_per_clip(model)
-    return {"provider": "runway", "model": model, "model_name": MODELS[model]["name"], "ratio": MODELS[model]["ratio"], "duration": DURATION,
+    return {"provider": "runway", "model": model, "model_name": MODELS[model]["name"], "ratio": MODELS[model]["ratio"],
+            "duration": "scene-length" if MODELS[model].get("max_seconds") else DURATION, "max_seconds": MODELS[model].get("max_seconds"),
             "credits_per_clip": credits, "reservation_krw": int(credits * CREDIT_USD * FX_KRW), "job_cap_krw": JOB_CAP_KRW,
             "clips_per_video_limit": limit, "generated_scenes": generated, "job_id": job_id, "source_hash": source_hash,
             "budget_scope_id": "clip-job-budget-" + digest(job_id)[:32],
@@ -203,7 +232,7 @@ class ClipProvider:
     def _headers(self):
         return {"Authorization": "Bearer " + os.environ["RUNWAYML_API_SECRET"], "X-Runway-Version": API_VERSION, "Content-Type": "application/json"}
 
-    def _reserve(self, key, payload):
+    def _reserve(self, key, payload, reservation_krw):
         if not os.environ.get("RUNWAYML_API_SECRET"):
             raise WorkflowError("RUNWAYML_API_SECRET가 설정되지 않았습니다. 실행 환경 파일에 운영자의 키를 넣은 뒤 다시 요청하세요")
         current = datetime.now(timezone.utc)
@@ -223,9 +252,9 @@ class ClipProvider:
                 if data.get("reservation_overrun") or data.get("usage", {}).get("request_contract_exceeded"):
                     raise WorkflowError("이 업무에서 영상 제공자 사용량 초과가 발생했습니다. 비용 대사 전 추가 호출을 차단합니다")
                 committed += row["actual_krw"] if row["state"] == "settled" else row["reserved_krw"]
-        if committed + self.config["reservation_krw"] > self.config["job_cap_krw"]:
-            raise WorkflowError("생성 영상 업무당 3,000원 한도를 초과하여 요청을 보류합니다")
-        return self.store.reserve_cost("clip", self.config["reservation_krw"], {
+        if committed + reservation_krw > self.config["job_cap_krw"]:
+            raise WorkflowError(f"생성 영상 업무당 {self.config['job_cap_krw']:,}원 한도를 초과하여 요청을 보류합니다")
+        return self.store.reserve_cost("clip", reservation_krw, {
             "budget_scope_id": self.config["budget_scope_id"], "request_kind": "clip", "cache_key": key,
             "job_id": self.job_id, "source_hash": self.source_hash, "payload_hash": digest({**payload, "promptImage": "omitted"}),
             "model": payload["model"], "price_source": self.config["pricing"]["source"], "price_checked": self.config["pricing"]["checked"],
@@ -239,12 +268,12 @@ class ClipProvider:
             raise WorkflowError(f"오늘(한국 시간) 유료 영상 클립 한도 {cap}개를 모두 썼습니다(사용 {used}개). 유료 호출은 하지 않았습니다. "
                                 "내일 다시 하거나 운영자가 하루 한도를 조정하세요")
 
-    def _preflight_credits(self, scene_index):
+    def _preflight_credits(self, scene_index, credits):
         """Ask Runway for the balance before the first paid clip, so an empty account never yields a failed paid attempt."""
         if self._credit_checked:
             return
         remaining = [index for index in self.config["generated_scenes"] if index >= scene_index]
-        needed = self.config["credits_per_clip"] * max(1, len(remaining))
+        needed = credits * max(1, len(remaining))
         try:
             response = self.session.get(API_BASE + "/organization", headers=self._headers(), timeout=(10, 30))
             balance = response.json()["creditBalance"] if response.status_code == 200 else None
@@ -329,7 +358,7 @@ class ClipProvider:
         os.replace(partial, target)
         return target
 
-    def clip(self, scene_index, image_path, out_path):
+    def clip(self, scene_index, image_path, out_path, seconds=None):
         scenes = self._authorized(scene_index)
         image_path = self._inside(image_path, ".png", "입력 이미지")
         out_path = self._inside(out_path, ".mp4", "생성 영상")
@@ -338,7 +367,8 @@ class ClipProvider:
             raise WorkflowError("입력 이미지는 5MB 이하 PNG여야 합니다")
         prompt = clip_prompt(scenes[scene_index])
         payload = {"model": self.config["model"], "promptImage": "data:image/png;base64," + base64.b64encode(image_bytes).decode(),
-                   "promptText": prompt, "ratio": self.config["ratio"], "duration": self.config["duration"]}
+                   "promptText": prompt, "ratio": self.config["ratio"], "duration": clip_seconds(self.config["model"], seconds)}
+        credits = credits_for(self.config["model"], payload["duration"])
         # Scene inputs only (model, first frame, prompt, ratio, duration): an unchanged scene is never paid for twice,
         # even after the source is re-approved for unrelated edits.
         key = "clip:" + digest({"model": payload["model"], "image_sha256": _hash(image_path), "prompt": prompt, "ratio": payload["ratio"],
@@ -357,8 +387,8 @@ class ClipProvider:
             if not os.environ.get("RUNWAYML_API_SECRET"):
                 raise WorkflowError("RUNWAYML_API_SECRET가 설정되지 않았습니다. 실행 환경 파일에 운영자의 키를 넣은 뒤 다시 요청하세요")
             self._check_daily_cap()
-            self._preflight_credits(scene_index)
-            reservation = self._reserve(key, payload)
+            self._preflight_credits(scene_index, credits)
+            reservation = self._reserve(key, payload, int(credits * CREDIT_USD * FX_KRW))
             task_id = self._create_task(reservation, payload)
             receipt = {"status": "submitted", "request_hash": key, "source_hash": self.source_hash, "scene_index": scene_index,
                        "reservation_id": reservation["id"], "task_id": task_id, "config": self.config, "prompt": prompt, "image_sha256": _hash(image_path)}
@@ -386,7 +416,7 @@ class ClipProvider:
             if not saved or not clip_path.read_bytes()[4:8] == b"ftyp":
                 receipt["status"] = "asset_needs_review"; _json(receipt_path, receipt)
                 raise WorkflowError("생성 영상 파일을 받지 못했거나 MP4 형식이 아니어서 검토가 필요합니다. 비용은 정산했고 task_id로 다시 내려받을 수 있습니다")
-            metadata = {"provider": "runway", "model": self.config["model"], "model_name": self.config["model_name"], "duration": self.config["duration"],
+            metadata = {"provider": "runway", "model": self.config["model"], "model_name": self.config["model_name"], "duration": payload["duration"],
                         "ratio": self.config["ratio"], "sha256": _hash(clip_path), "disclosure": "Runway 생성 영상 장면"}
             receipt.update(status="complete", sha256=metadata["sha256"], bytes=clip_path.stat().st_size, clip_metadata=metadata); _json(receipt_path, receipt)
             self._authorized(scene_index); out_path.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(clip_path, out_path)
@@ -396,8 +426,9 @@ class ClipProvider:
 def make_runway_clip_renderer(store, *, job_id, allow_paid=False, model="gen4_turbo", session=None, sleep=None, max_polls=DEFAULT_MAX_POLLS, limit=None):
     provider = ClipProvider(store, job_id=job_id, allow_paid=allow_paid, model=model, session=session, sleep=sleep, max_polls=max_polls, limit=limit)
 
-    def render(scene_index, image_path, out_path):
-        return provider.clip(scene_index, image_path, out_path)
+    def render(scene_index, image_path, out_path, seconds=None):
+        return provider.clip(scene_index, image_path, out_path, seconds=seconds)
+    render.accepts_seconds = True
     render.cache_key = provider.cache_key
     render.asset_cache_key = provider.asset_cache_key
     render.clip_provider = provider

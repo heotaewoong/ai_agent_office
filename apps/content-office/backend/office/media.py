@@ -610,7 +610,7 @@ def scene_background(background_renderer, folder, index):
     return path, meta
 
 
-def scene_clip(clip_renderer, folder, index, background):
+def scene_clip(clip_renderer, folder, index, background, seconds=None):
     """Fetch a clip for an opted-in scene. Generated (Runway) clips need the generated background as the input
     frame; a renderer that declares needs_background = False (free stock footage) works from the scene alone."""
     if clip_renderer is None or index not in list(getattr(clip_renderer, 'generated_scenes', [])):
@@ -618,16 +618,18 @@ def scene_clip(clip_renderer, folder, index, background):
     if getattr(clip_renderer, 'needs_background', True) and not background:
         raise WorkflowError('생성 영상 장면에는 배경 이미지 프로필이 켜져 있어야 합니다. 유료 영상은 호출하지 않았습니다')
     path = folder / f'generated-{index + 1:02}.mp4'
-    meta = clip_renderer(index, background, path) or {}
+    # Renderers that size the clip to the scene (Runway Grok) get the voice length, so the footage never loops.
+    sized = {'seconds': seconds} if getattr(clip_renderer, 'accepts_seconds', False) else {}
+    meta = clip_renderer(index, background, path, **sized) or {}
     if not path.is_file():
         raise WorkflowError('생성 영상 렌더러가 파일을 만들지 않았습니다')
     return path, meta
 
 
-def obtain_clip(clip_renderer, folder, index, background):
+def obtain_clip(clip_renderer, folder, index, background, seconds=None):
     """scene_clip, except a renderer's declared fallback errors (free stock footage unavailable) keep the still scene."""
     try:
-        path, meta = scene_clip(clip_renderer, folder, index, background)
+        path, meta = scene_clip(clip_renderer, folder, index, background, seconds)
     except tuple(getattr(clip_renderer, 'fallback_errors', ()) or ()) as error:
         return None, None, {'scene': index + 1, 'reason': str(error)[:200]}
     return path, meta, None
@@ -722,7 +724,7 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
             check_current()
         image = folder / f'scene-{index + 1:02}.png'
         background, background_meta = scene_background(background_renderer, folder, index)
-        generated, generated_meta, issue = obtain_clip(clip_renderer, folder, index, background)
+        generated, generated_meta, issue = obtain_clip(clip_renderer, folder, index, background, duration)
         if issue:
             clip_issues.append(issue)
         still, still_meta = background, background_meta
