@@ -562,10 +562,10 @@ export type Lead = {
   email_masked: string;
   magnet_key: string;
   source: string;
-  consent: { version: string; granted_at: string; withdrawn_at: string | null };
+  consent: { version: string; purpose?: "newsletter" | "lead_magnet_delivery" | null; granted_at: string; withdrawn_at: string | null };
   delivery: { state: "pending" | "sent_manual"; sent_at: string | null };
 };
-export type LeadInput = { email: string; magnet_key: string; source: string; consent_version: string; consent_text: string };
+export type LeadInput = { email: string; magnet_key: string; source: string; consent_version: string; consent_text: string; consent_purpose: "newsletter" | "lead_magnet_delivery" };
 export type LeadSummary = {
   total: number;
   consented: number;

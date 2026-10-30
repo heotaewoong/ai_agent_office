@@ -59,6 +59,30 @@ def test_job_attributed_model_cache_reuse_is_free_even_after_job_budget_is_full(
     assert {event["kind"] for event in store.events(job_id)} >= {"model_started", "model_completed", "model_cache_hit"}
 
 
+def test_run_scope_checks_maximum_before_transport_but_reuses_cache_for_free(tmp_path, monkeypatch):
+    from office.store import CostScopeExceeded
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
+    store = Store(tmp_path)
+    calls = []
+
+    def transport(*args, **kwargs):
+        calls.append(kwargs)
+        return Response('{"passed":true}')
+
+    scope = {"id": "provider-run", "cap_krw": 1000}
+    provider = Provider(store, transport=transport, cost_scope=scope)
+    messages = [{"role": "user", "content": "cached scoped test"}]
+    result = provider.generate("eval", messages, SCHEMA)
+    remaining = store.cost_scope_budget(scope)["remaining_krw"]
+    store.reserve_cost("synthetic-pending", remaining, {}, scope=scope)
+    with pytest.raises(CostScopeExceeded):
+        provider.generate("eval", [{"role": "user", "content": "different request"}], SCHEMA)
+    assert len(calls) == 1 and provider.cost_scope_exhausted is True
+    before = store.cost_scope_budget(scope)
+    assert provider.generate("eval", messages, SCHEMA) == result
+    assert store.cost_scope_budget(scope) == before and len(calls) == 1
+
+
 def test_schema_invalid_model_result_is_not_cached_as_success(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
     store = Store(tmp_path)

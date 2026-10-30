@@ -68,7 +68,7 @@ export function NewsletterPanel({ job, busy, action }: { job: Job; busy: boolean
             <Icon name="file" size={17} />
             뉴스레터 회차 · ③
           </h3>
-          <p className="not-ready">이 화면은 메일을 보내지 않습니다. ③ 승인은 회차 내용의 승인이며, 발송은 오너가 메일러에서 직접 합니다. 수신자 수는 동의 장부의 동의 유지 리드만 셉니다.</p>
+          <p className="not-ready">이 화면은 메일을 보내지 않습니다. ③ 승인은 회차 내용의 승인이며, 발송은 오너가 메일러에서 직접 합니다. 수신자에는 별도 뉴스레터 동의가 확인되고 철회하지 않은 이메일만 중복 없이 포함합니다. 자료 전달 동의와 목적 미확인 기록은 제외합니다.</p>
         </div>
       </div>
       <div className="newsletter-build">

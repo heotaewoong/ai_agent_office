@@ -16,7 +16,7 @@ def api(store):
 
 
 def lead(client, headers, email, magnet="d30-planner"):
-    return client.post("/api/leads", json={"email": email, "magnet_key": magnet, "source": "homepage", "consent_version": "v1", "consent_text": "뉴스레터 수신 동의"}, headers=headers).json()["lead"]
+    return client.post("/api/leads", json={"email": email, "magnet_key": magnet, "source": "homepage", "consent_version": "v1", "consent_text": "뉴스레터 수신 동의", "consent_purpose": "newsletter"}, headers=headers).json()["lead"]
 
 
 def test_issue_requires_release_approval(tmp_path):
@@ -288,14 +288,14 @@ def test_review_compare_and_approval_remain_atomic_during_rebuild(tmp_path, monk
 
 
 @pytest.mark.parametrize("action", ["approve", "reject", "export", "sent"])
-@pytest.mark.parametrize("change", ["source", "offer", "release", "release_rejected", "source_rejected", "file", "file_missing", "consent_text", "consent_version", "consent_granted", "email", "withdrawn", "new_recipient"])
+@pytest.mark.parametrize("change", ["source", "offer", "release", "release_rejected", "source_rejected", "file", "file_missing", "consent_text", "consent_version", "consent_granted", "consent_purpose", "email", "withdrawn", "new_recipient"])
 def test_current_chain_is_required_for_review_export_and_sent(tmp_path, action, change):
     from office import leads, newsletter
     from office.store import canonical, digest
     from tests.test_offer import reapprove_campaign_fixture
 
     store, job_id = released_fixture(tmp_path)
-    reader, _ = leads.register_lead(store, email="reader@example.com", magnet_key="one", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의")
+    reader, _ = leads.register_lead(store, email="reader@example.com", magnet_key="one", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의", consent_purpose="newsletter")
     current = newsletter.build_issue(store, job_id, issue_key="current-chain", subject=None, actor="op")
     if action == "sent":
         current = newsletter.review_issue(store, current["id"], "approve", expected_hash=current["review_hash"], actor="op")
@@ -326,7 +326,7 @@ def test_current_chain_is_required_for_review_export_and_sent(tmp_path, action, 
     elif change == "withdrawn":
         leads.withdraw_lead(store, reader["id"])
     elif change == "new_recipient":
-        leads.register_lead(store, email="new@example.com", magnet_key="two", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의")
+        leads.register_lead(store, email="new@example.com", magnet_key="two", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의", consent_purpose="newsletter")
     else:
         with store.connection(transaction=True) as db:
             row = db.execute("SELECT data FROM leads WHERE id=?", (reader["id"],)).fetchone()
@@ -338,6 +338,8 @@ def test_current_chain_is_required_for_review_export_and_sent(tmp_path, action, 
                     data["consent_text"] = "자료 전달에만 동의합니다"
                 elif change == "consent_version":
                     data["consent"]["version"] = "v2"
+                elif change == "consent_purpose":
+                    data["consent"]["purpose"] = "lead_magnet_delivery"
                 else:
                     data["consent"]["granted_at"] = "2026-10-30T01:00:00+00:00"
                 db.execute("UPDATE leads SET data=? WHERE id=?", (canonical(data), reader["id"]))
@@ -391,7 +393,7 @@ def test_withdrawal_requires_rebuild_and_explicit_reapproval_without_ledger_migr
     from office import leads, newsletter
 
     store, job_id = released_fixture(tmp_path)
-    reader, _ = leads.register_lead(store, email="reader@example.com", magnet_key="one", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의")
+    reader, _ = leads.register_lead(store, email="reader@example.com", magnet_key="one", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의", consent_purpose="newsletter")
     current = newsletter.build_issue(store, job_id, issue_key="withdrawal", subject=None, actor="op")
     approved = newsletter.review_issue(store, current["id"], "approve", expected_hash=current["review_hash"], actor="human")
     leads.withdraw_lead(store, reader["id"])
@@ -491,3 +493,23 @@ def test_sent_token_cannot_be_reused_for_another_approved_issue(tmp_path):
     assert approved_a["hash"] == approved_b["hash"] and approved_a["review_hash"] != approved_b["review_hash"]
     response = client.post(f"/api/newsletters/{second['id']}/sent", json={"expected_hash": approved_a["review_hash"]}, headers=headers)
     assert response.status_code == 409 and newsletter.issue(store, second["id"]) == approved_b
+
+
+def test_new_explicit_newsletter_grant_changes_snapshot_and_requires_new_issue_approval(tmp_path):
+    from office import leads, newsletter
+    store, job_id = released_fixture(tmp_path)
+    reader, _ = leads.register_lead(store, email="reader@example.com", magnet_key="same-material", source="homepage",
+                                    consent_version="delivery-v1", consent_text="자료 전달에 동의합니다", consent_purpose="lead_magnet_delivery")
+    current = newsletter.build_issue(store, job_id, issue_key="purpose-bound", subject=None, actor="human")
+    assert current["recipient_count"] == 0
+    approved = newsletter.review_issue(store, current["id"], "approve", expected_hash=current["review_hash"], actor="human")
+    changed, created = leads.register_lead(store, email="reader@example.com", magnet_key="same-material", source="homepage",
+                                          consent_version="newsletter-v1", consent_text="별도 뉴스레터 수신에 동의합니다", consent_purpose="newsletter")
+    assert not created and changed["id"] == reader["id"] and changed["delivery"] == reader["delivery"]
+    assert changed["consent_history"][0]["consent"]["purpose"] == "lead_magnet_delivery"
+    with pytest.raises(WorkflowError, match="동의"):
+        newsletter.mark_sent(store, current["id"], expected_hash=approved["review_hash"], actor="human")
+    assert newsletter.issue(store, current["id"]) == approved
+    rebuilt = newsletter.rebuild_issue(store, current["id"], actor="human")
+    assert rebuilt["recipient_count"] == 1 and rebuilt["state"] == "draft" and rebuilt["approval"] is None
+    assert rebuilt["recipients_hash"] != approved["recipients_hash"]

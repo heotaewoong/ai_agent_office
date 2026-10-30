@@ -18,7 +18,7 @@ def context(tmp_path):
 
 
 def lead_body(email="Test.Reader@Example.com", magnet="d30-planner", source="homepage"):
-    return {"email": email, "magnet_key": magnet, "source": source, "consent_version": "2026-10-v1", "consent_text": "무료 자료와 뉴스레터 수신에 동의합니다"}
+    return {"email": email, "magnet_key": magnet, "source": source, "consent_version": "2026-10-v1", "consent_text": "무료 자료와 뉴스레터 수신에 동의합니다", "consent_purpose": "newsletter"}
 
 
 def test_register_lead_masks_email_and_stores_lowercase(context):
@@ -109,3 +109,49 @@ def test_newsletter_snapshot_deduplicates_email_without_changing_lead_summary(co
     assert withdrawn_duplicate["recipient_count"] == 1 and withdrawn_duplicate["recipients_hash"] != duplicate["recipients_hash"]
     client.post(f"/api/leads/{other['id']}/withdraw", json={}, headers=headers)
     assert consent_snapshot(store)["recipient_count"] == 0
+
+
+def test_unrecorded_legacy_purpose_is_not_inferred_from_text_or_source(context):
+    from office.leads import consent_snapshot
+    from office.store import canonical
+    store, client, headers = context
+    payload = lead_body(email="legacy@example.com", source="newsletter")
+    payload.pop("consent_purpose")
+    saved = client.post("/api/leads", json=payload, headers=headers).json()["lead"]
+    assert saved["consent"]["purpose"] is None and consent_snapshot(store)["recipient_count"] == 0
+    with store.connection(transaction=True) as db:
+        row = db.execute("SELECT data FROM leads WHERE id=?", (saved["id"],)).fetchone()
+        data = json.loads(row["data"])
+        del data["consent"]["purpose"]
+        legacy = canonical(data)
+        db.execute("UPDATE leads SET data=? WHERE id=?", (legacy, saved["id"]))
+    events = store.events()
+    assert consent_snapshot(store)["recipient_count"] == 0
+    with store.connection() as db:
+        assert db.execute("SELECT data FROM leads WHERE id=?", (saved["id"],)).fetchone()["data"] == legacy
+    assert store.events() == events and client.get("/api/leads/summary").json()["consented"] == 1
+
+
+def test_material_delivery_does_not_grant_newsletter_and_invalid_purpose_is_rejected(context):
+    from office.leads import consent_snapshot
+    store, client, headers = context
+    payload = {**lead_body(), "consent_purpose": "lead_magnet_delivery"}
+    response = client.post("/api/leads", json=payload, headers=headers)
+    assert response.status_code == 201 and response.json()["lead"]["consent"]["purpose"] == "lead_magnet_delivery"
+    assert consent_snapshot(store)["recipient_count"] == 0
+    assert client.post("/api/leads", json={**payload, "consent_purpose": "all-marketing"}, headers=headers).status_code == 422
+
+
+def test_changed_explicit_consent_version_and_text_are_recorded_and_hashed(context):
+    from office.leads import consent_snapshot
+    store, client, headers = context
+    first = client.post("/api/leads", json=lead_body(), headers=headers).json()["lead"]
+    before = consent_snapshot(store)
+    changed_body = {**lead_body(), "consent_version": "newsletter-v2", "consent_text": "새 문구에 따른 뉴스레터 수신 동의"}
+    changed = client.post("/api/leads", json=changed_body, headers=headers).json()["lead"]
+    assert changed["id"] == first["id"] and changed["delivery"] == first["delivery"]
+    assert changed["consent"]["version"] == "newsletter-v2" and changed["consent_text"] == changed_body["consent_text"]
+    assert changed["consent_history"] == [{"consent": first["consent"], "consent_text": first["consent_text"]}]
+    after = consent_snapshot(store)
+    assert before["recipient_count"] == after["recipient_count"] == 1 and before["recipients_hash"] != after["recipients_hash"]
+    assert client.post("/api/leads", json=changed_body, headers=headers).json()["lead"] == changed

@@ -1,10 +1,10 @@
 import type { LeadInput } from "./types";
 
 export const LEAD_SOURCES = ["homepage", "youtube", "instagram", "threads", "blog", "newsletter", "other"] as const;
-export type LeadForm = LeadInput & { consent_confirmed: boolean };
+export type LeadForm = Omit<LeadInput, "consent_purpose"> & { consent_confirmed: boolean; newsletter_consent_confirmed: boolean };
 
 export function emptyLeadForm(): LeadForm {
-  return { email: "", magnet_key: "", source: "other", consent_version: "", consent_text: "", consent_confirmed: false };
+  return { email: "", magnet_key: "", source: "other", consent_version: "", consent_text: "", consent_confirmed: false, newsletter_consent_confirmed: false };
 }
 
 /** 화면용 이메일 형식 검사. 마스킹·저장은 서버가 합니다. */
@@ -14,10 +14,11 @@ export function validEmail(value: string): boolean {
   return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/.test(v);
 }
 
-export function changeLeadForm(form: LeadForm, key: keyof LeadInput, value: string): LeadForm {
+export function changeLeadForm(form: LeadForm, key: keyof Omit<LeadInput, "consent_purpose">, value: string): LeadForm {
   if (form[key] === value) return form;
   const reset = ["email", "magnet_key", "consent_version", "consent_text"].includes(key);
-  return { ...form, [key]: value, consent_confirmed: reset ? false : form.consent_confirmed };
+  return { ...form, [key]: value, consent_confirmed: reset ? false : form.consent_confirmed,
+    newsletter_consent_confirmed: reset ? false : form.newsletter_consent_confirmed };
 }
 
 export function leadInputFromForm(form: LeadForm): { input: LeadInput } | { error: string } {
@@ -27,11 +28,12 @@ export function leadInputFromForm(form: LeadForm): { input: LeadInput } | { erro
   const version = form.consent_version.trim(), text = form.consent_text.trim();
   if (!version || version.length > 50 || !text || text.length > 2000) return { error: "독자가 실제로 본 동의 문구(2000자 이내)와 버전(50자 이내)을 입력하세요." };
   if (form.consent_confirmed !== true) return { error: "이 독자가 해당 문구를 보고 실제로 동의했는지 먼저 확인하세요." };
-  return { input: { email: form.email.trim(), magnet_key: form.magnet_key.trim(), source: form.source, consent_version: version, consent_text: text } };
+  return { input: { email: form.email.trim(), magnet_key: form.magnet_key.trim(), source: form.source, consent_version: version, consent_text: text,
+    consent_purpose: form.newsletter_consent_confirmed === true ? "newsletter" : "lead_magnet_delivery" } };
 }
 
 export function leadFormAfterSave(form: LeadForm): LeadForm {
-  return { ...form, email: "", consent_confirmed: false };
+  return { ...form, email: "", consent_confirmed: false, newsletter_consent_confirmed: false };
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -46,4 +48,10 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export function leadSourceLabel(source: string): string {
   return SOURCE_LABELS[source] ?? source;
+}
+
+export function leadConsentPurposeLabel(purpose?: string | null): string {
+  if (purpose === "newsletter") return "뉴스레터 수신 동의";
+  if (purpose === "lead_magnet_delivery") return "신청 자료 전달 동의";
+  return "목적 미확인 · 뉴스레터 제외";
 }

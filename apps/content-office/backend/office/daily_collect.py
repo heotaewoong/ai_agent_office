@@ -17,7 +17,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from .runtime import SEOUL, AlreadyRunning, ProcessLock, WindowDeadline, aware_time, close_work_window, run_before_deadline, utcnow
-from .store import WorkflowError, now
+from .store import CostScopeExceeded, WorkflowError, now
 
 SETTING = "daily_collect"
 RUNS = "daily_collect_runs"
@@ -107,33 +107,6 @@ def _window_blocks(window, current):
     return aware_time(window["authorized_end"]) > current
 
 
-class _CostCap:
-    """요약 모델 앞에 두는 이번 실행 전용 상한. 다음 호출이 지금까지 가장 비싼 한 번만큼 든다고 보고 미리 멈춘다."""
-
-    def __init__(self, inner, store, cap_krw):
-        self.inner, self.store, self.cap = inner, store, cap_krw
-        self.baseline = self._total()
-        self.largest = 0
-        self.hit = False
-
-    def _total(self):
-        budget = self.store.budget()
-        return budget["spent_krw"] + budget["reserved_krw"]
-
-    def used(self):
-        return max(0, self._total() - self.baseline)
-
-    def generate(self, role, messages, schema, options=None):
-        before = self.used()
-        if before >= self.cap or before + self.largest > self.cap:
-            self.hit = True
-            raise WorkflowError(f"매일 자동 수집의 1회 비용 상한({self.cap}원)에 닿아 남은 카드 요약을 멈춥니다")
-        try:
-            return self.inner.generate(role, messages, schema, options)
-        finally:
-            self.largest = max(self.largest, self.used() - before)
-
-
 def _run_until(target, end_at):
     """POSIX(EC2)의 cron 실행은 주 스레드라 SIGALRM으로 마감에 끊는다. 그 밖에서는 제공자의 작업 시간 검사에 맡긴다."""
     if hasattr(signal, "SIGALRM") and threading.current_thread() is threading.main_thread():
@@ -206,12 +179,17 @@ def _collect(store, run, window, settings, refresh, provider_factory, deadline_r
     if provider_factory is None:
         from .bootstrap import card_provider as provider_factory
     before_ids = {article["id"] for article in store.articles_list()}
-    capped = None
+    scope = {"id": "daily_collect:" + window["id"], "cap_krw": settings["max_krw"]}
+    provider = None
     report, status, error_type = None, "completed", None
     try:
-        capped = _CostCap(provider_factory(store), store, settings["max_krw"])
+        provider = provider_factory(store)
+        provider.cost_scope = scope
+        provider.cost_scope_exhausted = False
         end_at = aware_time(window["authorized_end"]) - timedelta(seconds=5)
-        report = deadline_runner(lambda: refresh(store, provider=capped), end_at)
+        report = deadline_runner(lambda: refresh(store, provider=provider), end_at)
+    except CostScopeExceeded:
+        status = "stopped_cost_cap"
     except WindowDeadline:
         status = "timeout"
     except Exception as error:
@@ -223,12 +201,14 @@ def _collect(store, run, window, settings, refresh, provider_factory, deadline_r
         close_work_window(store, datetime.now(SEOUL).isoformat(), window_id=window["id"], closed_by=SOURCE)
         for lock in reversed(held):
             lock.__exit__()
-        spent = capped.used() if capped else 0
-        if status == "completed" and capped and capped.hit:
+        costs = store.cost_scope_budget(scope)
+        spent = costs["spent_krw"] + costs["reserved_krw"]
+        if status == "completed" and provider and provider.cost_scope_exhausted:
             status = "stopped_cost_cap"
         active = (report or {}).get("active_article_ids") or []
         summary = {"status": status, "date": run["date"], "window_id": window["id"], "articles": len(active),
-                   "new_articles": len(set(active) - before_ids), "spent_krw": spent, "max_krw": settings["max_krw"],
+                   "new_articles": len(set(active) - before_ids), "spent_krw": spent,
+                   "settled_krw": costs["spent_krw"], "reserved_krw": costs["reserved_krw"], "max_krw": settings["max_krw"],
                    "over_cap": spent > settings["max_krw"]}
         if error_type:
             summary["error_type"] = error_type

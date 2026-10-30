@@ -18,6 +18,7 @@ KEY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 MAX_EMAIL = 254
 MAX_CONSENT_TEXT = 2000
 MAX_CONSENT_VERSION = 50
+CONSENT_PURPOSES = ("newsletter", "lead_magnet_delivery")
 TABLE_SQL = "CREATE TABLE IF NOT EXISTS leads(id TEXT PRIMARY KEY, email TEXT NOT NULL, magnet_key TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(email, magnet_key))"
 
 
@@ -59,7 +60,7 @@ def _public_data(record: dict) -> dict:
     return {key: value for key, value in record.items() if key not in ("id", "created_at", "email_masked", "magnet_key")}
 
 
-def register_lead(store, *, email, magnet_key, source, consent_version, consent_text):
+def register_lead(store, *, email, magnet_key, source, consent_version, consent_text, consent_purpose=None):
     """동의와 함께 신청을 기록한다. (레코드, 새로 만들었는지) 를 돌려준다."""
     address = normalise_email(email)
     key = _magnet_key(magnet_key)
@@ -71,24 +72,31 @@ def register_lead(store, *, email, magnet_key, source, consent_version, consent_
         raise WorkflowError("동의 문구 버전이 필요합니다")
     if not text or len(text) > MAX_CONSENT_TEXT:
         raise WorkflowError("동의 문구 원문이 필요합니다")
+    if consent_purpose is not None and consent_purpose not in CONSENT_PURPOSES:
+        raise WorkflowError("동의 목적은 newsletter 또는 lead_magnet_delivery여야 합니다")
     with store.connection(transaction=True) as db:
         _ensure(db)
         row = db.execute("SELECT * FROM leads WHERE email=? AND magnet_key=?", (address, key)).fetchone()
         if row:
             existing = _record(row)
-            if existing["consent"]["withdrawn_at"] is None:
-                return existing, False
+            consent = existing["consent"]
+            if consent["withdrawn_at"] is None:
+                same = consent.get("purpose") == consent_purpose and consent["version"] == version and existing["consent_text"] == text
+                # A material request (or an old client with no purpose) cannot replace a separate newsletter grant.
+                if same or consent_purpose is None or (consent.get("purpose") == "newsletter" and consent_purpose == "lead_magnet_delivery"):
+                    return existing, False
             data = _public_data(existing)
-            data["consent"] = {"version": version, "granted_at": now(), "withdrawn_at": None}
+            data["consent_history"] = [*data.get("consent_history", []), {"consent": consent, "consent_text": existing["consent_text"]}]
+            data["consent"] = {"version": version, "granted_at": now(), "withdrawn_at": None, "purpose": consent_purpose}
             data["consent_text"] = text
             data["source"] = source
             record = _write(db, existing["id"], data)
-            store._event(db, "lead_consent_renewed", {"lead_id": record["id"], "magnet_key": key, "source": source, "consent_version": version})
+            store._event(db, "lead_consent_renewed", {"lead_id": record["id"], "magnet_key": key, "source": source, "consent_version": version, "consent_purpose": consent_purpose})
             return record, False
         record_id = identifier("lead")
-        data = {"source": source, "consent": {"version": version, "granted_at": now(), "withdrawn_at": None}, "consent_text": text, "delivery": {"state": "pending", "sent_at": None}}
+        data = {"source": source, "consent": {"version": version, "granted_at": now(), "withdrawn_at": None, "purpose": consent_purpose}, "consent_text": text, "delivery": {"state": "pending", "sent_at": None}}
         db.execute("INSERT INTO leads VALUES(?,?,?,?,?,?)", (record_id, address, key, canonical(data), now(), now()))
-        store._event(db, "lead_registered", {"lead_id": record_id, "magnet_key": key, "source": source, "consent_version": version, "next_action": "오너가 자료를 직접 보낸 뒤 '보냄'으로 기록합니다"})
+        store._event(db, "lead_registered", {"lead_id": record_id, "magnet_key": key, "source": source, "consent_version": version, "consent_purpose": consent_purpose, "next_action": "오너가 자료를 직접 보낸 뒤 '보냄'으로 기록합니다"})
         return _record(db.execute("SELECT * FROM leads WHERE id=?", (record_id,)).fetchone()), True
 
 
@@ -145,10 +153,10 @@ def summary(store):
 
 
 def consent_snapshot(store, *, db=None):
-    """이메일별 수신자 수와 현재 동의 사실의 해시. 원문과 이메일은 밖으로 내보내지 않는다.
+    """명시적인 뉴스레터 동의만 이메일별로 센다. 원문과 이메일은 밖으로 내보내지 않는다.
 
     신청 장부는 이메일+자료별로 보존한다. 같은 주소의 중복 신청도 동의 내용·철회가 바뀌면
-    해시는 달라지지만 뉴스레터 수신자 수는 한 명이다. 이전 ID 전용 해시는 재작성해야 한다.
+    해시는 달라지지만 뉴스레터 수신자 수는 한 명이다. 목적 없는 과거 동의는 추정하지 않는다.
     """
     if db is None:
         with store.connection() as connection:
@@ -157,7 +165,7 @@ def consent_snapshot(store, *, db=None):
     recipients = {}
     for row in db.execute("SELECT * FROM leads ORDER BY id"):
         data = json.loads(row["data"])
-        if data["consent"]["withdrawn_at"] is None:
+        if data["consent"]["withdrawn_at"] is None and data["consent"].get("purpose") == "newsletter":
             recipients.setdefault(row["email"], []).append({"id": row["id"], "magnet_key": row["magnet_key"],
                                                           "consent": data["consent"], "consent_text": data["consent_text"]})
     return {"recipient_count": len(recipients), "recipients_hash": digest(recipients)}

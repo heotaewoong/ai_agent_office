@@ -171,3 +171,19 @@ test("뉴스레터 발송 표시는 열린 회차의 해시를 보내고 stale40
   assert.equal((await api.markNewsletterSent("issue a/1", currentHash)).state, "sent_manual");
   assert.deepEqual(calls, [{ expected_hash: oldHash }, { expected_hash: currentHash }]);
 });
+
+test("수동 리드 등록은 명시한 동의 목적을 그대로 전송하고 자유 문구를 바꾸지 않는다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const bodies: unknown[] = [];
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    assert.equal(String(input), "/api/leads"); assert.equal(init?.method, "POST");
+    bodies.push(JSON.parse(String(init?.body)));
+    return Response.json({ lead: { id: "synthetic-lead" } });
+  };
+  const lead = { email: "reader@example.com", magnet_key: "synthetic-notes", source: "newsletter", consent_version: "v1", consent_text: "독자가 본 자유 문구를 그대로 보존합니다." };
+  await api.addLead({ ...lead, consent_purpose: "lead_magnet_delivery" });
+  await api.addLead({ ...lead, consent_purpose: "newsletter" });
+  assert.deepEqual(bodies, [{ ...lead, consent_purpose: "lead_magnet_delivery" }, { ...lead, consent_purpose: "newsletter" }]);
+});

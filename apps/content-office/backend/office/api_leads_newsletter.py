@@ -24,6 +24,7 @@ class LeadInput(BaseModel):
     source: Literal["homepage", "youtube", "instagram", "threads", "blog", "newsletter", "other"]
     consent_version: str = Field(min_length=1, max_length=50)
     consent_text: str = Field(min_length=1, max_length=2000)
+    consent_purpose: Literal["newsletter", "lead_magnet_delivery"] | None = None
 
 
 class NewsletterInput(BaseModel):
@@ -67,7 +68,7 @@ def dashboard_counts(store):
 def register(app, store):
     @app.post("/api/leads")
     def register_lead(body: LeadInput):
-        record, created = leads_module.register_lead(store, email=body.email, magnet_key=body.magnet_key, source=body.source, consent_version=body.consent_version, consent_text=body.consent_text)
+        record, created = leads_module.register_lead(store, email=body.email, magnet_key=body.magnet_key, source=body.source, consent_version=body.consent_version, consent_text=body.consent_text, consent_purpose=body.consent_purpose)
         return JSONResponse({"lead": record}, status_code=201 if created else 200)
 
     @app.get("/api/leads/summary")
