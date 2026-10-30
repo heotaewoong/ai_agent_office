@@ -91,7 +91,10 @@ class ImageProvider:
     def __init__(self, store: Store, *, job_id, allow_paid=False, transport=None):
         self.store, self.job_id, self.allow_paid = store, job_id, allow_paid
         self.transport = transport or requests.post
-        source = store.require_source_approval(job_id)
+        # Metadata is needed to atomically approve + enqueue; generation rechecks approval below.
+        source = store.job(job_id)
+        if not source.get("source_hash") or not isinstance(source.get("source_packet"), dict):
+            raise WorkflowError("배경 제작 설정을 확인하려면 현재 원고가 필요합니다")
         self.source_hash = source["source_hash"]
         scenes = source["source_packet"].get("video", {}).get("scenes", [])
         self._config_json = json.dumps(image_profile_config(job_id=job_id, source_hash=self.source_hash, scene_count=len(scenes)), ensure_ascii=False, sort_keys=True)
