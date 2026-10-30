@@ -30,6 +30,26 @@ def body():
 
 
 class LabTests(unittest.TestCase):
+    def test_comparison_draft_never_fabricates_human_approval(self):
+        payload = body()
+        payload['comparison_draft'] = True
+        project = self.lab.create(payload)
+        self.assertEqual(project['plan'][-1]['role'], 'FAQ')
+        with zipfile.ZipFile(io.BytesIO(self.lab.bundle(project['id'], 'request'))) as z:
+            self.assertIn('UNREVIEWED-DRAFT.txt', z.namelist())
+            self.assertIn('unreviewed_plan', json.loads(z.read('product-brief.json')))
+        result = self.lab.import_results(project['id'], {'plan_hash': project['plan_hash'], 'images': [image(png(color=i)) for i in range(1, 7)]})
+        self.assertIsNone(result['plan_review'])
+        self.assertIsNone(result['image_review'])
+        self.assertFalse(result['published'])
+        with self.assertRaises(InputError):
+            self.lab.review_results(project['id'], {'result_hash': result['result_hash'], 'confirmed': True})
+        with self.assertRaises(InputError):
+            self.lab.bundle(project['id'], 'results')
+        with zipfile.ZipFile(io.BytesIO(self.lab.bundle(project['id'], 'draft'))) as z:
+            self.assertIn('UNREVIEWED-DRAFT.txt', z.namelist())
+            self.assertIn('panel-06.png', z.namelist())
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.lab = Lab(self.temp.name)
