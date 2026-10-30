@@ -334,3 +334,10 @@ export function workWindowBlockedReason(window: { authorized_end?: string; end?:
     return "작업 시간을 확인하지 못했습니다. 제작 설정과 연결 상태를 확인해 주세요.";
   return undefined;
 }
+
+/** "영상 보기"가 틀 파일: 완성 영상(short.mp4)을 먼저, 없을 때만 다른 영상 파일. 장면 클립(5초)이 먼저 잡히지 않게 한다. */
+export function mainVideoFile<T extends { name: string; kind?: string }>(files: T[]): T | undefined {
+  return files.find((file) => file.name === "short.mp4")
+    ?? files.find((file) => file.kind === "video" && !/^(clip|generated|stock)-\d+/i.test(file.name))
+    ?? files.find((file) => file.kind === "video" || /\.mp4$/i.test(file.name));
+}

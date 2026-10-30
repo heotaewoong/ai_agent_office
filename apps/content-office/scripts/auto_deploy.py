@@ -82,12 +82,22 @@ def decide(*, enabled, origin, deployed, attempted, ci, deps_changed):
     return 'deploy', 'GitHub 검증을 통과한 새 커밋을 배포해요'
 
 
-def classify(status, message):
-    """배포 스크립트 결과를 감시기 판단으로 바꾼다."""
+DEFER_LIMIT = 5
+
+
+def classify(status, message, failed_checks=()):
+    """배포 스크립트 결과를 감시기 판단으로 바꾼다.
+
+    deploy_ec2.py는 컷오버 전의 모든 오류를 checks_failed로 남긴다. 그중 실제 검사·빌드 실패는
+    `<label>.failed` 파일이 남는다. 그 파일이 없으면(빌드 중 업무 기록 변경, 서비스 상태 변경 등)
+    커밋 잘못이 아니므로 다음 주기에 다시 시도한다.
+    """
     if status == 'deployed':
         return 'deployed', '배포했어요'
-    if status in GIVE_UP:
-        return 'failed', ('빌드에서 실패했어요' if status == 'checks_failed' else '배포 뒤 확인에 실패해 이전 버전으로 되돌렸어요')
+    if status == 'checks_failed' and failed_checks:
+        return 'failed', '서버 빌드에서 실패했어요: ' + ', '.join(sorted(failed_checks))
+    if status == 'rolled_back':
+        return 'failed', '배포 뒤 확인에 실패해 이전 버전으로 되돌렸어요'
     if status == 'manual_recovery_required':
         return 'emergency_stop', '자동 복구에 실패했어요. 자동 배포를 끄고 사람의 확인을 기다려요'
     return 'deferred', '서버가 지금 배포를 받지 않아 다음 주기에 다시 봐요: ' + (message or '').strip()[-240:]
@@ -132,8 +142,12 @@ class Watcher:
         command = ['nice', '-n', '10', 'bash', str(APP / 'scripts/deploy-ec2.sh'), sha, '--ci-verified-repo', self.slug]
         code, output = self.runner(command, APP, env)
         new = sorted(self.releases() - before)
-        status = read_json(self.runtime / 'deployments' / new[-1] / 'deployment.json', {}).get('status') if new else None
-        return status, output, (new[-1] if new else None)
+        if not new:
+            return None, output, None, ()
+        folder = self.runtime / 'deployments' / new[-1]
+        status = read_json(folder / 'deployment.json', {}).get('status')
+        failed = tuple(p.stem for p in folder.glob('*.failed'))
+        return status, output, new[-1], failed
 
     def run_once(self):
         switch = read_json(self.switch_path, {'enabled': False})
@@ -149,10 +163,17 @@ class Watcher:
         release = None
         # GitHub 검증 실패는 기록하지 않는다. 다시 실행해 통과하면 다음 주기에 배포된다.
         if decision == 'deploy':
-            status, output, release = self.deploy(origin)
-            decision, reason = classify(status, output)
+            status, output, release, failed = self.deploy(origin)
+            decision, reason = classify(status, output, failed)
+            deferrals = record.setdefault('deferrals', {})
+            if decision == 'deferred' and release:
+                # 빌드까지 갔다가 일시적 이유로 멈춘 경우만 센다. 같은 커밋이 계속 그러면 빌드 반복을 멈춘다.
+                deferrals[origin] = deferrals.get(origin, 0) + 1
+                if deferrals[origin] >= DEFER_LIMIT:
+                    decision, reason, status = 'failed', f'같은 커밋이 {DEFER_LIMIT}번 연속 보류돼 다음 커밋을 기다려요: ' + reason, 'checks_failed'
             if decision in ('deployed', 'failed'):
                 record['attempted'][origin] = status
+                deferrals.pop(origin, None)
             if decision == 'emergency_stop':
                 write_json(self.switch_path, {'enabled': False, 'changed_at': now(), 'actor': 'auto-deploy', 'reason': reason})
                 enabled = False

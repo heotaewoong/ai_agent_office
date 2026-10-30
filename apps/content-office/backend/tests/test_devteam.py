@@ -32,11 +32,15 @@ def test_status_reads_watcher_build_and_recent_deployments(tmp_path):
     write(runtime / "auto-deploy.json", {"checked_at": "t", "decision": "waiting_ci", "reason": "진행 중", "origin": "b" * 40, "deployed": "a" * 40, "ci": {"state": "pending", "url": "https://github.com/o/r/runs/1"}, "history": [{"at": "t", "origin": "b" * 40, "decision": "waiting_ci", "reason": "진행 중"}]})
     write(runtime / "deployments" / "20261030T050000Z-1" / "deployment.json", {"status": "deployed", "target": "a" * 40, "ci": {"source": "github-actions"}})
     write(runtime / "deployments" / "20261030T040000Z-2" / "deployment.json", {"status": "checks_failed", "target": "c" * 40})
+    (runtime / "deployments" / "20261030T040000Z-2" / "build.failed").write_text("Command failed in isolated staging.")
+    write(runtime / "deployments" / "20261030T030000Z-3" / "deployment.json", {"status": "checks_failed", "target": "d" * 40})
     status = dev_status(tmp_path)
+    assert status["deployments"][2]["transient"] is True and status["deployments"][2]["label"] == "보류·다시 시도"
     assert status["running"] == {"commit": "a" * 10, "deployed_at": "2026-10-30T05:00:00+00:00", "ci_verified": True}
     assert status["watcher"]["label"] == "GitHub 검증 기다림" and status["watcher"]["ci"]["state"] == "pending"
-    assert [d["status"] for d in status["deployments"]] == ["deployed", "checks_failed"]
-    assert status["deployments"][0]["ci_verified"] is True and status["deployments"][1]["label"] == "빌드 실패"
+    assert [d["status"] for d in status["deployments"]] == ["deployed", "checks_failed", "checks_failed"]
+    assert status["deployments"][0]["ci_verified"] is True and status["deployments"][1]["label"] == "빌드 실패 (build)"
+    assert status["deployments"][1]["transient"] is False
 
 
 def test_switch_api_requires_operator_session_and_records_event(context):

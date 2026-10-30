@@ -65,7 +65,10 @@ class OpenAISpeechProvider:
         self.transport = transport or requests.post
         if not isinstance(voice, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,39}", voice):
             raise WorkflowError("음성 이름이 유효하지 않습니다")
-        source = store.require_source_approval(job_id)
+        # Approval+enqueue needs metadata first; tts() still authorizes before any side effect.
+        source = store.job(job_id)
+        if not source.get("source_hash") or not isinstance(source.get("source_packet"), dict):
+            raise WorkflowError("음성 제작 설정을 확인하려면 현재 원고가 필요합니다")
         self.source_hash = source["source_hash"]
         narrations = [scene.get("narration") for scene in source["source_packet"].get("video", {}).get("scenes", [])]
         self.request_limit = len(dict.fromkeys(narrations))

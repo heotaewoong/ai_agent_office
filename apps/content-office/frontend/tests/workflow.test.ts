@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  mainVideoFile,
   draftStatus,
   acceptJobRefresh,
   createJobRefreshGuard,
@@ -293,4 +294,15 @@ test("생성 작업 시간은 종료·미설정·손상된 시각을 차단하�
   assert.ok(workWindowBlockedReason({ authorized_end: "2026-10-29T23:59:59Z" }, now));
   assert.ok(workWindowBlockedReason({ authorized_end: "2026-10-30T01:00:00Z", status: "closed" }, now));
   assert.equal(workWindowBlockedReason({ authorized_end: "2026-10-30T01:00:00Z", status: "open" }, now), undefined);
+});
+
+test("영상 보기는 장면 클립보다 완성 영상(short.mp4)을 먼저 고른다", () => {
+  const files = [
+    { name: "generated-01.mp4", kind: "video" },
+    { name: "clip-01.mp4", kind: "video" },
+    { name: "short.mp4", kind: "video" },
+  ];
+  assert.equal(mainVideoFile(files)?.name, "short.mp4");
+  assert.equal(mainVideoFile([{ name: "generated-01.mp4", kind: "video" }])?.name, "generated-01.mp4");
+  assert.equal(mainVideoFile([{ name: "a.txt" }]), undefined);
 });
