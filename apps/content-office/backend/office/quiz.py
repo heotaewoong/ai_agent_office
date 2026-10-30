@@ -62,6 +62,9 @@ def quiz_checks(quiz, packet, brand=None):
     issues = []
     if len(questions) != QUIZ_COUNT:
         issues.append(f"문항은 {QUIZ_COUNT}개여야 해요 (현재 {len(questions)}개)")
+    ids = [q.get('id') for q in questions]
+    if any(not isinstance(qid, str) or not qid.strip() for qid in ids) or len(set(str(qid) for qid in ids)) != len(ids):
+        issues.append('문항 ID는 비어 있지 않고 서로 달라야 해요')
     known = {item.get("id") for item in packet.get("evidence", []) if isinstance(item, dict) and item.get("id")}
     answers = []
     for number, question in enumerate(questions, 1):

@@ -114,6 +114,13 @@ async function request<T>(
 }
 
 export const api = {
+  improvementWorkspace: (jobId: string) => request<import("./improvements").ImprovementWorkspace>(`/jobs/${encodeURIComponent(jobId)}/improvements`),
+  saveQualityReview: (jobId: string, body: Record<string, unknown>) => request(`/jobs/${encodeURIComponent(jobId)}/quality-reviews`, "POST", body),
+  addExperience: (body: Record<string, unknown>) => request("/experiences", "POST", body),
+  withdrawExperienceUse: (id: string, expectedHash: string) => request(`/experiences/${encodeURIComponent(id)}/withdraw-use`, "POST", {expected_hash:expectedHash}),
+  saveLearningObservation: (jobId: string, body: Record<string, unknown>) => request(`/jobs/${encodeURIComponent(jobId)}/learning-observations`, "POST", body),
+  learningToIdea: (jobId: string, observationId: string, sourceHash: string) => request(`/jobs/${encodeURIComponent(jobId)}/learning-observations/${encodeURIComponent(observationId)}/idea`, "POST", {source_hash:sourceHash}),
+  saveChannelOutcome: (jobId: string, body: Record<string, unknown>) => request(`/jobs/${encodeURIComponent(jobId)}/channel-outcomes`, "POST", body),
   previewOwnedSource: (url:string) => request<{title:string;body:string;image_count:number}>("/owned-source/preview","POST",{url}),
   createOwnedSource: (input:{title:string;body:string;source_url:string;owner_confirmed:boolean}) => request<Job>("/owned-source/jobs","POST",input),
   setProfile: (kind: "text" | "voice" | "image" | "clip", profile: string) =>

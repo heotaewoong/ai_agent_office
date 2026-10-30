@@ -279,6 +279,12 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
     provider = provider or Provider(store, job_id=job_id)
     system = brand_system_prompt(BASE, brand)
     context = {"packet": packet_context(packet), "audience": brief, "campaign_offer": offer_snapshot(job.get("offer")), "instructions": INSTRUCTIONS}
+    if brief.get('axis') == 'A':
+        context['instructions'] += ' 학습 카드에는 원고 근거로 구별 기준·구체 예시·틀리지 않은 연상 고리·먼저 풀어 볼 질문을 배치하고 다음 장에서 정답과 이유를 설명한다. 질문 장에 정답을 먼저 노출하지 않는다. 장 수와 글자 한도는 유지한다.'
+        quiz = job.get('quiz') or {}
+        if quiz.get('source_hash') == job.get('source_hash') and quiz.get('checks', {}).get('passed') is True:
+            context['verified_format_quiz_data'] = quiz.get('questions', [])
+            context['instructions'] += ' 제공한 퀴즈는 형식 검사를 통과한 참고 데이터이며 독립 사실 검증 증명은 아니다. 해당 원고의 근거로 질문과 정답의 의미를 보존한다.'
     options = {"max_tokens": 12000, "temperature": 0.5, "reasoning_effort": "low"}
     plan = provider.generate("cards", [{"role": "system", "content": system}, {"role": "user", "content": canonical(context)}], CARDS_SCHEMA, options)
     checks = card_checks(plan, brand)

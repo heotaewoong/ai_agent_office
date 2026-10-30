@@ -456,7 +456,23 @@ def create_app(store: Store | None = None):
             raise HTTPException(404, '초안을 찾을 수 없습니다')
         # Same reader and source list the blog export would produce from this draft.
         packet = {**(job.get('source_packet') or {}), 'title': draft['title'], 'body': draft['body'], 'evidence': job['article'].get('evidence', [])}
-        html = blog_reader_html(draft['title'], safe_fragment(blog_markdown(packet)), 'draft')
+        # Resolve only registered image names; no arbitrary local paths or active HTML.
+        import re
+        from urllib.parse import quote
+        images = {f['name']: f for f in draft.get('assets', []) if f.get('media_type', '').startswith('image/')}
+        replacements = {}
+        def image_ref(match):
+            name = match.group(2)
+            if name not in images or len(replacements) >= 8:
+                return match.group(0)
+            placeholder = f'source-photo-{len(replacements)+1:02}.png'
+            replacements[placeholder] = f'/api/jobs/{quote(job_id, safe="")}/drafts/{quote(draft_id, safe="")}/files/{quote(name, safe="")}'
+            return f'![{match.group(1)}]({placeholder})'
+        packet['body'] = re.sub(r'!\[([^\]\n]*)\]\(([^\s)]+)\)', image_ref, packet['body'])
+        fragment = safe_fragment(blog_markdown(packet))
+        for placeholder, url in replacements.items():
+            fragment = fragment.replace('"' + placeholder + '"', '"' + url + '"')
+        html = blog_reader_html(draft['title'], fragment, 'draft')
         return HTMLResponse(html, headers={'Cache-Control': 'no-store',
             'Content-Security-Policy': "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://blog.kakaocdn.net https://t1.daumcdn.net; base-uri 'none'; form-action 'none'"})
 
@@ -869,6 +885,8 @@ def create_app(store: Store | None = None):
         return overview(store)
     from .api_owned_source import register as register_owned_source
     register_owned_source(app, store)
+    from .api_improvements import register as register_improvements
+    register_improvements(app, store)
     return app
 
 

@@ -196,12 +196,14 @@ export type Job = {
   updated_at?: string;
   events?: Event[];
   tasks?: Task[];
+  quiz?: {version?:string|number;generated_at?:string;source_hash?:string} | null;
   drafts?: EditorialDraft[];
   release_approval?: {
     outputs?: OutputKind[];
     version?: string;
     decision?: string;
   };
+  source_approval?: {version?: string; decision?: string; selections?: Selections} | null;
   brief?: Brief | null;
   brief_hash?: string;
   offer?: Offer | null;
@@ -459,6 +461,8 @@ export type IdeaSourcesInput = { source_urls: string[]; operator_verified: true;
 export type BriefLanguage = "ko" | "en";
 export type BriefAxis = "A" | "B";
 export type BriefPreset = {
+  current_solution?: string;
+  goal?: string;
   id: string;
   axis: BriefAxis;
   label: string;
@@ -473,6 +477,8 @@ export type BriefPreset = {
 };
 export type BriefPresets = { default: string; presets: BriefPreset[] };
 export type BriefOverrides = {
+  current_solution?: string;
+  goal?: string;
   reader?: string;
   problem?: string;
   outcome?: string;
@@ -483,6 +489,8 @@ export type BriefOverrides = {
   tone?: string;
 };
 export type Brief = {
+  current_solution?: string;
+  goal?: string;
   preset: string;
   axis: string;
   label: string;

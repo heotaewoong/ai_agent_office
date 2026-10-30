@@ -4295,3 +4295,13 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .profile-groups{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
 @media(min-width:1400px){.profile-groups{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:760px){.profile-groups{grid-template-columns:minmax(0,1fr)}}
+
+/* Quality review within the existing editor. */
+.improvement-panel { min-width: 0; overflow-wrap: anywhere; }
+.improvement-panel > details { border-top: 1px solid var(--line); padding: 14px 0; }
+.improvement-panel summary { cursor: pointer; line-height: 1.6; font-weight: 600; }
+.improvement-panel fieldset { min-width: 0; display: grid; gap: 12px; margin: 14px 0; }
+.improvement-panel label { display: block; line-height: 1.6; }
+.improvement-panel input:not([type=checkbox]), .improvement-panel select, .improvement-panel textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.improvement-panel textarea { min-height: 100px; }
+.improvement-panel article { padding: 12px 0; border-bottom: 1px solid var(--line); }

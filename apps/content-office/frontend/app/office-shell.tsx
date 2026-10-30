@@ -57,6 +57,8 @@ import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
 import { OwnedSourceIntake } from "./owned-source-intake";
 import { EditorialAssetsPanel } from "./editorial-assets-panel";
+import { ImprovementPanel } from "./improvement-panel";
+import { productionNext } from "../lib/production-next";
 import { NewsletterPanel } from "./newsletter-panel";
 import { withoutOAuthParams, youtubeOAuthResult } from "../lib/youtube-oauth";
 import { sourceApproved } from "../lib/workflow";
@@ -1715,6 +1717,7 @@ function Studio({
       )}
       <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       <EditorialAssetsPanel job={job} />
+      <ImprovementPanel key={job.id} job={job} />
       <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
     </>
@@ -2001,6 +2004,7 @@ function Delivery({
   const requiresMediaReview = confirmedOutputs.includes("video");
   const requiresThumbnail = releaseOutputs.includes("video");
   const files = job.manifest?.files ?? [];
+  const nextProduction = productionNext(job);
   const blogFormats = [
     { name: "tistory.html", label: "HTML", format: "html" },
     { name: "tistory.md", label: "Markdown", format: "markdown" },
@@ -2032,7 +2036,7 @@ function Delivery({
           <h2>{job.title}</h2>
           <p>{statusInfo(job.state).next}</p>
         </div>
-        <span className="count-pill">{files.length} FILES</span>
+        <span className="count-pill">제작 {files.length}개 · 검토 {(job.drafts??[]).reduce((n,d)=>n+(d.assets?.length??0),0)}개</span>
       </div>
       <WorkflowSteps state={job.state} />
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
@@ -2042,6 +2046,8 @@ function Delivery({
           <span>{job.error}</span>
         </div>
       )}
+      <EditorialAssetsPanel job={job} />
+      <ImprovementPanel key={job.id} job={job} />
       {files.length === 0 ? (
         <Empty
           title={
@@ -2051,9 +2057,11 @@ function Delivery({
           }
           icon="package"
         >
-          {job.state === "source_approved"
-            ? "승인한 원고로 선택 항목을 제작하세요."
-            : "원고 승인과 제작이 끝나면 블로그·영상·썸네일 파일이 표시됩니다."}
+          <strong>{nextProduction?.title}</strong>
+          <span>{nextProduction?.detail}</span>
+          {nextProduction?.href && <Link className="button primary" href={nextProduction.href}>
+            {nextProduction.href === "/settings" ? "작업 시간 열기" : "현재 원고 검토·승인①으로 이동"}
+          </Link>}
           {job.state === "source_approved" && (
             <ProduceButton
               jobId={job.id}

@@ -495,14 +495,20 @@ class Store:
         title = " ".join(str(card.get("title", "")).lower().split())
         return digest({"title": title, "source_url": card.get("source_url", "")})
 
-    def save_idea(self, card):
+    def save_idea(self, card, *, parent_job_id=None, parent_source_hash=None, parent_quiz_hash=None):
         if not str(card.get("title", "")).strip():
             raise WorkflowError("기획 제목이 필요합니다")
         key = self._idea_key(card)
         with self.connection(transaction=True) as db:
+            if parent_job_id is not None:
+                parent = self._job(db, parent_job_id)
+                if parent.get('source_hash') != parent_source_hash or digest(parent.get('quiz') or {}) != parent_quiz_hash:
+                    raise WorkflowError('기획 후보를 저장하는 동안 부모 원고/문항이 변경되었습니다')
             row = db.execute("SELECT data FROM ideas WHERE dedup_key=?", (key,)).fetchone()
             if row:
                 stored = json.loads(row[0])
+                if parent_job_id is not None:
+                    return stored  # Preserve any prior human edits/selection on a feedback retry.
                 merged = {**stored, **card, "id": stored["id"], "state": stored.get("state", "candidate")}
                 for field in ("selected_by", "selected_at"):
                     if field in stored:

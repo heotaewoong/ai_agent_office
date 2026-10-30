@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from .store import WorkflowError
 
-OVERRIDE_FIELDS = ("topic", "reader", "prior_knowledge", "problem", "outcome", "tone", "language", "cta")
+OVERRIDE_FIELDS = ("topic", "reader", "prior_knowledge", "problem", "current_solution", "outcome", "goal", "tone", "language", "cta")
 LANGUAGES = ("ko", "en")
 DEFAULT_PRESET = "ai-agent"
 MAX_FIELD_LENGTH = 500
@@ -81,7 +81,7 @@ def build_brief(preset, overrides=None):
     if not isinstance(preset, str) or preset not in PRESETS:
         raise WorkflowError(f"알 수 없는 독자 프리셋입니다: {preset!r}. 사용 가능: {', '.join(PRESETS)}")
     base = PRESETS[preset]
-    brief = {"preset": preset, "axis": base["axis"], "label": base["label"], **{field: base[field] for field in OVERRIDE_FIELDS}}
+    brief = {"preset": preset, "axis": base["axis"], "label": base["label"], **{field: base.get(field, '') for field in OVERRIDE_FIELDS}}
     if overrides is None:
         overrides = {}
     if not isinstance(overrides, dict):

@@ -5,6 +5,8 @@ type Form = Record<string, string | boolean>;
 export const BRIEF_FIELDS: { key: keyof BriefOverrides; label: string; hint: string }[] = [
   { key: "reader", label: "독자", hint: "예: 편입 영어를 처음 준비하는 직장인" },
   { key: "problem", label: "문제", hint: "독자가 지금 막힌 지점" },
+  { key: "current_solution", label: "지금 쓰는 해결책", hint: "예: 검색 결과를 따라 하다가 연결 상태에서 막힘" },
+  { key: "goal", label: "이번 콘텐츠의 목표", hint: "예: 두 상태를 구분하고 시험 노트 전달을 확인하기" },
   { key: "outcome", label: "약속한 결과", hint: "읽고 나면 할 수 있는 한 가지" },
   { key: "cta", label: "CTA", hint: "예: 무료 체크리스트 받기" },
 ];
@@ -25,7 +27,7 @@ function text(form: Form, key: string): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-const KEYS: Exclude<keyof BriefOverrides, "language">[] = ["reader", "problem", "outcome", "cta", "topic", "prior_knowledge", "tone"];
+const KEYS: Exclude<keyof BriefOverrides, "language">[] = ["reader", "problem", "current_solution", "goal", "outcome", "cta", "topic", "prior_knowledge", "tone"];
 
 /** 기존 작업을 편집할 때 표시하지 않는 설정까지 보존합니다. */
 export function briefFormFromBrief(brief: Brief | null | undefined): Form {
@@ -86,6 +88,8 @@ export function briefSummary(brief: Brief | null | undefined): [string, string][
   const rows: [string, string][] = [["프리셋", [brief.label || brief.preset, axisLabel(brief.axis)].filter(Boolean).join(" · ")]];
   if (brief.reader) rows.push(["독자", brief.reader]);
   if (brief.problem) rows.push(["문제", brief.problem]);
+  if (brief.current_solution) rows.push(["현재 해결책", brief.current_solution]);
+  if (brief.goal) rows.push(["콘텐츠 목표", brief.goal]);
   if (brief.cta) rows.push(["CTA", brief.cta]);
   if (brief.language) rows.push(["언어", LANGUAGE_LABELS[brief.language] ?? brief.language]);
   return rows;
