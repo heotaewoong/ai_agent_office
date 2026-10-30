@@ -295,7 +295,8 @@ async function harness(page: Page, review = false, release = false) {
       remaining_krw: 10000,
     },
     agents: [],
-    window: { end: "2026-10-25T23:20:00Z" },
+    // Synthetic contract-test window; never starts an actual production session.
+    window: { end: new Date(Date.now() + 3_600_000).toISOString() },
   };
   const writes: { path: string; csrf?: string; body: unknown }[] = [];
   let discoveryState = {
@@ -456,7 +457,7 @@ test("실제 RSS 스냅샷의 후보 선택은3개로제한하고CSRF로작업�
   const context = await harness(page);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
+  await page.goto("/news?seg=all");
   const checkboxes = page.getByRole("checkbox");
   await expect(checkboxes).toHaveCount(6);
   await checkboxes.nth(0).check();
@@ -488,10 +489,7 @@ test("원고수정중승인을차단하고저장은같은packet을보존하며�
   await expect(
     page.getByRole("button", { name: "원고 승인", exact: true }),
   ).toBeEnabled();
-  await expect(page.getByRole("button", { name: /영상 대본/ })).toBeVisible({
-    timeout: 2000,
-  });
-  await page.getByRole("button", { name: /영상 대본/ }).click();
+  await expect(page.getByRole("heading", { name: "영상", exact: true })).toBeVisible();
   await expect(
     page.getByText("실제 승인 전에 영상 말하기 대본도 확인합니다."),
   ).toBeVisible();
@@ -500,7 +498,7 @@ test("원고수정중승인을차단하고저장은같은packet을보존하며�
   await expect(
     page.getByRole("button", { name: "원고 승인", exact: true }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "오늘의 뉴스", exact: true }).click();
+  await page.getByRole("link", { name: "오늘의 뉴스", exact: true }).click();
   await page.goto("/scripts/contract-test-job");
   await expect(page.getByLabel("본문 · Markdown")).toHaveValue(
     "검증 전용 수정 원고입니다.",
@@ -538,7 +536,7 @@ test("모바일에서도뉴스선택이가능하고가로스크롤이없다", as
   context.dashboard.feeds[0].error =
     "HTTP503 제공자 연결 확인이 필요합니다. 실패한 공식 피드를 다시 검토하세요.";
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/news?seg=all");
   await expect(page.getByRole('region', { name: '오늘 주목할 뉴스' }).getByRole("checkbox")).toHaveCount(6);
   await page.getByRole('region', { name: '오늘 주목할 뉴스' }).getByRole("checkbox").first().check();
   expect(
@@ -563,7 +561,7 @@ test("모바일에서도뉴스선택이가능하고가로스크롤이없다", as
       nodes: item.nodes.map((node) => node.target),
     })),
   ).toEqual([]);
-  await page.getByRole("button", { name: "운영 기록", exact: true }).click();
+  await page.getByRole("link", { name: "운영 기록", exact: true }).click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

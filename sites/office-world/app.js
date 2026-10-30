@@ -399,7 +399,7 @@
 
     // 그림자: 드리우는 쪽과 받는 쪽
     castShadow(mesh) { if (this.shadows) this.shadows.addShadowCaster(mesh, false); },
-    receiveShadow(mesh) { if (this.shadows) mesh.receiveShadows = true; },
+    receiveShadow(mesh) { if (this.shadows) (mesh.sourceMesh || mesh).receiveShadows = true; },
 
     // ---------------- 픽셀 텍스처 (코드로 그린 16×16 블록 질감) ----------------
     pixelTexture(name, tiles, paint) {
@@ -1379,20 +1379,27 @@
       add(this.box('chair-seat', 0.62, 0.1, 0.62, '#1f2440'), 0, 0.6, 1.0);
       add(this.box('chair-back', 0.62, 0.7, 0.1, '#1f2440'), 0, 1.0, 1.3);
       add(this.box('chair-post', 0.08, 0.45, 0.08, '#2b2f44'), 0, 0.35, 1.0);
-      // The screen changes with task state. Only merge immutable furniture in desk-local space.
+      // Screens remain independent; desk tops receive a room-specific material below.
       const groups = new Map();
       for (const mesh of g.getChildMeshes()) {
-        if (mesh === screen) continue;
+        if (mesh === screen || mesh.name === 'desk-top') continue;
         if (!groups.has(mesh.material)) groups.set(mesh.material, []);
         groups.get(mesh.material).push(mesh);
       }
+      this.deskDetailTemplates ||= new Map();
       for (const parts of groups.values()) {
-        if (parts.length < 2) continue;
         const name = parts[0].name, pickable = parts.some(mesh => mesh.isPickable);
+        const key = name + ':' + parts[0].material.uniqueId;
         parts.forEach(mesh => { mesh.parent = null; });
-        const merged = B.Mesh.MergeMeshes(parts, true, true, undefined, false, false);
-        merged.name = 'desk-static-' + name; merged.parent = g;
-        merged.metadata = { stageId: st.id }; merged.isPickable = pickable;
+        let template = this.deskDetailTemplates.get(key);
+        if (!template || template.isDisposed()) {
+          template = B.Mesh.MergeMeshes(parts, true, true, undefined, false, false);
+          template.name = 'desk-template-' + name; template.isVisible = false; template.isPickable = false;
+          this.deskDetailTemplates.set(key, template);
+        } else parts.forEach(mesh => mesh.dispose());
+        const instance = template.createInstance('desk-static-' + name);
+        instance.parent = g; instance.isVisible = true;
+        instance.metadata = { stageId: st.id }; instance.isPickable = pickable;
       }
       const sit = this.local(st, x + Math.sin(rotY) * 1.0, 0, z + Math.cos(rotY) * 1.0);
       st.desks.push({ slot, sitPos: sit, faceY: st.rotY + rotY + Math.PI, screen, taken: null, localX: x, localZ: z, rotY });
