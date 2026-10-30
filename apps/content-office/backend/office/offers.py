@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -15,8 +16,11 @@ def offer_snapshot(offer):
     coupon_keys = ("code", "discount_percent", "expires_at", "terms", "verified")
     if coupon:
         coupon_keys += tuple(key for key in ("usage_limit", "user_usage_limit") if coupon.get(key) is not None)
-    return {"product": offer.get("product"), "price_krw": offer.get("price_krw"), "url": offer.get("url"), "note": offer.get("note"),
-            "coupon": {key: coupon.get(key) for key in coupon_keys} if coupon else None}
+    snapshot = {"product": offer.get("product"), "price_krw": offer.get("price_krw"), "url": offer.get("url"), "note": offer.get("note"),
+                "coupon": {key: coupon.get(key) for key in coupon_keys} if coupon else None}
+    if offer.get("free_pdf"):
+        snapshot["free_pdf"] = {key: offer["free_pdf"].get(key) for key in ("title", "url", "verified")}
+    return snapshot
 
 
 def offer_hash(offer):
@@ -44,6 +48,8 @@ def _expiry(value):
 
 def require_offer_ready(offer):
     """Recheck before generation, approval and every external handoff; no remote verification."""
+    if offer and offer.get("free_pdf") and offer["free_pdf"].get("verified") is not True:
+        raise WorkflowError("무료 PDF의 Drive 링크 공개 열람을 확인한 뒤 제작하세요")
     if not offer or not offer.get("coupon"):
         return
     coupon = offer["coupon"]
@@ -62,7 +68,7 @@ def normalise_offer(offer, actor):
     if not str(actor or "").strip():
         raise WorkflowError("오퍼를 기록한 담당자가 필요합니다")
     product = str((offer or {}).get("product") or "").strip()
-    if not product or len(product) > 200:
+    if (not product and not (offer or {}).get("free_pdf")) or len(product) > 200:
         raise WorkflowError("상품 이름은 1~200자여야 합니다")
     price = (offer or {}).get("price_krw")
     if price is not None and (isinstance(price, bool) or not isinstance(price, int) or not 0 <= price <= 10**9):
@@ -79,6 +85,8 @@ def normalise_offer(offer, actor):
     if note and len(note) > 500:
         raise WorkflowError("오퍼 메모는 500자 이하여야 합니다")
     coupon = (offer or {}).get("coupon")
+    if coupon and not product:
+        raise WorkflowError("구매 쿠폰에는 대상 상품이 필요합니다")
     if coupon is not None:
         if not isinstance(coupon, dict):
             raise WorkflowError("쿠폰 조건은 객체여야 합니다")
@@ -106,8 +114,18 @@ def normalise_offer(offer, actor):
                 limits[key] = value
         coupon = {"code": code, "discount_percent": percent, "expires_at": expires, "terms": terms, "verified": verified, **limits}
     result = {"product": product, "price_krw": price, "url": url, "note": note, "coupon": coupon}
+    pdf = (offer or {}).get("free_pdf")
+    if pdf is not None:
+        if not isinstance(pdf, dict) or not isinstance(pdf.get("verified", False), bool):
+            raise WorkflowError("무료 PDF 정보와 확인 여부를 확인하세요")
+        title = str(pdf.get("title") or "").strip()
+        link = str(pdf.get("url") or "").strip()
+        match = re.fullmatch(r"https://drive\.google\.com/file/d/([A-Za-z0-9_-]{10,200})/view(?:\?[^\s#]*)?", link)
+        if not title or len(title) > 100 or not match:
+            raise WorkflowError("무료 PDF 이름과 Google Drive 파일 공유 주소(/file/d/…/view)를 입력하세요")
+        result["free_pdf"] = {"title": title, "url": f"https://drive.google.com/file/d/{match[1]}/view", "verified": pdf.get("verified", False)}
     if coupon and coupon["verified"]:
-        require_offer_ready(result)
+        require_offer_ready({key: value for key, value in result.items() if key != "free_pdf"})
     return result
 
 
@@ -131,16 +149,21 @@ def offer_card_cta(offer):
     require_offer_ready(offer)
     domain = urlsplit(offer_url(offer)).hostname or "상품 링크는 게시물 본문"
     coupon = offer.get("coupon")
-    return f"{domain}\n{coupon['discount_percent']}% 할인 · 쿠폰 {coupon['code']}" if coupon else domain
+    lines = ["무료 PDF · 프로필 링크"] if offer.get("free_pdf") else []
+    if offer.get("product"):
+        lines.append(domain)
+        if coupon:
+            lines.append(f"{coupon['discount_percent']}% 할인 · 쿠폰 {coupon['code']}")
+    return "\n".join(lines) or None
 
 
 def offer_text(offer):
     if not offer:
         return ""
     require_offer_ready(offer)
-    parts = [str(offer["product"]).strip()]
+    parts = [str(offer["product"]).strip()] if offer.get("product") else []
     price = offer.get("price_krw")
-    if price is not None:
+    if price is not None and offer.get("product"):
         parts.append(f"기준가격 {price:,}원")
     coupon = offer.get("coupon")
     if coupon:
@@ -159,7 +182,11 @@ def offer_text(offer):
         parts.append(offer_url(offer))
     if offer.get("note"):
         parts.append(offer["note"])
-    return "함께 보기: " + " · ".join(parts)
+    lines = ["함께 보기: " + " · ".join(parts)] if parts else []
+    if offer.get("free_pdf"):
+        pdf = offer["free_pdf"]
+        lines.append(f"무료 PDF: {pdf['title']} · {pdf['url']}\nInstagram·YouTube Shorts: 프로필 링크에서 자료와 구매 안내를 확인하세요.")
+    return "\n\n".join(lines)
 
 
 def campaign_packet(packet, offer):
@@ -186,11 +213,14 @@ def campaign_packet(packet, offer):
     coupon = offer.get("coupon")
     domain = urlsplit(offer.get("url") or "").hostname or ""
     spoken_domain = "허브레인 점 케이알에서" if domain in ("heobrain.kr", "www.heobrain.kr") else "설명란의 상품 링크에서"
-    narration = f"{offer['product']}은 {spoken_domain} 확인하세요."
-    caption = offer["product"] + (" · " + domain.removeprefix("www.") if domain else "")
+    narration = f"{offer['product']}은 {spoken_domain} 확인하세요." if offer.get("product") else ""
+    caption = (offer["product"] + (" · " + domain.removeprefix("www.") if domain else "")) if offer.get("product") else ""
     if coupon:
         narration += f" 확인한 쿠폰은 {coupon['discount_percent']}퍼센트 할인입니다. 코드와 기간, 조건은 설명란을 확인하세요."
         caption += f" · {coupon['discount_percent']}% 할인 · 코드 {coupon['code']}"
+    if offer.get("free_pdf"):
+        narration += " 무료 PDF 자료는 프로필 링크에서 받으세요."
+        caption = " · ".join(part for part in (caption, "무료 PDF · 프로필 링크") if part)
     scenes.append({"narration": narration, "caption": caption, "visual": "상품 안내 · 코드와 조건은 설명란 · 실제 상품 화면을 복제하지 않은 자체 도형"})
     video["scenes"] = scenes
     result["campaign_cta_scene"] = narration

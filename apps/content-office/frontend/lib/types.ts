@@ -592,5 +592,6 @@ export type NewsletterIssue = {
   sent_at: string | null;
 };
 export type CouponSnapshot = { code: string | null; discount_percent: number | null; expires_at: string | null; terms: string | null; verified: boolean; usage_limit?: number; user_usage_limit?: number };
-export type OfferInput = { product: string; price_krw: number; url: string; note: string; coupon?: CouponSnapshot | null; expected_offer_hash: string | null };
+export type FreePdf = { title: string; url: string; verified: boolean };
+export type OfferInput = { product: string; price_krw: number; url: string; note: string; coupon?: CouponSnapshot | null; free_pdf?: FreePdf | null; expected_offer_hash: string | null };
 export type Offer = Omit<OfferInput, "expected_offer_hash"> & { captured_at: string; actor: string };

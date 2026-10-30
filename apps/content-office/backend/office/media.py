@@ -798,8 +798,10 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 reasons = '; '.join(status.get('error', '') for status in output_status.values())
                 raise WorkflowError(reasons or '완료된 제작물이 없습니다')
             shared = write_rights_manifest(packet, folder)
-            files = [shared] + [path for paths in output_files.values() for path in paths]
-            records = [{**artifact_record(root, path), 'outputs': ['shared'] if path == shared else [kind for kind, paths in output_files.items() if path in paths]} for path in sorted(set(files))]
+            from .exports import write_campaign_exports
+            campaign_files = write_campaign_exports(job.get('offer'), folder)
+            files = [shared, *campaign_files] + [path for paths in output_files.values() for path in paths]
+            records = [{**artifact_record(root, path), 'outputs': ['shared'] if path == shared or path in campaign_files else [kind for kind, paths in output_files.items() if path in paths]} for path in sorted(set(files))]
             from .offers import offer_snapshot
             manifest = {'source_hash': source_hash, 'offer_snapshot': offer_snapshot(job.get('offer')), 'production_contract': contract, 'output_status': output_status, 'completed_outputs': completed, 'files': records, 'media': media, 'thumbnail_candidates': [r for r in records if r['name'] in {p.name for p in thumbs}], 'warnings': ['게시·업로드는 실행되지 않았습니다', '완료된 제작물을 선택해 출고 승인②을 받습니다. 영상은 음성 청취와 화면 검토가 필요합니다']}
             if backgrounds and any(kind in completed for kind in ('video', 'cards')):

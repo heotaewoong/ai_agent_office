@@ -8,7 +8,11 @@ export type OfferDraftUpdate = (current: OfferDraft) => OfferDraft;
 
 export function offerFormFromOffer(offer?: Offer | null): Form {
   return {
-    promotion_mode: offer ? (offer.coupon ? "coupon" : "product") : "none",
+    promotion_mode: offer?.product ? (offer.coupon ? "coupon" : "product") : "none",
+    free_pdf_enabled: offer?.free_pdf ? "yes" : "no",
+    free_pdf_title: offer?.free_pdf?.title ?? "",
+    free_pdf_url: offer?.free_pdf?.url ?? "",
+    free_pdf_verified: offer?.free_pdf?.verified ? "yes" : "no",
     product: offer?.product ?? "",
     price_krw: offer ? String(offer.price_krw) : "",
     url: offer?.url ?? "",
@@ -33,7 +37,7 @@ export function syncOfferDraft(draft: OfferDraft, job: OfferJob): OfferDraft {
 }
 
 export function changeOfferDraft(draft: OfferDraft, key: string, value: string): OfferDraft {
-  return { ...draft, form: { ...draft.form, [key]: value, coupon_verified: key === "coupon_verified" ? value : "no" }, dirty: true };
+  return { ...draft, form: { ...draft.form, [key]: value, coupon_verified: key === "coupon_verified" ? value : "no", free_pdf_verified: key === "free_pdf_verified" ? value : ["free_pdf_title", "free_pdf_url", "free_pdf_enabled"].includes(key) ? "no" : draft.form.free_pdf_verified }, dirty: true };
 }
 
 export function offerDraftForJob(drafts: Record<string, OfferDraft>, job: OfferJob): OfferDraft {
@@ -52,22 +56,32 @@ export function updateOfferDrafts(drafts: Record<string, OfferDraft>, job: Offer
 
 /** 실제 발급과 분리한 캠페인 기록. 시간대 없는 입력은 명시적으로 한국 시간으로 해석한다. */
 export function offerFromForm(form: Form, now = Date.now()): { offer: FormOffer } | { error: string } {
-  const product = (form.product ?? "").trim();
-  if (!product || product.length > 200) return { error: "상품 이름은 1~200자로 입력하세요." };
-  const url = (form.url ?? "").trim();
-  try {
+  const productEnabled = form.promotion_mode !== "none";
+  const product = productEnabled ? (form.product ?? "").trim() : "";
+  if (productEnabled && (!product || product.length > 200)) return { error: "상품 이름은 1~200자로 입력하세요." };
+  const url = productEnabled ? (form.url ?? "").trim() : "";
+  try { if (productEnabled) {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password || url.length > 500 || /\s/.test(url)) throw new Error();
+    }
   } catch {
     return { error: "상품 URL은 사용자명·비밀번호 없는 https 주소로 입력하세요." };
   }
-  const priceText = (form.price_krw ?? "").replace(/,/g, "").trim();
+  const priceText = productEnabled ? (form.price_krw ?? "").replace(/,/g, "").trim() : "0";
   const price = Number(priceText);
   if (!/^\d+$/.test(priceText) || !Number.isSafeInteger(price) || price > 1_000_000_000) return { error: "가격은 0~1,000,000,000 사이 정수(원)로 입력하세요." };
   const note = (form.note ?? "").trim();
   if (note.length > 500) return { error: "메모는 500자 이내로 입력하세요." };
   const offer: FormOffer = { product, price_krw: price, url, note };
-  if (form.coupon_enabled !== "yes") return { offer };
+  if (form.free_pdf_enabled === "yes") {
+    const title = (form.free_pdf_title ?? "").trim();
+    const link = (form.free_pdf_url ?? "").trim();
+    const match = link.match(/^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]{10,200})\/view(?:\?[^\s#]*)?$/);
+    if (!title || title.length > 100 || !match) return { error: "무료 PDF 이름과 Google Drive 파일 공유 링크를 입력하세요." };
+    offer.free_pdf = { title, url: `https://drive.google.com/file/d/${match[1]}/view`, verified: form.free_pdf_verified === "yes" };
+  }
+  if (!productEnabled && !offer.free_pdf) return { error: "자료·상품 안내가 없으면 기존 안내를 해제하거나 그대로 제작하세요." };
+  if (!productEnabled || form.coupon_enabled !== "yes") return { offer };
   const percentText = (form.discount_percent ?? "").trim();
   const percent = percentText ? Number(percentText) : null;
   if (percent !== null && (!/^\d+$/.test(percentText) || percent < 1 || percent > 100))

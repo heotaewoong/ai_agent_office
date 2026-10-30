@@ -191,6 +191,19 @@ def offer_line(offer) -> str:
     return offer_text(offer)
 
 
+def write_campaign_exports(offer: dict | None, folder: Path) -> list[Path]:
+    if not offer:
+        return []
+    from .offers import offer_snapshot
+    text = offer_line(offer)
+    metadata = {"kind": "campaign-delivery-review", "offer": offer_snapshot(offer),
+                "free_pdf_selected": bool(offer.get("free_pdf")), "product_selected": bool(offer.get("product")),
+                "coupon_selected": bool(offer.get("coupon")), "profile_links_updated": False,
+                "automatic_dm_enabled": False, "external_published": False}
+    instructions = text + "\n\n플랫폼 전달 확인\nInstagram·YouTube Shorts: 실제 프로필 링크에 위 자료/상품 주소를 등록하고 열리는지 확인하세요.\nYouTube 일반 영상: 설명란에 주소를 넣고 계정의 링크 사용 조건을 확인하세요.\n댓글 자동 DM은 별도 연결입니다. 이 파일 생성으로 프로필 수정·메시지 발송·공개 게시가 실행되지 않습니다.\n"
+    return [write_text(folder, "profile-links.txt", instructions), write_text(folder, "campaign-delivery.json", json.dumps(metadata, ensure_ascii=False, indent=2))]
+
+
 def blog_markdown(packet: dict, offer: dict | None = None) -> str:
     body = packet["body"]
     if packet.get("hashtags"):
@@ -418,6 +431,8 @@ def write_reference_pdf(packet: dict, folder: Path, offer: dict | None = None) -
         story.append(Paragraph(escape(campaign), body))
         if offer.get("url"):
             story.append(Paragraph(f'<link href="{escape(offer_url(offer), quote=True)}" color="#245dc1">상품과 쿠폰 적용 조건 확인하기</link>', body))
+        if offer.get("free_pdf"):
+            story.append(Paragraph(f'<link href="{escape(offer["free_pdf"]["url"], quote=True)}" color="#245dc1">무료 PDF 받기</link>', body))
     story.append(Paragraph("게시 전 확인", heading))
     for item in ["주장과 수치가 출처의 범위에 맞는지 확인", "최신성·한계·개인 경험과 사실 구분", "대표 이미지·음성·자막과 글의 내용 일치 확인"]:
         story.append(Paragraph("□ " + escape(item), body))

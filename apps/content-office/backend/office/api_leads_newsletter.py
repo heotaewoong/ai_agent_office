@@ -52,6 +52,12 @@ class CouponInput(BaseModel):
     verified: bool = Field(default=False, strict=True)
 
 
+class FreePdfInput(BaseModel):
+    title: str = Field(min_length=1, max_length=100)
+    url: str = Field(min_length=1, max_length=500)
+    verified: bool = Field(default=False, strict=True)
+
+
 class OfferInput(BaseModel):
     expected_offer_hash: str | None = Field(pattern=r"^[0-9a-f]{64}$")
     product: str = Field(max_length=200)
@@ -59,6 +65,7 @@ class OfferInput(BaseModel):
     url: str | None = Field(default=None, max_length=500)
     note: str | None = Field(default=None, max_length=500)
     coupon: CouponInput | None = None
+    free_pdf: FreePdfInput | None = None
 
 
 def dashboard_counts(store):

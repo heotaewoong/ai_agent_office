@@ -117,3 +117,25 @@ test("초기 선택의 상품·할인율·한국 종료일·사용 횟수를 등
   assert.equal(couponRegistrationUrl({ ...form, url: "https://example.com/item" }), null);
   assert.ok("error" in offerFromForm({ ...form, usage_limit: "-1" }));
 });
+
+test("무료 PDF와 상품/쿠폰 선택은 독립적이며 PDF만 제공할 수 있다", () => {
+  const pdf = { free_pdf_enabled: "yes", free_pdf_title: "합성 무료 점검표", free_pdf_url: "https://drive.google.com/file/d/fixturePdf123456/view?usp=sharing", free_pdf_verified: "yes" };
+  const onlyPdf = offerFromForm({ ...pdf, promotion_mode: "none", product: "이전 상품", url: "https://heobrain.kr/product/old?coupon=OLD", coupon_enabled: "yes", coupon_code: "OLD" });
+  assert.ok("offer" in onlyPdf);
+  assert.equal(onlyPdf.offer.product, "");
+  assert.equal(onlyPdf.offer.url, "");
+  assert.equal(onlyPdf.offer.coupon, undefined);
+  assert.equal(onlyPdf.offer.free_pdf?.url, "https://drive.google.com/file/d/fixturePdf123456/view");
+  const both = offerFromForm({ ...pdf, promotion_mode: "coupon", product: "합성 상품", price_krw: "9900", url: "https://heobrain.kr/product/p", coupon_enabled: "yes", coupon_code: "FIXTURE20", discount_percent: "20" });
+  assert.ok("offer" in both && both.offer.free_pdf && both.offer.coupon);
+  const productOnly = offerFromForm({ ...pdf, free_pdf_enabled: "no", promotion_mode: "product", product: "합성 상품", price_krw: "9900", url: "https://heobrain.kr/product/p" });
+  assert.ok("offer" in productOnly && !productOnly.offer.free_pdf);
+  assert.ok("error" in offerFromForm({ ...pdf, promotion_mode: "none", free_pdf_url: "https://example.com/file.pdf" }));
+});
+
+test("PDF 주소 수정은 이전 공개 확인을 해제하고 작업별 폼을 보존한다", () => {
+  const original = { form: { free_pdf_enabled: "yes", free_pdf_title: "합성", free_pdf_url: "https://drive.google.com/file/d/fixturePdf123456/view", free_pdf_verified: "yes", coupon_verified: "yes" }, baseHash: null, dirty: false };
+  const changed = changeOfferDraft(original, "free_pdf_url", "https://drive.google.com/file/d/fixturePdf987654/view");
+  assert.equal(changed.form.free_pdf_verified, "no");
+  assert.equal(original.form.free_pdf_verified, "yes");
+});

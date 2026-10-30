@@ -163,8 +163,10 @@ def register(app, store):
                     "version": version, "source_hash": source_hash,
                     "checks": cards.get("checks"),
                     "slides": exported}
-        from .offers import offer_text
+        from .offers import offer_text, offer_snapshot
         campaign = offer_text(job.get("offer"))
+        if campaign:
+            metadata["campaign"] = offer_snapshot(job.get("offer"))
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, content in files:
