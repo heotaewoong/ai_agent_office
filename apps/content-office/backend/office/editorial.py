@@ -160,8 +160,14 @@ def deterministic_checks(packet):
     if sum(len(s.get("narration", "")) for s in scenes) > 360:
         issues.append("숏폼 내레이션이 너무 길어 실제 음성 검사가 필요합니다")
     issues.extend(style_issues(packet))
+    # 한국어 독자용 영상은 장면 제목(caption)도 한국어로 쓴다. 영어 용어만 있는 제목은 화면에서 읽히지 않는다.
+    if ((packet.get("audience") or {}).get("language") or "ko") == "ko":
+        for number, scene in enumerate((packet.get("video") or {}).get("scenes") or [], 1):
+            caption = str(scene.get("caption", "")).strip()
+            if caption and not re.search(r"[가-힣]", caption):
+                issues.append(f"{number}번 장면 제목이 한국어가 아니에요: '{caption}'. 한국어로 바꿔요(용어는 괄호로 병기)")
     issues.extend(check_texts(packet_texts(packet)))
-    return {"passed": not issues, "issues": issues, "checks": ["본문 길이·구조", "한국어 문장", "출처 URL", "근거 ID 연결", "지표·단위 경고 규칙", "장면 수", "내레이션 길이", "문체 규칙", "국어 규칙(조사 받침·이중 피동·번역투·반복·긴 문장)"]}
+    return {"passed": not issues, "issues": issues, "checks": ["본문 길이·구조", "한국어 문장", "출처 URL", "근거 ID 연결", "지표·단위 경고 규칙", "장면 수", "내레이션 길이", "문체 규칙", "장면 제목 한국어", "국어 규칙(조사 받침·이중 피동·번역투·반복·긴 문장)"]}
 
 
 def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):

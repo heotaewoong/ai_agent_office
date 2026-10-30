@@ -249,8 +249,9 @@ def scene_content(scene, index=0):
             comparison = [part.strip() for part in korean_pair.groups()]
             break
     numbers = numeric_facts(caption)
-    # Visual instructions such as '3개 박스' describe a layout, not a news metric.
-    if not numbers and not re.search(r'박스|카드|픽셀|px|레이아웃|글꼴|font|columns?', visual, re.I):
+    # Visual instructions describe the picture ('문의 1건, 분류 우선 흐름'), not a metric to headline.
+    # Take numbers from them only when the visual explicitly asks for a number scene.
+    if not numbers and requested == 'number' and not re.search(r'박스|카드|픽셀|px|레이아웃|글꼴|font|columns?', visual, re.I):
         numbers = numeric_facts(visual)
     if requested == 'flow' and steps:
         kind = 'flow'
