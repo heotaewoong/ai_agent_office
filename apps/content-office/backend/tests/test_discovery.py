@@ -118,6 +118,31 @@ def test_api_requires_csrf_rejects_conflicts_and_preserves_read_only_get(tmp_pat
     assert client.put('/api/discovery',json=body,headers=headers).status_code==409
 
 
+def test_fast_platform_changes_can_requeue_a_canceled_metadata_request(tmp_path):
+    s=Store(tmp_path);active(s)
+    first={**discovery.DEFAULT,'platforms':['youtube']}
+    second={**discovery.DEFAULT,'platforms':['linkedin']}
+    original=discovery.save(s,first,digest(discovery.DEFAULT))
+    discovery.save(s,second,digest(first))
+    claimed=s.claim('synthetic-worker')
+    assert claimed['id']==original['id']
+    with pytest.raises(WorkflowError,match='조사 조건'):discovery.run(s,claimed['payload']['config_hash'])
+    s.finish_task(claimed['id'],'synthetic-worker',{'error':'config_changed'},state='failed')
+    new=discovery.save(s,first,digest(second))
+    assert new['id']!=original['id'] and new['state']=='queued'
+    assert s.budget()['spent_krw']==0 and s.budget()['reserved_krw']==0
+
+
+def test_real_counters_rank_within_source_kind_without_combining_different_units(tmp_path):
+    s=Store(tmp_path)
+    rows=[{'id':'low','title':'AI low','url':'https://example.com/a','source_kind':'youtube','segment':'ai','signals':{'youtube_views':10},'score':99},
+          {'id':'high','title':'AI high','url':'https://example.com/b','source_kind':'youtube','segment':'ai','signals':{'youtube_views':200},'score':20},
+          {'id':'hn','title':'AI community','url':'https://example.com/c','source_kind':'community','segment':'ai','signals':{'hn_points':999999},'score':99}]
+    report=discovery.record(s,{**discovery.DEFAULT,'platforms':['youtube','linkedin']},rows,{'checked_at':datetime.now(timezone.utc).isoformat(),'feeds':[]})
+    assert [r['id'] for r in report['recommendations']['youtube']]==['high','low','hn']
+    assert report['recommendations']['linkedin'][0]['id']=='hn'
+
+
 def test_news_first_page_is_diverse_and_duplicate_metrics_survive_without_mutating_inputs():
     from office.source_registry import visible_articles
     rows=[{'id':str(i),'segment':'ai','feed_id':'arxiv'} for i in range(90)]+[{'id':'yt','segment':'ai','feed_id':'youtube'},{'id':'hn','segment':'ai','feed_id':'hn'},{'id':'exam','segment':'exam','feed_id':'moe'}]
