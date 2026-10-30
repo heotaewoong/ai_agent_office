@@ -1,5 +1,15 @@
 # HeoBrain 3D assets — provenance
 
+## guide-avatar-v1.json · 2026-10-31
+
+- Creator / rights basis: HeoBrain original procedural guide robot; project-authored geometry for HeoBrain use. No external character, person likeness, model, font, logo or texture is included. This entry does not grant a third-party license.
+- Authoring: Blender 4.5.15; 34 editable beveled suit/helmet parts, four original colors, existing five-pivot rig dimensions. The exact editable recipe is `output/2026-10-31-office-guide-avatar-authoring.py`; no model download or purchase.
+- Source `.blend`: `output/2026-10-31-heobrain-guide-avatar-v1.blend`, SHA-256 `f12bcc2ec577bf97177c738ff98f1e856110e6eff45a0ebe8ab8abbe5b6bd63d`.
+- Export `.glb`: same stem, SHA-256 `a81a53376c0f50ae30bc34afb9885a42988eb6070dac361dc75076ff05096b1e`.
+- Runtime `guide-avatar-v1.json`: SHA-256 `4615dc17828e7786ece32d80528f27a8d12233b262718b387afdb9ddca5a9cbb`. Four materials, 14 meshes, 3,672 triangles, under 620 KB, no external assets.
+- Conversion: evaluated Blender geometry grouped by original rig pivot/material, coordinates and normals converted to Babylon left-handed Y-up, six-decimal vertex serialization. Meshes explicitly enabled. Existing walk/sit/movement/root visibility remain authoritative; the default player remains available on fetch/parse failure. High-quality walking view loads the asset once; low quality does not request it.
+- Download date / external attribution / releases: not applicable to independently authored geometry. Build date 2026-10-31 KST. Actual Cycles 24-sample CPU review and WebGL walking inspection recorded in root `output/`. Native import, normals, rig movement, fallback and disposal are tested in `tests/guide-avatar.test.mjs`.
+
 ## atrium-detail-v3.json · 2026-10-31
 
 - Creator: HeoBrain project; original procedural architecture authored in this project. No downloaded model, photograph, logo, font, texture, or third-party building design is included.
