@@ -543,3 +543,30 @@ a { color: var(--accent); }
 @media(max-width:720px){.world-actions::-webkit-scrollbar{display:none}}
 @media(max-width:720px){.world-actions .view-switch{padding:0;border:0;background:transparent}.world-actions .view-switch button{min-height:40px}}
 @media(max-width:720px){.topbar{padding-block:4px}}
+
+/* 부서 이름은 접힌 목록 밖에서도 읽고 같은 번호의 건물로 이동한다. */
+:root { --department-offset:56px; }
+.topbar { flex-wrap:wrap; }
+.department-nav { flex:0 0 100%; min-width:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; }
+.department-nav:empty { display:none; }
+.department-nav button { min-width:0; min-height:44px; padding:8px; border:1px solid #71849d; border-bottom:3px solid var(--stage); border-radius:9px; background:#102033f5; color:#f6f9ff; font-weight:700; font-size:14px; cursor:pointer; word-break:keep-all; }
+.department-nav button:hover { background:#24405b; }
+.department-nav button:focus-visible { outline:3px solid #fff; outline-offset:2px; }
+.card.stage { background:#101e30f5; border-color:#71849d; }
+.card.stage .card-title,.wide-overview .card.stage .card-title { font-size:16px; }
+.card.stage .card-dot { width:24px; height:24px; display:grid; place-items:center; font-weight:700; color:#071322; }
+.wide-overview .card.stage { max-width:220px; }
+.expedition { top:calc(94px + var(--department-offset)); }
+.layer-nav { top:calc(85px + var(--department-offset)); }
+.rooms-menu,.meadow-layer .rooms-menu { top:calc(151px + var(--department-offset)); }
+.world-tools-body { top:calc(80px + var(--department-offset)); max-height:calc(100dvh - 100px - var(--department-offset)); }
+@media(min-width:721px) {
+  .panel,.results-view .panel,.roster-panel,.build-panel { top:calc(82px + var(--department-offset)); max-height:calc(100dvh - 100px - var(--department-offset)); }
+}
+@media(max-width:720px) {
+  :root { --department-offset:100px; }
+  .department-nav { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
+  .department-nav button { font-size:12px; padding:6px 3px; }
+  .layer-nav { top:auto; }
+  .results-view .panel,.roster-panel { top:calc(98px + var(--department-offset)); max-height:calc(100dvh - 114px - var(--department-offset)); }
+}

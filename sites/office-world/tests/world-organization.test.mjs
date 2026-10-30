@@ -12,6 +12,20 @@ function method(object, name, globals = {}) {
 
 const physicalIds = ['inbox', 'scripts', 'creative', 'outbox', 'ops'];
 const teamIds = ['life', 'content', 'dev', 'wiki', 'stocks'];
+
+test('visible department shortcuts show every team name and open its existing physical zone after refresh', () => {
+  const data=method('organization','project')(fixture());
+  const nodes=new Map();
+  const node=()=>({children:[],style:{setProperty(){}},events:{},querySelectorAll:()=>[],appendChild(el){this.children.push(el);},replaceChildren(){this.children=[];},setAttribute(){},addEventListener(type,fn){this.events[type]=fn;},dataset:{}});
+  const $=id=>{if(!nodes.has(id))nodes.set(id,node());return nodes.get(id);};
+  const hud={cards:new Map(),refresh(){},openStage(id){this.opened=id;}};
+  const rebuild=method('hud','rebuild',{$,space:{stages:data.stages},explorationNames:new Map(),exploration(){},document:{createElement:node}});
+  rebuild.call(hud,data);
+  assert.deepEqual($('department-nav').children.map(el=>el.textContent),['1 · 생활 비서 팀','2 · 콘텐츠 자동화 팀','3 · 개발 팀','4 · 옵시디언 팀','5 · 주식 팀']);
+  $('department-nav').children.forEach((el,i)=>{el.events.click();assert.equal(hud.opened,physicalIds[i]);});
+  rebuild.call(hud,data);
+  assert.equal($('department-nav').children.length,5,'polling must not duplicate shortcuts');
+});
 function fixture() {
   const views = ['news', 'studio', 'delivery', 'delivery', 'activity'];
   const rooms = { research: 'inbox', editor: 'scripts', critique: 'scripts', eval: 'scripts', video: 'creative', qa: 'creative', release: 'outbox', marketing: 'outbox', director: 'ops' };
