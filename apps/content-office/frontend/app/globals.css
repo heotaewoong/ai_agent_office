@@ -4325,3 +4325,40 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .version-compare { margin:24px 0; padding-top:20px; border-top:1px solid var(--line); }
 .version-compare > summary { cursor:pointer; font-weight:700; margin-bottom:16px; }
 @media(max-width:760px) { .version-columns { grid-template-columns:minmax(0,1fr); } .version-heading .button { width:100%; } }
+
+/* Shared wayfinding: panels remain mounted, so moving never resets an editor. */
+.detail-lab-link { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 16px; }
+.detail-lab-link small { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
+.page-outline { position: sticky; top: 12px; z-index: 15; margin: 0 0 28px; padding: 14px 18px; border: 1px solid #c7d1c2; border-radius: 12px; background: #fffefaf7; box-shadow: 0 6px 22px #2426210d; backdrop-filter: blur(12px); }
+.page-outline[hidden] { display: none; }
+.outline-topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.outline-topline strong { font-size: 14px; }
+.outline-topline strong span { margin-left: 6px; color: var(--green); }
+.outline-top { font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+.outline-links { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 10px 0 0; padding: 2px; max-height: 104px; overflow-y: auto; }
+.outline-links li { min-width: 0; max-width: 100%; }
+.outline-links a { display: flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.outline-links a span { color: var(--muted); font-size: 10px; }
+.outline-links a:hover { background: var(--green-light); border-color: #a4b8a6; }
+.outline-links a[aria-current] { background: #e5eee3; border-color: #6c8d71; color: #214b32; font-weight: 700; }
+.outline-location { font-size: 11px; color: #56624f; margin-top: 8px; overflow-wrap: anywhere; }
+.outline-select { display: none; }
+.outline-target { scroll-margin-top: 242px; }
+.outline-target:focus-visible { outline: 3px solid #6c8d71; outline-offset: 6px; border-radius: 3px; }
+.outline-panel { border: 1px solid #d5dbcf; border-radius: 12px; background: var(--white); padding: 24px; margin-block: 24px; box-shadow: 0 3px 12px #24262104; }
+.outline-panel > .section-heading, .outline-panel > h2, .outline-panel > h3 { padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.job-content > .approval-panel { border-top: 4px solid #6c8d71; }
+.job-content > .job-heading { padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+@media (min-width: 1100px) {
+  .job-sidebar { position: sticky; top: 240px; max-height: calc(100dvh - 260px); overflow-y: auto; }
+}
+@media (max-width: 767px) {
+  .page-outline { top: 6px; padding: 12px; margin-bottom: 20px; border-radius: 10px; }
+  .outline-links { display: none; }
+  .outline-select { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 10px; }
+  .outline-select select { flex: 1; min-width: 0; max-width: 100%; min-height: 44px; padding: 8px; border: 1px solid #aab8a3; border-radius: 6px; background: var(--white); }
+  .outline-location { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .outline-target { scroll-margin-top: 182px; }
+  .outline-panel { padding: 17px; margin-block: 20px; border-radius: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

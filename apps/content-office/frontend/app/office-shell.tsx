@@ -40,6 +40,7 @@ import {
   mainVideoFile,
 } from "../lib/workflow";
 import { Icon } from "./icons";
+import { PageOutline } from "./page-outline";
 import { WorldView } from "./world-view";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
@@ -420,6 +421,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
               {view === item.id && <span className="nav-active-dot" />}
             </Link>
           ))}
+          <a className="nav-item detail-lab-link" href="/detail-lab/" target="_blank" rel="noopener noreferrer"><Icon name="grid" /><span>상세페이지 제작실<small>별도 실험실 · 새 탭 ↗</small></span></a>
         </nav>
         <div className="sidebar-bottom">
           <div className="local-status">
@@ -515,6 +517,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
             <div className="heading-actions">
               <KnowledgeDrawer />
+              {(view === "studio" || view === "delivery") && <a className="button secondary" href="/detail-lab/" target="_blank" rel="noopener noreferrer">상세페이지 만들기 ↗</a>}
               {view === "news" && (
                 <button
                   className="button secondary"
@@ -537,6 +540,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
               )}
             </div>
           </div>
+
+          {view !== "world" && <PageOutline scope={`${view}-${activeId}`} />}
 
           {visibleError && (
             <div className="notice error" role="alert">
@@ -2103,6 +2108,7 @@ function Delivery({
       ) : (
         <>
           <section className="preview-toolbar" aria-label="제작물 읽기">
+            <h3>현재 제작물 미리보기</h3>
             <div className="preview-output-buttons" role="group" aria-label="제작물 보기">
               {blogFormats.length > 0 && (
                 <button
