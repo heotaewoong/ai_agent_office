@@ -5,6 +5,53 @@ import { resolve } from "node:path";
 import type { Article, Dashboard, Job } from "../../lib/types";
 
 for (const width of [1440, 390]) {
+  test(`독자 브리프 ${width}px에서 편집칸을 읽고 펼침 전환 후 입력을 유지한다`, async ({ page }) => {
+    const fixture = await harness(page, true);
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/scripts/contract-test-job");
+    await page.getByText("대상 독자·해결할 문제·기대 결과", { exact: true }).click();
+    const panel = page.getByRole("region", { name: "독자 브리프", exact: true });
+    await panel.getByText("브리프 바꾸기", { exact: true }).click();
+    const reader = panel.getByLabel("독자 (비우면 프리셋 값)", { exact: true });
+    await reader.fill("직접 지정한 독자를 보존합니다");
+    const size = await reader.evaluate(el => ({ font: parseFloat(getComputedStyle(el).fontSize), height: el.getBoundingClientRect().height, width: el.getBoundingClientRect().width }));
+    expect(size.font).toBeGreaterThanOrEqual(16);expect(size.height).toBeGreaterThanOrEqual(112);expect(size.height).toBeLessThan(180);expect(size.width).toBeGreaterThan(200);
+    await panel.getByText("브리프 바꾸기", { exact: true }).click();
+    await panel.getByText("브리프 바꾸기", { exact: true }).click();
+    await expect(reader).toHaveValue("직접 지정한 독자를 보존합니다");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(fixture.writes).toEqual([]);
+  });
+}
+
+test("숨겨진 작업실은 원고 조회를 쉬고 화면 복귀 시 수정 내용을 보존하며 갱신한다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  let reads = 0;
+  page.on("request", request => {
+    if (new URL(request.url()).pathname === "/api/jobs/contract-test-job" && request.method() === "GET") reads++;
+  });
+  await page.goto("/scripts/contract-test-job");
+  const body = page.getByLabel("본문 · Markdown", { exact: true });
+  await expect(body).toBeVisible();
+  await body.fill("화면 복귀 후에도 보존할 편집 원고");
+  await page.clock.install();
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const before = reads;
+  await page.clock.runFor(12_000);
+  expect(reads).toBe(before);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect.poll(() => reads).toBe(before + 1);
+  await expect(body).toHaveValue("화면 복귀 후에도 보존할 편집 원고");
+  expect(fixture.writes).toEqual([]);
+});
+
+for (const width of [1440, 390]) {
   test(`원고 시작 폼 ${width}px에서 넓은 편집칸과 입력 보존·진행 조건을 제공한다`, async ({ page }) => {
     const fixture = await harness(page, true);
     await page.setViewportSize({ width, height: 1000 });
@@ -248,7 +295,8 @@ async function harness(page: Page, review = false, release = false) {
       remaining_krw: 10000,
     },
     agents: [],
-    window: { end: "2026-10-25T23:20:00Z" },
+    // Synthetic contract-test window; never starts an actual production session.
+    window: { end: new Date(Date.now() + 3_600_000).toISOString() },
   };
   const writes: { path: string; csrf?: string; body: unknown }[] = [];
   let discoveryState = {
@@ -409,8 +457,8 @@ test("실제 RSS 스냅샷의 후보 선택은3개로제한하고CSRF로작업�
   const context = await harness(page);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
-  const checkboxes = page.getByRole("checkbox");
+  await page.goto("/news?seg=all");
+  const checkboxes = page.getByRole('region', { name: '오늘 주목할 뉴스' }).getByRole("checkbox");
   await expect(checkboxes).toHaveCount(6);
   await checkboxes.nth(0).check();
   await checkboxes.nth(1).check();
@@ -441,10 +489,7 @@ test("원고수정중승인을차단하고저장은같은packet을보존하며�
   await expect(
     page.getByRole("button", { name: "원고 승인", exact: true }),
   ).toBeEnabled();
-  await expect(page.getByRole("button", { name: /영상 대본/ })).toBeVisible({
-    timeout: 2000,
-  });
-  await page.getByRole("button", { name: /영상 대본/ }).click();
+  await expect(page.getByRole("heading", { name: "영상", exact: true })).toBeVisible();
   await expect(
     page.getByText("실제 승인 전에 영상 말하기 대본도 확인합니다."),
   ).toBeVisible();
@@ -453,12 +498,13 @@ test("원고수정중승인을차단하고저장은같은packet을보존하며�
   await expect(
     page.getByRole("button", { name: "원고 승인", exact: true }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "오늘의 뉴스", exact: true }).click();
-  await page.goto("/scripts/contract-test-job");
+  await page.getByRole("link", { name: "오늘의 뉴스", exact: true }).click();
+  await page.getByRole("link", { name: /^콘텐츠 작업실/ }).click();
   await expect(page.getByLabel("본문 · Markdown")).toHaveValue(
     "검증 전용 수정 원고입니다.",
   );
   await page.getByRole("button", { name: "저장하고 재검수" }).click();
+  await page.getByText("원고 검수 결과 · 확인 필요", { exact: true }).click();
   await expect(page.getByText("검수 미완료", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "원고 승인", exact: true }),
@@ -481,7 +527,7 @@ test("승인확인중서버버전변경은읽지않은새원고승인을차단�
   await page.getByRole("button", { name: "원고 승인", exact: true }).click();
   context.replaceJob({ ...context.getJob(), source_hash: "new-unreviewed-v2" });
   await expect(
-    page.getByRole("button", { name: "이 버전 승인하기" }),
+    page.getByRole("button", { name: "이 원고 승인·자동 제작", exact: true }),
   ).toBeDisabled({ timeout: 8000 });
   expect(context.writes).toEqual([]);
 });
@@ -491,7 +537,7 @@ test("모바일에서도뉴스선택이가능하고가로스크롤이없다", as
   context.dashboard.feeds[0].error =
     "HTTP503 제공자 연결 확인이 필요합니다. 실패한 공식 피드를 다시 검토하세요.";
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  await page.goto("/news?seg=all");
   await expect(page.getByRole('region', { name: '오늘 주목할 뉴스' }).getByRole("checkbox")).toHaveCount(6);
   await page.getByRole('region', { name: '오늘 주목할 뉴스' }).getByRole("checkbox").first().check();
   expect(
@@ -516,7 +562,7 @@ test("모바일에서도뉴스선택이가능하고가로스크롤이없다", as
       nodes: item.nodes.map((node) => node.target),
     })),
   ).toEqual([]);
-  await page.getByRole("button", { name: "운영 기록", exact: true }).click();
+  await page.getByRole("link", { name: "운영 기록", exact: true }).click();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -646,6 +692,8 @@ for (const viewport of [{ width: 1440, height: 1050 }, { width: 390, height: 844
     await page.goto("/publish?job=contract-test-job");
     const preview = page.locator(".artifact-preview iframe");
     await expect(preview).toHaveAttribute("src", "/api/jobs/contract-test-job/blog-preview");
+    if(viewport.width<768)await page.getByRole("combobox",{name:"목차 바로 이동",exact:true}).selectOption({label:"1. 현재 제작물"});
+    else await page.getByRole("navigation",{name:"이 페이지 목차",exact:true}).getByRole("link",{name:/현재 제작물/}).click();
     const blog = page.getByRole("button", { name: "블로그 읽기", exact: true });
     await expect(blog).toHaveAttribute("aria-pressed", "true");
     await expect(blog).toBeInViewport();
@@ -718,7 +766,7 @@ for (const hasVideo of [true, false]) {
   });
 }
 
-test("공개 원문 입력은 권한·길이·Gemini 전송을 확인하고 시작 버전을 보낸다", async ({
+test("공개 원문 입력은 권한·길이·현재 원고 모델 전송을 확인하고 시작 버전을 보낸다", async ({
   page,
 }) => {
   const context = await harness(page, true);
@@ -737,7 +785,7 @@ test("공개 원문 입력은 권한·길이·Gemini 전송을 확인하고 시�
     page.getByRole("button", { name: "근거 등록하고 새 원고 만들기" }),
   ).toBeDisabled();
   await source.fill("공개 원문 근거 문장입니다. ".repeat(20));
-  await expect(page.getByText(/Gemini.*전송/)).toBeVisible();
+  await expect(page.getByText(/입력한 텍스트는 현재 설정된 원고 모델.*전송됩니다/)).toBeVisible();
   await page
     .getByRole("checkbox", { name: /공개 원문이며 재사용할 권한/ })
     .check();
@@ -1030,6 +1078,11 @@ test("모바일 제작물 목차 이동은 편집 내용을 보존하고 큰 구
     await expect(page.locator(".outline-location")).toContainText(title);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
+  await page.getByRole("link", { name: "맨 위로 ↑", exact: true }).click();
+  await expect(select).toHaveValue("studio-setup-contract-test-job");
+  await page.getByRole("button", { name: "선택한 목차로 이동", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "제작 설정", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "제작 설정", exact: true })).toBeInViewport();
   await expect(body).toHaveValue("저장하지 않은 원고를 유지합니다.");
 
   expect(fixture.writes).toEqual([]);

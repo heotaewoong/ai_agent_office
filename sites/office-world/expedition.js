@@ -68,6 +68,18 @@ export function startTestDrive(profile, office) {
   return controls.setVehicleSpeed(vehicle.speed);
 }
 
+// A close creature between the third-person camera and player must not fill the view.
+export function creatureObstructsCamera(eye, player, creature) {
+  if (!eye || !player || !creature) return false;
+  const dx=player.x-eye.x,dy=player.y+1.5-eye.y,dz=player.z-eye.z;
+  const length=dx*dx+dy*dy+dz*dz;
+  if (!Number.isFinite(length) || length<.01) return false;
+  const ax=creature.x-eye.x,ay=creature.y+2-eye.y,az=creature.z-eye.z;
+  const t=(ax*dx+ay*dy+az*dz)/length;
+  if (!(t>0 && t<=1)) return false;
+  return (ax-t*dx)**2+(ay-t*dy)**2+(az-t*dz)**2 < 1.8**2;
+}
+
 export const TOUR_STOPS = [
   { id: 'exit', title: '환승광장 출구', x: 0, z: -15, radius: 8 },
   { id: 'inner', title: '빛의 순환도로', x: 0, z: 59, radius: 8 },
@@ -369,7 +381,7 @@ if (typeof document !== 'undefined') {
       box('alien-antenna', [.14,.7,.14], [0,3.6,0], glow, node);
       const ring = B.MeshBuilder.CreateTorus('alien-waypoint', { diameter: 5, thickness: .12, tessellation: 24 }, scene);
       ring.parent = node; ring.position.y = .28; ring.material = glow; ring.isPickable = false;
-      return { node, ring, id: a.id };
+      return { node, ring, id: a.id, parts: node.getChildMeshes(), opacity: 1 };
     });
     const car = new B.TransformNode('owned-hovercar', scene);
     const paint = material('owned-hovercar-paint', '#76e2dd'), trim = material('owned-hovercar-trim', '#243c54'), light = material('owned-hovercar-light', '#b8f4ff', true);
@@ -400,6 +412,8 @@ if (typeof document !== 'undefined') {
       for (const alien of aliens) {
         alien.node.setEnabled(o.space.layer === 'meadow' && !profile.captured.includes(alien.id));
         alien.ring.setEnabled(active);
+        const opacity=o.space.layer==='meadow' && o.space.view==='walk' && creatureObstructsCamera(o.controls.walk.position,o.controls.player.pos,alien.node.position) ? .18 : 1;
+        if(alien.opacity!==opacity){for (const part of alien.parts)part.visibility=opacity;alien.opacity=opacity;}
       }
       car.setEnabled(mounted && o.space.layer === 'meadow' && o.space.view === 'walk');
       if (mounted) {

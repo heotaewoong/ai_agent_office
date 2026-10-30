@@ -399,7 +399,7 @@
 
     // 그림자: 드리우는 쪽과 받는 쪽
     castShadow(mesh) { if (this.shadows) this.shadows.addShadowCaster(mesh, false); },
-    receiveShadow(mesh) { if (this.shadows) mesh.receiveShadows = true; },
+    receiveShadow(mesh) { if (this.shadows) (mesh.sourceMesh || mesh).receiveShadows = true; },
 
     // ---------------- 픽셀 텍스처 (코드로 그린 16×16 블록 질감) ----------------
     pixelTexture(name, tiles, paint) {
@@ -512,7 +512,7 @@
       this.buildHub();
 
       scene.onBeforeRenderObservable.add(() => this.tick());
-      window.addEventListener('resize', () => { this.applyDpr(); this.engine.resize(); });
+      window.addEventListener('resize', () => { this.applyDpr(); this.engine.resize(); controls.syncCameraFraming(); });
       this.renderFrame = () => scene.render();
       this.renderPaused = true;
       document.addEventListener('visibilitychange', () => this.syncRendering());
@@ -1358,7 +1358,7 @@
       });
       // 방 안 모든 물체가 그림자를 드리우고 받는다
       st.node.getChildMeshes().forEach((m) => { if (m.name !== 'edge' && !/glow|screen|bulb|board-bar/.test(m.name)) this.castShadow(m); this.receiveShadow(m); });
-      if(idx===0)this.buildArchitecture('atrium',st.node);
+      if(idx===0)st.atriumArchitecture=this.buildArchitecture('atrium',st.node);
     },
 
     buildDesk(st, x, z, rotY, slot) {
@@ -1379,20 +1379,29 @@
       add(this.box('chair-seat', 0.62, 0.1, 0.62, '#1f2440'), 0, 0.6, 1.0);
       add(this.box('chair-back', 0.62, 0.7, 0.1, '#1f2440'), 0, 1.0, 1.3);
       add(this.box('chair-post', 0.08, 0.45, 0.08, '#2b2f44'), 0, 0.35, 1.0);
-      // The screen changes with task state. Only merge immutable furniture in desk-local space.
+      // Screens remain independent; desk tops receive a room-specific material below.
       const groups = new Map();
       for (const mesh of g.getChildMeshes()) {
-        if (mesh === screen) continue;
+        if (mesh === screen || mesh.name === 'desk-top') continue;
         if (!groups.has(mesh.material)) groups.set(mesh.material, []);
         groups.get(mesh.material).push(mesh);
       }
+      this.deskDetailTemplates ||= new Map();
       for (const parts of groups.values()) {
-        if (parts.length < 2) continue;
         const name = parts[0].name, pickable = parts.some(mesh => mesh.isPickable);
+        const key = name + ':' + parts[0].material.uniqueId;
         parts.forEach(mesh => { mesh.parent = null; });
-        const merged = B.Mesh.MergeMeshes(parts, true, true, undefined, false, false);
-        merged.name = 'desk-static-' + name; merged.parent = g;
-        merged.metadata = { stageId: st.id }; merged.isPickable = pickable;
+        let template = this.deskDetailTemplates.get(key);
+        if (!template || template.isDisposed()) {
+          template = B.Mesh.MergeMeshes(parts, true, true, undefined, false, false);
+          template.name = 'desk-template-' + name; template.isVisible = false; template.isPickable = false;
+          template.freezeWorldMatrix();
+          this.deskDetailTemplates.set(key, template);
+        } else parts.forEach(mesh => mesh.dispose());
+        const instance = template.createInstance('desk-static-' + name);
+        instance.parent = g; instance.isVisible = true;
+        instance.metadata = { stageId: st.id }; instance.isPickable = pickable;
+        instance.computeWorldMatrix(true); instance.freezeWorldMatrix();
       }
       const sit = this.local(st, x + Math.sin(rotY) * 1.0, 0, z + Math.cos(rotY) * 1.0);
       st.desks.push({ slot, sitPos: sit, faceY: st.rotY + rotY + Math.PI, screen, taken: null, localX: x, localZ: z, rotY });
@@ -1484,13 +1493,23 @@
         detail('boot',.305,.22,.38,gear,0,-hipY+.11,.025,leg);
         detail('boot-toe',.31,.1,.15,gear,0,-hipY+.065,.17,leg);
       });
-      // Merge only unparented local details, then attach them to their animated pivot.
+      // Hidden templates outlive individual avatars; instances share each rigid part's draw call.
+      this.avatarDetailTemplates ||= new Map();
       for(const [parent,materials] of groups)for(const parts of materials.values()){
         const detailName=parts[0].name;
-        const mesh=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);
-        if(mesh){mesh.name=detailName+'-detail';mesh.parent=parent;mesh.isPickable=false;}
+        const limb=parent===root?'root':parent===armL||parent===armR?'arm':'leg';
+        const key=QUALITY+':'+limb+':'+parts[0].material.uniqueId;
+        let template=this.avatarDetailTemplates.get(key);
+        if(!template||template.isDisposed()){
+          template=B.Mesh.MergeMeshes(parts,true,true,undefined,false,false);
+          if(!template)continue;
+          template.name='avatar-template-'+key;template.isVisible=false;template.isPickable=false;
+          this.avatarDetailTemplates.set(key,template);
+        }else parts.forEach(mesh=>mesh.dispose());
+        const mesh=template.createInstance(detailName+'-detail');
+        mesh.parent=parent;mesh.isVisible=true;mesh.isPickable=false;
       }
-      root.getChildMeshes().forEach(mesh=>{if(mesh!==marker&&!mesh.material?.disableLighting){this.castShadow(mesh);this.receiveShadow(mesh);}});
+      root.getChildMeshes().forEach(mesh=>{if(mesh!==marker&&!mesh.material?.disableLighting){this.castShadow(mesh);this.receiveShadow(mesh.sourceMesh||mesh);}});
       return {root,legL,legR,armL,armR,head,body,marker,hipY,phase:Math.random()*6};
     },
 
@@ -1791,6 +1810,12 @@
       hud.closePanel();
     },
 
+    syncCameraFraming() {
+      if (!this.walk) return;
+      this.walk.fovMode = world.engine.getAspectRatio(this.walk) < 1
+        ? B.Camera.FOVMODE_HORIZONTAL_FIXED : B.Camera.FOVMODE_VERTICAL_FIXED;
+    },
+
     init() {
       const s = world.scene, canvas = world.canvas;
       this.overview = new B.ArcRotateCamera('overview', -Math.PI / 2, 1.15, 430, new B.Vector3(0, -18, 0), s);
@@ -1805,6 +1830,7 @@
       this.walk = new B.UniversalCamera('walk', new B.Vector3(0, 3, -8), s);
       this.walk.inputs.clear();
       this.walk.minZ = 0.3; this.walk.maxZ = 4500;
+      this.syncCameraFraming();
 
       if (QUALITY !== 'low') {
         // 화면 공간 주변광 차폐: 블록 틈과 가구 밑을 어둡게 (톤 매핑보다 먼저 적용되도록 먼저 만든다)
@@ -1896,6 +1922,9 @@
         this.overview.detachControl();
         s.activeCamera = this.walk;
         this.player.av.root.setEnabled(true);
+        // Starting movement returns keyboard input from the toolbar to the scene.
+        world.canvas.tabIndex = 0;
+        world.canvas.focus({ preventScroll: true });
         $('help').hidden = false;
         $('btn-reset').hidden = true;
         $('btn-exit').hidden = false;
@@ -2015,7 +2044,18 @@
       return true;
     },
 
+    watchHeader() {
+      const header = document.querySelector('.topbar');
+      if (!header) return;
+      const update = () => document.documentElement.style.setProperty('--world-header-bottom', `${Math.ceil(header.getBoundingClientRect().bottom)}px`);
+      const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(update) : null;
+      if (observer) observer.observe(header); else window.addEventListener('resize', update);
+      update();
+      world.scene.onDisposeObservable.addOnce(() => { observer?.disconnect(); window.removeEventListener('resize', update); });
+    },
+
     init() {
+      this.watchHeader();
       $('panel-close').addEventListener('click', () => this.closePanel());
       $('btn-command')?.addEventListener('click', () => this.openBrain());
       $('panel-body').addEventListener('click', (e) => {
@@ -2884,6 +2924,12 @@
     workbench.init();
     workshop.init();
     results.init();
+    // Optional appearance code must not delay base-world initialization or load in low mode.
+    if (QUALITY === 'high') void Promise.allSettled([
+      import('./arrival-detail.js?v=20261030'),
+      import('./atrium-detail.js?v=20261031'),
+      import('./guide-avatar.js?v=20261031'),
+    ]);
 
     let simTimer = null;
     data.onChange((d) => {

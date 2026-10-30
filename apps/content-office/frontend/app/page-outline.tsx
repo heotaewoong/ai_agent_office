@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 type Entry = { id: string; title: string };
 
 /** Navigation follows the rendered panels, including asynchronously loaded ones. */
 export function PageOutline({ scope, curated = false }: { scope: string; curated?: boolean }) {
   const nav = useRef<HTMLElement>(null);
+  const selectId = useId();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [active, setActive] = useState("");
 
@@ -88,12 +89,13 @@ export function PageOutline({ scope, curated = false }: { scope: string; curated
         <strong>이 페이지 목차 <span>{entries.length}</span></strong>
         <a href="#main-content" className="outline-top">맨 위로 ↑</a>
       </div>
-      <label className="outline-select">바로 이동
-        <select aria-label="목차 바로 이동" value={active} onChange={(event) => moveTo(event.target.value)}>
+      <div className="outline-select"><label htmlFor={selectId}>바로 이동</label>
+        <select id={selectId} aria-label="목차 바로 이동" value={active} onChange={(event) => moveTo(event.target.value)}>
           {!active && <option value="">구역 선택</option>}
           {entries.map((entry, index) => <option key={entry.id} value={entry.id}>{index + 1}. {entry.title}</option>)}
         </select>
-      </label>
+        <button type="button" disabled={!active} aria-label="선택한 목차로 이동" onClick={() => moveTo(active)}>이동</button>
+      </div>
       <ol className="outline-links">
         {entries.map((entry, index) => <li key={entry.id}><a href={`#${entry.id}`} aria-current={active === entry.id ? "location" : undefined}
           onClick={(event) => { event.preventDefault(); moveTo(entry.id); }}><span>{String(index + 1).padStart(2, "0")}</span>{entry.title}</a></li>)}

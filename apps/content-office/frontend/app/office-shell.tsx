@@ -44,6 +44,7 @@ import { Icon } from "./icons";
 import { PageOutline } from "./page-outline";
 import deliveryStyles from "./delivery-view.module.css";
 import { WorldView } from "./world-view";
+import { reuseUnchangedJob } from "../lib/job-snapshot";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ArchitectureView } from "./architecture-view";
@@ -285,7 +286,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
     try {
       const data = await api.job(id);
       const current = jobRefresh.current.settle(ticket);
-      if (alive.current && current) setJob(data);
+      if (alive.current && current) setJob(previous => reuseUnchangedJob(previous, data));
     } catch (cause) {
       if (jobRefresh.current.settle(ticket) && alive.current) throw cause;
     }
@@ -295,6 +296,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
     if (!activeId) return;
     let current = true;
     const fetchJob = async () => {
+      if (!current || document.hidden) return;
       try {
         await loadJob(activeId);
       } catch (cause) {
@@ -306,10 +308,12 @@ export default function Office({ children }: { children: React.ReactNode }) {
     };
     setJob(null);
     void fetchJob();
+    document.addEventListener("visibilitychange", fetchJob);
     const timer = setInterval(() => void fetchJob(), 4_000);
     return () => {
       current = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", fetchJob);
     };
   }, [activeId, loadJob]);
 

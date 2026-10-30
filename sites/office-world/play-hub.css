@@ -19,7 +19,12 @@
 .play-hub #play-section-explore:not([hidden]) .city-activities{display:block!important}
 .play-hub .free-drive-controls{grid-template-columns:minmax(0,1fr)}
 .play-hub .free-drive-ride{width:100%}
-.play-hub-ready.free-drive-open .ticker{bottom:20px;max-width:420px;left:50%;right:auto;transform:translateX(-50%)}
-.play-hub-ready.free-drive-open .layer-nav{bottom:18px}
-@media(max-width:720px){.play-hub{top:142px;right:10px;bottom:max(12px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px);width:390px;padding:14px}.play-hub-heading h2{font-size:15px}.play-hub-ready.free-drive-open .ticker{display:none}.play-hub .free-drive select{font-size:16px}}
+.play-hub-ready.free-drive-open .layer-nav{bottom:auto}
+.play-hub-ready.free-drive-open .ticker{bottom:auto;left:auto;right:auto;transform:none;max-width:min(760px,100%)}
+@media(max-width:720px){.play-hub{top:142px;right:10px;bottom:max(12px,env(safe-area-inset-bottom));max-width:calc(100vw - 20px);width:390px;padding:14px}.play-hub-heading h2{font-size:15px}.play-hub-ready.free-drive-open .ticker{display:none}.play-hub .free-drive select{font-size:16px}.play-hub-ready.free-drive-open .layer-nav{top:calc(var(--world-header-bottom,132px) + 8px);bottom:auto}}
 @media(max-height:580px){.play-hub{top:85px;bottom:10px}}
+.play-hub{top:calc(var(--world-header-bottom,132px) + 8px);bottom:auto;max-height:calc(100dvh - var(--world-header-bottom,132px) - 24px)}
+@media(max-width:720px){
+  .play-hub-ready .alien-game-pad{left:12px;bottom:max(24px,env(safe-area-inset-bottom,0px))}
+  .play-hub-ready.alien-game-active .alien-game-mobile-actions{width:min(164px,calc(100vw - 184px));bottom:max(24px,env(safe-area-inset-bottom,0px))}
+}

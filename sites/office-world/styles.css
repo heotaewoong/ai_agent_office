@@ -40,6 +40,7 @@ a { color: var(--accent); }
   outline: none;
   touch-action: none;
 }
+#scene:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
 
 /* ---------- 상단 바 ---------- */
 .topbar {
@@ -301,15 +302,23 @@ a { color: var(--accent); }
 .panel-note { font-size: 11px; color: var(--muted); flex: 1 1 100%; }
 
 /* ---------- 자막 띠 ---------- */
-.ticker {
+.world-status {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
-  margin-inline: auto;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: calc(max(16px, env(safe-area-inset-right, 0px)) + 202px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: none;
+}
+.ticker {
+  position: relative;
   width: max-content;
   z-index: 15;
-  max-width: min(760px, calc(100vw - 32px));
+  max-width: min(760px, 100%);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -353,14 +362,12 @@ a { color: var(--accent); }
 .minimap-label { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.12em; display: flex; justify-content: space-between; }
 
 .tags {
-  position: fixed;
-  left: max(16px, env(safe-area-inset-left, 0px));
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  position: relative;
   z-index: 15;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  max-width: min(22vw, calc(50vw - 400px));
+  max-width: min(680px, 100%);
 }
 .tag {
   font-family: var(--font-mono);
@@ -384,7 +391,8 @@ a { color: var(--accent); }
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 8px;
-  max-width: 40vw;
+  max-width: min(680px, calc(100vw - 240px));
+  word-break: keep-all;
 }
 .help[hidden] { display: none; }
 
@@ -408,7 +416,8 @@ a { color: var(--accent); }
   .brand-meta { display: none; }
   .walk-only { display: none; }
   .tags, .help { display: none; }
-  .ticker { bottom: calc(env(safe-area-inset-bottom, 0px) + 150px); padding: 8px 12px; }
+  .world-status { right: max(16px, env(safe-area-inset-right, 0px)); align-items: center; }
+  .ticker { padding: 8px 12px; }
   .ticker-text { font-size: 13px; }
   .panel {
     top: auto;
@@ -449,7 +458,7 @@ a { color: var(--accent); }
 .expedition small { display: block; font-size: 10px; color: #a2b2c7; line-height: 1.6; }
 @media (max-width:719px) { .expedition { top: 93px; left: 10px; width: 230px; padding: 10px 12px; } .expedition:not([open]) { width: 205px; } .expedition summary { font-size:12px; } }
 
-.tags { max-width: min(680px, calc(100vw - 240px)); flex-wrap: wrap; align-items: flex-start; }
+.tags { align-items: flex-start; }
 .tag { flex-shrink: 0; white-space: nowrap; }
 @media (max-width:850px) { .tags { display:none; } }
 
@@ -476,7 +485,7 @@ a { color: var(--accent); }
   .cards .card { position:relative!important; inset:auto!important; left:auto!important; top:auto!important; transform:none!important; flex:0 0 145px; min-width:130px; min-height:60px; max-width:155px; }
   .cards .card.agent { display:none!important; }
   .cards .card.brain { align-self:stretch; }
-  .ticker { bottom:calc(env(safe-area-inset-bottom,0px) + 226px); }
+  .world-status { bottom:calc(env(safe-area-inset-bottom,0px) + 226px); }
   .expedition[open] { max-height:39vh; }
   .expedition[open] ~ .rooms-menu { top:calc(39vh + 102px); }
 }
@@ -545,7 +554,7 @@ a { color: var(--accent); }
 @media(max-width:720px){.topbar{padding-block:4px}}
 
 /* 부서 이름은 접힌 목록 밖에서도 읽고 같은 번호의 건물로 이동한다. */
-:root { --department-offset:56px; }
+:root { --world-header-bottom:132px; }
 .topbar { flex-wrap:wrap; }
 .department-nav { flex:0 0 100%; min-width:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; }
 .department-nav:empty { display:none; }
@@ -556,17 +565,25 @@ a { color: var(--accent); }
 .card.stage .card-title,.wide-overview .card.stage .card-title { font-size:16px; }
 .card.stage .card-dot { width:24px; height:24px; display:grid; place-items:center; font-weight:700; color:#071322; }
 .wide-overview .card.stage { max-width:220px; }
-.expedition { top:calc(94px + var(--department-offset)); }
-.layer-nav { top:calc(85px + var(--department-offset)); }
-.rooms-menu,.meadow-layer .rooms-menu { top:calc(151px + var(--department-offset)); }
-.world-tools-body { top:calc(80px + var(--department-offset)); max-height:calc(100dvh - 100px - var(--department-offset)); }
+.expedition { top:calc(var(--world-header-bottom) + 18px); }
+.layer-nav { top:calc(var(--world-header-bottom) + 10px); }
+.rooms-menu,.meadow-layer .rooms-menu { top:calc(var(--world-header-bottom) + 74px); }
+.exit-btn { top:calc(var(--world-header-bottom) + 8px); }
+.help { top:calc(var(--world-header-bottom) + 62px); }
+.world-tools-body { top:calc(var(--world-header-bottom) + 8px); max-height:calc(100dvh - var(--world-header-bottom) - 24px); }
 @media(min-width:721px) {
-  .panel,.results-view .panel,.roster-panel,.build-panel { top:calc(82px + var(--department-offset)); max-height:calc(100dvh - 100px - var(--department-offset)); }
+  .panel,.results-view .panel,.roster-panel,.build-panel { top:calc(var(--world-header-bottom) + 12px); max-height:calc(100dvh - var(--world-header-bottom) - 28px); }
 }
 @media(max-width:720px) {
-  :root { --department-offset:100px; }
-  .department-nav { grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
-  .department-nav button { font-size:12px; padding:6px 3px; }
+  .department-nav { display:flex; overflow-x:auto; gap:6px; padding:3px 3px 6px; scroll-snap-type:x proximity; scrollbar-width:thin; scrollbar-color:#719ba8 #102033; }
+  .department-nav button { flex:0 0 168px; min-height:46px; font-size:13px; padding:7px 10px; scroll-snap-align:start; }
   .layer-nav { top:auto; }
-  .results-view .panel,.roster-panel { top:calc(98px + var(--department-offset)); max-height:calc(100dvh - 114px - var(--department-offset)); }
+  .exit-btn { font-size:12px; padding:8px 10px; }
+  .exit-btn .kbd { display:none; }
+  .panel { max-height:min(55vh,calc(100dvh - var(--world-header-bottom) - 220px)); }
+  .results-view .panel,.roster-panel { top:calc(var(--world-header-bottom) + 12px); max-height:calc(100dvh - var(--world-header-bottom) - 28px); }
+}
+@media(max-width:720px) and (max-height:500px) {
+  .panel:not([hidden]) { bottom:12px; max-height:calc(100dvh - var(--world-header-bottom) - 24px); z-index:55; }
+  .world-status { display:none; }
 }

@@ -31,7 +31,11 @@ for(const quality of ['low','high'])test('avatar '+quality+' keeps the rig and m
     for(const key of ['legL','legR','armL','armR'])assert.equal(av[key].parent,av.root);
     const meshes=av.root.getChildMeshes();assert(meshes.every(mesh=>!mesh.isPickable));
     assert(meshes.length<=(quality==='high'?21:19));
-    assert.equal(f.scene.meshes.length,meshes.length,'source detail meshes have been disposed');
+    assert.equal(f.scene.meshes.length,meshes.length+f.world.avatarDetailTemplates.size,'only bounded hidden templates remain beside avatar instances');
+    for(const template of f.world.avatarDetailTemplates.values()){
+      assert.equal(template.parent,null);assert.equal(template.isVisible,false);
+      assert.equal(template.isPickable,false);
+    }
     const casters=f.shadows.getShadowMap().renderList;
     assert(!casters.includes(av.marker));assert(!casters.some(mesh=>mesh.material.disableLighting));
     av.body.material.emissiveColor=new B.Color3(.1,.2,.3);
@@ -84,8 +88,23 @@ test('rebuilding avatars releases merged geometry and reuses cached materials an
       const av=f.create(),current={materials:f.scene.materials.length,textures:f.scene.textures.length};
       if(counts)assert.deepEqual(current,counts);else counts=current;
       assert.equal(f.world.surfaceTextures.size,1,'one shared metal texture');
-      av.root.dispose();assert.equal(f.scene.meshes.length,0);assert.equal(f.scene.transformNodes.length,0);
+      av.root.dispose();assert.equal(f.scene.meshes.length,f.world.avatarDetailTemplates.size);assert.equal(f.scene.transformNodes.length,0);
+      assert([...f.world.avatarDetailTemplates.values()].every(mesh=>mesh.instances.length===0));
       assert.equal(f.shadows.getShadowMap().renderList.length,0,'no disposed avatar remains a caster');
     }
+  }finally{f.dispose();}
+});
+
+test('shared detail instances survive disposal of another avatar and keep independent poses',()=>{
+  const f=fixture();try{
+    const first=f.create(),second=f.create(),left=detail(first.armL,'glove'),other=detail(second.armL,'glove');
+    assert(left instanceof B.InstancedMesh);assert.equal(left.sourceMesh,other.sourceMesh);
+    assert.equal(left.sourceMesh.receiveShadows,true);
+    first.armL.rotation.x=.8;second.armL.rotation.x=-.3;
+    assert.notDeepEqual(left.computeWorldMatrix(true).asArray(),other.computeWorldMatrix(true).asArray());
+    const template=other.sourceMesh,count=f.world.avatarDetailTemplates.size;
+    first.root.dispose();assert.equal(other.isDisposed(),false);assert.equal(template.isDisposed(),false);
+    second.root.dispose();assert.equal(f.world.avatarDetailTemplates.size,count);
+    assert.equal(template.instances.length,0);
   }finally{f.dispose();}
 });
