@@ -49,6 +49,74 @@ test("원고 시작 폼의 가져오기 실패는 입력을 보존하고 다시 
 });
 
 // These are explicitly isolated API contract tests, not live workflow completion.
+const designPackaging = {
+  titles: ["반복 업무를 줄이는 첫 단계", "매일 30분을 되찾는 방법", "자동화 전에 확인할 세 가지"],
+  thumbnails: [
+    { text: "반복을 줄여요", visual: "업무를 분류한 메모" },
+    { text: "30분 되찾기", visual: "시계와 정리된 체크리스트" },
+    { text: "먼저 확인해요", visual: "세 단계 점검표" },
+  ],
+  hook: "매일 하는 일을 하나 골라 어디서 시간이 걸리는지 적어보세요.",
+  logline: "반복 업무를 분류해 첫 자동화 대상을 고릅니다.",
+  reasons: ["반복되는 문제입니다", "바로 따라 할 수 있습니다", "경험을 기록합니다"],
+  chosen_title: "반복 업무를 줄이는 첫 단계",
+  packaging_hash: "packaging-design-v1",
+};
+
+for (const width of [1440, 390]) {
+  test(`패키지 기획 ${width}px 후보 비교·미리보기는 입력을 보존하고 확정을 호출하지 않는다`, async ({ page }) => {
+    const fixture = await harness(page, true);
+    fixture.replaceJob({ ...fixture.getJob(), article: { ...fixture.getJob().article!, origin: "idea" }, packaging: designPackaging });
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/scripts/contract-test-job");
+    const panel = page.getByRole("region", { name: "제목·썸네일·훅 기획", exact: true });
+    const title = panel.getByLabel("제목 2안", { exact: true });
+    await title.fill("수정한 두 번째 제목");
+    const second = panel.getByRole("radio", { name: "제목 2안 선택", exact: true });
+    await second.focus();
+    await second.press("Space");
+    await expect(second).toBeChecked();
+    await expect(panel.getByRole("complementary", { name: "선택한 제목 미리보기" })).toContainText("수정한 두 번째 제목");
+    await panel.getByRole("radio", { name: "제목 1안 선택", exact: true }).check();
+    await second.check();
+    await expect(title).toHaveValue("수정한 두 번째 제목");
+    await expect(panel.getByText("수정 중 · 확정 전", { exact: true })).toBeVisible();
+    expect(await title.evaluate(el => getComputedStyle(el).fontSize)).toBe("16px");
+    expect(await panel.getByLabel("훅 (첫 문장)", { exact: true }).evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(200);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    if (width === 1440) {
+      const audit = await new AxeBuilder({ page }).include('[aria-label="제목·썸네일·훅 기획"]').withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+      expect(audit.violations.map(v=>({ id:v.id, targets:v.nodes.map(n=>n.target) }))).toEqual([]);
+    }
+    expect(fixture.writes).toEqual([]);
+  });
+}
+
+test("패키지 기획은 초과 문구를 차단하고 선택한 제목과 기존 필드를 함께 확정한다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  fixture.replaceJob({ ...fixture.getJob(), article: { ...fixture.getJob().article!, origin: "idea" }, packaging: designPackaging });
+  const requests: unknown[] = [];
+  await page.route("**/api/jobs/contract-test-job/packaging", async route => {
+    const brief = route.request().postDataJSON();
+    requests.push(brief);
+    fixture.replaceJob({ ...fixture.getJob(), packaging: { ...brief, packaging_hash: "packaging-design-v2" } });
+    await route.fulfill({ json: fixture.getJob() });
+  });
+  await page.goto("/scripts/contract-test-job");
+  const panel = page.getByRole("region", { name: "제목·썸네일·훅 기획", exact: true });
+  const thumb = panel.getByLabel("썸네일 1안 글자", { exact: true });
+  await thumb.fill("한".repeat(13));
+  await panel.getByRole("button", { name: "다시 확정", exact: true }).click();
+  await expect(panel.getByRole("alert")).toContainText("12자를 넘습니다");
+  expect(requests).toEqual([]);
+  await thumb.fill(designPackaging.thumbnails[0].text);
+  await panel.getByRole("radio", { name: "제목 2안 선택", exact: true }).check();
+  await panel.getByRole("button", { name: "다시 확정", exact: true }).click();
+  await expect.poll(()=>requests.length).toBe(1);
+  const { packaging_hash, ...brief } = designPackaging;
+  expect(requests[0]).toEqual({ ...brief, chosen_title: designPackaging.titles[1] });
+});
+
 // Article inputs come from the actual public RSS research snapshot; a synthetic
 // review packet is used only to exercise approval controls without approving news.
 async function harness(page: Page, review = false, release = false) {
