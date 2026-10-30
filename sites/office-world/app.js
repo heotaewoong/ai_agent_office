@@ -2581,7 +2581,7 @@
         producing:['제작 중','delivery','검토 앱에서 제작 진행과 출력별 오류를 확인하세요.'],
         release_review:['사람 승인 대기 ②','delivery','검토 앱에서 실제 최종 파일과 출고 조건을 확인하세요.'],
         partial_release_review:['일부 제작 완료','delivery','검토 앱에서 완료한 출력과 실패한 출력을 구분해 확인하세요.'],
-        release_approved:['출고 승인 ② 완료 · 수동 전달 대기','delivery','검토 앱에서 ②의 파일·대상 조건과 실제 전달 결과를 확인하세요.'],
+        release_approved:['출고 승인 ② 완료 · 채널별 전달 기록 확인','delivery','검토 앱에서 ②의 파일·대상 조건과 실제 전달 결과를 확인하세요.'],
         blocked:['확인 필요','activity','운영 기록에서 중단 사유와 필요한 확인을 살펴보세요.'],
         needs_reconciliation:['호출 결과 확인 필요','activity','운영 기록에서 결과 불명 호출을 대조하고 다음 행동을 결정하세요.'],
         failed:['실패','activity','운영 기록에서 실패 원인과 다음 조치를 확인하세요.'],
