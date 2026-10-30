@@ -461,7 +461,7 @@ test("썸네일5안비교와최종선택은이전출고확인버전을무효로�
 }) => {
   const context = await harness(page, true, true);
   await page.goto("/");
-  await page.getByRole("link", { name: "제작·출고함", exact: true }).click();
+  await page.goto("/publish?job=contract-test-job");
   const options = page.getByRole("button", { name: /썸네일 .* 선택/ });
   await expect(options).toHaveCount(5, { timeout: 2500 });
   await page.screenshot({
@@ -506,7 +506,7 @@ test("승인된원고를수정하고저장하지않으면제작과출고를진�
   await expect(
     page.getByRole("button", { name: "선택 항목 제작 시작" }),
   ).toBeDisabled({ timeout: 2000 });
-  await page.getByRole("link", { name: "제작·출고함", exact: true }).click();
+  await page.goto("/publish?job=contract-test-job");
   await expect(
     page.getByRole("button", { name: "제작 시작", exact: true }),
   ).toBeDisabled();
@@ -575,7 +575,7 @@ for (const viewport of [{ width: 1440, height: 1050 }, { width: 390, height: 844
     await page.route("**/api/jobs/second-job", route => route.fulfill({ contentType: "application/json", body: JSON.stringify(secondJob) }));
     await page.route("**/api/jobs/second-job/blog-preview", route => route.fulfill({ contentType: "text/html", body: "<p>두 번째 블로그 본문</p>" }));
     await page.goto("/");
-    await page.getByRole("link", { name: "제작·출고함", exact: true }).click();
+    await page.goto("/publish?job=contract-test-job");
     const preview = page.locator(".artifact-preview iframe");
     await expect(preview).toHaveAttribute("src", "/api/jobs/contract-test-job/blog-preview");
     const blog = page.getByRole("button", { name: "블로그 읽기", exact: true });
@@ -616,9 +616,7 @@ for (const hasVideo of [true, false]) {
       selections: { blog: true, video: hasVideo, pdf: false, cards: false },
     });
     await page.goto("/");
-    await page
-      .getByRole("link", { name: "제작·출고함", exact: true })
-      .click();
+    await page.goto("/publish?job=contract-test-job");
     await page.getByRole("button", { name: "출고 승인", exact: true }).click();
     const confirmation = page.getByRole("button", {
       name: "이 파일 버전 승인하기",
@@ -793,7 +791,7 @@ test("영상 실패와 무관하게 완료된 블로그만 출고할 수 있다"
     },
   });
   await page.goto("/");
-  await page.getByRole("link", { name: "제작·출고함", exact: true }).click();
+  await page.goto("/publish?job=contract-test-job");
   const blog = page.getByRole("checkbox", { name: "블로그 출고", exact: true });
   const video = page.getByRole("checkbox", {
     name: "YouTube Shorts 출고",
@@ -834,7 +832,7 @@ test("출고 확인 중 항목을 바꾸면 이전 출력 선택으로 승인하
 }) => {
   const context = await harness(page, true, true);
   await page.goto("/");
-  await page.getByRole("link", { name: "제작·출고함", exact: true }).click();
+  await page.goto("/publish?job=contract-test-job");
   await page.getByRole("button", { name: "출고 승인", exact: true }).click();
   await page
     .getByRole("checkbox", { name: "YouTube Shorts 출고", exact: true })
