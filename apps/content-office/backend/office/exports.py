@@ -166,7 +166,7 @@ def safe_fragment(body: str) -> str:
             fence = marker[1]
         elif fence is not None:
             if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
-                parts.append('<pre style="max-width:100%;overflow-x:auto;white-space:pre;background:#17242b;color:#f2f7f8;padding:20px;border-radius:12px"><code>' + escape("\n".join(code)) + '</code></pre>')
+                parts.append('<pre style="max-width:100%;overflow-x:auto;white-space:pre;background:#17242b;color:#f2f7f8;padding:20px;border-radius:12px"><code style="color:inherit;background:transparent;padding:0">' + escape("\n".join(code)) + '</code></pre>')
                 code.clear()
                 fence = None
             else:
@@ -174,7 +174,7 @@ def safe_fragment(body: str) -> str:
         else:
             prose.append(line)
     if fence is not None:
-        parts.append('<pre style="max-width:100%;overflow-x:auto;white-space:pre"><code>' + escape("\n".join(code)) + '</code></pre>')
+        parts.append('<pre style="max-width:100%;overflow-x:auto;white-space:pre"><code style="color:inherit;background:transparent;padding:0">' + escape("\n".join(code)) + '</code></pre>')
     flush_prose()
     content = "\n".join(parts)
     if not re.search(r"<h[23]>", content):
@@ -349,7 +349,7 @@ def blog_reader_html(title: str, content: str, format: str = 'html') -> str:
 <title>{escape(title)} · HeoBrain</title>
 <style>
 *{{box-sizing:border-box}}html{{color-scheme:light}}body{{margin:0;background:#fff;color:#17212e;font-family:"Pretendard","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;font-size:19px;line-height:1.95;word-break:keep-all;overflow-wrap:anywhere}}
-.reader{{max-width:850px;margin:auto;padding:54px 38px 80px}}.brand{{color:#16746b;font-size:13px;font-weight:750;letter-spacing:.1em}}.reading-status{{float:right;color:#647184;letter-spacing:0;font-weight:500}}header{{padding-bottom:30px;border-bottom:1px solid #e3e8ed;margin-bottom:36px}}h1{{font-size:clamp(29px,4vw,43px);line-height:1.4;letter-spacing:-.04em;margin:22px 0 17px;font-weight:800}}.format-note{{color:#647184;font-size:14px;margin:0}}.hb-post{{max-width:none!important}}.hb-post h2{{font-size:25px;line-height:1.5;margin:46px 0 18px;padding-top:5px;letter-spacing:-.025em}}.hb-post h3{{font-size:21px;margin:30px 0 14px}}.hb-post p{{margin:18px 0!important}}.hb-post>p:first-of-type{{font-size:21px;color:#334155;line-height:1.95}}a{{color:#087d76;text-decoration-thickness:1px;text-underline-offset:4px;word-break:break-word}}code{{font-size:.9em;background:#eef5f4;padding:2px 5px;border-radius:4px}}.source-text{{white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,"Malgun Gothic",monospace;font-size:16px;line-height:1.95;word-break:normal}}.hb-number-badge{{font-weight:750;color:#087d76}}
+.reader{{max-width:850px;margin:auto;padding:54px 38px 80px}}.brand{{color:#16746b;font-size:13px;font-weight:750;letter-spacing:.1em}}.reading-status{{float:right;color:#647184;letter-spacing:0;font-weight:500}}header{{padding-bottom:30px;border-bottom:1px solid #e3e8ed;margin-bottom:36px}}h1{{font-size:clamp(29px,4vw,43px);line-height:1.4;letter-spacing:-.04em;margin:22px 0 17px;font-weight:800}}.format-note{{color:#647184;font-size:14px;margin:0}}.hb-post{{max-width:none!important}}.hb-post h2{{font-size:25px;line-height:1.5;margin:46px 0 18px;padding-top:5px;letter-spacing:-.025em}}.hb-post h3{{font-size:21px;margin:30px 0 14px}}.hb-post p{{margin:18px 0!important}}.hb-post>p:first-of-type{{font-size:21px;color:#334155;line-height:1.95}}a{{color:#087d76;text-decoration-thickness:1px;text-underline-offset:4px;word-break:break-word}}code{{font-size:.9em;background:#eef5f4;padding:2px 5px;border-radius:4px}}pre code{{color:inherit;background:transparent;padding:0}}.source-text{{white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,"Malgun Gothic",monospace;font-size:16px;line-height:1.95;word-break:normal}}.hb-number-badge{{font-weight:750;color:#087d76}}
 @media(max-width:600px){{body{{font-size:18px}}.reader{{padding:28px 20px 52px}}.brand{{font-size:11px}}.reading-status{{float:none;display:block;margin-top:8px}}h1{{margin-top:18px}}.hb-post h2{{font-size:23px;margin-top:34px}}.hb-post>p:first-of-type{{font-size:19px}}}}
 </style></head><body><main class="reader"><header><div class="brand">HeoBrain / AI 뉴스<span class="reading-status">검토용 · 미게시</span></div>
 <h1>{escape(title)}</h1><p class="format-note">{labels[format]}</p></header>{body}</main></body></html>'''
