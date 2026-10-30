@@ -1664,7 +1664,7 @@ function Studio({
                       },
                       "원고 승인과 제작 요청을 함께 저장했습니다. 제작·출고함에서 진행 상황을 확인하세요.",
                     );
-                    if (result !== true) setApprovalError(result);
+                    if (result !== true) setApprovalError(typeof result === "string" ? result : "승인 결과를 확인하지 못했습니다. 현재 작업 상태와 운영 기록을 확인해 주세요.");
                   }}
                 >
                   이 원고 승인·자동 제작
