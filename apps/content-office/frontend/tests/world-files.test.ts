@@ -49,3 +49,15 @@ test("압축본이 없는 기존 파일은 원본으로 제공한다", async () 
   assert.equal(result.encoding, null);
   assert.deepEqual(result.body, await readFile(file.path));
 });
+
+test("고정 엔진 gzip은 SRI 대상 원본과 바이트가 같고 라이선스 접근을 유지한다", async () => {
+  const file = resolveWorldFile(WORLD_ROOT, ["vendor", "babylon.min.js"])!;
+  const original = await readFile(file.path);
+  const result = await readWorldFile(file, "gzip");
+  assert.equal(result.encoding, "gzip");
+  assert.deepEqual(gunzipSync(result.body), original);
+  assert(result.body.length < original.length * .3);
+  assert.equal(resolveWorldFile(WORLD_ROOT, ["vendor", "babylon.min.js.gz"]), null);
+  const license = resolveWorldFile(WORLD_ROOT, ["vendor", "LICENSE-babylon.txt"])!;
+  assert.equal((await readWorldFile(license, "gzip")).encoding, null);
+});

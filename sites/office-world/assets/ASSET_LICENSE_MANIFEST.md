@@ -35,3 +35,5 @@ Generated from the three original runtime JSON files using Node standard-library
 | arrival-detail-v2.json.gz | 73,807 | 4a4e811e9f8986c2be4875e91ecff3d4eb606e3f7842bb48daafa7de777396de |
 | atrium-detail-v3.json.gz | 85,303 | 3695470e9fac28de92ef7571787932f435770ac4be53d38f8fc5220a067ea160 |
 | guide-avatar-v1.json.gz | 88,700 | ccede067fb2a77d6d5969ff60889075f7b2594859cec7599ec8e3bb89361bd8b |
+
+The existing Apache-2.0 `vendor/babylon.min.js` also has a lossless sidecar, `vendor/babylon.min.js.gz`: 1,471,995 bytes; SHA-256 `744fa8241706d5238acb5391ada9f511ca9b69088657842b7a0ff69127fb28a9`. The original engine, SRI and `vendor/LICENSE-babylon.txt` remain unchanged. No new engine version, library, permission or license is introduced. A byte-equivalence test covers the sidecar.

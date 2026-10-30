@@ -37,9 +37,9 @@ export function acceptsWorldGzip(header: string | null): boolean {
   return (choices.get("gzip") ?? choices.get("*") ?? 0) > 0;
 }
 
-/** Precompressed static geometry only; no runtime compression or cache of API data. */
+/** Precompressed static geometry/engine only; no runtime compression or API-data cache. */
 export async function readWorldFile(file: { path: string; type: string }, encoding: string | null) {
-  if (file.path.endsWith(".json") && acceptsWorldGzip(encoding)) {
+  if ((file.path.endsWith(".json") || file.path.endsWith("/vendor/babylon.min.js")) && acceptsWorldGzip(encoding)) {
     try {
       return { body: await readFile(file.path + ".gz"), encoding: "gzip" };
     } catch (cause) {
