@@ -867,6 +867,9 @@ test("작업실 목차는 핵심 제작물 6개만 표시하고 세부 패널을
   await expect(page.locator(".studio-section")).toHaveCount(6);
   await links.filter({ hasText: "영상" }).click();
   await expect(page.getByRole("heading", { name: "영상", exact: true })).toBeFocused();
+  await expect(page.locator(".outline-location")).toContainText("영상");
+  await links.filter({ hasText: "블로그 글·제목" }).click();
+  await expect(page.locator(".outline-location")).toContainText("블로그 글·제목");
   await expect(page.getByText("검증용 영상 계획", { exact: true })).toBeVisible();
   expect(fixture.writes).toEqual([]);
 });
