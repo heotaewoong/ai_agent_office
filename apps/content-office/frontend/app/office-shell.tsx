@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { officeHref, officeRoute, type View } from "../lib/navigation";
+import { filterNews, newsSegment, newsSegments, newsEmptyState } from "../lib/news";
+import { DecisionHome } from "./decision-home";
 import { api, OfficeApiError } from "../lib/api";
 import { createDashboardRefreshGuard } from "../lib/dashboard-refresh";
 import type {
@@ -61,9 +66,10 @@ import {
   type IntakeDraft,
 } from "./support-panels";
 
-type View = "news" | "studio" | "delivery" | "world" | "settings" | "activity" | "architecture";
 type LocalDraft = { title: string; body: string; baseHash?: string };
 const views: { id: View; title: string; icon: string; en: string }[] = [
+  { id: "home", title: "내 결정 대기", icon: "check", en: "DECISIONS" },
+  { id: "plans", title: "기획·독자 질문", icon: "pen", en: "PLANNING" },
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
   { id: "studio", title: "콘텐츠 작업실", icon: "pen", en: "CONTENT STUDIO" },
   {
@@ -114,8 +120,13 @@ function Empty({
   );
 }
 
-export default function Office() {
-  const [view, setView] = useState<View>("news");
+export default function Office({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const search = useSearchParams();
+  const route = officeRoute(pathname);
+  const view = route.view;
+  const segment = newsSegment(search.get("seg"));
   const [localDrafts, setLocalDrafts] = useState<Record<string, LocalDraft>>(
     {},
   );
@@ -177,6 +188,19 @@ export default function Office() {
     setActiveId(id);
   }, []);
 
+  const setView = (next: View) => router.push(officeHref(next, jobRefresh.current.activeId));
+  const routeJob = route.jobId || (view === "delivery" ? search.get("job") : null);
+  useEffect(() => { if (routeJob) selectJob(routeJob); }, [routeJob, selectJob]);
+  useEffect(() => {
+    if (view !== "news") return;
+    if (search.has("seg")) {
+      try { localStorage.setItem("heobrain-news-segment-v1", segment); } catch { /* Storage can be disabled. */ }
+    } else {
+      let remembered = "all";
+      try { remembered = newsSegment(localStorage.getItem("heobrain-news-segment-v1")); } catch { /* URL still works. */ }
+      if (remembered !== "all") router.replace(`/news?seg=${remembered}`, { scroll: false });
+    }
+  }, [view, segment, search, router]);
   const loadDashboard = useCallback(async (force = false) => {
     const ticket = dashboardRefresh.current.begin(force);
     if (!ticket) return;
@@ -320,6 +344,10 @@ export default function Office() {
 
   const jobs = dashboard?.jobs ?? [];
   const articles = dashboard?.articles ?? [];
+  const visibleArticles = filterNews(articles, segment);
+  const sources = dashboard?.source_registry ?? [];
+  const relevantSources = sources.filter(source => segment === "all" || source.segment === segment);
+  const emptyNews = newsEmptyState(segment, articles.length, relevantSources.length, Boolean(dashboard?.feed_report?.checked_at), Boolean(dashboard?.feed_report?.partial_failure));
   const reviewCount = jobs.filter(
     (item) => item.state === "source_review" || item.state === "release_review",
   ).length;
@@ -341,8 +369,8 @@ export default function Office() {
       <aside className="sidebar">
         <button
           className="brand"
-          onClick={() => setView("news")}
-          aria-label="HeoBrain 오늘의 뉴스"
+          onClick={() => setView("home")}
+          aria-label="HeoBrain 내 결정 대기"
         >
           <span className="brand-mark">
             h<span>•</span>
@@ -357,11 +385,12 @@ export default function Office() {
         </div>
         <nav aria-label="오피스 메뉴">
           {views.map((item) => (
-            <button
+            <Link
+              href={officeHref(item.id, activeId)}
+              prefetch={false}
               key={item.id}
               className={`nav-item ${view === item.id ? "active" : ""}`}
               aria-current={view === item.id ? "page" : undefined}
-              onClick={() => setView(item.id)}
             >
               <Icon name={item.icon} />
               <span>{item.title}</span>
@@ -369,7 +398,7 @@ export default function Office() {
                 <span className="nav-count">{reviewCount}</span>
               )}
               {view === item.id && <span className="nav-active-dot" />}
-            </button>
+            </Link>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -445,7 +474,11 @@ export default function Office() {
                 <span className="orange-period">.</span>
               </h1>
               <p className="page-description">
-                {view === "news"
+                {view === "home"
+                  ? "내 검토가 필요한 작업과 다음 행동을 확인하세요."
+                  : view === "plans"
+                    ? "독자 질문과 출처에서 다음 기획을 고르세요."
+                    : view === "news"
                   ? "독자의 질문과 확인한 근거에서 콘텐츠를 시작하세요."
                   : view === "studio"
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
@@ -506,7 +539,7 @@ export default function Office() {
           {view !== "news" && Object.keys(ideaSourcesDrafts).length > 0 && (
             <div className="notice" role="status">
               <span>기획 출처 입력 {Object.keys(ideaSourcesDrafts).length}건을 이 탭에 임시 보관 중입니다. 새로고침 전에 저장하세요.</span>
-              <button className="button text" onClick={() => setView("news")}>기획 은행으로 돌아가기</button>
+              <button className="button text" onClick={() => setView("plans")}>기획 은행으로 돌아가기</button>
             </div>
           )}
           {Object.keys(offerDrafts).length > 0 && (
@@ -522,6 +555,7 @@ export default function Office() {
             </div>
           )}
 
+          {children}
           {loading ? (
             <div className="loading-panel" role="status">
               <span className="spinner" />
@@ -541,6 +575,20 @@ export default function Office() {
             </Empty>
           ) : (
             <>
+              {view === "home" && <DecisionHome dashboard={dashboard} />}
+              {view === "plans" && <>
+                  <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
+                  <IdeaBank
+                    drafts={ideaSourcesDrafts}
+                    onDraftChange={updateIdeaSourcesDraft}
+                    refreshKey={ideaRefresh}
+                    onSelected={(j) => {
+                      selectJob(j.id);
+                      setView("studio");
+                      void loadDashboard(true);
+                    }}
+                  />
+              </>}
               {view === "news" && (
                 <>
                   <section className="brief-banner" aria-label="수집 현황">
@@ -586,17 +634,6 @@ export default function Office() {
                       </div>
                     </div>
                   </section>
-                  <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
-                  <IdeaBank
-                    drafts={ideaSourcesDrafts}
-                    onDraftChange={updateIdeaSourcesDraft}
-                    refreshKey={ideaRefresh}
-                    onSelected={(j) => {
-                      selectJob(j.id);
-                      setView("studio");
-                      void loadDashboard(true);
-                    }}
-                  />
                   <section
                     className="news-section"
                     aria-labelledby="news-heading"
@@ -604,26 +641,24 @@ export default function Office() {
                     <div className="section-heading">
                       <div className="section-title">
                         <h2 id="news-heading">오늘 주목할 뉴스</h2>
-                        <span className="count-pill">{articles.length}</span>
+                        <span className="count-pill">{visibleArticles.length}</span>
                       </div>
                       <span className="section-meta">
                         최대 3개 선택 · 점수는 편집 기준
                       </span>
                     </div>
-                    {articles.length === 0 ? (
-                      <Empty title="선정할 기사가 아직 없어요">
-                        RSS를 수집하면 발행일과 근거가 있는 후보가 여기에
-                        나타납니다. 실패한 피드와 날짜가 없는 항목은 운영
-                        기록에서 확인하세요.
-                      </Empty>
+                    <nav className="news-segments" aria-label="뉴스 분류">{newsSegments.map(item => <Link key={item.id} href={`/news?seg=${item.id}`} scroll={false} prefetch={false} aria-current={segment === item.id ? "page" : undefined} onClick={() => setShowAll(false)}>{item.label} <span>{filterNews(articles, item.id).length}</span></Link>)}</nav>
+                    <p className="news-scope">최근 7일의 선정 후보 · 분류별 전체 후보 수이며 오늘 새 기사 수가 아닙니다. 분류를 바꿔도 선택한 기사 {selected.length}건은 유지됩니다.</p>
+                    {dashboard.feed_report?.partial_failure && <p className="notice" role="status">일부 출처 수집에 실패했어요. 보이는 기사는 보존했습니다. 운영 기록에서 출처별 결과를 확인하세요.</p>}
+                    {visibleArticles.length === 0 ? (
+                      <Empty title={emptyNews.title}>{emptyNews.text} <Link href={emptyNews.kind === "failure" ? "/runs" : "/plans"}>{emptyNews.kind === "failure" ? "운영 기록 확인" : "기획·독자 질문 열기"}</Link></Empty>
                     ) : (
                       <div className="article-grid">
-                        {(showAll ? articles : articles.slice(0, 6)).map(
-                          (article, index) => (
+                        {(showAll ? visibleArticles : visibleArticles.slice(0, 6)).map(
+                          (article) => (
                             <ArticleCard
                               key={article.id}
                               article={article}
-                              index={index}
                               checked={selected.includes(article.id)}
                               disabled={
                                 !!busy ||
@@ -641,14 +676,14 @@ export default function Office() {
                         )}
                       </div>
                     )}
-                    {articles.length > 6 && (
+                    {visibleArticles.length > 6 && (
                       <button
                         className="show-more"
                         onClick={() => setShowAll(!showAll)}
                       >
                         {showAll
                           ? "주요 뉴스만 보기"
-                          : `후보 ${articles.length - 6}건 더 살펴보기`}
+                          : `후보 ${visibleArticles.length - 6}건 더 살펴보기`}
                         <Icon name="chevron" size={16} />
                       </button>
                     )}
@@ -703,7 +738,7 @@ export default function Office() {
                         >
                           오늘의 뉴스 고르기 →
                         </button>
-                        <button className="inline-button" onClick={() => setView("news")}>
+                        <button className="inline-button" onClick={() => setView("plans")}>
                           질문·직접 기획으로 시작하기 →
                         </button>
                       </div>
@@ -712,7 +747,7 @@ export default function Office() {
                         <button
                           key={item.id}
                           className={`job-item ${item.id === activeId ? "active" : ""}`}
-                          onClick={() => selectJob(item.id)}
+                          onClick={() => { selectJob(item.id); router.push(officeHref(view === "delivery" ? "delivery" : "studio", item.id)); }}
                         >
                           <Badge state={item.state} />
                           <strong>
@@ -895,13 +930,11 @@ export default function Office() {
 
 function ArticleCard({
   article,
-  index,
   checked,
   disabled,
   onToggle,
 }: {
   article: Article;
-  index: number;
   checked: boolean;
   disabled: boolean;
   onToggle: () => void;
@@ -918,7 +951,7 @@ function ArticleCard({
     <article className={`article-card ${checked ? "selected" : ""}`}>
       <div className="card-top">
         <span className="article-source">
-          <span className={`source-letter source-${index % 3}`}>
+          <span className="source-letter source-0">
             {article.feed_name?.slice(0, 1) || "R"}
           </span>
           {article.feed_name || "공식 RSS"}
@@ -940,7 +973,7 @@ function ArticleCard({
       </div>
       <div className="article-tags">
         <span>
-          {article.category || (index < 3 ? "EDITOR'S PICK" : "AI UPDATE")}
+          {article.segment === "exam" ? "자격증·수험생" : article.segment === "ai" ? "AI·자동화" : "분류 미확인"}
         </span>
         <time dateTime={article.published_at}>
           {formatDate(article.published_at)}
@@ -972,7 +1005,7 @@ function ArticleCard({
       )}
       {article.summary && (
         <details className="article-raw">
-          <summary>원문 설명 보기 (영어)</summary>
+          <summary>원문 설명 보기</summary>
           <p>{article.summary}</p>
         </details>
       )}
@@ -1000,12 +1033,6 @@ function ArticleCard({
       </div>
       <div className="card-bottom">
         <span className="editor-score">
-          <span className="score-bars">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
           <strong>{article.score}</strong>
           <small>편집 점수</small>
         </span>
