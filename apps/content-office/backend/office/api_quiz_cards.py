@@ -9,10 +9,13 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 import hashlib
+import io
+import json
 import mimetypes
+import zipfile
 
 from fastapi import HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from .quiz import enqueue_output
 from .runtime import window_open
@@ -109,6 +112,53 @@ def register(app, store):
     @app.get("/api/jobs/{job_id}/cards")
     def get_cards(job_id: str):
         return {"cards": cards_payload(store.job(job_id))}
+
+    @app.get("/api/jobs/{job_id}/cards/archive")
+    def cards_archive(job_id: str, version: int, source_hash: str):
+        """현재 화면의 카드만 묶는 검토 ZIP. 출고 승인이나 장부를 변경하지 않는다."""
+        job = store.job(job_id)
+        cards = job.get("cards") or {}
+        if not cards or cards.get("source_hash") != job.get("source_hash"):
+            raise HTTPException(409, "현재 원고의 카드뉴스를 먼저 생성하세요")
+        if cards.get("version") != version or cards.get("source_hash") != source_hash:
+            raise HTTPException(409, "카드뉴스 버전이 바뀌었습니다. 새로고침 후 내려받으세요")
+        slides = cards.get("slides") or []
+        if not 6 <= len(slides) <= 8 or [s.get("index") for s in slides] != list(range(1, len(slides) + 1)):
+            raise HTTPException(409, "카드 개수와 순서를 다시 확인하세요")
+        files, seen, total = [], set(), 0
+        for slide in slides:
+            record = slide.get("artifact")
+            if not record:
+                raise HTTPException(409, "아직 이미지가 없는 카드가 있습니다")
+            path = _verified_path(store, record)
+            if path.suffix.lower() != ".png":
+                raise HTTPException(409, "카드 이미지 형식을 다시 확인하세요")
+            total += path.stat().st_size
+            if total > 64 * 1024 * 1024:
+                raise HTTPException(409, "카드뉴스 용량이 너무 큽니다. 개별 내려받기를 이용하세요")
+            content = path.read_bytes()
+            digest = hashlib.sha256(content).hexdigest()
+            if digest != record.get("sha256") or len(content) > 64 * 1024 * 1024:
+                raise HTTPException(409, "파일이 변경되어 재검수가 필요합니다")
+            if digest in seen:
+                raise HTTPException(409, "같은 이미지가 중복되어 있습니다. 다시 검토하세요")
+            seen.add(digest)
+            files.append((f"card-{slide['index']:02d}.png", content))
+        metadata = {"purpose": "review_only", "release_approved": False,
+                    "version": version, "source_hash": source_hash,
+                    "checks": cards.get("checks"),
+                    "slides": [{"index": s["index"], "title": s.get("title"), "body": s.get("body"),
+                                "sha256": s["artifact"]["sha256"]} for s in slides]}
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name, content in files:
+                archive.writestr(name, content)
+            archive.writestr("review.json", json.dumps(metadata, ensure_ascii=False, indent=2))
+            archive.writestr("README.txt", "검토용 카드뉴스입니다. 출고 승인②를 대신하지 않습니다.\n검사 이슈와 게시 전 실제 이미지 전체를 확인하세요.\n")
+        return Response(buffer.getvalue(), media_type="application/zip", headers={
+            "Content-Disposition": f'attachment; filename="cards-review-v{version}.zip"',
+            "Cache-Control": "private, no-store",
+        })
 
     @app.get("/api/artifacts/{artifact_id}")
     def artifact(artifact_id: str):

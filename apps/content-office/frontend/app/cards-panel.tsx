@@ -79,9 +79,17 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
             <Icon name="refresh" size={14} className={pending ? "spin" : ""} />
             새로고침
           </button>
+          {cards && !stale && count >= 6 && count <= 8 && cards.slides.every((slide) => slide.artifact_id) && (
+            <a className="button secondary small"
+              href={`/api/jobs/${encodeURIComponent(job.id)}/cards/archive?version=${cards.version}&source_hash=${encodeURIComponent(cards.source_hash)}`}
+              download aria-label={`카드뉴스 ${count}장 전체 ZIP 다운로드`}>
+              <Icon name="download" size={14} />
+              전체 {count}장 ZIP 내려받기
+            </a>
+          )}
         </div>
       </div>
-      <p className="muted">글·영상·현재 원고의 카드뉴스를 검토용 ZIP으로 함께 받을 수 있습니다. 검사 이슈도 포함되며, 출고 승인②와 플랫폼 업로드는 별도입니다.</p>
+      <p className="muted">카드뉴스만 전체 ZIP으로 받거나 글·영상과 함께 통합 검토 ZIP으로 받을 수 있습니다. 검사 이슈도 포함되며, 출고 승인②와 플랫폼 업로드는 별도입니다.</p>
       {approved && job.manifest?.hash && <a className="button secondary small" href={`/api/jobs/${encodeURIComponent(job.id)}/review-package`}>글·영상·카드 검토 ZIP 받기</a>}
       {!approved && <p className="muted">① 원고 승인 뒤에만 만들 수 있습니다. 배경 이미지는 제작 설정을 따르고, 한국어 글자는 로컬에서 크게 얹습니다.</p>}
       {pending && <p className="muted">생성 요청을 받았습니다. 작업자가 저장하면 자동으로 표시됩니다.</p>}
@@ -95,7 +103,7 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
       {cards && (
         <>
           <div className="derived-meta">
-            <span className={`badge ${cards.checks.passed ? "green" : "orange"}`}>{cards.checks.passed ? "검사 통과" : `검사 이슈 ${cards.checks.issues.length}`}</span>
+            <span className={`badge ${cards.checks.passed ? "green" : "orange"}`}>{cards.checks.passed ? "검사 통과" : `검사 이슈 ${cards.checks.issues.length}개`}</span>
             <span className={`badge ${count >= 6 && count <= 8 ? "neutral" : "orange"}`}>{count}장</span>
             <span className="muted">
               버전 {cards.version} · {formatDate(cards.generated_at, true)} · 원고 {cards.source_hash.slice(0, 8)}

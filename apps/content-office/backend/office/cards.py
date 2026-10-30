@@ -1,4 +1,4 @@
-"""승인① 원고 → 카드뉴스 6~8장(1080x1080 PNG). 문구는 모델이 쓰고 모델이 다시 읽어 검토하며, 넘침·오탈자·금지 주장·중복은 코드가 검사한다.
+"""승인① 원고 → 카드뉴스 6~8장(1080x1440 PNG). 문구는 모델이 쓰고 모델이 다시 읽어 검토하며, 넘침·오탈자·금지 주장·중복은 코드가 검사한다.
 
 이미지: 카드마다 그 카드 내용을 보여 주는 주제 이미지를 화면 전체 배경으로 깔고(OpenAI, 운영자가 켠 경우),
 아래쪽에 짙은 그라데이션을 얹어 큰 글자(외곽선 포함)가 어떤 배경에서도 읽히게 한다. 이미지가 없으면 같은 배치의
@@ -191,6 +191,13 @@ def _dots(draw, index, total, accent, y=110):
         draw.ellipse((cx - radius, y - radius, cx + radius, y + radius), fill=accent if n == index else "#cfd8e6", outline=STROKE, width=2)
 
 
+def _save_instagram_portrait(image, path):
+    # 기존 검수된 글자 배치를 보존하고 3:4 격자용 여백만 더한다.
+    portrait = Image.new("RGB", (1080, 1440), image.getpixel((0, 1079)))
+    portrait.paste(image, (0, 180))
+    portrait.save(path, "PNG")
+
+
 def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None, background=None):
     """표지(1장)·본문(사진형)·마무리(마지막 장) 템플릿. 반환값은 어떤 템플릿과 배경을 썼는지."""
     title, body = str(slide.get("title", "")), str(slide.get("body", ""))
@@ -207,8 +214,8 @@ def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None
         text_box(draw, body, (72, 570, 936, 240), 54, "#3d3528", minimum_size=42, font_path=bold, line_gap=14)
         if cta:
             _pill(draw, (72, 850), str(cta), accent, "#ffffff", 44)
-        text_box(draw, "출처와 한계는 본문 글에서 확인하세요", (72, 1000, 936, 50), 26, "#8a7d69", font_path=korean_font())
-        image.save(path, "PNG")
+        text_box(draw, "자료 안내는 게시물 본문에서 확인하세요", (72, 1000, 936, 50), 26, "#8a7d69", font_path=korean_font())
+        _save_instagram_portrait(image, path)
         return {"template": template, "background": "solid", "cta": str(cta) if cta else None}
     if background is not None:
         image, used = _legibility(_fill(background)), "generated"
@@ -228,7 +235,7 @@ def render_slide(slide, index, total, path, brand_label=BRAND_LABEL, *, cta=None
     _outlined(draw, body, (BODY_BOX[0], body_top, BODY_BOX[2], body_m["height"] + 4), body_m["font_size"], body_m["font_size"], "#f1f5ff", 4)
     if template == "cover":
         text_box(draw, "넘겨서 보기 →", (800, 1018, 220, 44), 30, accent, font_path=bold)
-    image.save(path, "PNG")
+    _save_instagram_portrait(image, path)
     return {"template": template, "background": used, "cta": None}
 
 

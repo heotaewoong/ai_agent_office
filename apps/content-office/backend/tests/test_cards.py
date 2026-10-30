@@ -60,7 +60,7 @@ def test_cards_require_source_approval(tmp_path):
     assert provider.calls == [] and store.job(job["id"]).get("cards") is None
 
 
-def test_plan_cards_renders_square_pngs_and_registers_artifacts(tmp_path):
+def test_plan_cards_renders_portrait_pngs_and_registers_artifacts(tmp_path):
     store = Store(tmp_path)
     job = approved_job(store)
     provider = FakeCardsProvider([good_slides(7)])
@@ -78,7 +78,7 @@ def test_plan_cards_renders_square_pngs_and_registers_artifacts(tmp_path):
         path = store.artifacts / slide["artifact"]["path"]
         assert path.is_file() and path.suffix == ".png"
         with Image.open(path) as image:
-            assert image.size == (1080, 1080)
+            assert image.size == (1080, 1440)
     assert len({slide["artifact_id"] for slide in stored["slides"]}) == 7
     assert result["slides"][0]["title"] == "AI 뉴스, 왜 안 남을까요"
     assert any(e["kind"] == "cards_rendered" for e in store.events(job["id"]))
@@ -189,15 +189,15 @@ def test_render_templates_cover_body_cta_and_optional_background(tmp_path):
     assert last["template"] == "cta" and last["cta"] == "무료 AI 업무 적용 점검표 받기"
     for path in (cover, body, cta):
         with Image.open(path) as image:
-            assert image.size == (1080, 1080)
+            assert image.size == (1080, 1440)
     picture = tmp_path / "bg.png"
     Image.new("RGB", (1024, 1024), "#ff8800").save(picture)
     with_bg = render_slide(slides[2], 3, 6, tmp_path / "b2.png", background=picture)
     assert with_bg["template"] == "body" and with_bg["background"] == "generated"
     with Image.open(tmp_path / "b2.png") as image:
-        r, g, b = image.getpixel((540, 330))  # 이미지가 그대로 보이는 위쪽
+        r, g, b = image.getpixel((540, 510))  # 원래 그림의 y=330, 세로 여백 180
         assert r > 200 and b < 80
-        r, g, b = image.getpixel((1050, 1060))  # 글자가 놓이는 아래쪽은 짙게 어둡다
+        r, g, b = image.getpixel((1050, 1240))  # 원래 그림의 y=1060
         assert r < 60
     assert render_slide(slides[2], 3, 6, tmp_path / "b3.png")["background"] == "gradient"
 
