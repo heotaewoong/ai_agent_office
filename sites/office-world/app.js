@@ -2027,7 +2027,9 @@
       exploration();
       $('cards').querySelectorAll('.card.stage').forEach((el) => el.remove());
       this.cards.clear();
-      space.stages.forEach((st) => {
+      const departments = $('department-nav');
+      departments.replaceChildren();
+      space.stages.forEach((st, index) => {
         const el = document.createElement('button');
         el.type = 'button';
         el.className = 'card stage';
@@ -2035,6 +2037,15 @@
         el.addEventListener('click', () => this.openStage(st.id));
         $('cards').appendChild(el);
         this.cards.set(st.id, el);
+        const shortcut = document.createElement('button');
+        shortcut.type = 'button';
+        shortcut.dataset.department = st.id;
+        shortcut.style.setProperty('--stage', st.color);
+        shortcut.textContent = `${index + 1} · ${st.name}`;
+        shortcut.title = `${st.name} 위치와 맡은 업무 보기`;
+        shortcut.setAttribute('aria-controls', 'panel');
+        shortcut.addEventListener('click', () => this.openStage(st.id));
+        departments.appendChild(shortcut);
       });
       this.refresh(d);
     },
@@ -2042,14 +2053,14 @@
     refresh(d) {
       const command = $('btn-command');
       if (command) command.disabled = false;
-      space.stages.forEach((st) => {
+      space.stages.forEach((st, index) => {
         const el = this.cards.get(st.id);
         if (!el) return;
         const agents = space.agents.filter((a) => a.stageId === st.id);
         const running = agents.filter((a) => a.status === 'running').length;
         const human = st.items.filter((it) => it.needsHuman).length;
         const meta = st.teamId && st.connection !== 'content' ? esc(st.approval) : `<span>${st.items.length}건</span><span class="running">앱 역할 ${agents.length}개 · ${running} 실행</span>${human ? `<span class="human">사람 ${human}</span>` : ''}`;
-        el.innerHTML = `<span class="card-dot"></span><span class="card-body"><span class="card-title">${esc(st.name)}</span><span class="card-meta">${meta}</span></span><span class="card-faces">${agents.map((a) => `<span class="face ${a.status}" style="--face:${a.av ? faceColor(a) : '#c9a'}" title="${esc(a.name)}"></span>`).join('')}</span>`;
+        el.innerHTML = `<span class="card-dot" aria-hidden="true">${index + 1}</span><span class="card-body"><span class="card-title">${esc(st.name)}</span><span class="card-meta">${meta}</span></span><span class="card-faces">${agents.map((a) => `<span class="face ${a.status}" style="--face:${a.av ? faceColor(a) : '#c9a'}" title="${esc(a.name)}"></span>`).join('')}</span>`;
         el.classList.toggle('active', space.selectedStage === st.id);
       });
       const b = d.brain;
@@ -2184,6 +2195,7 @@
       if (redrawMini) this.miniT = now;
       if (isPhone() || space.layer === 'meadow') { this.cards.forEach((el) => { el.hidden = false; }); this.brainCard.hidden = false; this.agentCard.hidden = true; if (!isPhone() && redrawMini) this.drawMinimap(); return; }
       const w = world.canvas.clientWidth, h = world.canvas.clientHeight;
+      const nameTop = $('department-nav').getBoundingClientRect().bottom + 12;
       const walk = space.view === 'walk';
       const ppos = controls.player.pos;
       space.stages.forEach((st) => {
@@ -2195,7 +2207,7 @@
         if (!pr.visible || pr.x < -200 || pr.x > w + 200 || pr.y < -100 || pr.y > h + 100) { el.hidden = true; return; }
         el.hidden = false;
         const half = el.offsetWidth / 2 + 8;
-        el.style.left = `${Math.max(half, Math.min(w - half, pr.x))}px`; el.style.top = `${Math.max(90, pr.y)}px`;
+        el.style.left = `${Math.max(half, Math.min(w - half, pr.x))}px`; el.style.top = `${Math.max(nameTop + el.offsetHeight, pr.y)}px`;
       });
       const bp = this.project(new B.Vector3(0, 7.4, 0));
       this.brainCard.hidden = !bp.visible || (space.layer === 'meadow' && walk) || (walk && Math.hypot(ppos.x, ppos.z) > 26);
