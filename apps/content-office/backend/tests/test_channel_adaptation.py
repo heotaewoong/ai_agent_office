@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from office.channel_adaptation import adaptation_issues, source_link
+from office.channel_adaptation import adaptation_issues, source_link, copy_schema
 from office.channel_handoff import write_channel_handoffs
 from office.gates import metadata_fact_check
 from office.output_specs import output_issues
@@ -96,3 +96,17 @@ def test_url_encoding_numbers_are_not_claims_but_social_claim_numbers_still_chec
     assert metadata_fact_check(packet) == []
     packet['channel_posts']['threads_main'] = '효과가 99배예요.'
     assert any(r['level'] == 'block' and '99' in r['message'] for r in metadata_fact_check(packet))
+
+
+def test_english_source_has_only_its_matching_channel_schema_and_export(tmp_path):
+    assert copy_schema('en')['required'] == ['instagram_english']
+    assert 'instagram_english' not in copy_schema('ko')['required']
+    packet = {'title': 'Keep a local vault', 'body': 'Detailed source remains intact.',
+              'audience': {'language': 'en'}, 'channel_posts': {'instagram_english': 'Check the device and folder pause states before changing the setup.'}}
+    assert adaptation_issues(packet) == []
+    write_channel_handoffs(packet, tmp_path, source_hash='a' * 64, language='en')
+    rows = json.loads((tmp_path / 'channel-handoff.json').read_text(encoding='utf-8'))['channels']
+    english = next(r for r in rows if r['channel_key'] == 'instagram_english')
+    assert english['copy_mode'] == 'channel_adapted'
+    assert (tmp_path / english['file']).read_text(encoding='utf-8').startswith(packet['channel_posts']['instagram_english'])
+    assert next(r for r in rows if r['channel_key'] == 'threads_main')['state'] == 'needs_review'
