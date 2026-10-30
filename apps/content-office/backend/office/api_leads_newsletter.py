@@ -43,6 +43,8 @@ class NewsletterSent(BaseModel):
 
 
 class CouponInput(BaseModel):
+    usage_limit: int | None = Field(default=None, ge=1, le=10**9, strict=True)
+    user_usage_limit: int | None = Field(default=None, ge=1, le=10**9, strict=True)
     code: str | None = Field(default=None, max_length=64)
     discount_percent: int | None = Field(default=None, ge=1, le=100, strict=True)
     expires_at: str | None = Field(default=None, max_length=50)

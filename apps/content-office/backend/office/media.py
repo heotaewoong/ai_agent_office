@@ -796,7 +796,7 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
             run_output('blog', lambda: write_blog_exports(packet, folder, job.get('offer')) + write_channel_handoffs(packet, folder, job.get('offer'), source_hash=source_hash, language=(packet.get('audience') or {}).get('language'), channels=channel_registry))
             run_output('video', video_output)
             run_output('cards', card_output)
-            run_output('pdf', lambda: [write_reference_pdf(packet, folder)])
+            run_output('pdf', lambda: [write_reference_pdf(packet, folder, job.get('offer'))])
             completed = [kind for kind, status in output_status.items() if status['state'] == 'completed']
             if not completed:
                 reasons = '; '.join(status.get('error', '') for status in output_status.values())

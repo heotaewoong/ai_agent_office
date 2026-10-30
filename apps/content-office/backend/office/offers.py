@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timezone
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from .store import WorkflowError, digest
 
@@ -12,8 +12,11 @@ def offer_snapshot(offer):
     if not offer:
         return None
     coupon = offer.get("coupon")
+    coupon_keys = ("code", "discount_percent", "expires_at", "terms", "verified")
+    if coupon:
+        coupon_keys += tuple(key for key in ("usage_limit", "user_usage_limit") if coupon.get(key) is not None)
     return {"product": offer.get("product"), "price_krw": offer.get("price_krw"), "url": offer.get("url"), "note": offer.get("note"),
-            "coupon": {key: coupon.get(key) for key in ("code", "discount_percent", "expires_at", "terms", "verified")} if coupon else None}
+            "coupon": {key: coupon.get(key) for key in coupon_keys} if coupon else None}
 
 
 def offer_hash(offer):
@@ -94,11 +97,41 @@ def normalise_offer(offer, actor):
             raise WorkflowError("쿠폰 확인 여부는 참 또는 거짓이어야 합니다")
         if expires:
             expires = _expiry(expires).isoformat()
-        coupon = {"code": code, "discount_percent": percent, "expires_at": expires, "terms": terms, "verified": verified}
+        limits = {}
+        for key in ("usage_limit", "user_usage_limit"):
+            value = coupon.get(key)
+            if value is not None:
+                if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 10**9:
+                    raise WorkflowError("쿠폰 사용 횟수는 1~1,000,000,000의 정수여야 합니다. 전체 무제한은 비워 두세요")
+                limits[key] = value
+        coupon = {"code": code, "discount_percent": percent, "expires_at": expires, "terms": terms, "verified": verified, **limits}
     result = {"product": product, "price_krw": price, "url": url, "note": note, "coupon": coupon}
     if coupon and coupon["verified"]:
         require_offer_ready(result)
     return result
+
+
+def offer_url(offer):
+    """HeoBrain 상품 링크의 쿠폰은 선택한 스냅샷만 사용한다. 할인 권한은 서버가 검증한다."""
+    url = (offer or {}).get("url") or ""
+    parsed = urlsplit(url)
+    if parsed.hostname not in ("heobrain.kr", "www.heobrain.kr"):
+        return url
+    query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True) if key.lower() != "coupon"]
+    coupon = (offer or {}).get("coupon")
+    if coupon:
+        require_offer_ready(offer)
+        query.append(("coupon", coupon["code"]))
+    return urlunsplit(parsed._replace(query=urlencode(query)))
+
+
+def offer_card_cta(offer):
+    if not offer:
+        return None
+    require_offer_ready(offer)
+    domain = urlsplit(offer_url(offer)).hostname or "상품 링크는 게시물 본문"
+    coupon = offer.get("coupon")
+    return f"{domain}\n{coupon['discount_percent']}% 할인 · 쿠폰 {coupon['code']}" if coupon else domain
 
 
 def offer_text(offer):
@@ -118,8 +151,12 @@ def offer_text(offer):
             parts.append(f"할인 예상 {estimated:,}원(실제 결제금액은 스토어 확인)")
         parts.append(f"사용기한 {coupon['expires_at']}")
         parts.append(f"조건: {coupon['terms']}")
+        if coupon.get("user_usage_limit"):
+            parts.append(f"1인 {coupon['user_usage_limit']}회")
+        if coupon.get("usage_limit"):
+            parts.append(f"전체 {coupon['usage_limit']}회 한정")
     if offer.get("url"):
-        parts.append(offer["url"])
+        parts.append(offer_url(offer))
     if offer.get("note"):
         parts.append(offer["note"])
     return "함께 보기: " + " · ".join(parts)

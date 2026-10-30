@@ -170,7 +170,7 @@ def test_cards_routes_require_approval_then_enqueue_and_serve_images(context):
     plan_cards(store, job["id"], provider=FakeCardsProvider([good_slides()]))
     body = client.get(f"/api/jobs/{job['id']}/cards").json()["cards"]
     assert set(body) == {"version", "generated_at", "source_hash", "slides", "checks"}
-    assert set(body["slides"][0]) == {"index", "title", "body", "artifact_id", "visual", "template", "background"}
+    assert set(body["slides"][0]) == {"index", "title", "body", "artifact_id", "visual", "template", "background", "cta"}
     served = client.get(f"/api/artifacts/{body['slides'][0]['artifact_id']}")
     assert served.status_code == 200 and served.headers["content-type"] == "image/png"
     assert client.get("/api/artifacts/asset_missing").status_code == 404

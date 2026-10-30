@@ -23,7 +23,7 @@ from .runtime import window_open
 from .store import WorkflowError
 
 QUIZ_KEYS = ("version", "generated_at", "source_hash", "questions", "checks", "artifact_id")
-SLIDE_KEYS = ("index", "title", "body", "artifact_id", "visual", "template", "background")
+SLIDE_KEYS = ("index", "title", "body", "artifact_id", "visual", "template", "background", "cta")
 
 
 def quiz_payload(job):
@@ -163,12 +163,16 @@ def register(app, store):
                     "version": version, "source_hash": source_hash,
                     "checks": cards.get("checks"),
                     "slides": exported}
+        from .offers import offer_text
+        campaign = offer_text(job.get("offer"))
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, content in files:
                 archive.writestr(name, content)
             archive.writestr("review.json", json.dumps(metadata, ensure_ascii=False, indent=2))
             archive.writestr("README.txt", "검토용 카드뉴스입니다. 출고 승인②를 대신하지 않습니다.\n검사 이슈와 게시 전 실제 이미지 전체를 확인하세요.\n")
+            if campaign:
+                archive.writestr("campaign.txt", campaign + "\n\n인스타그램: 프로필 링크 또는 자료 전달 DM에 구매 링크를 넣으세요. 이미지의 주소는 클릭되지 않습니다.\n")
         return Response(buffer.getvalue(), media_type="application/zip", headers={
             "Content-Disposition": f'attachment; filename="cards-review-v{version}.zip"',
             "Cache-Control": "private, no-store",

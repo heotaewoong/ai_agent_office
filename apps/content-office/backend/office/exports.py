@@ -396,7 +396,7 @@ def write_rights_manifest(packet: dict, folder: Path) -> Path:
     return write_text(folder, "asset-rights.json", json.dumps(manifest, ensure_ascii=False, indent=2))
 
 
-def write_reference_pdf(packet: dict, folder: Path) -> Path:
+def write_reference_pdf(packet: dict, folder: Path, offer: dict | None = None) -> Path:
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_LEFT
     from reportlab.lib.styles import ParagraphStyle
@@ -411,6 +411,13 @@ def write_reference_pdf(packet: dict, folder: Path) -> Path:
     story = [Paragraph(escape(packet["title"]), title), Paragraph("출처 기반 요약 · 확인 체크리스트", heading)]
     for section in re.split(r"\n\s*\n", packet["body"]):
         story.append(Paragraph(escape(plain_text(section)).replace("\n", "<br/>"), body)); story.append(Spacer(1, 9))
+    campaign = offer_line(offer)
+    if campaign:
+        from .offers import offer_url
+        story.append(Paragraph("상품·쿠폰 안내", heading))
+        story.append(Paragraph(escape(campaign), body))
+        if offer.get("url"):
+            story.append(Paragraph(f'<link href="{escape(offer_url(offer), quote=True)}" color="#245dc1">상품과 쿠폰 적용 조건 확인하기</link>', body))
     story.append(Paragraph("게시 전 확인", heading))
     for item in ["주장과 수치가 출처의 범위에 맞는지 확인", "최신성·한계·개인 경험과 사실 구분", "대표 이미지·음성·자막과 글의 내용 일치 확인"]:
         story.append(Paragraph("□ " + escape(item), body))

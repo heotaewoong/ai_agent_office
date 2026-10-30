@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { campaignUrl, couponRegistrationUrl } from "../lib/offer.ts";
 import { changeOfferDraft, estimatedCouponPrice, offerDraftForJob, offerDraftFromJob, offerExpiryInput, offerFromForm, syncOfferDraft, updateOfferDrafts, type OfferDraft } from "../lib/offer.ts";
 
 test("오퍼 폼은 상품·https URL·0 이상의 정수 가격만 받는다", () => {
@@ -95,4 +96,24 @@ test("쿠폰 확인을 캐시로 되살린 뒤에도 조건을 수정하면 확�
   assert.equal(draft.form.coupon_verified, "yes");
   for (const key of ["coupon_code", "discount_percent", "expires_at", "coupon_terms", "product", "price_krw", "url"])
     assert.equal(changeOfferDraft(draft, key, "changed").form.coupon_verified, "no", key);
+});
+test("선택한 쿠폰만 링크에 싣고 미선택하면 이전 코드를 제거한다", () => {
+  const offer = { product: "합성상품", price_krw: 1000, url: "https://heobrain.kr/product/p?coupon=OLD&Coupon=OLD2", note: "", actor: "fixture", captured_at: "", coupon: { code: "FIXTURE20", discount_percent: 20, expires_at: "2099-01-01T00:00:00Z", terms: "합성", verified: true } };
+  assert.equal(campaignUrl(offer), "https://heobrain.kr/product/p?coupon=FIXTURE20");
+  assert.equal(campaignUrl({ ...offer, coupon: null }), "https://heobrain.kr/product/p");
+  assert.equal(campaignUrl({ ...offer, url: "https://example.com/item" }), "https://example.com/item");
+});
+
+test("초기 선택의 상품·할인율·한국 종료일·사용 횟수를 등록 초안에 전달한다", () => {
+  const form = { product: "합성 상품", price_krw: "9900", url: "https://heobrain.kr/product/p-1", coupon_enabled: "yes", coupon_code: "FIXTURE20", discount_percent: "20", expires_at: "2099-11-01", coupon_terms: "대상 상품 한정", user_usage_limit: "1", usage_limit: "100" };
+  const ready = offerFromForm({ ...form, coupon_verified: "yes" });
+  assert.ok("offer" in ready);
+  assert.equal(ready.offer.coupon?.expires_at, "2099-11-01T14:59:59.999Z");
+  assert.equal(ready.offer.coupon?.usage_limit, 100);
+  const url = new URL(couponRegistrationUrl(form)!);
+  assert.equal(url.searchParams.get("product"), "p-1");
+  assert.equal(url.searchParams.get("valid_until"), "2099-11-01");
+  assert.equal(url.searchParams.get("usage_limit"), "100");
+  assert.equal(couponRegistrationUrl({ ...form, url: "https://example.com/item" }), null);
+  assert.ok("error" in offerFromForm({ ...form, usage_limit: "-1" }));
 });
