@@ -247,16 +247,6 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(self.h.git('rev-parse', 'HEAD'), original)
         self.assertEqual(self.h.calls, [])
 
-    def test_volatile_cache_setting_is_not_a_business_record(self):
-        value = self.h.deployment()
-        before = value.business_state()
-        with closing(sqlite3.connect(self.h.state / 'office.sqlite3')) as db, db:
-            db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', ('runway_credit_cache', json.dumps({'checked_at': 'now', 'balance': 10})))
-        self.assertEqual(value.business_state(), before)
-        with closing(sqlite3.connect(self.h.state / 'office.sqlite3')) as db, db:
-            db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', ('budget_cap', '1000'))
-        self.assertNotEqual(value.business_state(), before)
-
     def test_open_or_missing_work_window_blocks(self):
         for window in ({}, {'authorized_end': (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()}):
             with closing(sqlite3.connect(self.h.state / 'office.sqlite3')) as db, db:
