@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 from .exports import korean_font, stock_credit_line, write_blog_exports, write_reference_pdf, write_rights_manifest, write_video_exports
-from .store import WorkflowError, digest, canonical
+from .store import WorkflowError, digest, canonical, identifier
 RENDER_VERSION = 'office-media-6-footage-overlay-preserved-source-photos'
 VOICE_CACHE_VERSION = 'office-media-1'
 
@@ -875,7 +875,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
     from .channels import registry
     channel_registry = registry(store) if selections.get('blog') else None
     contract = production_contract(voice_renderer, selections, image_renderer=background_renderer, clip_renderer=clip_renderer, channel_registry=channel_registry)
-    folder = source_folder / ('production-' + contract['hash'][:24])
+    # Every attempt owns its directory; a retry must not overwrite earlier review files.
+    folder = source_folder / ('production-' + contract['hash'][:24] + '-' + identifier('take'))
     voice_cache_dir = root / job_id / 'voices'
     if not folder.resolve().is_relative_to(root) or not voice_cache_dir.resolve().is_relative_to(root):
         raise WorkflowError('제작 경로가 허용 범위를 벗어났습니다')
@@ -973,6 +974,18 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
             shared = write_rights_manifest(packet, folder, stock_footage=stock)
             from .exports import write_campaign_exports
             campaign_files = write_campaign_exports(job.get('offer'), folder)
+            # Reuse identical shared exports so a fully cached rerun retains its version hash.
+            shared_exports = [shared, *campaign_files]
+            previous = job.get('manifest') or {}
+            for index, path in enumerate(shared_exports):
+                for record in previous.get('files', []):
+                    old = (root / record['path']).resolve()
+                    if ('shared' in record.get('outputs', []) and record.get('name') == path.name
+                            and old.is_relative_to(root) and old.is_file()
+                            and file_hash(old) == record.get('sha256') == file_hash(path)):
+                        shared_exports[index] = old
+                        break
+            shared, *campaign_files = shared_exports
             files = [shared, *campaign_files] + [path for paths in output_files.values() for path in paths]
             records = [{**artifact_record(root, path), 'outputs': ['shared'] if path == shared or path in campaign_files else [kind for kind, paths in output_files.items() if path in paths]} for path in sorted(set(files))]
             from .offers import offer_snapshot
@@ -989,7 +1002,7 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
             if (media or {}).get('clip_issues') and 'video' in completed:
                 manifest['warnings'].append(f"{len(media['clip_issues'])}개 장면은 실사 영상을 받지 못해 정지 화면으로 만들었습니다. 유료 대체 호출은 하지 않았습니다")
             if thumbs:
-                local_reviews = json.loads((folder / 'thumbnail-review.json').read_text(encoding="utf-8"))['candidates']
+                local_reviews = json.loads((thumbs[0].parent / 'thumbnail-review.json').read_text(encoding="utf-8"))['candidates']
                 by_name = {review['name']: review for review in local_reviews}
                 manifest['thumbnail_candidates'] = [{**record, **by_name[record['name']]} for record in manifest['thumbnail_candidates']]
                 eligible = [candidate for candidate in manifest['thumbnail_candidates'] if candidate['scores']['source_alignment'] >= 3 and candidate['scores']['title_fit'] >= 3]

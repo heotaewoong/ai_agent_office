@@ -92,6 +92,11 @@ class Store:
 
     @staticmethod
     def _write_job(db, job):
+        from .version_history import archive_production
+        previous = db.execute("SELECT data FROM jobs WHERE id=?", (job['id'],)).fetchone()
+        if previous:
+            archive_production(db, json.loads(previous[0]))
+        archive_production(db, job)
         job["updated_at"] = now()
         db.execute("UPDATE jobs SET data=?,updated_at=? WHERE id=?", (canonical(job), job["updated_at"], job["id"]))
         return job

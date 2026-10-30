@@ -1,4 +1,5 @@
 import type { ArchitectureOverview } from "./architecture";
+import type { ContentHistory } from "./version-history";
 import type { ClipEstimate } from "./types";
 import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
 import type { DailyCollectPatch, DailyCollectStatus } from "./daily-collect";
@@ -114,6 +115,7 @@ async function request<T>(
 }
 
 export const api = {
+  versionHistory: (jobId: string) => request<ContentHistory>(`/jobs/${encodeURIComponent(jobId)}/history`),
   jobClipProfile: (jobId: string) => request<{source_hash:string|null;override_hash:string;effective:{id:string;paid:boolean};global_profile_id:string}>(`/jobs/${encodeURIComponent(jobId)}/clip-profile`),
   setJobClipProfile: (jobId: string, body: {source_hash:string;profile:"none"|"global";override_hash:string}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/clip-profile`,"PUT",body),
   improvementWorkspace: (jobId: string) => request<import("./improvements").ImprovementWorkspace>(`/jobs/${encodeURIComponent(jobId)}/improvements`),

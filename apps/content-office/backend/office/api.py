@@ -699,6 +699,8 @@ def create_app(store: Store | None = None):
             'Content-Security-Policy': "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://blog.kakaocdn.net https://t1.daumcdn.net; base-uri 'none'; form-action 'none'"})
 
     from .api_quiz_cards import register as register_quiz_cards; register_quiz_cards(app, store)  # 퀴즈·카드뉴스 라우트와 /api/artifacts/{id}(manifest 파일 + 퀴즈 JSON + 카드 PNG) 서빙
+    from .version_history import register as register_history
+    register_history(app, store)
 
     def profile_availability():
         from . import image_selection, text_selection, video_selection, voice_selection

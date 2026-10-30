@@ -57,6 +57,7 @@ import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
 import { OwnedSourceIntake } from "./owned-source-intake";
 import { EditorialAssetsPanel } from "./editorial-assets-panel";
+import { VersionHistoryPanel } from "./version-history-panel";
 import { ImprovementPanel } from "./improvement-panel";
 import { JobClipProfile } from "./job-clip-profile";
 import { productionNext } from "../lib/production-next";
@@ -1718,6 +1719,7 @@ function Studio({
         </p>
       )}
       <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      <VersionHistoryPanel key={`history-${job.id}`} job={job} />
       <EditorialAssetsPanel job={job} />
       <ImprovementPanel key={job.id} job={job} />
       <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
@@ -2049,6 +2051,7 @@ function Delivery({
           <span>{job.error}</span>
         </div>
       )}
+      <VersionHistoryPanel key={`history-${job.id}`} job={job} />
       <EditorialAssetsPanel job={job} />
       <ImprovementPanel key={job.id} job={job} />
       <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
