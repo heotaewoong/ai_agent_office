@@ -238,7 +238,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
     if (!result) return;
     if (result.kind === "success") setNotice(result.message);
     else setError(result.message);
-    const clean = new URL(withoutOAuthParams(window.location.href));
+    const clean = new URL(withoutOAuthParams(window.location.href), window.location.origin);
     router.replace(`/settings${clean.search}${clean.hash}`);
   }, [router]);
 
