@@ -13,6 +13,8 @@ export type Article = {
   evidence?: Evidence[];
   limitations?: string[];
   origin?: string;
+  preserve_original?: boolean;
+  operator_source_text?: string;
   card_ko?: KoreanCard;
 };
 export type KoreanCard = {
@@ -51,6 +53,9 @@ export type Evidence = {
 export type SourcePacket = {
   title: string;
   body: string;
+  preserve_original?: boolean;
+  source_input_hash?: string;
+  reference_evidence_ids?: string[];
   audience?: { language?: BriefLanguage };
   packaging_hash?: string;
   evidence?: Evidence[];
@@ -206,6 +211,17 @@ export type JobMetadata = {
   source_hash?: string | null;
   has_source?: boolean;
 };
+export type JobBudget = {
+  job_id: string;
+  cap_krw: number | null;
+  spent_krw: number;
+  reserved_krw: number;
+  remaining_krw: number | null;
+  overrun_krw: number;
+  hash: string;
+  configured_by: string | null;
+  configured_at: string | null;
+};
 export type Feed = {
   id?: string;
   name?: string;
@@ -231,7 +247,7 @@ export type Agent = {
   mode?: string;
   [key: string]: unknown;
 };
-export type VoiceProfile = {id?:string;name?:string;paid?:boolean;automatic_fallback?:boolean;job_cap_krw?:number;note?:string};
+export type VoiceProfile = {id?:string;name?:string;paid?:boolean;configured?:boolean;key_source?:string|null;automatic_fallback?:boolean;job_cap_krw?:number;note?:string};
 export type ProviderProfile = {
   id?: string;
   name?: string;
@@ -276,6 +292,37 @@ export type Delivery = {
   created_at?: string;
   updated_at?: string;
   reconciled_at?: string;
+};
+export type ChannelStagingRow = {
+  channel_key: string;
+  label: string;
+  platform: string;
+  locale: string;
+  source_language: string | null;
+  public_url: string | null;
+  status: "local_ready" | "blocked" | "paused" | "private" | "unknown" | "needs_review";
+  local_ready: boolean;
+  required_files: string[];
+  files: { id?: string; name: string; url?: string; sha256: string; size?: number }[];
+  blockers: string[];
+  external_state: "not_connected" | "not_attempted" | "private" | "unknown" | "needs_review";
+  external_draft_created: boolean;
+  external_id: string | null;
+  upload_status?: string | null;
+  processing_status?: string | null;
+  can_upload_private: boolean;
+};
+export type ChannelStagingSnapshot = {
+  job_id: string;
+  source_hash: string | null;
+  manifest_hash: string | null;
+  current_release: boolean;
+  stage_hash: string;
+  recorded_at: string | null;
+  recorded_current: boolean;
+  blockers: string[];
+  channels: ChannelStagingRow[];
+  notes: string[];
 };
 export type WindowStart = { work_window: { authorized_end?: string }; services: { started: string[]; running: string[]; note: string } };
 export type Dashboard = {

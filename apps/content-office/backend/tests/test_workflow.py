@@ -124,3 +124,40 @@ def test_source_input_updates_atomically_and_rejects_an_old_editor_snapshot(stor
     assert current["article"]["operator_source_text"] == "처음 등록한 본문"
     assert current["source_hash"] == first["source_hash"]
     assert current["source_approval"] is None
+
+
+def test_preservation_mode_is_bound_to_source_hash_and_compare_and_swap(store):
+    from office.store import digest
+    job = new_job(store)
+    original = "  ## 저자가 직접 제공한 원문\r\n\r\n| 하나 | 둘 |\r\n|---|---|\r\n| 보존 | 확인 |  \r\n"
+    summary = store.register_source_input(job["id"], original, expected_hash=None)
+    assert summary["article"]["preserve_original"] is False
+    saved = store.register_source_input(job["id"], original, expected_hash=summary["source_hash"], preserve_original=True)
+    assert saved["source_hash"] != summary["source_hash"]
+    assert saved["article"]["operator_source_text"] == saved["source_packet"]["body"] == original
+    assert saved["article"]["preserve_original"] is saved["source_packet"]["preserve_original"] is True
+    assert saved["source_packet"]["source_input_hash"] == digest(original)
+    with pytest.raises(WorkflowError, match="버전"):
+        store.register_source_input(job["id"], "늦은 탭의 변경", expected_hash=summary["source_hash"], preserve_original=False)
+    assert store.job(job["id"]) == saved
+    toggled = store.register_source_input(job["id"], original, expected_hash=saved["source_hash"])
+    assert toggled["source_hash"] != saved["source_hash"] and toggled["article"]["preserve_original"] is False
+    assert "preserve_original" not in toggled["source_packet"]
+
+
+@pytest.mark.parametrize("value", [None, "true", "false", 0, 1, [], {}])
+def test_source_preservation_requires_a_strict_boolean_before_mutating_state(store, value):
+    job = new_job(store)
+    before, events = store.job(job["id"]), store.events(job["id"])
+    with pytest.raises(WorkflowError, match="true.*false"):
+        store.register_source_input(job["id"], "제공한 본문", expected_hash=None, preserve_original=value)
+    assert store.job(job["id"]) == before and store.events(job["id"]) == events
+
+
+@pytest.mark.parametrize("text", [None, "", " \r\n\t", 123])
+def test_source_preservation_requires_supplied_markdown_before_mutating_state(store, text):
+    job = new_job(store)
+    before, events = store.job(job["id"]), store.events(job["id"])
+    with pytest.raises(WorkflowError, match="직접 제공"):
+        store.register_source_input(job["id"], text, expected_hash=None, preserve_original=True)
+    assert store.job(job["id"]) == before and store.events(job["id"]) == events

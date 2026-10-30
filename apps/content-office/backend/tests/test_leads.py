@@ -87,3 +87,25 @@ def test_emails_live_only_in_the_leads_table(context):
     db.close()
     kinds = [e["kind"] for e in store.events()]
     assert "lead_registered" in kinds
+
+
+def test_newsletter_snapshot_deduplicates_email_without_changing_lead_summary(context):
+    from office.leads import consent_snapshot
+    from office.store import digest
+
+    store, client, headers = context
+    first = client.post("/api/leads", json=lead_body(email="same@example.com", magnet="one"), headers=headers).json()["lead"]
+    initial = consent_snapshot(store)
+    other = client.post("/api/leads", json=lead_body(email="SAME@example.com", magnet="two"), headers=headers).json()["lead"]
+    duplicate = consent_snapshot(store)
+    assert initial["recipient_count"] == duplicate["recipient_count"] == 1
+    assert initial["recipients_hash"] != duplicate["recipients_hash"]
+    assert duplicate["recipients_hash"] != digest(sorted([first["id"], other["id"]]))
+    assert client.get("/api/leads/summary").json()["consented"] == 2
+    assert len(client.get("/api/leads").json()["leads"]) == 2
+    assert "same@example.com" not in json.dumps(duplicate) and first["id"] not in json.dumps(duplicate)
+    client.post(f"/api/leads/{first['id']}/withdraw", json={}, headers=headers)
+    withdrawn_duplicate = consent_snapshot(store)
+    assert withdrawn_duplicate["recipient_count"] == 1 and withdrawn_duplicate["recipients_hash"] != duplicate["recipients_hash"]
+    client.post(f"/api/leads/{other['id']}/withdraw", json={}, headers=headers)
+    assert consent_snapshot(store)["recipient_count"] == 0

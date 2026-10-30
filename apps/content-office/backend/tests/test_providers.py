@@ -1,3 +1,5 @@
+import json
+
 import requests
 import pytest
 from office.providers import Provider
@@ -13,6 +15,48 @@ class Response:
 
 
 SCHEMA = {"type": "object", "properties": {"passed": {"type": "boolean"}}, "required": ["passed"], "additionalProperties": False}
+
+
+def test_job_budget_blocks_model_before_transport_and_preserves_other_job_costs(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
+    store = Store(tmp_path)
+    job_id = store.create_job({"id": "capped-provider", "title": "예산 시험"})["id"]
+    current = store.get_job_budget(job_id)
+    store.set_job_budget(job_id, 1000, "op", expected_hash=current["hash"])
+    store.reserve_cost("speech_tts", 1000, {"job_id": job_id})
+    calls = []
+    provider = Provider(store, job_id=job_id, transport=lambda *a, **kw: calls.append(kw))
+    with pytest.raises(WorkflowError, match="업무의 합산 예산"):
+        provider.generate("eval", [{"role": "user", "content": "test"}], SCHEMA)
+    assert calls == []
+    assert store.get_job_budget(job_id)["reserved_krw"] == 1000
+
+
+def test_job_attributed_model_cache_reuse_is_free_even_after_job_budget_is_full(tmp_path, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
+    store = Store(tmp_path)
+    job_id = store.create_job({"id": "cached-provider", "title": "예산 시험"})["id"]
+    current = store.get_job_budget(job_id)
+    store.set_job_budget(job_id, 1000, "op", expected_hash=current["hash"])
+    calls = []
+
+    def transport(*args, **kwargs):
+        calls.append(kwargs)
+        return Response('{"passed":true}')
+
+    provider = Provider(store, job_id=job_id, transport=transport)
+    messages = [{"role": "user", "content": "cached test"}]
+    result = provider.generate("eval", messages, SCHEMA)
+    budget = store.get_job_budget(job_id)
+    assert budget["spent_krw"] > 0 and len(calls) == 1
+    with store.connection() as db:
+        costs = [json.loads(row[0]) for row in db.execute("SELECT data FROM costs")]
+    assert len(costs) == 1 and costs[0]["job_id"] == job_id
+    store.reserve_cost("speech_tts", budget["remaining_krw"], {"job_id": job_id})
+    full = store.get_job_budget(job_id)
+    assert provider.generate("eval", messages, SCHEMA) == result
+    assert store.get_job_budget(job_id) == full and len(calls) == 1
+    assert {event["kind"] for event in store.events(job_id)} >= {"model_started", "model_completed", "model_cache_hit"}
 
 
 def test_schema_invalid_model_result_is_not_cached_as_success(tmp_path, monkeypatch):

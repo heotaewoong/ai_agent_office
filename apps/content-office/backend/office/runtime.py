@@ -56,7 +56,8 @@ class ProcessLock:
 
     def __enter__(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.handle = os.fdopen(os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600), "r+b")
+        # A Windows lock failure must not leave buffered bytes for close() to flush again.
+        self.handle = os.fdopen(os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600), "r+b", buffering=0 if os.name == "nt" else -1)
         try:
             if os.name == "nt":
                 import msvcrt

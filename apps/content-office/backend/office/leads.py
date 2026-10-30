@@ -144,7 +144,20 @@ def summary(store):
     return {"total": len(records), "consented": len(records) - withdrawn, "withdrawn": withdrawn, "by_magnet": by_magnet, "by_source": by_source}
 
 
-def consent_snapshot(store):
-    """지금 동의가 살아 있는 신청의 수와 정렬한 ID 해시. 이메일도 ID 목록도 밖으로 내보내지 않는다."""
-    ids = sorted(record["id"] for record in leads(store) if record["consent"]["withdrawn_at"] is None)
-    return {"recipient_count": len(ids), "recipients_hash": digest(ids)}
+def consent_snapshot(store, *, db=None):
+    """이메일별 수신자 수와 현재 동의 사실의 해시. 원문과 이메일은 밖으로 내보내지 않는다.
+
+    신청 장부는 이메일+자료별로 보존한다. 같은 주소의 중복 신청도 동의 내용·철회가 바뀌면
+    해시는 달라지지만 뉴스레터 수신자 수는 한 명이다. 이전 ID 전용 해시는 재작성해야 한다.
+    """
+    if db is None:
+        with store.connection() as connection:
+            return consent_snapshot(store, db=connection)
+    _ensure(db)
+    recipients = {}
+    for row in db.execute("SELECT * FROM leads ORDER BY id"):
+        data = json.loads(row["data"])
+        if data["consent"]["withdrawn_at"] is None:
+            recipients.setdefault(row["email"], []).append({"id": row["id"], "magnet_key": row["magnet_key"],
+                                                          "consent": data["consent"], "consent_text": data["consent_text"]})
+    return {"recipient_count": len(recipients), "recipients_hash": digest(recipients)}

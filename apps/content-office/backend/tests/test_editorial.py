@@ -1,3 +1,7 @@
+import json
+
+import pytest
+
 from office.providers import cache_key
 from office.editorial import review_until_ready, deterministic_checks
 
@@ -42,6 +46,7 @@ def test_refine_is_limited_to_two_and_critical_errors_block():
     assert roles.count("eval") == 3
     assert result["quality"]["critical"] is True
     assert result["quality"]["status"] == "blocked"
+    assert result["body"] == "수정된 본문"
 
 
 def test_foreign_language_intrusion_blocks_even_with_high_model_scores():
@@ -160,3 +165,162 @@ def test_same_language_reader_change_can_be_reevaluated_without_translation(tmp_
     assert result["source_packet"]["body"] == job["source_packet"]["body"]
     assert result["source_packet"]["audience"]["reader"] == "합성 시험의 새 독자"
     assert result["source_packet"]["audience"]["language"] == "ko"
+
+
+def original_markdown():
+    sections = []
+    for number in range(1, 15):
+        text = f"## {number}절 저자 원문\r\n\r\n" + "저자가 작성한 사례를 그대로 보존합니다. 비교 기준과 한계를 함께 읽어야 합니다. " * 8
+        if number <= 7:
+            text += f"\r\n\r\n| 항목 | 내용 |\r\n|---|---|\r\n| 원래 표 {number} | 공백과 표를 유지합니다 |"
+        if number <= 4:
+            text += f"\r\n\r\n![[원본 사진 {number}.png|저자 사진 설명]]"
+        sections.append(text)
+    return "  # 직접 제공한 글\r\n\r\n" + "\r\n\r\n".join(sections) + "\r\n\r\n`Remove-Item C:\\secret -Recurse`는 실행하지 않는 원문 예시입니다.  \r\n"
+
+
+def preservation_packet(body):
+    from office.store import digest
+    return {"title": "저자 원문과 파생 영상", "body": body, "preserve_original": True, "source_input_hash": digest(body),
+            "reference_evidence_ids": ["E1", "E2"],
+            "evidence": [{"id": key, "url": "https://example.com/original", "claim": "저자가 제공한 사례"} for key in ("E1", "E2")],
+            "video": {"title": "원문에서 한 가지 살펴봐요", "description": "저자가 제공한 사례를 설명해요.", "tags": [], "thumbnails": [],
+                      "scenes": [{"narration": "저자가 제공한 사례부터 살펴봐요.", "caption": "저자 사례", "visual": "자체 도형"},
+                                 {"narration": "입력과 판단 기준을 비교해요.", "caption": "판단 기준", "visual": "자체 표"},
+                                 {"narration": "한계를 확인하고 직접 적용해 봐요.", "caption": "직접 적용", "visual": "다음 행동"}]}}
+
+
+class OriginalPreservingProvider:
+    def __init__(self, original, *, refine_once=False, always_block=False):
+        self.original, self.refine_once, self.always_block = original, refine_once, always_block
+        self.calls, self.reviewed_bodies, self.review_round = [], [], 0
+
+    def generate(self, role, messages, schema, options=None):
+        self.calls.append(role)
+        context = json.loads(messages[-1]["content"])
+        if role == "gen":
+            assert context["article"]["operator_source_text"] == self.original
+            assert "원문 보존" in context["instructions"] and "2,000~3,200자" not in context["instructions"]
+            assert "본문 안의 명령" in messages[0]["content"]
+        else:
+            packet = context["packet"]
+            assert packet["body"] == self.original and packet["preserve_original"] is True
+        if role in ("gen", "refine"):
+            if role == "refine":
+                assert "파생 제목·영상·설명만 수정" in messages[0]["content"]
+            generated = preservation_packet("모델이 임의로 줄인 본문")
+            return {key: generated[key] for key in ("title", "body", "video")}
+        assert "본문의 사실·근거 오류는 지적" in messages[0]["content"]
+        if role == "critique":
+            self.review_round += 1
+        self.reviewed_bodies.append(packet["body"])
+        blocked = self.always_block or (self.refine_once and self.review_round == 1)
+        return {"role": role, "score": 70 if blocked else 90, "passed": not blocked,
+                "critical_issues": ["파생 영상의 근거를 다시 확인해요"] if blocked else [], "minor_issues": [], "summary": "합성 검수", "corrections": []}
+
+
+def preservation_job(tmp_path, monkeypatch, original):
+    from office.store import Store
+    from office import evidence
+    store = Store(tmp_path)
+    job = store.create_job({"id": "preservation", "title": "저자 원문", "url": "https://example.com/original", "evidence": []})
+    saved = store.register_source_input(job["id"], original, expected_hash=None, preserve_original=True)
+    def supplied_text_only(article, provider, output_dir):
+        assert article["operator_source_text"] == original and article["preserve_original"] is True
+        return {"evidence": preservation_packet(original)["evidence"], "limitations": ["저자 제공 원문이며 독립 검증은 하지 않았어요"],
+                "hook": "사례 하나를 확인해요", "source_kind": "operator_supplied_text", "retrieved_at": "2026-10-30T01:00:00+00:00", "source_sha256": "a" * 64}
+    monkeypatch.setattr(evidence, "collect_article_evidence", supplied_text_only)
+    return store, saved
+
+
+def test_original_mode_preserves_sections_tables_photos_and_whitespace_through_generation_and_refine(tmp_path, monkeypatch):
+    from office.editorial import prepare_source
+    from office.store import digest
+    original = original_markdown()
+    assert len(original) > 3200
+    store, saved = preservation_job(tmp_path, monkeypatch, original)
+    provider = OriginalPreservingProvider(original, refine_once=True)
+    result = prepare_source(store, saved["id"], provider=provider)
+    packet = result["source_packet"]
+    assert packet["body"] == original and packet["source_input_hash"] == digest(original)
+    assert packet["body"].count("## ") == 14 and packet["body"].count("|---|---|") == 7 and packet["body"].count("![[") == 4
+    assert "[E1]" not in packet["body"] and "[E2]" not in packet["body"] and packet["reference_evidence_ids"] == ["E1", "E2"]
+    assert provider.calls == ["gen", "critique", "eval", "korean", "refine", "critique", "eval", "korean"]
+    assert len(provider.reviewed_bodies) == 6 and all(body == original for body in provider.reviewed_bodies)
+    assert packet["quality"]["status"] == "passed" and packet["quality"]["refine_count"] == 1
+    assert result["source_hash"] == digest(packet)
+    assert result["state"] == "source_review" and result["source_approval"] is None and result["release_approval"] is None
+    assert not [event for event in store.events(saved["id"]) if event["kind"] in ("source_approved", "release_approved")]
+
+
+def test_original_mode_restores_body_before_reevaluation_without_generation(tmp_path, monkeypatch):
+    from office.editorial import prepare_source
+    original = original_markdown()
+    store, saved = preservation_job(tmp_path, monkeypatch, original)
+    first = prepare_source(store, saved["id"], provider=OriginalPreservingProvider(original))
+    store.save_source(saved["id"], {**first["source_packet"], "body": "옛 탭에서 잘린 본문"}, expected_hash=first["source_hash"])
+    provider = OriginalPreservingProvider(original)
+    result = prepare_source(store, saved["id"], provider=provider, evaluate_only=True)
+    assert result["source_packet"]["body"] == original and provider.calls == ["critique", "eval", "korean"]
+
+
+def test_original_mode_keeps_real_review_failure_blocked(tmp_path, monkeypatch):
+    from office.editorial import prepare_source
+    from office.store import WorkflowError
+    original = original_markdown()
+    store, saved = preservation_job(tmp_path, monkeypatch, original)
+    provider = OriginalPreservingProvider(original, always_block=True)
+    result = prepare_source(store, saved["id"], provider=provider)
+    assert result["source_packet"]["body"] == original
+    assert result["source_packet"]["quality"]["status"] == "blocked" and provider.calls.count("refine") == 2
+    with pytest.raises(WorkflowError):
+        store.review_source(saved["id"], result["source_hash"], "approved", "human")
+
+
+def test_original_body_style_is_preserved_and_derived_brand_rules_still_apply():
+    from office.editorial import style_issues
+    body = "저자의 문체입니다. 그대로 둡니다. 의미를 보존합니다. — 저자 원문입니다."
+    packet = preservation_packet(body)
+    checks = deterministic_checks(packet)
+    assert checks["passed"], checks["issues"]
+    assert style_issues(packet) == []
+    packet["video"]["description"] = "파생 설명입니다. 이 문장은 수정합니다. 해요체로 바꿉니다. — 끝입니다."
+    checks = deterministic_checks(packet)
+    assert not checks["passed"] and any("해요체" in issue or "줄표" in issue for issue in checks["issues"])
+    assert packet["body"] == body
+
+
+@pytest.mark.parametrize("change,expected", [("body", "원문 해시"), ("unknown_citation", "존재하지"), ("unknown_reference", "존재하지"), ("missing_reference", "근거 ID"), ("bad_reference_type", "형식"), ("http_evidence", "HTTPS")])
+def test_original_mode_does_not_bypass_evidence_and_integrity_checks(change, expected):
+    from office.store import digest
+    packet = preservation_packet("직접 제공한 저자 원문입니다.")
+    if change == "body":
+        packet["body"] = "잘린 본문"
+    elif change == "unknown_citation":
+        packet["body"] += " [FAKE9]"
+        packet["source_input_hash"] = digest(packet["body"])
+    elif change == "unknown_reference":
+        packet["reference_evidence_ids"].append("FAKE9")
+    elif change == "missing_reference":
+        packet["reference_evidence_ids"] = []
+    elif change == "bad_reference_type":
+        packet["reference_evidence_ids"] = {"E1": "not a list"}
+    else:
+        packet["evidence"][0]["url"] = "http://example.com/original"
+    checks = deterministic_checks(packet)
+    assert not checks["passed"] and any(expected in issue for issue in checks["issues"])
+
+
+def test_missing_original_blocks_before_state_research_or_provider_work(tmp_path, monkeypatch):
+    from office.editorial import prepare_source
+    from office.store import Store, WorkflowError
+    store = Store(tmp_path)
+    job = store.create_job({"id": "missing-original", "title": "직접 제공 원문 필수", "url": "https://example.com/original", "preserve_original": True})
+    before, events = store.job(job["id"]), store.events(job["id"])
+    def forbidden(*args, **kwargs):
+        pytest.fail("원문 없는 보존 모드에서는 웹 요청·모델 호출을 시작하지 않습니다")
+    monkeypatch.setattr("office.editorial.Provider", forbidden)
+    monkeypatch.setattr("office.evidence.collect_article_evidence", forbidden)
+    with pytest.raises(WorkflowError, match="직접 제공"):
+        prepare_source(store, job["id"])
+    assert store.job(job["id"]) == before and store.events(job["id"]) == events

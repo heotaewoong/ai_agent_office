@@ -10,8 +10,12 @@ from office.store import Store, WorkflowError
 MP4 = b"\x00\x00\x00\x18ftypisom\x00\x00\x00\x00isomiso2mp41" + b"\x01" * 3000
 
 
-def released_fixture(tmp_path, *, approve_release=True, outputs=('video',), article_id='yt-test', language='ko'):
+def released_fixture(tmp_path, *, approve_release=True, outputs=('video',), article_id='yt-test', language='ko', allow_channels=False):
     store = Store(tmp_path / 'state')
+    if allow_channels:
+        from office.channels import update_channel
+        for key in ('youtube_main_ko', 'youtube_english'):
+            update_channel(store, key, {'publication_enabled': True}, actor='synthetic-fixture-operator')
     job = store.create_job({'id': article_id, 'title': '업로드 시험'})
     packet = {'title': '업로드 시험', 'body': '합성 기능 시험입니다.', 'synthetic_fixture': True,
               'quality': {'status': 'passed', 'critical': []}, 'audience': {'language': language},
@@ -40,7 +44,13 @@ def released_fixture(tmp_path, *, approve_release=True, outputs=('video',), arti
     return store, job['id']
 
 
+def enabled_fixture(*args, **kwargs):
+    return released_fixture(*args, allow_channels=True, **kwargs)
+
+
 def env(monkeypatch, present=True):
+    for key in ('YOUTUBE_MAIN_KO_REFRESH_TOKEN', 'YOUTUBE_ENGLISH_REFRESH_TOKEN'):
+        monkeypatch.delenv(key, raising=False)
     for key in ('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN'):
         if present:
             monkeypatch.setenv(key, 'test-' + key.lower())
@@ -62,7 +72,8 @@ class FakeYouTube:
     def __init__(self, *, put_status=201, start_status=200, privacy='private', resume_range=None):
         self.put_status, self.start_status, self.privacy, self.resume_range = put_status, start_status, privacy, resume_range
         self.posts, self.puts, self.gets = [], [], []
-        self.video = {'id': 'vid_ABC123', 'status': {'uploadStatus': 'uploaded', 'privacyStatus': privacy}}
+        self.video = {'id': 'vid_ABC123', 'snippet': {'channelId': 'UCc2CaOrPo-1dezowe7kklZA'},
+                      'status': {'uploadStatus': 'uploaded', 'privacyStatus': privacy}}
 
     def post(self, url, **kwargs):
         self.posts.append({'url': url, **kwargs})
@@ -82,18 +93,18 @@ class FakeYouTube:
 
     def get(self, url, **kwargs):
         self.gets.append({'url': url, **kwargs})
-        return Response(200, {'items': [{'id': 'vid_ABC123', 'status': {'uploadStatus': 'processed', 'privacyStatus': self.privacy}, 'processingDetails': {'processingStatus': 'succeeded'}}]})
+        return Response(200, {'items': [{**self.video, 'status': {'uploadStatus': 'processed', 'privacyStatus': self.privacy}, 'processingDetails': {'processingStatus': 'succeeded'}}]})
 
 
 def test_release_approval_for_video_is_required_before_any_request(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path, approve_release=False)
+    store, job_id = enabled_fixture(tmp_path, approve_release=False)
     session = FakeYouTube()
     with pytest.raises(WorkflowError, match='출고 승인②'):
         deliver_youtube(store, job_id, actor='op', session=session)
     assert session.posts == []
-    store2, job2 = released_fixture(tmp_path / 'blog-only', outputs=('blog',))
+    store2, job2 = enabled_fixture(tmp_path / 'blog-only', outputs=('blog',))
     with pytest.raises(WorkflowError, match='출고 승인②'):
         deliver_youtube(store2, job2, actor='op', session=session)
     assert session.posts == []
@@ -102,7 +113,7 @@ def test_release_approval_for_video_is_required_before_any_request(tmp_path, mon
 def test_missing_oauth_env_rejects_without_ledger_change(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries
     env(monkeypatch, present=False)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with pytest.raises(WorkflowError, match='YOUTUBE_'):
         deliver_youtube(store, job_id, actor='op', session=FakeYouTube())
     assert deliveries(store, job_id) == []
@@ -111,10 +122,11 @@ def test_missing_oauth_env_rejects_without_ledger_change(tmp_path, monkeypatch):
 def test_private_upload_records_external_id_and_is_idempotent(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     session = FakeYouTube()
     record = deliver_youtube(store, job_id, actor='op', session=session)
     assert record['state'] == 'private' and record['external_id'] == 'vid_ABC123' and record['channel'] == 'youtube'
+    assert record['upload_status'] == 'uploaded' and record['processing_status'] is None
     token_call, start_call = session.posts
     assert token_call['url'] == 'https://oauth2.googleapis.com/token' and token_call['data']['grant_type'] == 'refresh_token'
     assert start_call['url'].startswith('https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable')
@@ -138,7 +150,7 @@ def test_private_upload_records_external_id_and_is_idempotent(tmp_path, monkeypa
 def test_server_error_during_upload_is_unknown_and_blocks_resend(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     session = FakeYouTube(put_status=503)
     with pytest.raises(WorkflowError, match='불명'):
         deliver_youtube(store, job_id, actor='op', session=session)
@@ -158,11 +170,11 @@ def test_network_failure_at_start_is_unknown_and_quota_error_is_failed(tmp_path,
             if url == 'https://oauth2.googleapis.com/token':
                 return super().post(url, **kwargs)
             raise requests.ConnectionError('offline')
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with pytest.raises(WorkflowError, match='불명'):
         deliver_youtube(store, job_id, actor='op', session=Offline())
     assert deliveries(store, job_id)[0]['state'] == 'unknown'
-    store2, job2 = released_fixture(tmp_path / 'quota')
+    store2, job2 = enabled_fixture(tmp_path / 'quota')
     with pytest.raises(WorkflowError, match='403'):
         deliver_youtube(store2, job2, actor='op', session=FakeYouTube(start_status=403))
     record = deliveries(store2, job2)[0]
@@ -174,7 +186,7 @@ def test_network_failure_at_start_is_unknown_and_quota_error_is_failed(tmp_path,
 def test_reconcile_resumes_incomplete_session_then_confirms_private(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries, reconcile_youtube
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     session = FakeYouTube(put_status=503)
     with pytest.raises(WorkflowError):
         deliver_youtube(store, job_id, actor='op', session=session)
@@ -193,7 +205,7 @@ def test_reconcile_resumes_incomplete_session_then_confirms_private(tmp_path, mo
 def test_unexpected_public_visibility_is_flagged_for_review(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with pytest.raises(WorkflowError, match='공개 범위'):
         deliver_youtube(store, job_id, actor='op', session=FakeYouTube(privacy='public'))
     record = deliveries(store, job_id)[0]
@@ -204,7 +216,7 @@ def test_unexpected_public_visibility_is_flagged_for_review(tmp_path, monkeypatc
 def test_changed_asset_after_release_is_rejected(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     job = store.job(job_id)
     path = store.artifacts / next(f['path'] for f in job['manifest']['files'] if f['name'] == 'short.mp4')
     path.write_bytes(MP4 + b'tampered')
@@ -218,7 +230,7 @@ def test_channel_key_selects_credentials_and_is_part_of_idempotency(tmp_path, mo
     from office.youtube_delivery import deliver_youtube, deliveries
     env(monkeypatch)
     monkeypatch.setenv('YOUTUBE_ENGLISH_REFRESH_TOKEN', 'en-token')
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     session = FakeYouTube()
     with pytest.raises(WorkflowError, match='언어'):
         deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_english')
@@ -229,7 +241,7 @@ def test_channel_key_selects_credentials_and_is_part_of_idempotency(tmp_path, mo
     with pytest.raises(WorkflowError, match='언어'):
         deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_english')
     assert session.puts == []
-    store, job_id = released_fixture(tmp_path / 'reviewed-english', language='en')
+    store, job_id = enabled_fixture(tmp_path / 'reviewed-english', language='en')
     en = deliver_youtube(store, job_id, actor='op', session=session, channel_key='youtube_english')
     assert en['channel_key'] == 'youtube_english' and en['locale'] == 'en' and en['state'] == 'private'
     assert session.posts[0]['data']['refresh_token'] == 'en-token' and len(session.puts) == 1
@@ -242,7 +254,7 @@ def test_language_mismatch_blocks_before_request_and_english_channel_uses_its_to
     from office.briefs import build_brief
     env(monkeypatch)
     monkeypatch.setenv('YOUTUBE_ENGLISH_REFRESH_TOKEN', 'en-token')
-    store, job_id = released_fixture(tmp_path, language='en')
+    store, job_id = enabled_fixture(tmp_path, language='en')
     store.set_brief(job_id, build_brief('productivity-automation', {'language': 'en'}), 'op')
     session = FakeYouTube()
     with pytest.raises(WorkflowError, match='언어'):
@@ -260,7 +272,7 @@ def test_unknown_channel_or_missing_channel_token_is_rejected(tmp_path, monkeypa
     from office.youtube_delivery import deliver_youtube
     env(monkeypatch)
     monkeypatch.delenv('YOUTUBE_ENGLISH_REFRESH_TOKEN', raising=False)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with pytest.raises(WorkflowError, match='채널'):
         deliver_youtube(store, job_id, actor='op', session=FakeYouTube(), channel_key='tistory_main')
     from office.briefs import build_brief
@@ -273,7 +285,7 @@ def test_response_channel_id_mismatch_marks_needs_review(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube
     from office.channels import update_channel
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     update_channel(store, 'youtube_main_ko', {'external_account_id': 'UCexpected00000000000000'}, actor='op')
     session = FakeYouTube()
     session.video['snippet'] = {'channelId': 'UCother000000000000000000'}
@@ -285,7 +297,7 @@ def test_response_channel_id_mismatch_marks_needs_review(tmp_path, monkeypatch):
     assert 'delivery_channel_mismatch' in [e['kind'] for e in store.events(job_id)]
     good = FakeYouTube()
     good.video['snippet'] = {'channelId': 'UCexpected00000000000000'}
-    store2, job2 = released_fixture(tmp_path / 'ok')
+    store2, job2 = enabled_fixture(tmp_path / 'ok')
     update_channel(store2, 'youtube_main_ko', {'external_account_id': 'UCexpected00000000000000'}, actor='op')
     assert deliver_youtube(store2, job2, actor='op', session=good)['state'] == 'private'
 
@@ -296,7 +308,7 @@ def test_concurrent_same_video_starts_only_one_upload(tmp_path, monkeypatch):
     from office import youtube_delivery as delivery
 
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     ready = Barrier(2, timeout=10)
     original_metadata = delivery.video_metadata
 
@@ -334,8 +346,8 @@ def test_concurrent_distinct_deliveries_preserve_both_external_ids(tmp_path, mon
     from office import youtube_delivery as delivery
 
     env(monkeypatch)
-    store, first_job = released_fixture(tmp_path, article_id='first')
-    _, second_job = released_fixture(tmp_path, article_id='second')
+    store, first_job = enabled_fixture(tmp_path, article_id='first')
+    _, second_job = enabled_fixture(tmp_path, article_id='second')
     ready, snapshots = Barrier(2, timeout=10), Barrier(2, timeout=10)
     state = local()
     original_setting, original_save = Store.setting, delivery._save
@@ -381,8 +393,8 @@ def test_active_upload_blocks_reconcile_but_not_other_delivery_or_database(tmp_p
     from office import youtube_delivery as delivery
 
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path, article_id='first')
-    _, other_job = released_fixture(tmp_path, article_id='second')
+    store, job_id = enabled_fixture(tmp_path, article_id='first')
+    _, other_job = enabled_fixture(tmp_path, article_id='second')
     started, complete = Event(), Event()
 
     class PendingUpload(FakeYouTube):
@@ -417,7 +429,7 @@ def test_only_one_reconcile_can_resume_an_unknown_session(tmp_path, monkeypatch)
     from office import youtube_delivery as delivery
 
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with pytest.raises(WorkflowError, match='불명'):
         delivery.deliver_youtube(store, job_id, actor='op', session=FakeYouTube(put_status=503))
     record = delivery.deliveries(store, job_id)[0]
@@ -448,7 +460,7 @@ def test_oauth_failure_releases_reservation_for_explicit_retry(tmp_path, monkeyp
     from office import youtube_delivery as delivery
 
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
 
     class InvalidToken(FakeYouTube):
         def post(self, url, **kwargs):
@@ -471,7 +483,7 @@ def test_release_change_during_oauth_stops_before_upload_and_allows_explicit_ret
     from office.store import digest
 
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
 
     class ChangedRelease(FakeYouTube):
         def post(self, url, **kwargs):
@@ -507,7 +519,7 @@ def test_process_exit_releases_delivery_lock_and_created_requires_reconciliation
     from office import youtube_delivery as delivery
 
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     record = delivery.deliver_youtube(store, job_id, actor='op', session=FakeYouTube())
     record.update(state='created', external_id=None)
     record.pop('session_uri', None)
@@ -534,7 +546,7 @@ def test_failed_reconcile_releases_lock_and_keeps_unknown_until_explicit_retry(t
     from office import youtube_delivery as delivery
 
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with pytest.raises(WorkflowError, match='불명'):
         delivery.deliver_youtube(store, job_id, actor='op', session=FakeYouTube(put_status=503))
     record = delivery.deliveries(store, job_id)[0]
@@ -557,7 +569,7 @@ def test_failed_reconcile_releases_lock_and_keeps_unknown_until_explicit_retry(t
 def test_missing_visibility_is_unknown_and_reconciles_without_reupload(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries, reconcile_youtube
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     session = FakeYouTube(privacy=None)
     with pytest.raises(WorkflowError, match='비공개 여부'):
         deliver_youtube(store, job_id, actor='op', session=session)
@@ -574,7 +586,7 @@ def test_missing_visibility_is_unknown_and_reconciles_without_reupload(tmp_path,
 def test_closed_work_window_blocks_cli_adapter_before_network(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     store.set_setting('work_window', {'status': 'closed'})
     session = FakeYouTube()
     with pytest.raises(WorkflowError, match='작업 시간'):
@@ -585,7 +597,7 @@ def test_closed_work_window_blocks_cli_adapter_before_network(tmp_path, monkeypa
 def test_window_closing_during_oauth_prevents_upload_session(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     class ClosingYouTube(FakeYouTube):
         def post(self, url, **kwargs):
             response = super().post(url, **kwargs)
@@ -603,7 +615,7 @@ def test_legacy_offer_not_in_approved_packet_blocks_upload_without_requests(tmp_
     from office.youtube_delivery import deliver_youtube, deliveries
     from office.store import canonical
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with store.connection(transaction=True) as db:
         legacy = store._job(db, job_id)
         legacy['offer'] = {'product': 'Legacy campaign', 'price_krw': 9900, 'url': 'https://example.invalid/product', 'note': None}
@@ -617,7 +629,7 @@ def test_legacy_offer_not_in_approved_packet_blocks_upload_without_requests(tmp_
 def test_closed_window_blocks_reconcile_before_any_request(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, reconcile_youtube
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     record = deliver_youtube(store, job_id, actor='op', session=FakeYouTube())
     store.set_setting('work_window', {'status': 'closed'})
     session = FakeYouTube()
@@ -629,7 +641,7 @@ def test_closed_window_blocks_reconcile_before_any_request(tmp_path, monkeypatch
 def test_resume_rechecks_window_after_server_reports_partial_bytes(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube, deliveries, reconcile_youtube
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     with pytest.raises(WorkflowError):
         deliver_youtube(store, job_id, actor='op', session=FakeYouTube(put_status=503))
     record = deliveries(store, job_id)[0]
@@ -649,7 +661,7 @@ def test_channel_mismatch_remains_blocked_when_visibility_missing(tmp_path, monk
     from office.youtube_delivery import deliver_youtube, deliveries, reconcile_youtube
     from office.channels import update_channel
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path)
+    store, job_id = enabled_fixture(tmp_path)
     update_channel(store, 'youtube_main_ko', {'external_account_id': 'UCexpected00000000000000'}, actor='op')
     session = FakeYouTube(privacy=None)
     session.video['snippet'] = {'channelId': 'UCwrong0000000000000000'}
@@ -665,8 +677,145 @@ def test_channel_mismatch_remains_blocked_when_visibility_missing(tmp_path, monk
 def test_unrecorded_source_language_cannot_use_editable_brief_as_translation(tmp_path, monkeypatch):
     from office.youtube_delivery import deliver_youtube
     env(monkeypatch)
-    store, job_id = released_fixture(tmp_path, language=None)
+    store, job_id = enabled_fixture(tmp_path, language=None)
     session = FakeYouTube()
     with pytest.raises(WorkflowError, match='승인 원고의 언어'):
         deliver_youtube(store, job_id, actor='op', session=session)
     assert session.posts == [] and session.puts == []
+
+
+@pytest.mark.parametrize('enabled', [False, None, 0, 1, 'true', 'false'])
+def test_publication_requires_exact_true_before_reservation_or_network(tmp_path, monkeypatch, enabled):
+    from office.youtube_delivery import deliver_youtube, deliveries
+    env(monkeypatch)
+    store, job_id = released_fixture(tmp_path)
+    store.set_setting('channel_registry', {'youtube_main_ko': {'publication_enabled': enabled}})
+    session = FakeYouTube()
+    with pytest.raises(WorkflowError, match='전송 허용'):
+        deliver_youtube(store, job_id, actor='op', session=session)
+    assert session.posts == [] and session.puts == [] and session.gets == []
+    assert deliveries(store, job_id) == []
+
+
+@pytest.mark.parametrize('stage', ['before_reservation', 'before_oauth', 'after_oauth', 'before_bytes'])
+def test_disabling_publication_at_each_boundary_stops_new_requests(tmp_path, monkeypatch, stage):
+    from contextlib import contextmanager
+    from office import youtube_delivery as delivery
+    from office.channels import update_channel
+    env(monkeypatch)
+    store, job_id = enabled_fixture(tmp_path)
+
+    def disable():
+        update_channel(store, 'youtube_main_ko', {'publication_enabled': False}, actor='op')
+
+    if stage == 'before_reservation':
+        original_lock = delivery._delivery_lock
+
+        @contextmanager
+        def disabling_lock(*args):
+            with original_lock(*args):
+                disable()
+                yield
+
+        monkeypatch.setattr(delivery, '_delivery_lock', disabling_lock)
+    elif stage == 'before_oauth':
+        original_event = store.event
+
+        def event(kind, *args, **kwargs):
+            result = original_event(kind, *args, **kwargs)
+            if kind == 'delivery_created':
+                disable()
+            return result
+
+        monkeypatch.setattr(store, 'event', event)
+
+    class DisablingYouTube(FakeYouTube):
+        def post(self, url, **kwargs):
+            response = super().post(url, **kwargs)
+            if ((stage == 'after_oauth' and url == delivery.TOKEN_URL)
+                    or (stage == 'before_bytes' and url == delivery.UPLOAD_URL)):
+                disable()
+            return response
+
+    session = DisablingYouTube()
+    with pytest.raises(WorkflowError, match='전송 허용'):
+        delivery.deliver_youtube(store, job_id, actor='op', session=session)
+    assert len(session.posts) == {'before_reservation': 0, 'before_oauth': 0, 'after_oauth': 1, 'before_bytes': 2}[stage]
+    assert session.puts == [] and session.gets == []
+    records = delivery.deliveries(store, job_id)
+    if stage == 'before_reservation':
+        assert records == []
+    elif stage == 'before_bytes':
+        assert records[0]['state'] == 'accepted' and records[0]['session_uri']
+    else:
+        assert records[0]['state'] == 'failed' and not records[0].get('session_uri')
+
+
+@pytest.mark.parametrize('disable_at_status', [False, True])
+def test_disabled_publication_allows_status_read_but_never_resumes_bytes(tmp_path, monkeypatch, disable_at_status):
+    from office import youtube_delivery as delivery
+    from office.channels import update_channel
+    env(monkeypatch)
+    store, job_id = enabled_fixture(tmp_path)
+    with pytest.raises(WorkflowError, match='불명'):
+        delivery.deliver_youtube(store, job_id, actor='op', session=FakeYouTube(put_status=503))
+    before = delivery.deliveries(store, job_id)[0]
+
+    def disable():
+        update_channel(store, 'youtube_main_ko', {'publication_enabled': False}, actor='op')
+
+    if not disable_at_status:
+        disable()
+
+    class DisablingStatus(FakeYouTube):
+        def put(self, url, **kwargs):
+            response = super().put(url, **kwargs)
+            if disable_at_status:
+                disable()
+            return response
+
+    session = DisablingStatus(resume_range='bytes=0-1023')
+    with pytest.raises(WorkflowError, match='전송 허용'):
+        delivery.reconcile_youtube(store, job_id, before['id'], session=session)
+    assert len(session.posts) == 1 and len(session.puts) == 1
+    assert session.puts[0]['headers']['Content-Length'] == '0' and 'data' not in session.puts[0]
+    current = delivery.deliveries(store, job_id)[0]
+    assert current['state'] == 'unknown' and current['session_uri'] == before['session_uri']
+    assert not current.get('external_id')
+
+
+def test_disabled_publication_can_reconcile_existing_external_id_without_upload(tmp_path, monkeypatch):
+    from office import youtube_delivery as delivery
+    from office.channels import update_channel
+    env(monkeypatch)
+    store, job_id = enabled_fixture(tmp_path)
+    record = delivery.deliver_youtube(store, job_id, actor='op', session=FakeYouTube())
+    update_channel(store, 'youtube_main_ko', {'publication_enabled': False}, actor='op')
+    session = FakeYouTube()
+    result = delivery.reconcile_youtube(store, job_id, record['id'], session=session)
+    assert result['state'] == 'private' and result['processing_status'] == 'succeeded'
+    assert len(session.posts) == 1 and len(session.gets) == 1 and session.puts == []
+
+
+def test_missing_response_channel_is_unknown_until_read_reconciliation_confirms_it(tmp_path, monkeypatch):
+    from office import youtube_delivery as delivery
+    from office.channels import update_channel
+    env(monkeypatch)
+    store, job_id = enabled_fixture(tmp_path)
+    expected = 'UCexpected00000000000000'
+    update_channel(store, 'youtube_main_ko', {'external_account_id': expected}, actor='op')
+    session = FakeYouTube()
+    session.video.pop('snippet')
+    with pytest.raises(WorkflowError, match='채널 ID'):
+        delivery.deliver_youtube(store, job_id, actor='op', session=session)
+    record = delivery.deliveries(store, job_id)[0]
+    assert record['state'] == 'unknown' and record['reason'] == 'channel_unconfirmed'
+    assert record['external_id'] == session.video['id']
+    update_channel(store, 'youtube_main_ko', {'publication_enabled': False}, actor='op')
+    result = delivery.reconcile_youtube(store, job_id, record['id'], session=session)
+    assert result['state'] == 'unknown' and result['reason'] == 'channel_unconfirmed'
+    session.video['snippet'] = {'channelId': expected}
+    result = delivery.reconcile_youtube(store, job_id, record['id'], session=session)
+    assert result['state'] == 'private' and result['reason'] is None
+    assert result['processing_status'] == 'succeeded' and len(session.puts) == 1
+    assert session.gets[-1]['params']['part'] == 'snippet,status,processingDetails'

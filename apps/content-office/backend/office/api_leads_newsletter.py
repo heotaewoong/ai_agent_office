@@ -97,7 +97,7 @@ def register(app, store):
 
     @app.get("/api/newsletters/{issue_id}/export")
     def export_newsletter(issue_id: str):
-        record = newsletter.issue(store, issue_id)
+        record = newsletter.export_issue(store, issue_id)
         return Response(record["markdown"], media_type="text/markdown; charset=utf-8", headers={"Cache-Control": "no-store", "Content-Disposition": f'attachment; filename="newsletter-{record["issue_key"]}.md"'})
 
     @app.post("/api/newsletters/{issue_id}/review")

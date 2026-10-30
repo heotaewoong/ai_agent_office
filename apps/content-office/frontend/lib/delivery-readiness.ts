@@ -1,4 +1,4 @@
-import type { Channel, Delivery, Job } from "./types";
+import type { Channel, ChannelStagingRow, ChannelStagingSnapshot, Delivery, Job } from "./types";
 import { channelMismatch, localeLabel } from "./channels.ts";
 import { deliveryStateLabel, studioUrl, uploadReadiness } from "./settings.ts";
 
@@ -38,6 +38,39 @@ export function deliveryRecordLabel(record: Pick<Delivery, "state" | "privacy_st
   if (record.state === "private" && (record.privacy_status !== "private" || !studioUrl(record.external_id)))
     return "업로드 기록 있음 · 비공개 범위/영상 ID 확인 필요";
   return deliveryStateLabel(record.state);
+}
+
+export function stagingLocalLabel(row: Pick<ChannelStagingRow, "status" | "local_ready">): string {
+  if (row.status === "paused") return "보류 · 준비 요청하지 않음";
+  return row.local_ready ? "승인된 파일 준비됨 · 앱 내부" : "준비 미완료 · 아래 조건 확인";
+}
+
+/** 빈 응답이나 다른 작업의 준비표로 기록 버튼을 열지 않는다. */
+export function requireStagingSnapshot(snapshot: ChannelStagingSnapshot, jobId: string): void {
+  const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+  if (!snapshot || snapshot.job_id !== jobId || typeof snapshot.stage_hash !== "string" || !/^[a-f0-9]{64}$/.test(snapshot.stage_hash)
+    || typeof snapshot.current_release !== "boolean" || typeof snapshot.recorded_current !== "boolean"
+    || (snapshot.manifest_hash != null && typeof snapshot.manifest_hash !== "string")
+    || !strings(snapshot.blockers) || !strings(snapshot.notes)
+    || !Array.isArray(snapshot.channels) || !snapshot.channels.length
+    || snapshot.channels.some((row) => !row || typeof row.channel_key !== "string" || typeof row.label !== "string"
+      || typeof row.platform !== "string" || typeof row.locale !== "string"
+      || (row.external_id != null && typeof row.external_id !== "string")
+      || (row.upload_status != null && typeof row.upload_status !== "string")
+      || (row.processing_status != null && typeof row.processing_status !== "string")
+      || typeof row.local_ready !== "boolean" || !strings(row.blockers) || !strings(row.required_files)
+      || !Array.isArray(row.files) || row.files.some((file) => !file || typeof file.name !== "string" || typeof file.sha256 !== "string" || !/^[a-f0-9]{64}$/.test(file.sha256)))
+    || new Set(snapshot.channels.map((row) => row.channel_key)).size !== snapshot.channels.length)
+    throw new Error("채널별 준비표가 비어 있거나 현재 작업의 판본을 확인하지 못했습니다. 상태를 다시 확인하세요.");
+}
+
+export function stagingExternalLabel(row: Pick<ChannelStagingRow, "platform" | "external_state" | "external_id" | "external_draft_created">): string {
+  if (row.external_state === "private")
+    return row.platform === "youtube" && studioUrl(row.external_id) ? "YouTube 비공개 확인 기록 있음" : "비공개 표시 · 외부 영상 ID 확인 필요";
+  if (row.external_state === "unknown") return "전송 결과 불명 · 대사 필요";
+  if (row.external_state === "needs_review") return "외부 상태 확인 필요";
+  if (row.external_draft_created && row.external_id) return "플랫폼 임시저장 기록 있음 · 외부에서 재확인";
+  return row.external_state === "not_connected" ? "플랫폼 미연결 · 외부 임시저장 없음" : "전송 미실행 · 외부 임시저장 없음";
 }
 
 /** 파일 존재와 현재 출고 승인②를 구별하며 플랫폼 임시저장 성공으로 승격하지 않는다. */

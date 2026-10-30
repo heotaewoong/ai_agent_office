@@ -37,6 +37,44 @@ def test_process_lock_rejects_live_duplicate_and_releases_on_exit(tmp_path):
         pass
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows byte-range lock initialization race")
+def test_process_lock_losing_empty_file_race_raises_already_running_and_closes(tmp_path, monkeypatch):
+    module = runtime()
+    lock_path = tmp_path / "initializing.lock"
+    winner, contender = module.ProcessLock(lock_path), module.ProcessLock(lock_path)
+    original_fdopen = module.os.fdopen
+    opened = []
+
+    class InitializingHandle:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def __getattr__(self, name):
+            return getattr(self.handle, name)
+
+        def tell(self):
+            position = self.handle.tell()
+            assert position == 0
+            winner.__enter__()  # The other owner locks byte zero after this owner's empty-file check.
+            return position
+
+    def fdopen(*args, **kwargs):
+        handle = original_fdopen(*args, **kwargs)
+        opened.append(handle)
+        return InitializingHandle(handle) if len(opened) == 1 else handle
+
+    monkeypatch.setattr(module.os, "fdopen", fdopen)
+    try:
+        with pytest.raises(module.AlreadyRunning, match="already running"):
+            contender.__enter__()
+        assert contender.handle is None and opened[0].closed
+        assert winner.handle is not None
+    finally:
+        winner.__exit__()
+    with module.ProcessLock(lock_path):
+        pass
+
+
 def test_recovery_requires_worker_lock_and_preserves_cost_reservation(tmp_path):
     module = runtime()
     store = Store(tmp_path)

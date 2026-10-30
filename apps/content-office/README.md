@@ -57,7 +57,7 @@ flowchart TD
 
 제작·출고함의 채널 표에서 **제작 파일 없음 / 앱 검토 파일 있음 / 현재② 출고 묶음 / 외부 전송 결과**를 구분합니다. YouTube 비공개 업로드는 현재②·실제 채널 자격·발행 허용·원고 언어·작업 시간이 모두 필요합니다. 응답의 `privacyStatus=private`와 외부 ID를 확인하기 전에는 완료로 표시하지 않습니다. 불명 결과는 같은 영상을 새로 올리지 않고 기존 외부 ID·세션으로 대사합니다. 조건·쿠폰·원고·파일이 바뀌면 이전 승인으로 영상 바이트를 보내지 않습니다.
 
-스토어 쿠폰 발급/실제 결제, YouTube OAuth 연결, 다른 플랫폼의 임시저장·예약·공개 API, 뉴스레터 자동 발송은 별도 운영 작업 또는 미구현입니다. 원고①·출고②·회차③을 에이전트가 대신 승인하지 않습니다.
+스토어 쿠폰 발급/실제 결제, 다른 플랫폼의 임시저장·예약·공개 API, 뉴스레터 자동 발송은 별도 운영 작업 또는 미구현입니다. 원고①·출고②·회차③을 에이전트가 대신 승인하지 않습니다. YouTube 채널 연결(OAuth 로그인)은 아래 "YouTube 채널 연결" 절에 구현돼 있으나 실제 Google 계정으로 끝까지 검증하지는 않았습니다.
 
 2D 목록은 `/api/dashboard?compact=true`로 원고 본문 없이 필요한 작업 메타데이터만 받습니다. 기본 `/api/dashboard`의 기존 응답 계약은 유지하며 오래된 작업 ID를 목록에서 잘라내지 않습니다. 상세 원고는 선택한 작업 GET에서 읽습니다. 목록 갱신은 겹치지 않고, 화면 복귀·명시 갱신 뒤 예전 성공/실패 응답이 최신 상태를 덮지 못합니다. 이 변경의 전송량 감소는 실제 FPS·DB 속도 향상을 뜻하지 않습니다.
 
@@ -161,7 +161,7 @@ Pop-Location
 
 ### Linux(EC2)
 
-Linux에서는 `scripts/start-local.sh`, `scripts/stop-local.sh`와 위의 `.venv/bin/python` 절차를 그대로 씁니다. 기본 음성은 Windows System.Speech(`Microsoft Heami Desktop`)라 Linux에서는 생성되지 않으므로, 영상을 만들기 전에 운영자가 `office.voice_selection set --profile gemini-kore`로 유료 음성 프로필을 명시적으로 선택해야 합니다. 생성 배경을 쓰려면 환경 파일에 운영자의 `OPENAI_API_KEY`를 넣고 `office.image_selection set --profile openai-gpt-image`를 선택합니다. 한국어 폰트는 TrueType(.ttf)이어야 합니다. PDF 생성기(reportlab)가 Noto Sans CJK 같은 TTC/OTF를 읽지 못하므로 `fonts-nanum` 패키지의 `/usr/share/fonts/truetype/nanum/NanumGothic.ttf`를 기본으로 찾고, 다른 폰트는 `CONTENT_OFFICE_FONT`에 TTF 경로로 지정합니다. FFmpeg/ffprobe는 PATH에 있어야 합니다. Ubuntu 기준 준비 명령은 다음과 같습니다.
+Linux에서는 `scripts/start-local.sh`, `scripts/stop-local.sh`와 위의 `.venv/bin/python` 절차를 그대로 씁니다. 기본 음성은 Windows System.Speech(`Microsoft Heami Desktop`)라 Linux에서는 생성되지 않으므로, 영상을 만들기 전에 운영자가 `office.voice_selection set --profile openai-tts` 또는 `--profile gemini-kore`로 유료 음성 프로필을 명시적으로 선택해야 합니다. 생성 배경을 쓰려면 환경 파일에 운영자의 `OPENAI_API_KEY`를 넣고 `office.image_selection set --profile openai-gpt-image`를 선택합니다. 한국어 폰트는 TrueType(.ttf)이어야 합니다. PDF 생성기(reportlab)가 Noto Sans CJK 같은 TTC/OTF를 읽지 못하므로 `fonts-nanum` 패키지의 `/usr/share/fonts/truetype/nanum/NanumGothic.ttf`를 기본으로 찾고, 다른 폰트는 `CONTENT_OFFICE_FONT`에 TTF 경로로 지정합니다. FFmpeg/ffprobe는 PATH에 있어야 합니다. Ubuntu 기준 준비 명령은 다음과 같습니다.
 
 ```bash
 sudo apt-get install -y ffmpeg fonts-nanum python3-venv
@@ -220,7 +220,8 @@ npm run build
 | `OPENAI_API_KEY` | 배경 이미지 프로필 `openai-gpt-image`를 고른 경우에만 필요합니다. 실행하는 운영자가 자신의 키를 환경 파일에 넣으며, 영수증·UI·ZIP·저장소에 기록하지 않습니다 |
 | `RUNWAYML_API_SECRET` | 생성 영상 프로필 `runway-*`를 고른 경우에만 필요합니다. 같은 규칙으로 환경으로만 전달합니다 |
 | `CODEX_HOME` · `CONTENT_OFFICE_CODEX_BIN` | 배경 이미지 프로필 `codex-subscription`용. 기본은 실행 계정의 `~/.codex`와 PATH의 `codex`입니다. 키가 아니라 ChatGPT 로그인을 쓰므로 환경 파일에 비밀값을 넣지 않습니다 |
-| `YOUTUBE_CLIENT_ID` · `YOUTUBE_CLIENT_SECRET` · `YOUTUBE_<채널키>_REFRESH_TOKEN` | YouTube 비공개 업로드를 요청할 때만 필요한 채널 소유자의 OAuth 자격입니다. refresh token은 채널 키마다 따로 둡니다(`YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`). 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. 장부·이벤트·ZIP에 기록하지 않습니다 |
+| `YOUTUBE_CLIENT_ID` · `YOUTUBE_CLIENT_SECRET` · `YOUTUBE_<채널키>_REFRESH_TOKEN` | YouTube 비공개 업로드를 요청할 때만 필요한 채널 소유자의 OAuth 자격입니다. refresh token은 채널 키마다 따로 둡니다(`YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`). 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. refresh token은 환경변수 대신 화면의 'YouTube 연결'로 받을 수도 있습니다(환경변수가 우선). 장부·이벤트·ZIP에 기록하지 않습니다 |
+| `OFFICE_SECRETS_FILE` | 'YouTube 연결'로 받은 refresh token 파일. 기본 `~/.config/heobrain-content-office/youtube-tokens.json`. 상태 폴더(`OFFICE_STATE_DIR`)와 코드 저장소 안은 거부합니다. 0600으로 만들며 백업·복사 시 비밀값으로 다룹니다 |
 | `OFFICE_STATE_DIR` | DB·자산·캐시 위치. 기본 `~/.local/state/heobrain-content-office` |
 | `OFFICE_MODEL` | 새 장부의 명시적 모델 선택. 현재 실제 작성에 검증한 모델은 `gemini-3.5-flash-lite`이며 저장된 모델 설정이 우선합니다 |
 | `CONTENT_OFFICE_FONT` | 한국어 TTF 경로. 이 환경은 Windows Malgun Gothic을 사용하며 폰트 파일을 배포하지 않습니다 |
@@ -228,13 +229,15 @@ npm run build
 | `OFFICE_ENV_FILE` | start-local에 필요한 본인 소유 환경 파일을 지정할 때만 사용합니다 |
 | `OFFICE_PUBLIC_ORIGIN` | 외부 공개 시 브라우저가 여는 단일 HTTPS 주소(예: `https://77-114-15-207.sslip.io`). 앱에는 사용자 계정이 없으므로 모든 요청을 인증하는 리버스 프록시(nginx 기본 인증+TLS) 뒤에서만 설정합니다. 설정하면 세션 쿠키에 Secure가 붙습니다 |
 
-음성 프로필은 운영자가 명시적으로 선택합니다. 로컬 Heami와 실제 합성 자료에서 시험한 Gemini3.8 Flash TTS/Kore를 제공합니다. Gemini 경로도 원고 승인① 후 승인된3~7장면 대본에만 호출하며, 원고당1,000원 하위한도와 기존 총10,000원 한도를 함께 적용합니다. 요청이 실패해도 다른 유료 음성으로 자동 전환하지 않습니다. 실제 음성/전사 비교는 아래 조사 폴더의 음성 품질 보고서에 있으며, 자동 전사 차이가 주관적 청취 품질 보증은 아닙니다.
+음성 프로필은 운영자가 명시적으로 선택합니다. 로컬 Heami와 실제 합성 자료에서 시험한 Gemini3.8 Flash TTS/Kore를 제공합니다. Gemini 경로도 원고 승인① 후 승인된3~7장면 대본에만 호출하며, 원고당1,000원 하위한도와 기존 총10,000원 한도를 함께 적용합니다. `openai-tts`(OpenAI `gpt-4o-mini-tts`, 음성 `marin`, 차분한 한국어 내레이션 지시)도 같은 규칙입니다: 원고 승인①과 현재 원고 버전, 실행 환경의 `OPENAI_API_KEY`(저장하지 않음), 작업 시간·단가 유효기간을 확인한 뒤 승인 장면 대본만 PCM 24kHz로 받아 모노 WAV로 저장하며, Gemini 음성과 합쳐 원고당 1,000원 하위한도를 적용합니다. 단가는 공식 가격표(https://developers.openai.com/api/docs/pricing, 2026-10-30 확인, 2026-11-06까지 유효) 기준 텍스트 입력 $0.60·오디오 출력 $12 / 100만 토큰입니다. 응답에 사용량이 없어 입력 UTF-8 바이트(토큰 상한)와 실제 음성 길이×가정 토큰율(초당 50, 공식 수치 아님)로 추정 정산하고 `provider_usage_estimate_pending_invoice`로 표시하므로 청구서 대사가 필요합니다. 4xx는 0원 정산, 네트워크 오류·5xx는 결과 불명으로 예약을 유지합니다. OpenAI 문서는 이 모델의 종료일을 2027-01-06으로 공지했습니다. 요청이 실패해도 다른 유료 음성으로 자동 전환하지 않습니다. 실제 음성/전사 비교는 아래 조사 폴더의 음성 품질 보고서에 있으며, 자동 전사 차이가 주관적 청취 품질 보증은 아닙니다.
 
 ```bash
 cd "<저장소 경로>/apps/content-office/backend"
 .venv/bin/python -m office.voice_selection status
 # 선택 자체는 유료 호출을 하지 않습니다.
 .venv/bin/python -m office.voice_selection set --profile gemini-kore
+# EC2에서 OpenAI 음성을 쓰려면:
+.venv/bin/python -m office.voice_selection set --profile openai-tts
 # 로컬을 명시적으로 고르려면:
 .venv/bin/python -m office.voice_selection set --profile windows-heami
 ```
@@ -278,13 +281,34 @@ API: `POST /api/settings/profiles` (`{"kind": "voice|image|clip", "profile": "..
 
 출고 승인②를 받은 영상에 한해 운영자가 명시적으로 요청하면 채널 레지스트리에서 고른 YouTube 채널(기본 `youtube_main_ko`)에 `privacyStatus: private`로 올립니다. 작업 브리프의 언어와 채널 언어가 다르면 화면이 먼저 안내하고 서버도 요청 전에 거부합니다. 공개·예약 공개는 앱이 바꾸지 않으며 YouTube Studio에서 운영자가 결정합니다. 제목·태그는 승인 원고의 영상 계획, 설명은 제작물의 `description.txt`를 쓰고 합성 음성·생성 화면 고지를 덧붙입니다. 같은 영상(자산 해시·제작물 판본)은 한 번만 올리며, 결과 불명이면 자동 재전송 대신 대사(reconcile)로 세션을 이어 올리거나 외부 ID로 상태를 확인합니다. 업로드 결과의 공개 범위가 private가 아니면 `needs_review`로 표시합니다.
 
-채널 소유자의 OAuth 자격은 `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`와 채널 키별 `YOUTUBE_<채널키>_REFRESH_TOKEN` 환경변수로만 전달합니다. 업로드 응답의 `channelId`가 등록한 채널 ID와 다르면 `needs_review`(사유 `channel_mismatch`)로 남깁니다. 접근 토큰은 호출 동안만 메모리에 있고 장부·이벤트에 기록하지 않습니다. 2026-10-28 기준 YouTube Data API는 업로드 전용 일일 버킷(100회)과 기타 메서드 10,000단위를 따로 둡니다.
+채널 소유자의 OAuth 자격은 `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`와 채널 키별 `YOUTUBE_<채널키>_REFRESH_TOKEN` 환경변수 또는 아래 웹 연결의 비밀 파일로 전달합니다. 업로드 응답의 `channelId`가 등록한 채널 ID와 다르면 `needs_review`(사유 `channel_mismatch`)로 남깁니다. 접근 토큰은 호출 동안만 메모리에 있고 장부·이벤트에 기록하지 않습니다. 2026-10-28 기준 YouTube Data API는 업로드 전용 일일 버킷(100회)과 기타 메서드 10,000단위를 따로 둡니다.
 
 ```bash
 .venv/bin/python -m office.youtube_delivery status --job <job_id>
 .venv/bin/python -m office.youtube_delivery deliver --job <job_id>
 .venv/bin/python -m office.youtube_delivery reconcile --job <job_id> --delivery <delivery_id>
 # API: GET /api/jobs/{id}/deliveries · POST /api/jobs/{id}/deliveries/youtube ({"channel_key": "youtube_main_ko"}) · POST /api/jobs/{id}/deliveries/{delivery_id}/reconcile
+```
+
+### YouTube 채널 연결 (OAuth 로그인)
+
+refresh token을 환경 파일에 손으로 복사하는 대신, 채널 소유자가 "제작 설정 → 채널" 표의 **YouTube 연결** 버튼으로 Google에 로그인해 연결할 수 있습니다. 연결은 발행이 아닙니다. 승인⓪①②③, 출고 승인② 뒤 운영자 요청, `privacyStatus: private` 업로드 규칙은 그대로입니다.
+
+1. Google Cloud 콘솔에서 프로젝트를 고르고 **API 및 서비스 → 라이브러리**에서 **YouTube Data API v3**를 사용 설정합니다.
+2. **OAuth 동의 화면**을 만듭니다. 게시 상태가 '테스트'인 동안에는 채널 소유 Google 계정을 **테스트 사용자**로 추가해야 하고, Google 문서상 이 상태에서 받은 refresh token은 **7일 뒤 만료**됩니다(https://developers.google.com/identity/protocols/oauth2). 오래 쓰려면 앱을 '프로덕션'으로 게시하고 필요한 확인 절차를 따르세요.
+3. **사용자 인증 정보 → OAuth 클라이언트 ID → 웹 애플리케이션**을 만들고 **승인된 리디렉션 URI**에 `OFFICE_PUBLIC_ORIGIN + /api/youtube/oauth/callback`(예: `https://77-114-15-207.sslip.io/api/youtube/oauth/callback`)을 정확히 넣습니다. 화면의 채널 표 위에도 서버가 계산한 값이 표시됩니다.
+4. 서버 실행 환경 파일에 `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `OFFICE_PUBLIC_ORIGIN`(https)을 넣고, 필요하면 `OFFICE_SECRETS_FILE`로 토큰 파일 위치를 바꾼 뒤 API를 다시 시작합니다. 셋 중 하나라도 없으면 버튼이 이유와 함께 비활성화됩니다.
+5. 채널 행의 **YouTube 연결**을 누르면 Google 동의 화면(`youtube.upload`·`youtube.readonly` 권한, `access_type=offline`, `prompt=consent select_account`)으로 이동합니다. 브랜드 계정 채널이면 계정 선택에서 그 채널을 고르고 두 권한을 모두 허용합니다.
+6. 돌아오면 서버가 코드를 토큰으로 바꾸고 `channels.list?mine=true`로 채널 ID를 확인합니다. 이 키에 등록된 채널 ID와 다르거나 다른 YouTube 키에 이미 등록된 채널이면 아무것도 저장하지 않고 이유를 보여 줍니다. 맞으면 refresh token을 비밀 파일에 저장하고, 채널 ID가 비어 있던 키는 그 ID로 등록하며, 이벤트 `youtube_channel_connected`(채널 키·ID만)를 남깁니다.
+
+토큰 파일은 상태 폴더 **밖**(기본 `~/.config/heobrain-content-office/youtube-tokens.json`, 0600)에만 있고 DB·이벤트·API 응답·화면·로그에는 들어가지 않습니다. 같은 채널 키에 환경변수 refresh token이 있으면 환경변수가 우선하며 화면에서는 연결 버튼 대신 "환경 파일 토큰"으로 표시합니다. **연결 해제**는 비밀 파일의 토큰만 지우고(이벤트 `youtube_channel_disconnected`) 등록 채널 ID와 환경 파일 토큰은 그대로 둡니다. Google 쪽 권한까지 없애려면 Google 계정의 "서드 파티 앱 및 서비스"에서 이 앱을 지우세요.
+
+연결 요청의 `state`는 10분짜리 1회용 값이며 DB에는 해시만 남깁니다. Google에서 돌아오는 요청은 사이트 간 이동이라 `SameSite=Strict` 세션 쿠키가 오지 않으므로, CSRF 검증을 거친 시작 요청이 `/api/youtube/oauth` 경로 전용 `HttpOnly; Secure; SameSite=Lax` 쿠키로 같은 브라우저인지 묶습니다. 콜백은 Next.js의 `/api/*` 프록시와 nginx 기본 인증을 그대로 지나며, 결과는 `/?youtube=connected|error&reason=…&channel=…`로 돌려보내 첫 화면이 한 번 알린 뒤 주소창에서 지웁니다.
+
+```bash
+# API: GET /api/youtube/oauth/status → {client_configured, public_origin_configured, redirect_uri, secrets_location_ok, channels[{key, label, source: env|file|null, connected, file_stored, channel_id, connected_at}]}
+# POST /api/youtube/oauth/start ({"channel_key"}) → {authorize_url, expires_in} · GET /api/youtube/oauth/callback?code&state → 303 /?youtube=…
+# POST /api/youtube/oauth/disconnect ({"channel_key"}) → 위 channels 항목 하나
 ```
 
 ### 글 모델 (원고·검수·퀴즈·카드 문구)
@@ -313,6 +337,16 @@ OpenAI는 Chat Completions + JSON schema 응답 형식, `reasoning_effort: low`�
 | `transfer-admission` | A · 시험·편입 | 대학 편입 준비 | ko |
 
 덮어쓸 수 있는 칸은 `reader`(독자)·`problem`(문제)·`outcome`(약속한 결과)·`cta`·`language`(ko/en)·`topic`·`prior_knowledge`·`tone`입니다. 빈 문자열은 프리셋 값을 그대로 씁니다. 화면에서는 "기획 직접 등록"의 독자 브리프 칸(프리셋 선택 + 독자·문제·약속한 결과·CTA·언어)과 작업실 상단의 "독자 브리프" 카드에서 바꿉니다. 작업의 브리프를 바꾸면 다음 원고 생성부터 적용되고, 이미 만든 원고를 고치지는 않습니다.
+
+기획 카드의 **저장된 기획 읽기**를 펼치면 서버에 저장한 주제·독자·막힌 점·약속한 결과·문체·언어·CTA를 다시 확인할 수 있습니다. 쿠폰 조건처럼 긴 안내도 여기서 읽고 기획 선택⓪를 판단합니다. 펼치기는 읽기 동작이며 승인·제작 요청을 실행하지 않습니다. 기획에 브리프가 없거나 값이 비어 있으면 미기록으로 표시합니다.
+
+### 승인② 뒤 채널별 배포 대기
+
+출고 승인②가 성공하면 기존 작업 기록 안에 채널별 로컬 준비 스냅샷을 자동으로 남깁니다. 별도 큐나 운영 DB 표를 만들지 않습니다. 제작·출고함의 **채널별로 어디까지 준비됐나요?**에서 현재 원고·오퍼·승인·파일 해시·채널 언어를 다시 검사하며, 기록이 낡거나 자동 기록에 실패하면 현재 판본을 명시적으로 다시 기록할 수 있습니다. 이 목록의 준비 완료는 앱 안의 파일 준비이고 플랫폼 임시저장함에 올렸다는 뜻이 아닙니다. X는 사용자 요청으로 보류하며 Slack·Discord 연락처와 스토어는 외부 배포 대상으로 섞지 않습니다.
+
+YouTube만 기존 private 업로드 전송기를 사용합니다. 채널 허용이 정확한 `true`여야 초기 요청·OAuth 이후·첫 전송·재개 전송이 통과하며, 허용이 꺼져도 기존 외부 ID 조회와 읽기 대사는 보존합니다. 자동 배포 대기 기록이 외부 업로드를 실행하지는 않습니다. 실제 전송은 연결한 소유 채널·현재②·파일·작업 시간 조건을 확인한 별도 요청입니다.
+
+배포 대기 조회 `GET /api/jobs/{id}/staging`은 원고①·출고②·오퍼·선택 파일 SHA-256·채널 설정을 묶은 `stage_hash`를 반환합니다. `POST` 기록은 이 값을 `expected_hash`로 보내고 쓰기 트랜잭션에서 판본과 파일을 다시 확인합니다. 다른 판본은409, 토큰 누락·오형식은422로 거부합니다. 조회 실패·빈 응답·다른 작업의 응답은 기록 가능한 준비표로 사용하지 않습니다. YouTube 비공개 기록의 외부 ID·업로드 상태·영상 처리 상태를 따로 표시하며, 비공개 확인은 처리·재생 완료를 뜻하지 않습니다.
 
 작업실의 미저장 브리프는 작업별로 보존하므로 다른 작업이나 출고함으로 이동했다가 돌아와도 입력과 편집 기준 판본이 유지됩니다. 같은 탭의 메모리 안에서 보존하며 새로고침·종료에는 이탈 경고만 제공합니다. 저장 중 추가한 입력은 늦은 완료 응답으로 지우지 않습니다. 이미 승인된 원고·파일과 다음 원고용 브리프 초안은 구분합니다.
 
@@ -350,7 +384,7 @@ OpenAI는 Chat Completions + JSON schema 응답 형식, `reasoning_effort: low`�
 | `slack_internal` · `discord_contact` | 내부 알림 | ko | 검토 알림만 |
 | `store` | heobrain.kr | ko | 스토어 서버가 판정, 오피스는 가격을 바꾸지 않음 |
 
-YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 키별 `YOUTUBE_<KEY>_REFRESH_TOKEN`(예: `YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`)으로 전달합니다. 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. 화면 "제작 설정 → 채널"에서는 공개 주소 링크, YouTube 채널 ID(`UC`로 시작하는 24자, 화면에서 형식 검사), 발행 허용, 토큰 연결 여부만 보이고 토큰 값은 표시하거나 입력받지 않습니다. 업로드 패널은 YouTube 채널을 고르며 브리프 언어와 채널 언어가 다르면 보내기 전에 막고, 응답 `channelId`가 등록값과 다르면 업로드 기록을 `needs_review`로 둡니다. 업로드 기록에는 `channel_key`와 `locale`이 함께 남습니다.
+YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 키별 `YOUTUBE_<KEY>_REFRESH_TOKEN`(예: `YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`)으로 전달합니다. 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. 화면 "제작 설정 → 채널"에서는 공개 주소 링크, YouTube 채널 ID(`UC`로 시작하는 24자, 화면에서 형식 검사), 발행 허용, 토큰 연결 여부와 'YouTube 연결'·'연결 해제' 버튼만 보이고 토큰 값은 표시하거나 입력받지 않습니다. 업로드 패널은 YouTube 채널을 고르며 브리프 언어와 채널 언어가 다르면 보내기 전에 막고, 응답 `channelId`가 등록값과 다르면 업로드 기록을 `needs_review`로 둡니다. 업로드 기록에는 `channel_key`와 `locale`이 함께 남습니다.
 
 ```bash
 # API: GET /api/channels · PUT /api/channels/{key} ({"external_account_id"?, "publication_enabled"?, "public_url"?})
@@ -375,6 +409,8 @@ YouTube 자격은 공통 `YOUTUBE_CLIENT_ID`·`YOUTUBE_CLIENT_SECRET`와 채널 
 ### 시험 일정 · 시의성
 
 프리셋별 공식 시험 일정(이름·날짜·종류·출처 URL·검증 여부)에서 다음 시험과 시의성 점수(0~1)를 계산합니다. 기획 은행의 각 기획에는 `next_exam`·`timeliness`가 붙어 "정보처리기사 필기 D-32" 배지와 시의성 막대로 보입니다. 날짜는 출처 URL로 직접 확인한 것만 `verified: true`입니다.
+
+위 D-day·시의성 막대는 같은 최근 일정에 정확한 `verified: true`와 공개 HTTPS 출처가 있는 경우에만 표시합니다. 미확인·추정 일정은 주의 문구와 기록된 출처를 보여주며 확정 D-day나 일정 가산점으로 바꾸지 않습니다. 저장된 확인 표시는 오늘 공식 공고를 새로 읽었다는 뜻이 아닙니다. 특정 일정이 없는 기존 편집 기준값도 확인된 시험일 점수와 구분합니다.
 
 ```bash
 # API: GET /api/calendar?preset=exam-opic → {preset, exams[{name, date, kind, source_url, verified}], next: null | {name, date, kind, days_left}, timeliness}

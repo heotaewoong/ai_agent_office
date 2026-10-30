@@ -82,8 +82,9 @@ def cache_key(provider, model, messages, schema, options):
 
 
 class Provider:
-    def __init__(self, store: Store, model=None, transport=None):
+    def __init__(self, store: Store, model=None, transport=None, *, job_id=None):
         self.store = store
+        self.job_id = job_id
         self.model = model or store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash")
         self.transport = transport or requests.post
 
@@ -107,7 +108,7 @@ class Provider:
                 Draft202012Validator(schema).validate(cached)
             except ValidationError:
                 raise WorkflowError("저장된 모델 결과 형식이 schema와 달라 검토가 필요합니다") from None
-            self.store.event("model_cache_hit", {"role": role, "model": self.model, "key": key})
+            self.store.event("model_cache_hit", {"role": role, "model": self.model, "key": key}, self.job_id)
             return cached
         price_until = self.store.setting("price_valid_until", "2026-11-02T00:00:00+09:00")
         if datetime.now(timezone.utc) >= datetime.fromisoformat(price_until):
@@ -130,8 +131,8 @@ class Provider:
         # UTF-8 byte length is a conservative token bound for these text-only inputs.
         input_bound = len(canonical(payload).encode("utf-8"))
         maximum = ((input_bound * price["input_usd_million"] + options["max_tokens"] * price["output_usd_million"]) / 1_000_000 * FX_RESERVATION_KRW) * 1.2
-        reservation = self.store.reserve_cost("model", maximum, {"role": role, "model": self.model, "provider": provider, "cache_key": key, "input_byte_bound": input_bound, "max_output_tokens": options["max_tokens"], "price": price, "price_source": price_source, "price_checked": price_checked, "fx_reservation_krw": FX_RESERVATION_KRW})
-        self.store.event("model_started", {"role": role, "model": self.model, "provider": provider, "reservation_id": reservation["id"], "input_hash": digest(messages), "schema_hash": digest(schema), "reserved_krw": reservation["reserved_krw"]})
+        reservation = self.store.reserve_cost("model", maximum, {"role": role, "model": self.model, "provider": provider, "cache_key": key, "input_byte_bound": input_bound, "max_output_tokens": options["max_tokens"], "price": price, "price_source": price_source, "price_checked": price_checked, "fx_reservation_krw": FX_RESERVATION_KRW, "job_id": self.job_id})
+        self.store.event("model_started", {"role": role, "model": self.model, "provider": provider, "reservation_id": reservation["id"], "input_hash": digest(messages), "schema_hash": digest(schema), "reserved_krw": reservation["reserved_krw"]}, self.job_id)
         try:
             response = self.transport(url, headers=headers, json=payload, timeout=(10, 150))
         except requests.RequestException:
@@ -171,7 +172,7 @@ class Provider:
         except (ValueError, KeyError, TypeError, IndexError):
             raise WorkflowError("모델 결과 형식이 올바르지 않습니다. 성공으로 처리하지 않습니다") from None
         self.store.cache_put(key, result)
-        self.store.event("model_completed", {"role": role, "model": self.model, "provider": provider, "key": key, "input_tokens": input_tokens, "output_tokens": output_tokens, "estimated_krw": round(actual, 3)})
+        self.store.event("model_completed", {"role": role, "model": self.model, "provider": provider, "key": key, "input_tokens": input_tokens, "output_tokens": output_tokens, "estimated_krw": round(actual, 3)}, self.job_id)
         return result
 
     # --- Gemini -------------------------------------------------------------------------------

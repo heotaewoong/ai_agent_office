@@ -232,19 +232,28 @@ class Store:
             self._event(db, "source_" + decision, record, job_id)
             return self._write_job(db, job)
 
-    def register_source_input(self, job_id, text, expected_hash):
+    def register_source_input(self, job_id, text, expected_hash, preserve_original=False):
         from .offers import offer_snapshot, source_version
+        if type(preserve_original) is not bool:
+            raise WorkflowError("원문 보존 여부는 true 또는 false여야 합니다")
+        if preserve_original and (not isinstance(text, str) or not text.strip()):
+            raise WorkflowError("원문 보존 모드에는 직접 제공한 Markdown 본문이 필요합니다")
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
             if job["source_hash"] != expected_hash:
                 raise WorkflowError("원문을 등록하는 동안 원고 버전이 변경되었습니다")
             packet = {**(job.get("source_packet") or {"title": job["title"], "body": "공개 원문을 등록했습니다. 근거 정리와 새 원고 생성을 기다리고 있습니다."}), "evidence": [], "source_input_hash": digest(text), "quality": {"status": "unverified", "critical": True, "reviews": []}}
-            article = {**job["article"], "operator_source_text": text, "evidence": [], "evidence_source_kind": "operator_supplied_text_pending_extraction"}
+            if preserve_original:
+                packet.update(body=text, preserve_original=True)
+            else:
+                packet.pop("preserve_original", None)
+            packet.pop("reference_evidence_ids", None)
+            article = {**job["article"], "operator_source_text": text, "preserve_original": preserve_original, "evidence": [], "evidence_source_kind": "operator_supplied_text_pending_extraction"}
             version = source_version(packet, job.get("offer"))
             recorded = {**packet, "offer_snapshot": offer_snapshot(job["offer"])} if job.get("offer") else packet
             db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job_id, version, canonical(recorded), now()))
             job.update(article=article, source_hash=version, source_packet=packet, source_approval=None, release_approval=None, manifest=None, state="research_ready", error=None)
-            self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "role": "연구"}, job_id)
+            self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "preserve_original": preserve_original, "role": "연구"}, job_id)
             return self._write_job(db, job)
 
     def add_draft(self, job_id, draft):
@@ -584,6 +593,47 @@ class Store:
         with self.connection() as db:
             return self._budget(db)
 
+    @staticmethod
+    def _job_budget(db, job_id):
+        row = db.execute("SELECT value FROM settings WHERE key=?", ("job_budget:" + job_id,)).fetchone()
+        configuration = json.loads(row[0]) if row else None
+        cap = configuration["cap_krw"] if configuration else None
+        totals = db.execute(
+            "SELECT COALESCE(SUM(CASE WHEN state='settled' THEN actual_krw ELSE 0 END),0), "
+            "COALESCE(SUM(CASE WHEN state IN ('reserved','unknown') THEN reserved_krw ELSE 0 END),0) "
+            "FROM costs WHERE json_extract(data,'$.job_id')=?", (job_id,)).fetchone()
+        spent, reserved = totals
+        return {"job_id": job_id, "cap_krw": cap, "spent_krw": spent, "reserved_krw": reserved,
+                "remaining_krw": cap - spent - reserved if cap is not None else None,
+                "overrun_krw": max(0, spent + reserved - cap) if cap is not None else 0,
+                "hash": digest({"job_id": job_id, "configuration": configuration}),
+                "configured_by": configuration.get("configured_by") if configuration else None,
+                "configured_at": configuration.get("configured_at") if configuration else None}
+
+    def get_job_budget(self, job_id):
+        with self.connection() as db:
+            self._job(db, job_id)
+            return self._job_budget(db, job_id)
+
+    def set_job_budget(self, job_id, cap_krw, actor, *, expected_hash):
+        if type(cap_krw) is not int or cap_krw <= 0:
+            raise WorkflowError("업무 예산 한도는 양의 정수여야 합니다")
+        if not isinstance(actor, str) or not actor.strip():
+            raise WorkflowError("업무 예산을 설정한 담당자가 필요합니다")
+        if not isinstance(expected_hash, str) or len(expected_hash) != 64 or any(ch not in "0123456789abcdef" for ch in expected_hash):
+            raise WorkflowError("현재 업무 예산의 hash가 필요합니다")
+        with self.connection(transaction=True) as db:
+            self._job(db, job_id)
+            current = self._job_budget(db, job_id)
+            if expected_hash != current["hash"]:
+                raise WorkflowError("업무 예산 설정이 변경되었습니다. 최신 한도를 불러온 뒤 다시 설정하세요")
+            if cap_krw > self._budget(db)["cap_krw"]:
+                raise WorkflowError("업무 예산 한도는 전체 예산 한도를 넘을 수 없습니다")
+            configuration = {"cap_krw": cap_krw, "configured_by": actor.strip()[:120], "configured_at": now()}
+            db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", ("job_budget:" + job_id, canonical(configuration)))
+            self._event(db, "job_budget_set", {**configuration, "previous_cap_krw": current["cap_krw"]}, job_id)
+            return self._job_budget(db, job_id)
+
     def reserve_cost(self, kind, maximum_krw, data):
         if not math.isfinite(maximum_krw) or maximum_krw < 0:
             raise WorkflowError("잘못된 비용 한도입니다")
@@ -595,6 +645,10 @@ class Store:
                         raise WorkflowError("같은 모델 호출이 진행 중이거나 결과 불명입니다. 먼저 비용·결과 대사가 필요합니다")
             if maximum > self._budget(db)["remaining_krw"]:
                 raise WorkflowError("예산 한도를 초과하여 호출을 보류합니다")
+            if data.get("job_id"):
+                job_budget = self._job_budget(db, data["job_id"])
+                if job_budget["cap_krw"] is not None and maximum > job_budget["remaining_krw"]:
+                    raise WorkflowError(f"이 업무의 합산 예산 {job_budget['cap_krw']:,}원 한도를 초과하여 호출을 보류합니다")
             cost_id = identifier("cost")
             db.execute("INSERT INTO costs VALUES(?,?,'reserved',?,NULL,?,?,?)", (cost_id, kind, maximum, canonical(data), now(), now()))
             return {"id": cost_id, "reserved_krw": maximum}

@@ -149,7 +149,7 @@ def generate_quiz(store: Store, job_id, provider=None):
     packet = job["source_packet"] or {}
     brand = load_brand()
     brief = brief_for_job(job)
-    provider = provider or Provider(store)
+    provider = provider or Provider(store, job_id=job_id)
     system = brand_system_prompt(BASE, brand)
     context = {"packet": packet_context(packet), "audience": brief, "instructions": INSTRUCTIONS}
     quiz = provider.generate("quiz", [{"role": "system", "content": system}, {"role": "user", "content": canonical(context)}], QUIZ_SCHEMA, {"max_tokens": 4096, "temperature": 0.4})

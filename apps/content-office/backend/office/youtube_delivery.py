@@ -37,7 +37,7 @@ DEFAULT_CHANNEL = "youtube_main_ko"
 
 
 def configured():
-    """True when at least one YouTube channel key has a full credential set."""
+    """Credentials exist; this does not prove authentication, ownership, or permission to send."""
     return bool(configured_youtube_channels())
 
 
@@ -48,10 +48,17 @@ def _youtube_channel(store, channel_key):
     return channel_row(store, channel_key)
 
 
+def _require_channel_enabled(store, channel_key):
+    row = _youtube_channel(store, channel_key)
+    if row.get("publication_enabled") is not True:
+        raise WorkflowError("이 채널의 전송 허용이 꺼져 있습니다. 운영자가 채널 설정을 확인하세요. 영상은 전송하지 않았습니다")
+    return row
+
+
 def _credentials(channel_key):
     credentials = youtube_credentials(channel_key)
     if credentials is None:
-        raise WorkflowError("·".join(missing_credential_names(channel_key)) + f"이 설정되지 않았습니다({channel_key}). 채널 소유자가 실행 환경 파일에 넣은 뒤 다시 요청하세요")
+        raise WorkflowError("·".join(missing_credential_names(channel_key)) + f"이 설정되지 않았습니다({channel_key}). 채널 소유자가 실행 환경 파일에 넣거나 설정 화면의 'YouTube 연결'로 로그인한 뒤 다시 요청하세요")
     return credentials
 
 
@@ -124,6 +131,7 @@ def _released_video(store, job_id):
 def _require_current_upload(store, record):
     if not window_open(store):
         raise WorkflowError("작업 시간이 종료됐습니다. 영상 바이트는 전송하지 않았습니다")
+    _require_channel_enabled(store, record.get("channel_key", DEFAULT_CHANNEL))
     _, manifest, _, _ = _released_video(store, record["job_id"])
     if manifest.get("hash") != record.get("manifest_hash"):
         raise WorkflowError("출고 판본이 변경됐습니다. 영상 바이트는 전송하지 않았습니다")
@@ -178,10 +186,17 @@ def _finalize(store, record, body):
         record.update(state="unknown", reason="upload_response_unreadable", updated_at=now())
         _save(store, record)
         raise WorkflowError("업로드 응답을 읽지 못해 결과 불명으로 남깁니다. 대사 후 다시 확인하세요") from None
-    record.update(external_id=external_id, upload_status=status.get("uploadStatus"), privacy_status=status.get("privacyStatus"), updated_at=now())
+    processing = body.get("processingDetails") if isinstance(body.get("processingDetails"), dict) else {}
+    record.update(external_id=external_id, upload_status=status.get("uploadStatus"), privacy_status=status.get("privacyStatus"),
+                  processing_status=processing.get("processingStatus"), updated_at=now())
     expected = channel_row(store, record.get("channel_key", DEFAULT_CHANNEL)).get("external_account_id")
     snippet = body.get("snippet") if isinstance(body.get("snippet"), dict) else {}
     actual = snippet.get("channelId")
+    if expected and (not isinstance(actual, str) or not actual):
+        record.update(state="unknown", reason="channel_unconfirmed")
+        _save(store, record)
+        store.event("delivery_needs_review", {"delivery_id": record["id"], "external_id": external_id, "reason": record["reason"]}, record["job_id"])
+        raise WorkflowError("업로드 외부 ID는 받았지만 채널 ID를 확인하지 못했습니다. 재업로드하지 말고 대사하세요")
     if expected and isinstance(actual, str) and actual and actual != expected:
         record.update(state="needs_review", reason="channel_mismatch", response_channel_id=actual)
         _save(store, record)
@@ -207,7 +222,7 @@ def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_C
     if not window_open(store):
         raise WorkflowError("허용된 작업 시간이 종료됐습니다. 업로드는 시작하지 않았습니다")
     session = session or requests
-    row = _youtube_channel(store, channel_key)
+    row = _require_channel_enabled(store, channel_key)
     job, manifest, release, paths = _released_video(store, job_id)
     credentials = _credentials(channel_key)
     locale = _require_language_match(store, job, row)
@@ -225,12 +240,14 @@ def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_C
 
 
 def _upload_youtube(store, record, data, metadata, credentials, session):
+    _require_channel_enabled(store, record["channel_key"])
     record = _save(store, record, reserve=True)
     if record["state"] != "created":
         return record
     job_id = record["job_id"]
     store.event("delivery_created", {"delivery_id": record["id"], "channel": "youtube", "channel_key": record["channel_key"], "visibility": "private"}, job_id)
     try:
+        _require_channel_enabled(store, record["channel_key"])
         token = _access_token(session, credentials)
     except WorkflowError:
         record.update(state="failed", reason="oauth_before_upload_failed", updated_at=now())
@@ -242,6 +259,7 @@ def _upload_youtube(store, record, data, metadata, credentials, session):
     try:
         if not window_open(store):
             raise WorkflowError("인증을 기다리는 동안 작업 시간이 종료됐습니다. 업로드는 시작하지 않았습니다")
+        _require_channel_enabled(store, record["channel_key"])
         _, current_manifest, _, _ = _released_video(store, job_id)
         if current_manifest["hash"] != record["manifest_hash"]:
             raise WorkflowError("인증을 기다리는 동안 출고 판본이 변경되었습니다. 현재 제작물을 확인한 뒤 다시 요청하세요")
@@ -339,7 +357,7 @@ def _reconcile_youtube(store, job_id, record, session):
             raise WorkflowError("업로드 상태 응답을 읽지 못했습니다. 결과 불명을 유지합니다") from None
     if record.get("external_id"):
         try:
-            listing = session.get(VIDEOS_URL, headers={"Authorization": "Bearer " + token}, params={"part": "status,processingDetails", "id": record["external_id"]}, timeout=(10, 30))
+            listing = session.get(VIDEOS_URL, headers={"Authorization": "Bearer " + token}, params={"part": "snippet,status,processingDetails", "id": record["external_id"]}, timeout=(10, 30))
             items = listing.json().get("items", []) if listing.status_code == 200 else []
         except (requests.RequestException, ValueError, TypeError, AttributeError):
             raise WorkflowError("YouTube 영상 상태를 조회하지 못했습니다. 기록은 그대로 둡니다") from None
@@ -350,13 +368,22 @@ def _reconcile_youtube(store, job_id, record, session):
         status = items[0].get("status", {})
         record.update(upload_status=status.get("uploadStatus"), privacy_status=status.get("privacyStatus"),
                       processing_status=items[0].get("processingDetails", {}).get("processingStatus"), reconciled_at=now(), updated_at=now())
+        expected = channel_row(store, record.get("channel_key", DEFAULT_CHANNEL)).get("external_account_id")
+        snippet = items[0].get("snippet") if isinstance(items[0].get("snippet"), dict) else {}
+        actual = snippet.get("channelId")
+        if expected and actual != expected:
+            reason = "channel_mismatch" if isinstance(actual, str) and actual else "channel_unconfirmed"
+            if record["state"] != "needs_review":
+                record.update(state="needs_review" if reason == "channel_mismatch" else "unknown", reason=reason, response_channel_id=actual)
+            _save(store, record)
+            return record
         privacy = status.get("privacyStatus")
         if privacy is None and record["state"] != "needs_review":
             record.update(state="unknown", reason="visibility_unconfirmed")
         elif privacy != "private" and record["state"] != "needs_review":
             record.update(state="needs_review", reason="visibility_mismatch")
             store.event("delivery_visibility_mismatch", {"delivery_id": record["id"], "external_id": record["external_id"], "privacy_status": privacy}, job_id)
-        elif privacy == "private" and record.get("reason") == "visibility_unconfirmed":
+        elif privacy == "private" and record.get("reason") in ("visibility_unconfirmed", "channel_unconfirmed"):
             record.update(state="private", visibility="private", reason=None)
             store.event("delivery_private", {"delivery_id": record["id"], "external_id": record["external_id"], "channel": "youtube", "reconciled": True}, job_id)
         _save(store, record)

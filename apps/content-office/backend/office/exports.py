@@ -2,12 +2,22 @@
 from __future__ import annotations
 
 from html import escape
+import hashlib
+from io import BytesIO
 import json
 import os
 from pathlib import Path
 import re
+from urllib.parse import urlsplit
 
 from .store import WorkflowError
+
+SOURCE_PHOTO_HOSTS = frozenset({"blog.kakaocdn.net", "t1.daumcdn.net"})
+SOURCE_PHOTO_NAME_PATTERN = re.compile(r"source-photo-0[1-8]\.(?:png|jpg|webp)")
+SOURCE_PHOTO_MAX_BYTES = 8 * 1024 * 1024
+SOURCE_PHOTO_TOTAL_BYTES = 32 * 1024 * 1024
+SOURCE_PHOTO_MAX_PIXELS = 25_000_000
+MARKDOWN_PHOTO = re.compile(r"!\[([^\]\r\n]*)\]\((https://[^\s)]+)\)")
 
 
 # TrueType (.ttf) only: reportlab cannot read TTC collections or CFF-based OTF such as Noto Sans CJK.
@@ -80,7 +90,21 @@ def safe_inline(text: str) -> str:
     return ''.join(rendered) + escape(text[cursor:])
 
 
-def safe_fragment(body: str) -> str:
+def _source_image_url(value):
+    if SOURCE_PHOTO_NAME_PATTERN.fullmatch(value):
+        return value
+    # Only the public image hosts used by the owner's source articles; never local paths or arbitrary tracking hosts.
+    try:
+        url = urlsplit(value)
+        if (url.scheme == "https" and url.hostname in SOURCE_PHOTO_HOSTS
+                and not url.username and not url.password and url.port in (None, 443)):
+            return value
+    except ValueError:
+        pass
+    return None
+
+
+def _prose_blocks(body: str) -> str:
     blocks = []
     for block in re.split(r"\n\s*\n", body.strip()):
         lines = block.splitlines()
@@ -98,11 +122,16 @@ def safe_fragment(body: str) -> str:
                           '<thead><tr>' + head + '</tr></thead><tbody>' + table_rows + '</tbody></table></div>')
             lines = lines[row_index:]
         for line in lines:
+            image = re.fullmatch(r'!\[([^\]\n]*)\]\(([^\s)]+)\)', line.strip())
             heading = re.match(r"^(#{1,6})\s+(.+)$", line)
             numbered = re.match(r"^(\d+)[.)]\s+(.+)$", line)
             bullet = re.match(r"^[-*]\s+(.+)$", line)
             quote = re.match(r"^>\s?(.*)$", line)
-            if quote:
+            if image and (image_url := _source_image_url(image[2])):
+                url = escape(image_url, quote=True)
+                alt = escape(image[1], quote=True)
+                blocks.append(f'<figure style="margin:24px 0"><a href="{url}" target="_blank" rel="noopener noreferrer"><img src="{url}" alt="{alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer" style="display:block;max-width:100%;height:auto;margin:auto"></a><figcaption style="margin-top:10px;font-size:.9em">{alt}</figcaption></figure>')
+            elif quote:
                 if quote[1].strip():
                     blocks.append('<blockquote style="margin:20px 0;padding:14px 18px;border-left:4px solid #8cc9bd;background:#f3f9f7">'
                                   f'{safe_inline(quote[1])}</blockquote>')
@@ -117,9 +146,40 @@ def safe_fragment(body: str) -> str:
                 blocks.append(f'<p style="padding-left:16px">• {safe_inline(bullet[1])}</p>')
             else:
                 blocks.append(f'<p style="margin:12px 0">{safe_inline(line)}</p>')
-    if not re.search(r"<h[23]>", "".join(blocks)):
-        blocks.insert(0, "<h2>핵심 내용</h2>")
-    return '<style></style>\n<article class="hb-post" style="max-width:760px;margin:0 auto;color:inherit;line-height:1.9;overflow-wrap:anywhere">\n' + "\n".join(blocks) + "\n</article>\n"
+    return "\n".join(blocks)
+
+
+def safe_fragment(body: str) -> str:
+    """Keep code fences literal; untrusted source markup remains escaped."""
+    parts, prose, code = [], [], []
+    fence = None
+
+    def flush_prose():
+        if prose:
+            parts.append(_prose_blocks("\n".join(prose)))
+            prose.clear()
+
+    for line in body.splitlines():
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)$", line)
+        if fence is None and marker:
+            flush_prose()
+            fence = marker[1]
+        elif fence is not None:
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
+                parts.append('<pre style="max-width:100%;overflow-x:auto;white-space:pre;background:#17242b;color:#f2f7f8;padding:20px;border-radius:12px"><code>' + escape("\n".join(code)) + '</code></pre>')
+                code.clear()
+                fence = None
+            else:
+                code.append(line)
+        else:
+            prose.append(line)
+    if fence is not None:
+        parts.append('<pre style="max-width:100%;overflow-x:auto;white-space:pre"><code>' + escape("\n".join(code)) + '</code></pre>')
+    flush_prose()
+    content = "\n".join(parts)
+    if not re.search(r"<h[23]>", content):
+        content = "<h2>핵심 내용</h2>\n" + content
+    return '<style></style>\n<article class="hb-post" style="max-width:760px;margin:0 auto;color:inherit;line-height:1.9;overflow-wrap:anywhere">\n' + content + "\n</article>\n"
 
 
 def reference_lines(packet: dict) -> list[str]:
@@ -142,11 +202,113 @@ def blog_markdown(packet: dict, offer: dict | None = None) -> str:
     return body
 
 
+def _photo_lines(body):
+    """Yield prose lines only: Markdown image examples inside code fences are not fetched."""
+    fence = None
+    for index, line in enumerate(body.splitlines(keepends=True)):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)", line)
+        if fence is None and marker:
+            fence = marker[1]
+        elif fence is not None:
+            if marker and marker[1][0] == fence[0] and len(marker[1]) >= len(fence) and not marker[2].strip():
+                fence = None
+        else:
+            yield index, line
+
+
+def _photo_info(raw):
+    from PIL import Image
+    if not raw or len(raw) > SOURCE_PHOTO_MAX_BYTES:
+        raise WorkflowError("원문 사진은 한 장에 8MB 이하여야 합니다")
+    try:
+        with Image.open(BytesIO(raw)) as image:
+            kind, width, height = image.format, image.width, image.height
+            if kind not in ("PNG", "JPEG", "WEBP") or getattr(image, "is_animated", False) or getattr(image, "n_frames", 1) != 1:
+                raise ValueError("unsupported image")
+            if width <= 0 or height <= 0 or width * height > SOURCE_PHOTO_MAX_PIXELS:
+                raise ValueError("pixel limit")
+            image.verify()
+        with Image.open(BytesIO(raw)) as image:
+            image.load()
+    except Exception:
+        raise WorkflowError("원문 사진은 정상적인 PNG·JPEG·WebP 정지영상이며 2,500만 화소 이하여야 합니다") from None
+    return {"format": kind, "width": width, "height": height}
+
+
+def _save_photo_cache(path, photos):
+    partial = path.with_suffix(".json.partial")
+    partial.write_text(json.dumps({"version": 1, "photos": photos}, ensure_ascii=False, indent=2), encoding="utf-8", newline="")
+    partial.replace(path)
+
+
+def _localize_source_photos(packet, folder):
+    from .feeds import fetch_public
+    original = packet["body"]
+    urls = list(dict.fromkeys(match[2] for _, line in _photo_lines(original) for match in MARKDOWN_PHOTO.finditer(line) if _source_image_url(match[2])))
+    if len(urls) > 8:
+        raise WorkflowError("원문 사진은 최대 8장까지 보존할 수 있습니다")
+    cache_path = folder / "source-photos.json"
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+        cached = {item["url_sha256"]: item for item in cache["photos"] if isinstance(item, dict)}
+    except (OSError, ValueError, KeyError, TypeError):
+        cached = {}
+    records, paths, replacements, total = [], [], {}, 0
+    for number, url in enumerate(urls, 1):
+        url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        previous = cached.get(url_hash) or {}
+        raw = None
+        name = previous.get("filename", "")
+        if isinstance(name, str) and SOURCE_PHOTO_NAME_PATTERN.fullmatch(name) and name.startswith(f"source-photo-{number:02}."):
+            try:
+                candidate = folder / name
+                if candidate.resolve().parent == folder.resolve() and candidate.stat().st_size <= SOURCE_PHOTO_MAX_BYTES:
+                    data = candidate.read_bytes()
+                    if hashlib.sha256(data).hexdigest() == previous.get("sha256"):
+                        raw = data
+            except (OSError, WorkflowError):
+                pass
+        if raw is None:
+            try:
+                raw, _, _ = fetch_public(url, maximum=SOURCE_PHOTO_MAX_BYTES, allowed_hosts=SOURCE_PHOTO_HOSTS)
+            except Exception:
+                raise WorkflowError(f"원문 사진 {number}을 안전하게 가져오지 못했습니다. 사진을 누락하지 않고 블로그 제작을 중단합니다") from None
+        info = _photo_info(raw)
+        total += len(raw)
+        if total > SOURCE_PHOTO_TOTAL_BYTES:
+            raise WorkflowError("원문 사진 합계는 32MB 이하여야 합니다")
+        extension = {"PNG": "png", "JPEG": "jpg", "WEBP": "webp"}[info["format"]]
+        name = f"source-photo-{number:02}.{extension}"
+        path = folder / name
+        if path.is_symlink():
+            raise WorkflowError("원문 사진 저장 경로를 검증하지 못했습니다")
+        path.write_bytes(raw)
+        source = urlsplit(url)
+        records.append({"filename": name, "url_sha256": url_hash, "source_url": source._replace(query="", fragment="").geturl(),
+                        "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw), **info,
+                        "rights": "owner_supplied_reference", "commercial_status": "not_commercially_cleared"})
+        paths.append(path)
+        replacements[url] = name
+        _save_photo_cache(cache_path, records)
+    if not urls:
+        _save_photo_cache(cache_path, [])
+    # Keep the submitted text separate from the localized publishing copy; no Windows newline conversion.
+    original_path = folder / "source-original.md"
+    original_path.write_text(original, encoding="utf-8", newline="")
+    prose_lines = dict(_photo_lines(original))
+    localized = [MARKDOWN_PHOTO.sub(lambda match: f"![{match[1]}]({replacements.get(match[2], match[2])})", line) if index in prose_lines else line for index, line in enumerate(original.splitlines(keepends=True))]
+    return "".join(localized), [original_path, cache_path, *paths]
+
+
 def write_blog_exports(packet: dict, folder: Path, offer: dict | None = None) -> list[Path]:
+    extra = []
+    if packet.get("preserve_original") is True:
+        localized, extra = _localize_source_photos(packet, folder)
+        packet = {**packet, "body": localized}
     body = blog_markdown(packet, offer)
     return [write_text(folder, "tistory.md", body + "\n"),
             write_text(folder, "tistory.html", safe_fragment(body)),
-            write_text(folder, "naver.txt", packet["title"] + "\n\n" + plain_text(body) + "\n")]
+            write_text(folder, "naver.txt", packet["title"] + "\n\n" + plain_text(body) + "\n"), *extra]
 
 
 def blog_reader_html(title: str, content: str, format: str = 'html') -> str:
@@ -183,6 +345,12 @@ def write_video_exports(packet: dict, folder: Path, offer: dict | None = None) -
 
 def write_rights_manifest(packet: dict, folder: Path) -> Path:
     manifest = {"status": "not_commercially_cleared", "visual_source": "first_party_programmatic_shapes_and_text", "external_visual_assets": [], "font": "System Korean font used for rendering; font files are not distributed", "evidence": [{"id": e.get("id"), "url": e.get("url"), "claim": e.get("claim")} for e in packet.get("evidence", [])], "limitations": ["자료 출처 링크는 이미지·원문 재배포 허가가 아닙니다", "판매용 PDF 및 외부 상품 권리는 별도 검토가 필요합니다", "실제 서비스 화면·타사 로고·실제 시험 문항을 복제하지 않았습니다"]}
+    cache_path = folder / "source-photos.json"
+    if packet.get("preserve_original") is True and cache_path.is_file():
+        photos = json.loads(cache_path.read_text(encoding="utf-8"))["photos"]
+        if photos:
+            manifest.update(visual_source="first_party_programmatic_shapes_and_owner_supplied_references", external_visual_assets=photos)
+            manifest["limitations"].append("원문 참조 사진을 바이트 그대로 보존했습니다. 소유권·초상권·상업 이용 허가는 별도 확인이 필요합니다")
     return write_text(folder, "asset-rights.json", json.dumps(manifest, ensure_ascii=False, indent=2))
 
 

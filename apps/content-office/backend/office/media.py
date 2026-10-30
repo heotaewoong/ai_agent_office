@@ -14,7 +14,7 @@ import subprocess
 from PIL import Image, ImageDraw, ImageFont
 from .exports import korean_font, write_blog_exports, write_reference_pdf, write_rights_manifest, write_video_exports
 from .store import WorkflowError, digest
-RENDER_VERSION = 'office-media-4-campaign-handoff'
+RENDER_VERSION = 'office-media-5-preserved-source-photos'
 VOICE_CACHE_VERSION = 'office-media-1'
 
 def command(args, timeout=180):
@@ -249,8 +249,9 @@ def scene_content(scene, index=0):
             comparison = [part.strip() for part in korean_pair.groups()]
             break
     numbers = numeric_facts(caption)
-    # Visual instructions such as '3개 박스' describe a layout, not a news metric.
-    if not numbers and not re.search(r'박스|카드|픽셀|px|레이아웃|글꼴|font|columns?', visual, re.I):
+    # Visual instructions describe the picture ('문의 1건, 분류 우선 흐름'), not a metric to headline.
+    # Take numbers from them only when the visual explicitly asks for a number scene.
+    if not numbers and requested == 'number' and not re.search(r'박스|카드|픽셀|px|레이아웃|글꼴|font|columns?', visual, re.I):
         numbers = numeric_facts(visual)
     if requested == 'flow' and steps:
         kind = 'flow'
@@ -296,7 +297,8 @@ def cover_background(source, size=(1080, 1920)):
     resized = background.resize((max(size[0], math.ceil(width * scale)), max(size[1], math.ceil(height * scale))), Image.LANCZOS)
     left, top = (resized.width - size[0]) // 2, (resized.height - size[1]) // 2
     frame = resized.crop((left, top, left + size[0], top + size[1]))
-    return Image.blend(frame, Image.new('RGB', size, '#0b1327'), 0.55)
+    # 생성 배경이 보이도록 35%만 눌러 두고, 글자 가독성은 굵은 제목과 장면 패널이 맡는다.
+    return Image.blend(frame, Image.new('RGB', size, '#0b1327'), 0.35)
 
 
 def draw_scene(plan, scene, index, total, path, *, background=None, background_meta=None, overlay_only=False):
@@ -316,7 +318,7 @@ def draw_scene(plan, scene, index, total, path, *, background=None, background_m
     text_box(draw, 'HeoBrain / AI 개념 노트', (85, 100, 900, 70), 32, accent)
     # The current scene is the headline. The approved global title remains in
     # the plan/thumbnail, rather than competing with every scene's explanation.
-    title_metrics = text_box(draw, content['caption'], (85, 235, 910, 310), 76, minimum_size=46)
+    title_metrics = text_box(draw, content['caption'], (85, 235, 910, 310), 80, minimum_size=46, font_path=korean_font('bold'))
     kind = content['kind']
     comparison_metrics = []
     number_metrics = []

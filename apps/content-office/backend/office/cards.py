@@ -265,7 +265,7 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
     packet = job["source_packet"] or {}
     brand = load_brand()
     brief = brief_for_job(job)
-    provider = provider or Provider(store)
+    provider = provider or Provider(store, job_id=job_id)
     system = brand_system_prompt(BASE, brand)
     context = {"packet": packet_context(packet), "audience": brief, "instructions": INSTRUCTIONS}
     options = {"max_tokens": 12000, "temperature": 0.5, "reasoning_effort": "low"}

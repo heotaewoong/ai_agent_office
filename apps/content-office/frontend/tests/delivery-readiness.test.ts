@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { channelHandoffStatus, deliveryRecordLabel, packetLanguage, requirePrivateUploadResult, sourceChannelMismatch, youtubePreflight } from "../lib/delivery-readiness.ts";
+import { channelHandoffStatus, deliveryRecordLabel, packetLanguage, requirePrivateUploadResult, requireStagingSnapshot, sourceChannelMismatch, stagingExternalLabel, stagingLocalLabel, youtubePreflight } from "../lib/delivery-readiness.ts";
 
 const job = { id: "fixture", source_hash: "source1", source_packet: { title: "가상 원고", body: "가상 본문", audience: { language: "ko" } }, selections: { video: true }, brief: { language: "ko" }, manifest: { hash: "m1", source_hash: "source1", files: [{ name: "short.mp4", outputs: ["video"] }, { name: "tistory.html", outputs: ["blog"] }] }, release_approval: { decision: "approved", version: "m1", outputs: ["video", "blog"] } };
 const channel = { label: "가상 채널", locale: "ko", credentials_configured: true, publication_enabled: true };
@@ -32,6 +32,33 @@ test("과거 원고의 언어 기록이 없거나 지원 밖이면 브리프 추
     assert.match(sourceChannelMismatch(legacy as never, channel as never) ?? "", /언어 기록.*재검수/);
     assert.equal(youtubePreflight(legacy as never, channel as never).ok, false);
   }
+});
+
+test("앱 파일 준비를 플랫폼 임시저장이나 업로드로 표시하지 않고 X 보류를 우선한다", () => {
+  const row = { status: "local_ready", local_ready: true, platform: "threads", external_state: "not_connected", external_draft_created: false, external_id: null } as const;
+  assert.match(stagingLocalLabel(row), /준비됨.*앱 내부/);
+  assert.match(stagingExternalLabel(row), /플랫폼 미연결.*임시저장 없음/);
+  assert.match(stagingLocalLabel({ ...row, status: "paused" }), /보류/);
+  assert.match(stagingLocalLabel({ ...row, status: "blocked", local_ready: false }), /미완료/);
+  assert.match(stagingExternalLabel({ ...row, external_draft_created: true }), /임시저장 없음/);
+});
+
+test("빈·다른 작업·중복·손상 준비표를 기록 가능한 현재 판본으로 사용하지 않는다", () => {
+  const row = { channel_key: "threads_main", label: "Threads", platform: "threads", locale: "ko", local_ready: true, blockers: [], required_files: ["threads-main.txt"], files: [{ name: "threads-main.txt", sha256: "b".repeat(64) }] };
+  const valid = { job_id: "synthetic", stage_hash: "a".repeat(64), current_release: true, recorded_current: false, blockers: [], notes: [], channels: [row] };
+  assert.doesNotThrow(() => requireStagingSnapshot(valid as never, "synthetic"));
+  for (const invalid of [null, {}, { ...valid, channels: [] }, { ...valid, channels: [row, row] }, { ...valid, channels: [{ ...row, required_files: null }] }, { ...valid, channels: [{ ...row, files: [{ name: "f", sha256: "bad" }] }] }])
+    assert.throws(() => requireStagingSnapshot(invalid as never, "synthetic"), /비어 있거나.*판본/);
+  assert.throws(() => requireStagingSnapshot(valid as never, "other-job"), /판본/);
+});
+
+test("외부 상태는 실제 ID 있는 비공개 기록·불명·확인 필요를 각각 표시한다", () => {
+  const row = { platform: "youtube", external_state: "private", external_draft_created: false, external_id: "fixture_vid" } as const;
+  assert.match(stagingExternalLabel(row), /비공개 확인 기록/);
+  assert.match(stagingExternalLabel({ ...row, external_id: null }), /ID 확인 필요/);
+  assert.match(stagingExternalLabel({ ...row, external_state: "unknown" }), /불명.*대사/);
+  assert.match(stagingExternalLabel({ ...row, external_state: "needs_review" }), /확인 필요/);
+  assert.match(stagingExternalLabel({ ...row, external_state: "not_attempted", external_id: null }), /전송 미실행.*임시저장 없음/);
 });
 
 test("HTTP 성공이어도 private·실제 공개범위·영상 ID가 없는 업로드를 완료로 표시하지 않는다", () => {

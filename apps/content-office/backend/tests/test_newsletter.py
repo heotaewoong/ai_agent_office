@@ -1,4 +1,4 @@
-"""뉴스레터 회차: 승인② 원고에서 회차 생성, 사람 승인③, 발송 직전 최신 동의 스냅샷, 수동 발송 기록. 이메일은 회차에 넣지 않는다."""
+"""뉴스레터 회차: 현재 원고·출고·동의에 결속된 사람 승인③과 수동 발송 기록. 이메일은 회차에 넣지 않는다."""
 import json
 
 import pytest
@@ -98,7 +98,7 @@ def test_rebuild_refreshes_consent_and_resets_approval_when_content_changes(tmp_
     client.post(f"/api/leads/{first['id']}/withdraw", json={}, headers=headers)
     rebuilt = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
     assert rebuilt["recipient_count"] == 1 and rebuilt["recipients_hash"] != issue["recipients_hash"]
-    assert rebuilt["hash"] == issue["hash"] and rebuilt["state"] == "approved" and rebuilt["approval"]["stage"] == "③"
+    assert rebuilt["hash"] == issue["hash"] and rebuilt["state"] == "draft" and rebuilt["approval"] is None
     client.put(f"/api/jobs/{job_id}/offer", json={"expected_offer_hash": None, "product": "D-30 플래너", "price_krw": 9900, "url": "https://heobrain.kr/planner", "note": None}, headers=headers)
     from tests.test_offer import reapprove_campaign_fixture
     reapprove_campaign_fixture(store, job_id)
@@ -154,6 +154,7 @@ def test_dashboard_counts_leads_and_newsletters(tmp_path):
     lead(client, headers, "two@example.com")
     client.post(f"/api/leads/{first['id']}/withdraw", json={}, headers=headers)
     auto_issue = client.get("/api/newsletters").json()["issues"][0]
+    auto_issue = client.post(f"/api/newsletters/{auto_issue['id']}/rebuild", json={}, headers=headers).json()
     client.post(f"/api/jobs/{job_id}/newsletter", json={"issue_key": "2026-11-w9", "subject": None}, headers=headers)
     client.post(f"/api/newsletters/{auto_issue['id']}/review", json={"decision": "approve", "expected_hash": auto_issue["review_hash"], "note": None}, headers=headers)
     dashboard = client.get("/api/dashboard").json()
@@ -224,6 +225,8 @@ def test_unchanged_rebuild_preserves_preview_hash_and_content_approval_semantics
     approved = client.post(f"/api/newsletters/{issue['id']}/review", json={"decision": "approve", "expected_hash": rebuilt["review_hash"]}, headers=headers)
     assert approved.status_code == 200
     assert approved.json()["approval"]["version"] == issue["hash"]
+    unchanged = client.post(f"/api/newsletters/{issue['id']}/rebuild", json={}, headers=headers).json()
+    assert unchanged["state"] == "approved" and unchanged["approval"] == approved.json()["approval"]
 
 
 def test_review_compare_and_approval_remain_atomic_during_rebuild(tmp_path, monkeypatch):
@@ -264,7 +267,6 @@ def test_review_compare_and_approval_remain_atomic_during_rebuild(tmp_path, monk
 
     monkeypatch.setattr(store, "connection", observed_connection)
     monkeypatch.setattr(newsletter, "_released_job", paused_release)
-    monkeypatch.setattr(newsletter, "consent_snapshot", lambda _: {"recipient_count": issue["recipient_count"], "recipients_hash": issue["recipients_hash"]})
     reviewer = Thread(name="newsletter-review", target=run, args=(lambda: newsletter.review_issue(store, issue["id"], "approve", expected_hash=issue["review_hash"], actor="op"),))
     rebuilder = Thread(name="newsletter-rebuild", target=run, args=(lambda: newsletter.rebuild_issue(store, issue["id"], actor="op"),))
     reviewer.start()
@@ -278,6 +280,164 @@ def test_review_compare_and_approval_remain_atomic_during_rebuild(tmp_path, monk
         reviewer.join(5)
         if rebuilder.ident is not None:
             rebuilder.join(5)
-    assert not reviewer.is_alive() and not rebuilder.is_alive() and not errors
+    assert not reviewer.is_alive() and not rebuilder.is_alive()
+    assert len(errors) == 1 and isinstance(errors[0], WorkflowError) and "판본" in str(errors[0])
     current = newsletter.issue(store, issue["id"])
     assert current["hash"] != issue["hash"] and current["state"] == "draft" and current["approval"] is None
+    assert not [event for event in store.events(job_id) if event["kind"] == "newsletter_reviewed"]
+
+
+@pytest.mark.parametrize("action", ["approve", "reject", "export", "sent"])
+@pytest.mark.parametrize("change", ["source", "offer", "release", "release_rejected", "source_rejected", "file", "file_missing", "consent_text", "consent_version", "consent_granted", "email", "withdrawn", "new_recipient"])
+def test_current_chain_is_required_for_review_export_and_sent(tmp_path, action, change):
+    from office import leads, newsletter
+    from office.store import canonical, digest
+    from tests.test_offer import reapprove_campaign_fixture
+
+    store, job_id = released_fixture(tmp_path)
+    reader, _ = leads.register_lead(store, email="reader@example.com", magnet_key="one", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의")
+    current = newsletter.build_issue(store, job_id, issue_key="current-chain", subject=None, actor="op")
+    if action == "sent":
+        current = newsletter.review_issue(store, current["id"], "approve", expected_hash=current["review_hash"], actor="op")
+    approvals_before = len([event for event in store.events(job_id) if event["kind"] == "newsletter_reviewed"])
+    job = store.job(job_id)
+    if change == "source":
+        packet = {**job["source_packet"], "body": "새 원고 B입니다."}
+        store.save_source(job_id, packet)
+        reapprove_campaign_fixture(store, job_id)
+    elif change == "offer":
+        store.set_offer(job_id, {"product": "새 상품 B", "price_krw": 9900, "url": "https://heobrain.kr/new"}, "op")
+        reapprove_campaign_fixture(store, job_id)
+    elif change == "release":
+        manifest = {**job["manifest"], "note": "새 출고 판본 B"}
+        manifest["hash"] = digest({key: value for key, value in manifest.items() if key != "hash"})
+        store.save_manifest_if_current(job_id, job["source_hash"], job["selections"], manifest)
+        store.review_release(job_id, manifest["hash"], "approved", "op", media_reviewed=True, outputs=["video"])
+    elif change == "release_rejected":
+        store.review_release(job_id, job["manifest"]["hash"], "rejected", "op", outputs=["video"])
+    elif change == "source_rejected":
+        store.review_source(job_id, job["source_hash"], "rejected", "op")
+    elif change in ("file", "file_missing"):
+        path = store.artifacts / job["manifest"]["files"][0]["path"]
+        if change == "file":
+            path.write_bytes(b"changed after release")
+        else:
+            path.unlink()
+    elif change == "withdrawn":
+        leads.withdraw_lead(store, reader["id"])
+    elif change == "new_recipient":
+        leads.register_lead(store, email="new@example.com", magnet_key="two", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의")
+    else:
+        with store.connection(transaction=True) as db:
+            row = db.execute("SELECT data FROM leads WHERE id=?", (reader["id"],)).fetchone()
+            data = json.loads(row["data"])
+            if change == "email":
+                db.execute("UPDATE leads SET email=? WHERE id=?", ("changed@example.com", reader["id"]))
+            else:
+                if change == "consent_text":
+                    data["consent_text"] = "자료 전달에만 동의합니다"
+                elif change == "consent_version":
+                    data["consent"]["version"] = "v2"
+                else:
+                    data["consent"]["granted_at"] = "2026-10-30T01:00:00+00:00"
+                db.execute("UPDATE leads SET data=? WHERE id=?", (canonical(data), reader["id"]))
+    client, headers = api(store)
+    if action == "export":
+        response = client.get(f"/api/newsletters/{current['id']}/export")
+    elif action == "sent":
+        response = client.post(f"/api/newsletters/{current['id']}/sent", json={}, headers=headers)
+    else:
+        response = client.post(f"/api/newsletters/{current['id']}/review", json={"decision": action, "expected_hash": current["review_hash"]}, headers=headers)
+    assert response.status_code == 409, response.text
+    saved = newsletter.issue(store, current["id"])
+    assert saved["state"] == current["state"] and saved["approval"] == current["approval"] and saved["sent_at"] is None
+    assert saved["recipients_hash"] == current["recipients_hash"] and saved["recipient_count"] == current["recipient_count"]
+    assert len([event for event in store.events(job_id) if event["kind"] == "newsletter_reviewed"]) == approvals_before
+    assert not [event for event in store.events(job_id) if event["kind"] == "newsletter_sent_manual"]
+
+
+@pytest.mark.parametrize("action", ["approve", "reject", "export", "sent"])
+def test_coupon_expiry_blocks_review_export_and_sent(tmp_path, monkeypatch, action):
+    from datetime import datetime, timedelta, timezone
+    from office import newsletter, offers
+    from tests.test_offer import coupon_offer, reapprove_campaign_fixture
+
+    store, job_id = released_fixture(tmp_path)
+    future = datetime.now(timezone.utc) + timedelta(days=1)
+    store.set_offer(job_id, coupon_offer(code="SAVE10", discount_percent=10, expires_at=future.isoformat(), terms="합성 시험", verified=True), "op")
+    reapprove_campaign_fixture(store, job_id)
+    current = newsletter.build_issue(store, job_id, issue_key="expiry", subject=None, actor="op")
+    if action == "sent":
+        current = newsletter.review_issue(store, current["id"], "approve", expected_hash=current["review_hash"], actor="op")
+
+    class AfterExpiry(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return future + timedelta(seconds=1)
+
+    monkeypatch.setattr(offers, "datetime", AfterExpiry)
+    client, headers = api(store)
+    if action == "export":
+        response = client.get(f"/api/newsletters/{current['id']}/export")
+    elif action == "sent":
+        response = client.post(f"/api/newsletters/{current['id']}/sent", json={}, headers=headers)
+    else:
+        response = client.post(f"/api/newsletters/{current['id']}/review", json={"decision": action, "expected_hash": current["review_hash"]}, headers=headers)
+    assert response.status_code == 409 and "기간" in response.json()["detail"]
+    assert newsletter.issue(store, current["id"])["sent_at"] is None
+
+
+def test_withdrawal_requires_rebuild_and_explicit_reapproval_without_ledger_migration(tmp_path):
+    from office import leads, newsletter
+
+    store, job_id = released_fixture(tmp_path)
+    reader, _ = leads.register_lead(store, email="reader@example.com", magnet_key="one", source="homepage", consent_version="v1", consent_text="뉴스레터 수신 동의")
+    current = newsletter.build_issue(store, job_id, issue_key="withdrawal", subject=None, actor="op")
+    approved = newsletter.review_issue(store, current["id"], "approve", expected_hash=current["review_hash"], actor="human")
+    leads.withdraw_lead(store, reader["id"])
+    with pytest.raises(WorkflowError, match="동의"):
+        newsletter.mark_sent(store, current["id"], actor="op")
+    assert newsletter.issue(store, current["id"]) == approved
+    rebuilt = newsletter.rebuild_issue(store, current["id"], actor="op")
+    assert rebuilt["recipient_count"] == 0 and rebuilt["state"] == "draft" and rebuilt["approval"] is None
+    with store.connection() as db:
+        reviews = db.execute("SELECT * FROM approvals WHERE kind='newsletter'").fetchall()
+        assert len(reviews) == 1 and reviews[0]["actor"] == "human"
+    fresh = newsletter.review_issue(store, current["id"], "approve", expected_hash=rebuilt["review_hash"], actor="human")
+    sent = newsletter.mark_sent(store, current["id"], actor="op")
+    assert sent["recipient_count"] == 0 and sent["recipients_hash"] == fresh["recipients_hash"] and sent["state"] == "sent_manual"
+
+
+def test_rejected_issue_cannot_export_or_mark_sent(tmp_path):
+    from office import newsletter
+
+    store, job_id = released_fixture(tmp_path)
+    current = newsletter.issues(store)[0]
+    rejected = newsletter.review_issue(store, current["id"], "reject", expected_hash=current["review_hash"], actor="human")
+    client, headers = api(store)
+    assert client.get(f"/api/newsletters/{current['id']}/export").status_code == 409
+    assert client.post(f"/api/newsletters/{current['id']}/sent", json={}, headers=headers).status_code == 409
+    assert newsletter.issue(store, current["id"]) == rejected
+
+
+def test_legacy_snapshot_and_approval_are_readable_but_need_rebuild_and_reapproval(tmp_path):
+    from office import newsletter
+    from office.store import canonical, digest
+
+    store, job_id = released_fixture(tmp_path)
+    current = newsletter.issues(store)[0]
+    legacy = {key: value for key, value in current.items() if key not in ("id", "issue_key", "job_id", "state", "created_at", "updated_at", "review_hash", "release_outputs")}
+    legacy["recipients_hash"] = digest([])
+    legacy["hash"] = digest({key: legacy[key] for key in ("subject", "markdown", "source_hash", "release_version")})
+    legacy["approval"] = {"stage": "③", "decision": "approved", "actor": "legacy-human", "version": legacy["hash"]}
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE newsletter_issues SET state='approved',data=? WHERE id=?", (canonical(legacy), current["id"]))
+    before = newsletter.issue(store, current["id"])
+    assert before["approval"]["actor"] == "legacy-human"
+    with pytest.raises(WorkflowError):
+        newsletter.mark_sent(store, current["id"], actor="op")
+    with pytest.raises(WorkflowError):
+        newsletter.export_issue(store, current["id"])
+    assert newsletter.issue(store, current["id"]) == before
+    rebuilt = newsletter.rebuild_issue(store, current["id"], actor="op")
+    assert rebuilt["state"] == "draft" and rebuilt["approval"] is None and rebuilt["release_outputs"] == ["video"]

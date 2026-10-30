@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Action, Idea, Job, JobMetadata, KnowledgeSearch, Task, OutputKind } from "../lib/types";
+import type { Action, Idea, Job, JobBudget, JobMetadata, KnowledgeSearch, Task, OutputKind } from "../lib/types";
 import {
   completedOutputs,
   evidenceInputAllowed,
   retryBlockedReason,
   formatDate,
+  formatMoney,
 } from "../lib/workflow";
 import { calendarSourceUrl, calendarTimeliness, dDayLabel, isVerifiedExam, timelinessPercent } from "../lib/calendar";
 import { Icon } from "./icons";
@@ -20,7 +21,88 @@ export type IntakeDraft = {
   text: string;
   version: string | null;
   acknowledged: boolean;
+  preserveOriginal?: boolean;
 };
+
+export function JobBudgetPanel({ jobId, globalCap, refreshKey, busy }: { jobId: string; globalCap?: number; refreshKey?: string; busy: boolean }) {
+  const [budget, setBudget] = useState<JobBudget>();
+  const [input, setInput] = useState("1000");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const alive = useRef(true), sequence = useRef(0), writing = useRef(false), activeJob = useRef(jobId);
+  activeJob.current = jobId;
+  const current = budget?.job_id === jobId ? budget : undefined;
+  function requireBudget(value: JobBudget) {
+    if (!value || value.job_id !== jobId || typeof value.hash !== "string" || !/^[a-f0-9]{64}$/.test(value.hash)
+      || (value.cap_krw !== null && (!Number.isSafeInteger(value.cap_krw) || value.cap_krw <= 0))
+      || ![value.spent_krw, value.reserved_krw, value.overrun_krw].every((number) => Number.isSafeInteger(number) && number >= 0)
+      || (value.remaining_krw !== null && !Number.isSafeInteger(value.remaining_krw))
+      || (value.cap_krw === null) !== (value.remaining_krw === null))
+      throw new Error("이 작업의 예산 숫자와 판본을 확인하지 못했습니다. 다시 조회하세요.");
+  }
+  const load = useCallback(async () => {
+    if (writing.current) return;
+    const ticket = ++sequence.current;
+    setLoading(true); setError(""); setNotice(""); setBudget(undefined);
+    try {
+      const value = await api.jobBudget(jobId);
+      requireBudget(value);
+      if (alive.current && activeJob.current === jobId && ticket === sequence.current) setBudget(value);
+    } catch (cause) {
+      if (alive.current && activeJob.current === jobId && ticket === sequence.current) setError(cause instanceof Error ? cause.message : "작업별 예산을 읽지 못했습니다.");
+    } finally {
+      if (alive.current && activeJob.current === jobId && ticket === sequence.current) setLoading(false);
+    }
+  }, [jobId]);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; sequence.current++; };
+  }, [jobId]);
+  useEffect(() => { void load(); }, [load, refreshKey]);
+  const cap = /^\d+$/.test(input) ? Number(input) : NaN;
+  const validCap = Number.isSafeInteger(cap) && cap > 0 && (globalCap === undefined || cap <= globalCap);
+  async function save() {
+    if (busy || loading || writing.current || !current || error || !validCap) return;
+    const ticket = ++sequence.current;
+    writing.current = true; setSaving(true); setNotice("");
+    try {
+      const value = await api.setJobBudget(jobId, cap, current.hash);
+      requireBudget(value);
+      if (value.cap_krw !== cap) throw new Error("요청한 작업 상한의 저장 결과를 확인하지 못했습니다. 다시 조회하세요.");
+      if (alive.current && activeJob.current === jobId && ticket === sequence.current) {
+        setBudget(value); setNotice(`이 작업의 상한을 ${formatMoney(cap)}원으로 기록했습니다. 비용·예약·승인은 유지하며 모델을 호출하지 않았습니다.`);
+      }
+    } catch (cause) {
+      if (alive.current && activeJob.current === jobId && ticket === sequence.current) { setBudget(undefined); setError(cause instanceof Error ? cause.message : "작업 상한을 기록하지 못했습니다."); }
+    } finally {
+      writing.current = false;
+      if (alive.current && activeJob.current === jobId) setSaving(false);
+    }
+  }
+  return <section className="editor-panel derived-panel" aria-label="이 작업의 제작 비용 상한">
+    <h3>이 작업의 제작 비용</h3>
+    <p className="muted">전체 상한: {typeof globalCap === "number" && Number.isSafeInteger(globalCap) && globalCap > 0 ? `${formatMoney(globalCap)}원` : "미확인"} · 기존 비용과 예약은 초기화하지 않습니다. 작업 상한이 없으면 전체 예산 제한을 따릅니다.</p>
+    {loading && <p role="status">작업 예산을 확인하고 있습니다.</p>}
+    {error && <p className="notice error" role="alert">{error} 사용량을 0원으로 간주하지 않았습니다. 다시 조회한 뒤 설정하세요.</p>}
+    {notice && <p className="notice" role="status">{notice}</p>}
+    {current && <dl className="brief-rows">
+      <div><dt>이 작업 상한</dt><dd>{current.cap_krw === null ? "미설정 · 전체 제한 적용" : `${formatMoney(current.cap_krw)}원`}</dd></div>
+      <div><dt>쓴 금액(추정)</dt><dd>{formatMoney(current.spent_krw)}원</dd></div>
+      <div><dt>예약·결과 불명</dt><dd>{formatMoney(current.reserved_krw)}원</dd></div>
+      <div><dt>작업 상한에서 남음</dt><dd>{current.remaining_krw === null ? "별도 상한 미설정" : `${formatMoney(current.remaining_krw)}원`}</dd></div>
+      {current.overrun_krw > 0 && <div><dt>작업 상한 초과</dt><dd>{formatMoney(current.overrun_krw)}원</dd></div>}
+    </dl>}
+    <div className="newsletter-build">
+      <label htmlFor={`job-budget-${jobId}`}>이 작업 상한(원)<input id={`job-budget-${jobId}`} inputMode="numeric" pattern="[0-9]*" value={input} disabled={busy || saving} onChange={(event) => setInput(event.target.value)} /></label>
+      <button className="button secondary" type="button" disabled={busy || loading || saving || !current || Boolean(error) || !validCap} onClick={() => void save()}>작업 상한 설정</button>
+      <button className="button text" type="button" disabled={busy || loading || saving} onClick={() => void load()}>예산 다시 조회</button>
+    </div>
+    <p className="muted">첫 1편은 1,000원 상한을 권장합니다. 실제 예약액은 남은 작업 예산과 전체 예산 안에서만 허용하며, 설정 자체는 제작이나 승인을 시작하지 않습니다.</p>
+    {!validCap && <p className="field-error">{input === "" ? "이 작업의 상한을 입력하세요. 빈 입력은 0원이 아닙니다." : "전체 상한 이하의 양의 정수를 입력하세요."}</p>}
+  </section>;
+}
 
 export function EvidenceIntake({
   job,
@@ -45,6 +127,7 @@ export function EvidenceIntake({
 }) {
   const text = draft?.text ?? "";
   const version = draft ? draft.version : (job.source_hash ?? null);
+  const preserveOriginal = (draft?.preserveOriginal ?? job.article?.preserve_original) === true;
   const stale = Boolean(text && version !== (job.source_hash ?? null));
   if (!evidenceInputAllowed(job)) return null;
   const needsPackaging = packagingRequired(job);
@@ -95,13 +178,7 @@ export function EvidenceIntake({
             minLength={200}
             disabled={locked}
             placeholder="원문에서 사용 권한을 확인한 공개 텍스트를 200~20,000자로 붙여넣으세요."
-            onChange={(event) =>
-              onChange(
-                event.target.value
-                  ? { text: event.target.value, version, acknowledged: false }
-                  : null,
-              )
-            }
+            onChange={(event) => onChange({ text: event.target.value, version, acknowledged: false, preserveOriginal })}
           />
           <div className="intake-meta">
             <span>
@@ -115,11 +192,22 @@ export function EvidenceIntake({
               checked={draft?.acknowledged ?? false}
               disabled={locked || !text}
               onChange={(event) =>
-                onChange({ text, version, acknowledged: event.target.checked })
+                onChange({ text, version, acknowledged: event.target.checked, preserveOriginal })
               }
             />
             <span>이 출처의 공개 원문이며 재사용할 권한을 확인했습니다.</span>
           </label>
+          <label className="intake-consent">
+            <input
+              type="checkbox"
+              checked={preserveOriginal}
+              disabled={locked}
+              onChange={(event) => onChange({ text, version, acknowledged: draft?.acknowledged ?? false, preserveOriginal: event.target.checked })}
+            />
+            <span>원문 전체를 보존하고 영상만 파생</span>
+          </label>
+          <p className="intake-disclosure">본인이 쓴 글이나 원문 전체를 재사용하도록 허락받은 글에만 선택하세요. 선택하면 Markdown 본문을 요약·재작성하지 않고 영상 대본과 검수를 따로 요청합니다. 원고 승인①과 출고 승인②는 사람이 합니다. 선택하지 않으면 기존 요약·재작성 방식을 사용합니다.</p>
+          <p className="intake-meta">등록할 방식: {preserveOriginal ? "원문 보존 · 영상 파생" : "요약·재작성"} · 입력 원문 {text.length.toLocaleString("ko-KR")}자</p>
           {stale && (
             <p className="intake-error" role="alert">
               입력 중 원고 버전이 바뀌었습니다. 입력을 복사한 뒤 현재 작업을
@@ -148,14 +236,16 @@ export function EvidenceIntake({
               void action(
                 "공개 원문 근거 등록",
                 async () => {
-                  await api.registerEvidence(job.id, text, version);
+                  await api.registerEvidence(job.id, text, version, preserveOriginal);
                   onChange(null);
                 },
-                "공개 원문을 등록하고 근거 추출·새 원고 작업을 요청했습니다. 생성 완료와 승인은 별도입니다.",
+                preserveOriginal
+                  ? `원문 ${text.length.toLocaleString("ko-KR")}자를 보존 모드로 등록하고 영상 대본·검수를 요청했습니다. 생성 완료와 승인은 별도입니다.`
+                  : "공개 원문을 등록하고 근거 추출·새 원고 작업을 요청했습니다. 생성 완료와 승인은 별도입니다.",
               );
             }}
           >
-            근거 등록하고 새 원고 만들기
+            {preserveOriginal ? "근거 등록하고 영상 대본 만들기" : "근거 등록하고 새 원고 만들기"}
             <Icon name="arrow" size={16} />
           </button>
         </div>
@@ -650,6 +740,23 @@ export function IdeaBank({ onSelected, refreshKey = 0, drafts = {}, onDraftChang
                 <span>{calendarTimeliness(idea.next_exam, idea.timeliness)}%</span>
               </div>
             ) : !idea.next_exam && typeof idea.timeliness === "number" && Number.isFinite(idea.timeliness) && idea.timeliness > 0 ? <p className="muted">저장된 편집 참고값 {timelinessPercent(idea.timeliness)}% · 특정 시험일을 확인한 점수는 아닙니다.</p> : <p className="muted">시의성 미확인 · 확정 일정에 따른 가산을 표시하지 않습니다.</p>}
+            <details className="idea-brief-preview">
+              <summary>저장된 기획 읽기</summary>
+              {idea.brief ? <>
+                <p className="muted">기획 선택⓪ 전에 실제 저장된 독자·약속·구매 안내를 확인하세요. 이 내용을 펼쳐 읽어도 승인이나 제작 요청은 실행되지 않습니다.</p>
+                <dl className="brief-rows">
+                  {([
+                    ["주제", idea.brief.topic],
+                    ["독자", idea.brief.reader],
+                    ["독자가 막힌 점", idea.brief.problem],
+                    ["약속한 결과", idea.brief.outcome],
+                    ["문체", idea.brief.tone],
+                    ["원고 언어", idea.brief.language === "ko" ? "한국어" : idea.brief.language === "en" ? "영어" : idea.brief.language],
+                    ["다음 행동(CTA)", idea.brief.cta],
+                  ] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{typeof value === "string" && value.trim() ? value : "미기록"}</dd></div>)}
+                </dl>
+              </> : <p className="muted">이 기획에 저장된 독자 기획이 없습니다.</p>}
+            </details>
             {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
             <IdeaSourcesPanel
               idea={idea}

@@ -145,6 +145,7 @@ class ThumbnailChoice(BaseModel):
 class EvidenceInput(BaseModel):
     source_text: str = Field(min_length=200, max_length=20000)
     version: str | None = None
+    preserve_original: bool = Field(default=False, strict=True)
 
 
 class IdeaInput(BaseModel):
@@ -229,6 +230,66 @@ class ChannelPatch(BaseModel):
 
 class YoutubeDeliveryRequest(BaseModel):
     channel_key: str = Field(default="youtube_main_ko", max_length=64)
+
+
+class StagingRequest(BaseModel):
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class JobBudgetRequest(BaseModel):
+    cap_krw: int = Field(strict=True, gt=0)
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+def _local_photo_preview(store, job, html_path, content):
+    from html.parser import HTMLParser
+    from urllib.parse import urlsplit
+    from .exports import SOURCE_PHOTO_HOSTS, SOURCE_PHOTO_MAX_BYTES, SOURCE_PHOTO_NAME_PATTERN
+
+    records = [file for file in (job.get("manifest") or {}).get("files", [])
+               if "blog" in file.get("outputs", []) and SOURCE_PHOTO_NAME_PATTERN.fullmatch(file.get("name", ""))]
+    if not records and job["article"].get("preserve_original") is not True:
+        return content
+    root, urls = store.artifacts.resolve(), {}
+    try:
+        for record in records:
+            name = record["name"]
+            path = (root / record["path"]).resolve()
+            relative = path.relative_to(root)
+            if (relative.parts[:2] != (job["id"], job["source_hash"]) or path.parent != html_path.parent
+                    or path.name != name or not path.is_file() or path.stat().st_size > SOURCE_PHOTO_MAX_BYTES or name in urls):
+                raise WorkflowError("원문 사진이 현재 작업의 블로그 파일과 일치하지 않습니다")
+            checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+            asset_id = "asset_" + digest({"path": relative.as_posix(), "sha256": checksum})[:24]
+            if checksum != record.get("sha256") or record.get("id") != asset_id:
+                raise WorkflowError("원문 사진이 변경되어 미리보기를 중단했습니다. 재제작·검수하세요")
+            urls[name] = "/api/artifacts/" + asset_id
+    except (OSError, ValueError, KeyError, TypeError):
+        raise WorkflowError("원문 사진을 확인하지 못했습니다. 재제작·검수하세요") from None
+
+    def replace(match):
+        if match[3] not in urls:
+            raise WorkflowError("블로그의 원문 사진이 현재 제작물 목록에 없습니다")
+        return match[1] + match[2] + urls[match[3]] + match[2]
+
+    localized = re.sub(rf'''((?i:src|href)\s*=\s*)(["'])({SOURCE_PHOTO_NAME_PATTERN.pattern})\2''', replace, content)
+
+    class PhotoReferences(HTMLParser):
+        def handle_starttag(self, tag, attributes):
+            values = dict(attributes)
+            if tag == "img" and (sum(key == "src" for key, _ in attributes) != 1 or "srcset" in values or values.get("src") not in urls.values()):
+                raise WorkflowError("블로그 사진을 현재 작업의 검증된 파일로 연결하지 못했습니다")
+            href = values.get("href")
+            if tag == "a" and href and href not in urls.values():
+                if (sum(key == "href" for key, _ in attributes) != 1 or href.startswith(("source-photo-", "/", ".", "\\"))
+                        or re.match(r"(?i)^(?:file:|[a-z]:)", href) or urlsplit(href).hostname in SOURCE_PHOTO_HOSTS):
+                    raise WorkflowError("원문 사진의 확대 주소를 현재 작업의 파일로 확인하지 못했습니다")
+
+    try:
+        PhotoReferences().feed(localized)
+    except ValueError:
+        raise WorkflowError("블로그 사진 주소를 안전하게 확인하지 못했습니다. 재제작·검수하세요") from None
+    return localized
 
 
 def create_app(store: Store | None = None):
@@ -338,6 +399,14 @@ def create_app(store: Store | None = None):
         job = store.job(job_id)
         return {**job, "brief_hash": digest(job.get("brief")), "events": store.events(job_id), "tasks": store.tasks(job_id), "drafts": store.drafts(job_id)}
 
+    @app.get("/api/jobs/{job_id}/budget")
+    def get_job_budget(job_id: str):
+        return store.get_job_budget(job_id)
+
+    @app.put("/api/jobs/{job_id}/budget")
+    def set_job_budget(job_id: str, request: JobBudgetRequest):
+        return store.set_job_budget(job_id, request.cap_krw, "local-operator", expected_hash=request.expected_hash)
+
     @app.get('/api/jobs/{job_id}/drafts/{draft_id}/preview')
     def draft_preview(job_id: str, draft_id: str):
         from .exports import blog_reader_html, blog_markdown, safe_fragment
@@ -349,7 +418,7 @@ def create_app(store: Store | None = None):
         packet = {**(job.get('source_packet') or {}), 'title': draft['title'], 'body': draft['body'], 'evidence': job['article'].get('evidence', [])}
         html = blog_reader_html(draft['title'], safe_fragment(blog_markdown(packet)), 'draft')
         return HTMLResponse(html, headers={'Cache-Control': 'no-store',
-            'Content-Security-Policy': "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"})
+            'Content-Security-Policy': "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://blog.kakaocdn.net https://t1.daumcdn.net; base-uri 'none'; form-action 'none'"})
 
     @app.post("/api/jobs/{job_id}/draft", status_code=202)
     def draft_source(job_id: str):
@@ -371,6 +440,12 @@ def create_app(store: Store | None = None):
         require_open_window()
         current = store.job(job_id)
         packet = {**edit.packet, "evidence": current["article"].get("evidence", []), "quality": {"status": "unverified", "critical": False, "reviews": [], "refine_count": 0}, "audience": (current.get("source_packet") or {}).get("audience", {})}
+        if current["article"].get("preserve_original") is True:
+            original = current["article"].get("operator_source_text")
+            if not isinstance(original, str) or edit.packet.get("body") != original:
+                raise WorkflowError("원문 보존 모드의 본문은 원문 입력에서 수정·재등록하세요. 편집 내용은 저장하지 않았습니다")
+            packet.update(preserve_original=True, source_input_hash=digest(original),
+                          reference_evidence_ids=(current.get("source_packet") or {}).get("reference_evidence_ids", []))
         if len(canonical(packet)) > 100000:
             raise WorkflowError("원고 입력이 너무 큽니다")
         saved = store.save_source(job_id, packet, expected_hash=edit.version)
@@ -381,8 +456,8 @@ def create_app(store: Store | None = None):
     def register_source_text(job_id: str, evidence_input: EvidenceInput):
         require_open_window()
         require_packaging(store.job(job_id))
-        job = store.register_source_input(job_id, evidence_input.source_text, expected_hash=evidence_input.version)
-        store.event("operator_source_registered", {"characters": len(evidence_input.source_text), "source_sha256": digest(evidence_input.source_text), "role": "연구", "next_action": "근거 추출·원고 생성·재검수"}, job_id)
+        job = store.register_source_input(job_id, evidence_input.source_text, expected_hash=evidence_input.version, preserve_original=evidence_input.preserve_original)
+        store.event("operator_source_registered", {"characters": len(evidence_input.source_text), "source_sha256": digest(evidence_input.source_text), "preserve_original": evidence_input.preserve_original, "role": "연구", "next_action": "근거 추출·원문 보존·영상 대본·재검수" if evidence_input.preserve_original else "근거 추출·원고 생성·재검수"}, job_id)
         store.enqueue("draft", {"job_id": job_id, "source_hash": job["source_hash"]}, key=f"source-input:{job_id}:{digest(evidence_input.source_text)}:{job['source_hash']}")
         return store.job(job_id)
 
@@ -452,7 +527,11 @@ def create_app(store: Store | None = None):
         manifest = verify_files(job, review.outputs)
         if not manifest or review.version != manifest.get("hash"):
             raise WorkflowError("출고 대상 버전이 변경되었습니다")
-        return store.review_release(job_id, review.version, review.decision, "local-operator", review.media_reviewed, review.outputs)
+        saved = store.review_release(job_id, review.version, review.decision, "local-operator", review.media_reviewed, review.outputs)
+        if review.decision == "approved":
+            from .staging import auto_prepare_staging
+            auto_prepare_staging(store, job_id, "local-operator")
+        return saved
 
     @app.post("/api/jobs/{job_id}/thumbnail")
     def choose_thumbnail(job_id: str, choice: ThumbnailChoice):
@@ -507,12 +586,15 @@ def create_app(store: Store | None = None):
         data = path.read_bytes()
         if hashlib.sha256(data).hexdigest() != record['sha256']:
             raise WorkflowError('블로그 파일이 변경되어 재검수가 필요합니다')
+        content = data.decode('utf-8')
+        if format == 'html':
+            content = _local_photo_preview(store, job, path, content)
         current = store.require_source_approval(job_id)
         if current['source_hash'] != job['source_hash'] or (current.get('manifest') or {}).get('hash') != manifest.get('hash'):
             raise WorkflowError('블로그 버전이 변경되었습니다. 현재 작업을 다시 확인하세요')
-        html = blog_reader_html(job['source_packet']['title'], data.decode('utf-8'), format)
+        html = blog_reader_html(job['source_packet']['title'], content, format)
         return HTMLResponse(html, headers={'Cache-Control': 'no-store',
-            'Content-Security-Policy': "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"})
+            'Content-Security-Policy': "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src 'self' https://blog.kakaocdn.net https://t1.daumcdn.net; base-uri 'none'; form-action 'none'"})
 
     from .api_quiz_cards import register as register_quiz_cards; register_quiz_cards(app, store)  # 퀴즈·카드뉴스 라우트와 /api/artifacts/{id}(manifest 파일 + 퀴즈 JSON + 카드 PNG) 서빙
 
@@ -543,6 +625,16 @@ def create_app(store: Store | None = None):
     def list_deliveries(job_id: str):
         from .youtube_delivery import configured, deliveries
         return {"deliveries": deliveries(store, job_id), "youtube_configured": configured()}
+
+    @app.get("/api/jobs/{job_id}/staging")
+    def get_channel_staging(job_id: str):
+        from .staging import staging_view
+        return staging_view(store, job_id)
+
+    @app.post("/api/jobs/{job_id}/staging")
+    def record_channel_staging(job_id: str, request: StagingRequest):
+        from .staging import prepare_staging
+        return prepare_staging(store, job_id, request.expected_hash, "local-operator")
 
     @app.post("/api/jobs/{job_id}/deliveries/youtube", status_code=202)
     def deliver_youtube_video(job_id: str, body: YoutubeDeliveryRequest | None = None):
@@ -660,6 +752,7 @@ def create_app(store: Store | None = None):
 
     from .api_leads_newsletter import register as register_leads_newsletter; register_leads_newsletter(app, store)  # 리드 동의 장부·뉴스레터③·오퍼
     from .api_calendar_questions import register as register_calendar_questions; register_calendar_questions(app, store)  # 시험 일정·시의성, 독자 질문 수집
+    from .api_youtube_oauth import register as register_youtube_oauth; register_youtube_oauth(app, store)  # YouTube 채널 연결(OAuth) — 토큰은 상태 폴더 밖 비밀 파일
 
     @app.get("/api/architecture")
     def architecture_overview():

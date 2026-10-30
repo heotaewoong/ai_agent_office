@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import type { Channel, Delivery as DeliveryRecord, Job } from "../lib/types";
+import type { Channel, ChannelStagingSnapshot, Delivery as DeliveryRecord, Job } from "../lib/types";
 import { canReconcile, studioUrl } from "../lib/settings";
 import { localeLabel, youtubeChannels } from "../lib/channels";
-import { channelHandoffStatus, deliveryRecordLabel, packetLanguage, requirePrivateUploadResult, sourceChannelMismatch, youtubePreflight } from "../lib/delivery-readiness";
+import { deliveryRecordLabel, packetLanguage, requirePrivateUploadResult, requireStagingSnapshot, sourceChannelMismatch, stagingExternalLabel, stagingLocalLabel, youtubePreflight } from "../lib/delivery-readiness";
+import { formatDate, safeArtifactUrl } from "../lib/workflow";
 import { Icon } from "./icons";
 
 const DEFAULT_CHANNEL = "youtube_main_ko";
@@ -170,28 +171,95 @@ export function YoutubePanel({
   );
 }
 
-export function ChannelHandoffPanel({ job }: { job: Job }) {
+export function ChannelHandoffPanel({ job, busy, action }: { job: Job; busy: boolean; action: Action }) {
   const sourceLanguage = packetLanguage(job);
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const revision = JSON.stringify([job.id, job.source_hash, job.manifest?.hash, job.release_approval, job.offer_hash, job.updated_at, job.events?.[0]?.id, job.events?.at(-1)?.id]);
+  const activeRevision = useRef(revision);
+  activeRevision.current = revision;
+  const [snapshot, setSnapshot] = useState<{ revision: string; data: ChannelStagingSnapshot }>();
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const alive = useRef(true);
+  const ticket = useRef(0);
+  const writing = useRef(false);
+  const current = snapshot?.revision === revision ? snapshot.data : null;
+  const load = useCallback(async () => {
+    if (!alive.current || activeRevision.current !== revision) return;
+    const request = ++ticket.current;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await api.channelStaging(job.id);
+      requireStagingSnapshot(data, job.id);
+      if (alive.current && activeRevision.current === revision && request === ticket.current) setSnapshot({ revision, data });
+    } catch (cause) {
+      if (alive.current && activeRevision.current === revision && request === ticket.current) setError(cause instanceof Error ? cause.message : "배포대기 상태를 읽지 못했습니다.");
+    } finally {
+      if (alive.current && activeRevision.current === revision && request === ticket.current) setLoading(false);
+    }
+  }, [job.id, revision]);
   useEffect(() => {
-    let alive = true;
-    api.channels().then((result) => {
-      if (alive) { setChannels(result.channels); setError(""); }
-    }).catch((cause) => {
-      if (alive) setError(cause instanceof Error ? cause.message : "채널 설정을 읽지 못했습니다.");
-    });
-    return () => { alive = false; };
-  }, []);
+    alive.current = true;
+    setSnapshot(undefined);
+    void load();
+    return () => { alive.current = false; ticket.current++; };
+  }, [load]);
+  const canRecord = Boolean(current?.current_release && !current.recorded_current && !current.blockers.length && current.channels.some((row) => row.local_ready) && /^[a-f0-9]{64}$/.test(current.stage_hash));
+  async function record() {
+    if (busy || loading || writing.current || error || !current || !canRecord) return;
+    writing.current = true;
+    ticket.current++;
+    try {
+      await action("앱 배포대기 기록", async () => {
+        const saved = await api.recordChannelStaging(job.id, current.stage_hash);
+        requireStagingSnapshot(saved, job.id);
+        if (!saved.recorded_current || !saved.recorded_at || saved.job_id !== job.id || saved.stage_hash !== current.stage_hash)
+          throw new Error("앱 배포대기 기록의 판본·저장 결과를 확인하지 못했습니다. 상태를 다시 조회하세요.");
+        return saved;
+      }, "승인된 파일 판본의 배포대기 목록을 앱 장부에 기록했습니다. 외부 플랫폼에는 전송하지 않았습니다.");
+      if (alive.current) await load();
+    } finally {
+      writing.current = false;
+    }
+  }
   return <section className="editor-panel derived-panel" aria-label="플랫폼별 출고 준비 상태">
     <div className="section-heading"><div><span className="eyebrow">작업 {job.id}</span><h2>채널별로 어디까지 준비됐나요?</h2></div></div>
-    <p className="muted">앱의 출고 묶음과 외부 플랫폼의 임시저장함은 다릅니다. 아래 준비 표시는 현재 파일·출고 승인 기록만 확인하며, 실제 플랫폼 전송 성공을 뜻하지 않습니다.</p>
+    <p className="muted">앱의 배포대기 장부와 외부 플랫폼의 임시저장함은 다릅니다. 목록 기록은 승인된 파일·언어·출고 판본을 앱에 보존하며, 실제 전송·임시저장·공개 게시를 시작하지 않습니다. X는 요청에 따라 보류합니다.</p>
     <p className="muted">제작물의 원고 언어: {sourceLanguage ? localeLabel(sourceLanguage) : "미확인 · 원고 재검수 필요"} · 다음 원고용 브리프: {localeLabel(job.brief?.language)}. 채널은 제작물에 연결된 원고 언어로 확인합니다.</p>
-    {error ? <p className="notice error" role="alert">{error}</p> : !channels.length ? <p className="muted" role="status">등록 채널을 확인하고 있습니다.</p> : <div style={{ overflowX: "auto" }}>
-      <table className="channel-table"><thead><tr><th scope="col">채널</th><th scope="col">현재 준비 범위 · 다음 행동</th></tr></thead>
-        <tbody>{channels.map((row) => <tr key={row.key}><th scope="row">{row.label} · {localeLabel(row.locale)}</th><td>{["youtube", "instagram", "threads", "linkedin", "x", "tistory", "naver_blog"].includes(row.platform) && sourceChannelMismatch(job, row) || channelHandoffStatus(job, row.platform, row.key)}</td></tr>)}</tbody>
-      </table>
-    </div>}
+    <div className="derived-actions">
+      <button className="button secondary" type="button" disabled={busy || loading || !canRecord || Boolean(error)} onClick={() => void record()}>앱 배포대기 장부에 기록</button>
+      <button className="button text" type="button" disabled={busy || loading} onClick={() => void load()}>상태 다시 확인</button>
+    </div>
+    {error && <p className="notice error" role="alert">{error}</p>}
+    {loading && <p className="muted" role="status">현재 출고 판본·파일·채널 조건을 확인하고 있습니다.</p>}
+    {current && <>
+      <p className="muted">{current.recorded_current ? `현재 판본의 앱 장부 기록 있음 · ${formatDate(current.recorded_at ?? undefined, true)}` : "현재 판본의 앱 배포대기 기록은 아직 없습니다."} · 출고 판본 {current.manifest_hash?.slice(0, 12) ?? "없음"}</p>
+      {current.blockers.length > 0 && <ul className="derived-issues">{current.blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+      <div style={{ overflowX: "auto", maxWidth: "100%", minWidth: 0 }} tabIndex={0} role="region" aria-label="채널별 배포대기 표, 가로로 스크롤할 수 있습니다">
+        <table className="channel-table"><thead><tr><th scope="col">채널</th><th scope="col">앱 내부 준비</th><th scope="col">실제 플랫폼 기록</th></tr></thead>
+          <tbody>{current.channels.map((row) => <tr key={row.channel_key}>
+            <th scope="row">{row.label} · {localeLabel(row.locale)}</th>
+            <td><strong>{stagingLocalLabel(row)}</strong>
+              {row.blockers.length > 0 && <ul>{row.blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+              <details><summary>필수·확인 파일 {row.files.length}개</summary>
+                <p>필요: {row.required_files.join(", ") || "없음"}</p>
+                <ul>{row.files.map((file) => {
+                  const url = file.url && safeArtifactUrl(file.url);
+                  return <li key={`${file.name}-${file.sha256}`} style={{ overflowWrap: "anywhere" }}>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{file.name}</a> : file.name} · 해시 {file.sha256.slice(0, 12)}</li>;
+                })}</ul>
+              </details>
+            </td>
+            <td><strong>{stagingExternalLabel(row)}</strong>
+              {row.external_id && <p style={{ overflowWrap: "anywhere" }}>외부 ID: {row.external_id}</p>}
+              {row.platform === "youtube" && row.external_id && <p>업로드 상태: {row.upload_status || "미확인"} · 영상 처리: {row.processing_status || "미확인"}. 비공개 확인 기록은 재생 완료를 뜻하지 않습니다.</p>}
+              {row.platform === "youtube" && studioUrl(row.external_id) && <a href={studioUrl(row.external_id)!} target="_blank" rel="noopener noreferrer">Studio에서 실제 상태 확인 ↗</a>}
+              {row.can_upload_private && <p>아래 YouTube 영역에서 비공개 업로드를 별도로 요청할 수 있습니다.</p>}
+            </td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+      {current.notes.map((note) => <p className="muted" key={note}>{note}</p>)}
+    </>}
     <p className="muted">YouTube만 현재 출고 승인② 뒤 별도 요청으로 비공개 업로드할 수 있습니다. 네이버·티스토리·Instagram·Threads·LinkedIn 등의 플랫폼 임시저장·예약·공개 게시 연동은 아직 없습니다. 메일·홍보 발송은 동의와 회차 승인③이 별도로 필요합니다.</p>
   </section>;
 }

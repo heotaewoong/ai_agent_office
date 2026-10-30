@@ -1,7 +1,9 @@
 import type { ArchitectureOverview } from "./architecture";
+import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
 import type {
   Dashboard,
   Job,
+  JobBudget,
   SourcePacket,
   Selections,
   KnowledgeSearch,
@@ -34,6 +36,7 @@ import type {
   LeadSummary,
   NewsletterIssue,
   OfferInput,
+  ChannelStagingSnapshot,
 } from "./types";
 
 export class OfficeApiError extends Error {
@@ -116,6 +119,10 @@ export const api = {
     request<{ deliveries: Delivery[]; youtube_configured: boolean }>(`/jobs/${encodeURIComponent(id)}/deliveries`),
   deliverYoutube: (id: string, channelKey = "youtube_main_ko") =>
     request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/youtube`, "POST", { channel_key: channelKey }),
+  channelStaging: (id: string) =>
+    request<ChannelStagingSnapshot>(`/jobs/${encodeURIComponent(id)}/staging`),
+  recordChannelStaging: (id: string, expectedHash: string) =>
+    request<ChannelStagingSnapshot>(`/jobs/${encodeURIComponent(id)}/staging`, "POST", { expected_hash: expectedHash }),
   briefs: () => request<BriefPresets>("/briefs"),
   architecture: () => request<ArchitectureOverview>("/architecture"),
   setJobBrief: (id: string, preset: string, overrides: BriefOverrides, expectedBriefHash: string) =>
@@ -123,19 +130,29 @@ export const api = {
   channels: () => request<{ channels: Channel[] }>("/channels"),
   updateChannel: (key: string, patch: ChannelPatch) =>
     request<Channel>(`/channels/${encodeURIComponent(key)}`, "PUT", patch),
+  // YouTube 채널 연결(OAuth): 시작하면 Google 동의 화면 주소만 받고, 토큰은 서버 비밀 파일에만 남습니다.
+  youtubeOAuthStatus: () => request<YoutubeOAuthStatus>("/youtube/oauth/status"),
+  youtubeOAuthStart: (channelKey: string) =>
+    request<{ authorize_url: string; expires_in: number }>("/youtube/oauth/start", "POST", { channel_key: channelKey }),
+  youtubeOAuthDisconnect: (channelKey: string) =>
+    request<YoutubeOAuthChannel>("/youtube/oauth/disconnect", "POST", { channel_key: channelKey }),
   reconcileDelivery: (id: string, deliveryId: string) =>
     request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/reconcile`, "POST", {}),
   knowledge: (query = "") =>
     request<KnowledgeSearch>(`/knowledge?query=${encodeURIComponent(query)}`),
-  registerEvidence: (id: string, sourceText: string, version: string | null) =>
+  registerEvidence: (id: string, sourceText: string, version: string | null, preserveOriginal = false) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/evidence`, "POST", {
       source_text: sourceText,
       version,
+      preserve_original: preserveOriginal,
     }),
   retryTask: (id: string) =>
     request(`/tasks/${encodeURIComponent(id)}/retry`, "POST", {}),
   dashboard: () => request<Dashboard>("/dashboard?compact=true"),
   job: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}`),
+  jobBudget: (id: string) => request<JobBudget>(`/jobs/${encodeURIComponent(id)}/budget`),
+  setJobBudget: (id: string, capKrw: number, expectedHash: string) =>
+    request<JobBudget>(`/jobs/${encodeURIComponent(id)}/budget`, "PUT", { cap_krw: capKrw, expected_hash: expectedHash }),
   refresh: () => request("/refresh", "POST", {}),
   createJobs: (ids: string[]) =>
     request<{ jobs: Job[] }>("/jobs", "POST", { article_ids: ids }),

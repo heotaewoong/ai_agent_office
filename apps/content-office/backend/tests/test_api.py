@@ -282,6 +282,216 @@ def test_public_source_text_is_registered_without_forging_evidence_or_approval(c
     assert store.tasks(job["id"])[0]["kind"] == "draft"
 
 
+def test_job_budget_routes_preserve_global_ledger_and_approval_with_versioned_cap(context):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    path = f"/api/jobs/{job['id']}/budget"
+    before_job = store.job(job["id"])
+    initial = client.get(path)
+    assert initial.status_code == 200
+    snapshot = initial.json()
+    assert snapshot["job_id"] == job["id"] and snapshot["cap_krw"] is None and snapshot["remaining_krw"] is None
+    assert snapshot["spent_krw"] == snapshot["reserved_krw"] == 0
+    paid = store.reserve_cost("synthetic-paid", 300, {"job_id": job["id"]})
+    store.settle_cost(paid["id"], 150, {})
+    unknown = store.reserve_cost("synthetic-unknown", 400, {"job_id": job["id"]})
+    store.unknown_cost(unknown["id"], "synthetic-only")
+    current = client.get(path).json()
+    assert current["hash"] == snapshot["hash"] and current["spent_krw"] == 150 and current["reserved_krw"] == 400
+    global_before = store.budget()
+    body = {"cap_krw": 1000, "expected_hash": snapshot["hash"]}
+    assert client.put(path, json=body).status_code == 403
+    updated = client.put(path, json=body, headers=headers)
+    assert updated.status_code == 200
+    assert updated.json()["cap_krw"] == 1000 and updated.json()["remaining_krw"] == 450
+    assert updated.json()["hash"] != snapshot["hash"] and updated.json()["configured_by"] == "local-operator"
+    assert store.budget() == global_before and store.job(job["id"]) == before_job and store.tasks() == []
+    stale = client.put(path, json={"cap_krw": 2000, "expected_hash": snapshot["hash"]}, headers=headers)
+    assert stale.status_code == 409 and client.get(path).json()["cap_krw"] == 1000
+    excessive = client.put(path, json={"cap_krw": global_before["cap_krw"] + 1, "expected_hash": updated.json()["hash"]}, headers=headers)
+    assert excessive.status_code == 409 and store.budget() == global_before
+
+
+@pytest.mark.parametrize("patch", [{"cap_krw": value} for value in (None, "1000", True, False, 1.5, 0, -1)] + [{"expected_hash": None}, {"expected_hash": "bad"}])
+def test_job_budget_api_rejects_non_integer_or_unversioned_settings_without_mutation(context, patch):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    path = f"/api/jobs/{job['id']}/budget"
+    initial = client.get(path).json()
+    events = store.events()
+    result = client.put(path, json={"cap_krw": 1000, "expected_hash": initial["hash"], **patch}, headers=headers)
+    assert result.status_code == 422
+    assert client.get(path).json() == initial and store.events() == events
+    assert client.put(path, json={"cap_krw": 1000}, headers=headers).status_code == 422
+
+
+@pytest.mark.parametrize("mode", ["omitted", False])
+def test_source_input_keeps_summary_as_default_and_explicit_false(context, mode):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    original = "기존 요약 입력 방식을 검증하는 합성 본문입니다. " * 30
+    body = {"source_text": original, "version": job["source_hash"]}
+    if mode != "omitted":
+        body["preserve_original"] = mode
+    result = client.post(f"/api/jobs/{job['id']}/evidence", json=body, headers=headers)
+    assert result.status_code == 200
+    saved = result.json()
+    assert saved["article"]["preserve_original"] is False
+    assert saved["article"]["operator_source_text"] == original
+    assert saved["source_packet"].get("preserve_original") is not True
+    assert saved["source_packet"]["body"] != original
+    assert saved["source_packet"]["source_input_hash"] == digest(original)
+
+
+@pytest.mark.parametrize("invalid", ["true", "false", 1, 0, None, [], {}])
+def test_preserve_original_requires_strict_boolean_without_mutation(context, invalid):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    before, events, tasks = store.job(job["id"]), store.events(), store.tasks()
+    result = client.post(f"/api/jobs/{job['id']}/evidence", json={"source_text": "원문 보존 입력 검증용 본문입니다. " * 30, "preserve_original": invalid}, headers=headers)
+    assert result.status_code == 422
+    assert store.job(job["id"]) == before and store.events() == events and store.tasks() == tasks
+
+
+def test_long_original_markdown_is_passed_through_with_hash_and_no_approval(context):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    original = "# 직접 쓴 합성 원문\n\n" + ("## 본문\n\n문장과 **강조** 및 [출처](https://example.com/source)를 그대로 둡니다.\n\n```python\nprint('원문 보존')\n```\n\n" * 120) + "마지막 줄과 공백  \n"
+    assert 10000 < len(original) <= 20000
+    result = client.post(f"/api/jobs/{job['id']}/evidence", json={"source_text": original, "version": job["source_hash"], "preserve_original": True}, headers=headers)
+    assert result.status_code == 200
+    saved = result.json()
+    assert saved["article"]["operator_source_text"] == saved["source_packet"]["body"] == original
+    assert saved["article"]["preserve_original"] is saved["source_packet"]["preserve_original"] is True
+    assert saved["source_packet"]["source_input_hash"] == digest(original)
+    assert saved["source_approval"] is None and saved["release_approval"] is None and saved["manifest"] is None
+    assert saved["source_packet"]["quality"]["status"] == "unverified"
+    assert store.tasks(job["id"])[0]["kind"] == "draft"
+    assert store.tasks(job["id"])[0]["payload"]["source_hash"] == saved["source_hash"]
+    stale = client.post(f"/api/jobs/{job['id']}/evidence", json={"source_text": original, "version": job["source_hash"], "preserve_original": False}, headers=headers)
+    assert stale.status_code == 409 and store.job(job["id"])["article"]["preserve_original"] is True
+
+
+def test_preserved_body_cannot_be_edited_but_title_video_and_server_contract_are_kept(context):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    original = "# 합성 원문\n\n본인이 쓴 원문 보존 API 검사입니다.  \n" * 20
+    saved = store.register_source_input(job["id"], original, job["source_hash"], preserve_original=True)
+    packet = {**saved["source_packet"], "reference_evidence_ids": ["E1"]}
+    saved = store.save_source(job["id"], packet)
+    before, events, tasks = store.job(job["id"]), store.events(), store.tasks()
+    changed = client.put(f"/api/jobs/{job['id']}/source", json={"version": saved["source_hash"], "packet": {**packet, "body": original + "변경"}}, headers=headers)
+    assert changed.status_code == 409 and "원문 입력" in changed.json()["detail"]
+    assert store.job(job["id"]) == before and store.events() == events and store.tasks() == tasks
+    edited = {**packet, "title": "제목만 수정", "video": {"title": "별도 영상", "scenes": []},
+              "preserve_original": False, "source_input_hash": "forged", "reference_evidence_ids": ["FORGED"]}
+    accepted = client.put(f"/api/jobs/{job['id']}/source", json={"version": saved["source_hash"], "packet": edited}, headers=headers)
+    assert accepted.status_code == 200
+    result = accepted.json()["source_packet"]
+    assert result["body"] == original and result["title"] == "제목만 수정" and result["video"] == edited["video"]
+    assert result["preserve_original"] is True and result["source_input_hash"] == digest(original)
+    assert result["reference_evidence_ids"] == ["E1"] and result["quality"]["status"] == "unverified"
+    assert store.tasks(job["id"])[0]["kind"] == "evaluate"
+
+
+def test_both_preview_routes_allow_only_the_two_image_hosts_and_keep_script_blocked(context):
+    store, client, _ = context
+    job = approved_bundle(store)
+    draft = store.add_draft(job["id"], {"title": "합성 미리보기", "body": "공개 원문 미리보기입니다."})
+    manifest = job["manifest"]
+    record = manifest["files"][0]
+    record.update(name="tistory.html", outputs=["blog"])
+    manifest["completed_outputs"] = ["blog"]
+    manifest["hash"] = digest(manifest)
+    store.save_manifest_if_current(job["id"], job["source_hash"], job["selections"], manifest)
+    for path in (f"/api/jobs/{job['id']}/drafts/{draft['id']}/preview", f"/api/jobs/{job['id']}/blog-preview"):
+        result = client.get(path)
+        assert result.status_code == 200
+        directives = {parts[0]: parts[1:] for directive in result.headers["Content-Security-Policy"].split(";") if (parts := directive.strip().split())}
+        assert directives == {"default-src": ["'none'"], "script-src": ["'none'"], "style-src": ["'unsafe-inline'"],
+                              "img-src": ["'self'", "https://blog.kakaocdn.net", "https://t1.daumcdn.net"], "base-uri": ["'none'"], "form-action": ["'none'"]}
+        assert result.headers["Cache-Control"] == "no-store"
+
+
+def photo_preview_fixture(store, html=None, photo_location="current"):
+    import base64
+    from office.media import artifact_record
+    job = store.create_job(store.article("one"))
+    original = "# 합성 사진 원문\n\n" + "사진 원문 보존 검사입니다. " * 20
+    job = store.register_source_input(job["id"], original, job["source_hash"], preserve_original=True)
+    job = store.save_source(job["id"], {**job["source_packet"], "quality": {"status": "passed", "critical": False}})
+    store.review_source(job["id"], job["source_hash"], "approved", "synthetic-operator", {"blog": True})
+    folder = store.artifacts / job["id"] / job["source_hash"] / "production-photo-fixture"
+    folder.mkdir(parents=True)
+    picture = folder / "source-photo-01.png"
+    if photo_location == "other-job":
+        other = store.create_job({"id": "synthetic-other-job", "title": "다른 작업"})
+        picture = store.artifacts / other["id"] / job["source_hash"] / "production-photo-fixture" / picture.name
+        picture.parent.mkdir(parents=True)
+    elif photo_location == "outside":
+        picture = store.root / picture.name
+    picture.write_bytes(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5H8AAAAASUVORK5CYII="))
+    records = []
+    for name, text in {"tistory.html": html or '<figure><a href="source-photo-01.png"><img src="source-photo-01.png" alt="합성 사진"></a></figure>',
+                       "tistory.md": "# 변하지 않는 Markdown\n\n원문 텍스트입니다.", "naver.txt": "변하지 않는 네이버 본문"}.items():
+        file = folder / name
+        file.write_text(text, encoding="utf-8")
+        records.append({**artifact_record(store.artifacts, file), "outputs": ["blog"]})
+    if photo_location == "outside":
+        checksum = hashlib.sha256(picture.read_bytes()).hexdigest()
+        photo = {"id": "asset_outside", "name": picture.name, "path": str(picture), "sha256": checksum, "outputs": ["blog"]}
+    else:
+        photo = {**artifact_record(store.artifacts, picture), "outputs": ["blog"]}
+    records.append(photo)
+    manifest = {"source_hash": job["source_hash"], "files": records, "completed_outputs": ["blog"]}
+    manifest["hash"] = digest(manifest)
+    store.save_manifest_if_current(job["id"], job["source_hash"], store.job(job["id"])["selections"], manifest)
+    return job, picture, photo
+
+
+def test_blog_preview_maps_verified_local_photos_to_artifact_ids_and_keeps_text_formats(context):
+    store, client, _ = context
+    job, picture, photo = photo_preview_fixture(store)
+    path = f"/api/jobs/{job['id']}/blog-preview"
+    preview = client.get(path)
+    assert preview.status_code == 200
+    artifact_url = "/api/artifacts/" + photo["id"]
+    assert f'src="{artifact_url}"' in preview.text and f'href="{artifact_url}"' in preview.text
+    assert 'src="source-photo-' not in preview.text and str(picture.parent) not in preview.text
+    image = client.get(artifact_url)
+    assert image.status_code == 200 and image.content == picture.read_bytes()
+    assert "image/png" in image.headers["Content-Type"]
+    assert "변하지 않는 Markdown" in client.get(path + "?format=markdown").text
+    assert "변하지 않는 네이버 본문" in client.get(path + "?format=naver").text
+
+
+@pytest.mark.parametrize("change", ["missing", "tampered"])
+def test_blog_preview_blocks_missing_or_modified_manifest_photos(context, change):
+    store, client, _ = context
+    job, picture, _ = photo_preview_fixture(store)
+    if change == "missing":
+        picture.unlink()
+    else:
+        picture.write_bytes(b"changed synthetic bytes")
+    response = client.get(f"/api/jobs/{job['id']}/blog-preview")
+    assert response.status_code == 409 and "사진" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("location", ["other-job", "outside"])
+def test_blog_preview_rejects_foreign_job_and_absolute_local_picture_paths(context, location):
+    store, client, _ = context
+    job, _, _ = photo_preview_fixture(store, photo_location=location)
+    assert client.get(f"/api/jobs/{job['id']}/blog-preview").status_code == 409
+
+
+@pytest.mark.parametrize("src", ["file:///C:/private/photo.png", "../other-job/source-photo-01.png", "/api/artifacts/asset_other_job", "https://blog.kakaocdn.net/photo.png?SECRET_QUERY=never-expose", "source-photo-02.png"])
+def test_blog_preview_rejects_unmapped_or_remote_picture_references_without_leaking_url(context, src):
+    store, client, _ = context
+    job, _, _ = photo_preview_fixture(store, html=f'<figure><img src="{src}"></figure>')
+    response = client.get(f"/api/jobs/{job['id']}/blog-preview")
+    assert response.status_code == 409 and "SECRET_QUERY" not in response.text and src not in response.text
+
+
 def test_idea_source_text_requires_packaging_before_any_mutation(context):
     from office.packaging import attach_packaging
     store, client, headers = context
@@ -397,6 +607,7 @@ def test_delivery_routes_require_release_and_report_ledger(context, monkeypatch)
     for key in ('YOUTUBE_CLIENT_ID', 'YOUTUBE_CLIENT_SECRET', 'YOUTUBE_REFRESH_TOKEN', 'YOUTUBE_MAIN_KO_REFRESH_TOKEN', 'YOUTUBE_ENGLISH_REFRESH_TOKEN'):
         monkeypatch.delenv(key, raising=False)
     job = store.create_job({'id': 'delivery-route', 'title': '업로드 경로'})
+    store.set_setting("channel_registry", {"youtube_main_ko": {"publication_enabled": True}})
     assert client.get(f"/api/jobs/{job['id']}/deliveries").json() == {'deliveries': [], 'youtube_configured': False}
     response = client.post(f"/api/jobs/{job['id']}/deliveries/youtube", headers=headers)
     assert response.status_code == 409 and '출고 승인②' in response.json()['detail']

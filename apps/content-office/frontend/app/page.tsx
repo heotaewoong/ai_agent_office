@@ -49,10 +49,12 @@ import { CardsPanel } from "./cards-panel";
 import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
 import { NewsletterPanel } from "./newsletter-panel";
+import { withoutOAuthParams, youtubeOAuthResult } from "../lib/youtube-oauth";
 import { sourceApproved } from "../lib/workflow";
 import { packagingRequired } from "../lib/packaging";
 import {
   EvidenceIntake,
+  JobBudgetPanel,
   IdeaBank,
   KnowledgeDrawer,
   TaskHistory,
@@ -206,6 +208,16 @@ export default function Office() {
       if (dashboardRefresh.current.settle(ticket) && alive.current) setLoading(false);
     }
   }, [selectJob]);
+
+  // YouTube 채널 연결(OAuth) 콜백이 /?youtube=… 로 돌려보내면 결과를 한 번 알리고 주소창을 정리합니다.
+  useEffect(() => {
+    const result = youtubeOAuthResult(window.location.search);
+    if (!result) return;
+    setView("settings");
+    if (result.kind === "success") setNotice(result.message);
+    else setError(result.message);
+    window.history.replaceState(null, "", withoutOAuthParams(window.location.href));
+  }, []);
 
   useEffect(() => {
     alive.current = true;
@@ -743,6 +755,8 @@ export default function Office() {
                         작업을 불러오는 중…
                       </div>
                     ) : view === "studio" ? (
+                      <>
+                      <JobBudgetPanel key={`budget-${job.id}`} jobId={job.id} globalCap={dashboard.budget.cap_krw} refreshKey={job.updated_at} busy={!!busy || !connected} />
                       <Studio
                         key={job.id}
                         job={job}
@@ -777,6 +791,7 @@ export default function Office() {
                         }}
                         onDelivery={() => setView("delivery")}
                       />
+                      </>
                     ) : (
                       <>
                         {briefDrafts[job.id] && (
@@ -804,7 +819,7 @@ export default function Office() {
                           }
                           action={action}
                         />
-                        <ChannelHandoffPanel job={job} />
+                        <ChannelHandoffPanel key={`staging-${job.id}`} job={job} busy={!!busy || !connected || Boolean(localDrafts[job.id])} action={action} />
                         {job.selections?.video && (
                           <YoutubePanel
                             key={`youtube-${job.id}`}
@@ -1242,6 +1257,10 @@ function Studio({
         action={action}
       />
       <div className="editor-panel">
+        {job.article?.operator_source_text && <p className="muted" role="status">
+          현재 등록 방식: {job.article.preserve_original === true ? "원문 보존 · 영상 파생" : "요약·재작성"} · 등록 원문 {job.article.operator_source_text.length.toLocaleString("ko-KR")}자 · 현재 본문 {body.length.toLocaleString("ko-KR")}자.
+          {job.article.preserve_original === true && (body === job.article.operator_source_text ? " 등록 원문과 현재 본문이 일치합니다. 검수·승인은 별도로 확인하세요." : " 현재 본문이 등록 원문과 다릅니다. 원문 보존 상태와 검수 결과를 확인하세요.")}
+        </p>}
         <div className="editor-toolbar">
           <div className="tabs" aria-label="원고와 근거">
             <button
@@ -1316,9 +1335,12 @@ function Studio({
                 id="draft-body"
                 value={body}
                 disabled={locked}
+                readOnly={job.article?.preserve_original === true}
+                aria-describedby={job.article?.preserve_original === true ? `original-edit-${job.id}` : undefined}
                 spellCheck={false}
-                onChange={(event) => edit(title, event.target.value)}
+                onChange={(event) => { if (job.article?.preserve_original !== true) edit(title, event.target.value); }}
               />
+              {job.article?.preserve_original === true && <p className="muted" id={`original-edit-${job.id}`}>원문 보존 모드에서는 본문을 직접 고치지 않습니다. 본문 수정은 위의 공개 원문 입력에 전체 글을 다시 등록하세요. 제목과 영상 대본은 별도로 검토·수정할 수 있습니다.</p>}
               <div className="editor-foot">
                 <p>
                   변경 내용을 저장하면 같은 원고를 다시 검수하고, 이전 승인은
@@ -1470,7 +1492,9 @@ function Studio({
               <h3>
                 {job.state === "source_approved"
                   ? "이 원고로 제작할 준비가 됐어요"
-                  : "읽고 확인한 원고만 다음으로"}
+                  : job.state === "release_review" || job.state === "partial_release_review"
+                    ? "제작을 마쳤어요. 설정을 바꿨다면 다시 만들 수 있어요"
+                    : "읽고 확인한 원고만 다음으로"}
               </h3>
               <p>
                 {dirty
@@ -1481,9 +1505,9 @@ function Studio({
               </p>
             </div>
             <div className="approval-actions">
-              {job.state === "source_approved" ? (
+              {["source_approved", "release_review", "partial_release_review"].includes(job.state) ? (
                 <button
-                  className="button primary"
+                  className={job.state === "source_approved" ? "button primary" : "button secondary"}
                   disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
                   onClick={() =>
                     void action(
@@ -1496,7 +1520,7 @@ function Studio({
                     )
                   }
                 >
-                  선택 항목 제작 시작
+                  {job.state === "source_approved" ? "선택 항목 제작 시작" : "현재 설정으로 다시 제작"}
                   <Icon name="arrow" size={17} />
                 </button>
               ) : (
