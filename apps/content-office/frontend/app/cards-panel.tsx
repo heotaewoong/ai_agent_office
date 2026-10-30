@@ -90,6 +90,7 @@ export function CardsPanel({ job, busy, action }: { job: Job; busy: boolean; act
         </div>
       </div>
       <p className="muted">카드뉴스만 전체 ZIP으로 받거나 글·영상과 함께 통합 검토 ZIP으로 받을 수 있습니다. 검사 이슈도 포함되며, 출고 승인②와 플랫폼 업로드는 별도입니다.</p>
+      <p className="muted">원고 승인에서 카드뉴스를 선택하면 검사에 통과한 현재 원고의 6~8장을 정식 제작물에 넣습니다. 여기서 별도로 다시 만든 카드는 기존 출고 승인본을 바꾸지 않습니다.</p>
       {approved && job.manifest?.hash && <a className="button secondary small" href={`/api/jobs/${encodeURIComponent(job.id)}/review-package`}>글·영상·카드 검토 ZIP 받기</a>}
       {!approved && <p className="muted">① 원고 승인 뒤에만 만들 수 있습니다. 배경 이미지는 제작 설정을 따르고, 한국어 글자는 로컬에서 크게 얹습니다.</p>}
       {pending && <p className="muted">생성 요청을 받았습니다. 작업자가 저장하면 자동으로 표시됩니다.</p>}

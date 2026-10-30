@@ -132,6 +132,25 @@ def test_retry_keeps_verified_successful_blog_when_other_output_is_retried(tmp_p
     assert {r['path'] for r in second['files'] if 'blog' in r['outputs']} == {r['path'] for r in first['files'] if 'blog' in r['outputs']}
 
 
+def test_new_checked_card_revision_changes_manifest_without_overwriting_old_files(tmp_path,monkeypatch):
+    from PIL import Image
+    from office.quiz import artifact_record
+    from office import media
+    store,job_id=approved_job(tmp_path,video=False,cards=True)
+    cache_social_cards(store,job_id)
+    first=media.produce(store,job_id)
+    old={r['path']:(store.artifacts/r['path']).read_bytes() for r in first['files'] if 'cards' in r['outputs']}
+    folder=store.artifacts/'cards-v2';folder.mkdir();slides=[]
+    for i in range(7):
+        path=folder/f'card-{i+1:02}.png';Image.new('RGB',(1080,1350),(i*30+1,80,100)).save(path)
+        slides.append({'artifact':artifact_record(store.artifacts,path),'index':i+1})
+    store.update_job(job_id,cards={'source_hash':first['source_hash'],'slides':slides,'checks':{'passed':True,'issues':[]},'version':2})
+    monkeypatch.setattr(media,'write_blog_exports',lambda *a:pytest.fail('성공한 글은 재사용해야 합니다'))
+    second=media.produce(store,job_id)
+    assert second['hash']!=first['hash'] and second['completed_outputs']==['blog','cards']
+    assert all((store.artifacts/path).read_bytes()==data for path,data in old.items())
+
+
 def test_missing_font_blocks_visual_output_but_keeps_independent_blog(tmp_path, monkeypatch):
     from office import media
     store, job_id = approved_job(tmp_path, video=False, cards=True)
@@ -542,7 +561,7 @@ def test_production_exports_checked_social_cards_without_regenerating_background
     files = {x['name']: store.artifacts / x['path'] for x in manifest['files']}
     assert Image.open(files['card-01.png']).size == (1080,1350)
     assert len([n for n in files if n.startswith('card-') and n.endswith('.png')])==7
-    assert 'card-news.json' in files
+    assert any(n.startswith('card-news-') and n.endswith('.json') for n in files)
     assert manifest['completed_outputs']==['cards']
 
 

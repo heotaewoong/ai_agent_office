@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 from .exports import korean_font, write_blog_exports, write_reference_pdf, write_rights_manifest, write_video_exports
-from .store import WorkflowError, digest
+from .store import WorkflowError, digest, canonical
 RENDER_VERSION = 'office-media-5-preserved-source-photos'
 VOICE_CACHE_VERSION = 'office-media-1'
 
@@ -138,6 +138,7 @@ def production_contract(voice_renderer, selections, image_renderer=None, clip_re
               'selections': dict(selections)}
     if selections.get('cards'):
         config['cards_implementation_sha256']=file_hash(Path(__file__).with_name('cards.py'))
+        config['cards_pipeline_sha256']=file_hash(Path(__file__).with_name('social_production.py'))
     return {**config, 'hash': digest(config)}
 
 def wrap_text(draw, text, font, width):
@@ -743,6 +744,10 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                         for record in old_records:
                             path = (root / record['path']).resolve()
                             valid = valid and path.is_relative_to(root) and path.is_file() and file_hash(path) == record['sha256']
+                        if valid and kind=='cards':
+                            metadata=next((r for r in old_records if r['name'].startswith('card-news-') and r['name'].endswith('.json')),None)
+                            current_cards=store.job(job_id).get('cards') or {}
+                            valid=bool(metadata and metadata['sha256']==hashlib.sha256(canonical(current_cards).encode('utf-8')).hexdigest())
                         if valid:
                             output_files[kind] = [root / record['path'] for record in old_records]
                             output_status[kind] = {'state': 'completed', 'files': len(output_files[kind])}

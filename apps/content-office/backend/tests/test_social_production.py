@@ -19,7 +19,7 @@ def test_current_cards_are_reused_without_provider_cost(tmp_path,monkeypatch):
     store,j,folder,cards=context(tmp_path);store.update_job(j['id'],cards=cards)
     monkeypatch.setattr('office.cards.plan_cards',lambda *a,**k:pytest.fail('do not regenerate'))
     paths=card_paths(store,j['id'],j['source_hash'],folder)
-    assert len(paths)==8 and paths[0].name=='card-news.json'
+    assert len(paths)==8 and paths[0].name.startswith('card-news-')
 
 def test_missing_cards_plan_once_with_strict_checks(tmp_path,monkeypatch):
     store,j,folder,cards=context(tmp_path);called=[]

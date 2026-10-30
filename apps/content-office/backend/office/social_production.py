@@ -1,7 +1,7 @@
 """Reuse verified current social cards or create them once for production."""
 import hashlib
 from pathlib import Path
-from .store import WorkflowError,canonical
+from .store import WorkflowError,canonical,digest
 
 def card_paths(store,job_id,source_hash,folder):
     from .cards import plan_cards
@@ -24,8 +24,10 @@ def card_paths(store,job_id,source_hash,folder):
         if record['sha256'] in seen:raise WorkflowError('같은 카드 이미지가 중복되어 있습니다. 카드 순서를 다시 검수해 주세요')
         seen.add(record['sha256'])
         paths.append(path)
-    metadata=Path(folder)/'card-news.json'
-    metadata.write_text(canonical(cards),encoding='utf-8')
+    metadata=Path(folder)/f'card-news-{digest(cards)[:16]}.json'
+    payload=canonical(cards)
+    if metadata.exists() and metadata.read_text(encoding='utf-8')!=payload:raise WorkflowError('기존 카드 검토 기록이 변경되었습니다')
+    if not metadata.exists():metadata.write_text(payload,encoding='utf-8')
     latest=store.require_source_approval(job_id)
     if latest['source_hash']!=source_hash:raise WorkflowError('카드 연결 중 원고가 변경되었습니다')
     return [metadata,*paths]
