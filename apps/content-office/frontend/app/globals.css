@@ -3921,6 +3921,20 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .channel-table td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
 .channel-table td strong{display:block;font-size:13px}.channel-table td small{color:var(--muted);font-size:10px}
 .channel-table a{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.staging-field-label{display:none}
+@media (max-width:760px){
+  .staging-table{display:block;width:100%;min-width:0;font-size:15px;line-height:1.8}
+  .staging-table thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+  .staging-table tbody{display:grid;gap:14px}
+  .staging-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--white)}
+  .staging-table tbody :is(th,td){display:block;width:auto;min-width:0;padding:14px 16px;border:0;white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
+  .staging-table tbody th{font-size:16px;line-height:1.7;background:#f6f8f4;color:var(--ink)}
+  .staging-table tbody td+td{border-top:1px solid var(--line)}
+  .staging-table td strong{font-size:15px;line-height:1.8}
+  .staging-table td .staging-field-label{display:block;margin-bottom:6px;font-size:13px;font-weight:700;color:var(--muted)}
+  .staging-table a{display:inline;white-space:normal;overflow-wrap:anywhere}
+  .staging-table summary{min-height:44px;padding-block:8px}
+}
 .channel-account{display:grid;gap:6px;min-width:240px}
 .channel-account input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px}
 .channel-account input[aria-invalid="true"]{border-color:#b2412a}

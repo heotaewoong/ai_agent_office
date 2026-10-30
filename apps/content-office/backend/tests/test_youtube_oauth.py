@@ -52,6 +52,7 @@ class FakeTransport:
 
 @pytest.fixture
 def oauth(tmp_path, monkeypatch, isolated_secrets_file):
+    monkeypatch.delenv("YOUTUBE_OAUTH_CLIENT_TYPE", raising=False)
     for key in ("YOUTUBE_REFRESH_TOKEN", "YOUTUBE_MAIN_KO_REFRESH_TOKEN", "YOUTUBE_ENGLISH_REFRESH_TOKEN"):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid.apps.googleusercontent.com")
@@ -126,6 +127,7 @@ def test_start_requires_csrf_youtube_channel_and_client_config(oauth, monkeypatc
 
 
 def test_start_requires_public_https_origin(tmp_path, monkeypatch):
+    monkeypatch.delenv("YOUTUBE_OAUTH_CLIENT_TYPE", raising=False)
     monkeypatch.setenv("YOUTUBE_CLIENT_ID", "cid")
     monkeypatch.setenv("YOUTUBE_CLIENT_SECRET", SECRET)
     monkeypatch.delenv("OFFICE_PUBLIC_ORIGIN", raising=False)
@@ -135,6 +137,37 @@ def test_start_requires_public_https_origin(tmp_path, monkeypatch):
     assert blocked.status_code == 409 and "OFFICE_PUBLIC_ORIGIN" in blocked.json()["detail"]
     status = client.get("/api/youtube/oauth/status").json()
     assert status == {**status, "client_configured": True, "public_origin_configured": False, "redirect_uri": None}
+
+
+def test_installed_client_marker_blocks_web_begin_without_disabling_refresh_credentials(oauth, monkeypatch):
+    from office import youtube_oauth
+    from office.channels import channel, youtube_credentials
+    from office.store import WorkflowError
+
+    monkeypatch.setenv("YOUTUBE_OAUTH_CLIENT_TYPE", "installed")
+    monkeypatch.setenv("YOUTUBE_MAIN_KO_REFRESH_TOKEN", REFRESH)
+    assert youtube_credentials("youtube_main_ko")["refresh_token"] == REFRESH
+    assert channel(oauth["store"], "youtube_main_ko")["credentials_configured"] is True
+    assert youtube_oauth.client_configured() is False
+    with pytest.raises(WorkflowError, match="Desktop.*웹 애플리케이션"):
+        youtube_oauth.begin(oauth["store"], "youtube_main_ko", PUBLIC)
+    blocked = oauth["client"].post("/api/youtube/oauth/start", json={"channel_key": "youtube_main_ko"}, headers=oauth["headers"])
+    assert blocked.status_code == 409 and "Desktop" in blocked.json()["detail"]
+    assert oauth["client"].get("/api/youtube/oauth/status").json()["client_configured"] is False
+    assert oauth["store"].setting("youtube_oauth_states") is None
+    assert oauth["transport"].calls == [] and not oauth["secrets"].exists()
+    assert youtube_credentials("youtube_main_ko")["refresh_token"] == REFRESH
+
+
+@pytest.mark.parametrize("marker", [None, "web"])
+def test_unmarked_and_explicit_web_clients_keep_existing_web_flow(oauth, monkeypatch, marker):
+    from office import youtube_oauth
+
+    if marker is not None:
+        monkeypatch.setenv("YOUTUBE_OAUTH_CLIENT_TYPE", marker)
+    assert youtube_oauth.client_configured() is True
+    start(oauth)
+    assert oauth["transport"].calls == []
 
 
 def test_secrets_file_inside_state_folder_is_refused(oauth, monkeypatch):

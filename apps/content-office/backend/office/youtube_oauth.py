@@ -61,7 +61,7 @@ def _youtube_key(key):
 
 
 def client_configured():
-    return all(os.environ.get(name) for name in SHARED_ENV)
+    return os.environ.get("YOUTUBE_OAUTH_CLIENT_TYPE", "").strip().lower() != "installed" and all(os.environ.get(name) for name in SHARED_ENV)
 
 
 def redirect_uri(origin):
@@ -69,6 +69,8 @@ def redirect_uri(origin):
 
 
 def require_ready(store, origin):
+    if os.environ.get("YOUTUBE_OAUTH_CLIENT_TYPE", "").strip().lower() == "installed":
+        raise WorkflowError("현재 인증 설정은 Desktop 앱(installed)입니다. 웹 화면의 YouTube 연결에는 웹 애플리케이션 클라이언트가 필요합니다. 저장된 Desktop 토큰은 업로드에 재사용할 수 있습니다")
     missing = [name for name in SHARED_ENV if not os.environ.get(name)]
     if missing:
         raise WorkflowError("·".join(missing) + "이 설정되지 않았습니다. Google Cloud의 OAuth 클라이언트(웹 애플리케이션) 값을 실행 환경 파일에 넣으세요")

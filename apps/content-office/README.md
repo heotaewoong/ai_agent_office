@@ -529,3 +529,12 @@ v6 편집 통제실은 화면에서 끝까지 이어집니다. 기획에서 시�
 기획 출신 작업의 공개 본문 등록은 서버도 패키징 여부를 먼저 검사합니다. 제목·썸네일·후크가 없으면 원고·승인·이벤트·큐를 바꾸기 전에409로 거부합니다. UI의 이동 버튼은 해당 기획 카드로 초점을 옮깁니다. 연구 모델은 학습·편입·생산성 등 실제 원문의 주제를 따르며 개인 경험을 합격 보장으로 확대하지 않도록 지시합니다. 실제 모델 산출물 품질은 별도 검수 대상입니다.
 
 설정 화면의 키 표시는 연결 여부 메타데이터이며 실제 인증/호출 성공이 아닙니다. 프로필 선택만으로 호출하지 않습니다. **① 전 원고·근거·비평·검수 글 API**와 **① 후 선택한 음성·이미지·영상 제작**의 비용을 구분합니다. 승인 자체는 유료 제작 시작 명령이 아닙니다.
+
+
+## 본인이 수동으로 연결하는 Desktop OAuth 보조 도구
+
+기존 Google Desktop client가 있고 EC2 Web client는 아직 없는 경우, Windows에서 `python -X utf8 -m office.youtube_oauth_desktop --client-file "<기존 Desktop JSON>" --output-env "<Git 밖 본인 전용 폴더의 새 env>" --channel-key youtube_main_ko`를 실행할 수 있습니다. 기본 대기는30분이며 자동으로 외부 브라우저를 열지 않습니다. 출력된127.0.0.1의 `/health` 준비 응답을 확인한 뒤 같은 PC의 일반 브라우저에서 `/start`를 수동으로 엽니다. 키·인증 URL·코드를 채팅이나 보고서에 붙이지 않습니다.
+
+도구는 PKCE·일회용state·권한·대상 채널을 검증한 뒤 새 비공개 파일만 저장합니다. EC2 환경 병합·채널 전송 허용·승인·업로드는 자동으로 수행하지 않습니다. Desktop client를 기존 Web callback에 그대로 넣으면 redirect URI가 맞지 않습니다. 명시적인 installed client 표시가 있는 경우 Web 연결 준비 상태와 업로드용 토큰 재사용 상태를 구분합니다.
+
+연결 후에는 저장한 refresh token으로 access token을 갱신해 반복 로그인을 줄입니다. Google OAuth 앱이 External/Testing 상태이고 YouTube 권한을 요청하면 refresh token은7일 뒤 만료될 수 있습니다. 운영 상태·권한 취소·만료·계정 정책을 별도로 확인해야 하며 영구 로그인은 보장하지 않습니다. 근거: https://developers.google.com/identity/protocols/oauth2 .

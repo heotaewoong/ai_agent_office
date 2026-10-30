@@ -235,11 +235,11 @@ export function ChannelHandoffPanel({ job, busy, action }: { job: Job; busy: boo
     {current && <>
       <p className="muted">{current.recorded_current ? `현재 판본의 앱 장부 기록 있음 · ${formatDate(current.recorded_at ?? undefined, true)}` : "현재 판본의 앱 배포대기 기록은 아직 없습니다."} · 출고 판본 {current.manifest_hash?.slice(0, 12) ?? "없음"}</p>
       {current.blockers.length > 0 && <ul className="derived-issues">{current.blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
-      <div style={{ overflowX: "auto", maxWidth: "100%", minWidth: 0 }} tabIndex={0} role="region" aria-label="채널별 배포대기 표, 가로로 스크롤할 수 있습니다">
-        <table className="channel-table"><thead><tr><th scope="col">채널</th><th scope="col">앱 내부 준비</th><th scope="col">실제 플랫폼 기록</th></tr></thead>
-          <tbody>{current.channels.map((row) => <tr key={row.channel_key}>
-            <th scope="row">{row.label} · {localeLabel(row.locale)}</th>
-            <td><strong>{stagingLocalLabel(row)}</strong>
+      <div style={{ overflowX: "auto", maxWidth: "100%", minWidth: 0 }} tabIndex={0} role="region" aria-label="채널별 배포대기 상태, 작은 화면에서는 채널별 카드로 표시합니다">
+        <table className="channel-table staging-table" role="table" aria-label="채널별 준비와 실제 플랫폼 기록"><thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">채널</th><th scope="col" role="columnheader">앱 내부 준비</th><th scope="col" role="columnheader">실제 플랫폼 기록</th></tr></thead>
+          <tbody role="rowgroup">{current.channels.map((row) => <tr key={row.channel_key} role="row">
+            <th scope="row" role="rowheader">{row.label} · {localeLabel(row.locale)}</th>
+            <td role="cell"><span className="staging-field-label" aria-hidden="true">앱 내부 준비</span><strong>{stagingLocalLabel(row)}</strong>
               {row.blockers.length > 0 && <ul>{row.blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
               <details><summary>필수·확인 파일 {row.files.length}개</summary>
                 <p>필요: {row.required_files.join(", ") || "없음"}</p>
@@ -249,7 +249,7 @@ export function ChannelHandoffPanel({ job, busy, action }: { job: Job; busy: boo
                 })}</ul>
               </details>
             </td>
-            <td><strong>{stagingExternalLabel(row)}</strong>
+            <td role="cell"><span className="staging-field-label" aria-hidden="true">실제 플랫폼 기록</span><strong>{stagingExternalLabel(row)}</strong>
               {row.external_id && <p style={{ overflowWrap: "anywhere" }}>외부 ID: {row.external_id}</p>}
               {row.platform === "youtube" && row.external_id && <p>업로드 상태: {row.upload_status || "미확인"} · 영상 처리: {row.processing_status || "미확인"}. 비공개 확인 기록은 재생 완료를 뜻하지 않습니다.</p>}
               {row.platform === "youtube" && studioUrl(row.external_id) && <a href={studioUrl(row.external_id)!} target="_blank" rel="noopener noreferrer">Studio에서 실제 상태 확인 ↗</a>}

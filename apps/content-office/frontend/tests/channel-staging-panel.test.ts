@@ -44,7 +44,7 @@ function fixture(t: { after: (fn: () => void) => void }) {
     const visit = (value: any) => { if (Array.isArray(value)) value.forEach(visit); else if (value?.props) { nodes.push(value); visit(value.props.children); } };
     visit(tree);
     effects.splice(0).forEach((effect) => effect());
-    return { text: text(tree), record: nodes.find((node) => node.type === "button" && text(node) === "앱 배포대기 장부에 기록")!, refresh: nodes.find((node) => node.type === "button" && text(node) === "상태 다시 확인")!, alert: nodes.find((node) => node.props.role === "alert"), status: nodes.find((node) => node.props.role === "status"), region: nodes.find((node) => node.props.role === "region") };
+    return { text: text(tree), nodes, record: nodes.find((node) => node.type === "button" && text(node) === "앱 배포대기 장부에 기록")!, refresh: nodes.find((node) => node.type === "button" && text(node) === "상태 다시 확인")!, alert: nodes.find((node) => node.props.role === "alert"), status: nodes.find((node) => node.props.role === "status"), region: nodes.find((node) => node.props.role === "region") };
   }
   return { render, requests, writes, update: (updatedAt: string) => { job = { ...job, updated_at: updatedAt }; }, unmount };
 }
@@ -84,7 +84,19 @@ test("빈 준비표와 조회 실패는 경고와 잠긴 기록 버튼을 보여
   assert.equal(recovered.alert, undefined);
   assert.equal(recovered.record.props.disabled, false);
   assert.equal(recovered.region?.props.tabIndex, 0);
-  assert.match(recovered.region?.props["aria-label"], /스크롤/);
+  assert.match(recovered.region?.props["aria-label"], /배포대기 상태/);
   recovered.record.props.onClick(); await tick();
   assert.deepEqual(view.writes, [{ id: "job-one", hash: "c".repeat(64) }]);
+});
+
+test("모바일 카드의 표시 순서와 표·열·행 의미를 함께 유지한다", async (t) => {
+  const view = fixture(t); view.render();
+  view.requests[0].resolve(snapshot()); await tick();
+  const { nodes } = view.render();
+  assert.match(nodes.find((node) => node.type === "table")!.props.className, /staging-table/);
+  assert.equal(nodes.find((node) => node.type === "table")!.props.role, "table");
+  assert.deepEqual(nodes.filter((node) => node.props.role === "columnheader").map((node) => node.props.children), ["채널", "앱 내부 준비", "실제 플랫폼 기록"]);
+  assert.equal(nodes.filter((node) => node.props.role === "rowheader").length, 1);
+  assert.equal(nodes.filter((node) => node.props.role === "cell").length, 2);
+  assert.deepEqual(nodes.filter((node) => node.props.className === "staging-field-label").map((node) => [node.props.children, node.props["aria-hidden"]]), [["앱 내부 준비", "true"], ["실제 플랫폼 기록", "true"]]);
 });
