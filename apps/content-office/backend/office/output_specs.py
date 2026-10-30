@@ -1,8 +1,9 @@
 """Versioned blog output contract; existing saved drafts remain readable."""
 def output_issues(packet):
+    from .channel_adaptation import adaptation_issues
+    issues = adaptation_issues(packet)
     if 'titles' not in packet and 'hashtags' not in packet:
-        return []
-    issues=[]
+        return issues
     preserve_original = packet.get('preserve_original') is True
     if not preserve_original and not 1350 <= len(packet.get('body','')) <= 1650: issues.append('블로그 본문은 1,500자±10%여야 합니다')
     for key,count in [('titles',3),('hashtags',5)]:

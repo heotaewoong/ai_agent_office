@@ -29,6 +29,8 @@ def metadata_fact_check(packet):
     body = _numbers(packet.get("body", ""))
     video = packet.get("video") or {}
     fields = {"블로그 제목": packet.get("title") or "", "영상 제목": video.get("title") or "", "영상 설명": video.get("description") or "", "태그": " ".join(video.get("tags") or [])}
+    if isinstance(packet.get('channel_posts'), dict):
+        fields.update({f'SNS {key}': text for key, text in packet['channel_posts'].items() if isinstance(text, str)})
     thumbs = [t for t in (video.get("thumbnails") or []) if isinstance(t, dict)]
     for index, thumb in enumerate(thumbs, 1):
         fields[f"썸네일 {index} 제목"] = thumb.get("title") or ""

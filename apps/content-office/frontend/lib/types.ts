@@ -58,6 +58,8 @@ export type SourcePacket = {
   body: string;
   preserve_original?: boolean;
   source_input_hash?: string;
+  channel_policy_version?: string;
+  channel_posts?: Record<string, string>;
   reference_evidence_ids?: string[];
   audience?: { language?: BriefLanguage };
   packaging_hash?: string;
