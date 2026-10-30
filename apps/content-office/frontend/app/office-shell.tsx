@@ -42,6 +42,7 @@ import {
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { PageOutline } from "./page-outline";
+import deliveryStyles from "./delivery-view.module.css";
 import { WorldView } from "./world-view";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
@@ -542,7 +543,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {view !== "world" && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio"} />}
+          {view !== "world" && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
 
           {visibleError && (
             <div className="notice error" role="alert">
@@ -861,6 +862,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                           </div>
                         )}
                         <Delivery
+                          youtubeConfigured={Boolean(dashboard.provider?.youtube?.configured)}
                           voice={dashboard.provider?.voice}
                           requestBlockedReason={requestBlockedReason}
                           key={job.id}
@@ -868,23 +870,6 @@ export default function Office({ children }: { children: React.ReactNode }) {
                           busy={
                             !!busy || !connected || Boolean(localDrafts[job.id])
                           }
-                          action={action}
-                        />
-                        <ChannelHandoffPanel key={`staging-${job.id}`} job={job} busy={!!busy || !connected || Boolean(localDrafts[job.id])} action={action} />
-                        {job.selections?.video && (
-                          <YoutubePanel
-                            key={`youtube-${job.id}`}
-                            job={job}
-                            youtubeConfigured={Boolean(dashboard.provider?.youtube?.configured)}
-                            requestBlockedReason={requestBlockedReason}
-                            busy={!!busy || !connected || Boolean(localDrafts[job.id])}
-                            action={action}
-                          />
-                        )}
-                        <NewsletterPanel
-                          key={`newsletter-${job.id}`}
-                          job={job}
-                          busy={!!busy || !connected || Boolean(localDrafts[job.id])}
                           action={action}
                         />
                       </>
@@ -2014,12 +1999,14 @@ function TaskProgress({
 }
 
 function Delivery({
+  youtubeConfigured,
   requestBlockedReason,
   voice,
   job,
   busy,
   action,
 }: {
+  youtubeConfigured: boolean;
   requestBlockedReason?: string;
   voice?: VoiceProfile;
   job: Job;
@@ -2074,7 +2061,7 @@ function Delivery({
     selected && (selected.kind === "video" || /\.mp4$/i.test(selected.name));
   const isImage = selected && /\.(png|jpg|jpeg|webp)$/i.test(selected.name);
   return (
-    <>
+    <div className={deliveryStyles.root}>
       <div className="job-heading">
         <div>
           <Badge state={job.state} />
@@ -2084,6 +2071,11 @@ function Delivery({
         <span className="count-pill">제작 {files.length}개 · 검토 {(job.drafts??[]).reduce((n,d)=>n+(d.assets?.length??0),0)}개</span>
       </div>
       <WorkflowSteps state={job.state} />
+      <section className={deliveryStyles.overview} aria-label="출고 준비 요약">
+        <div><p className={deliveryStyles.kicker}>내 콘텐츠 출고 데스크</p><h2>완성본을 확인하고, 출고를 결정하세요</h2><p>{!files.length ? nextProduction?.title || statusInfo(job.state).next : job.state === "release_approved" ? "승인된 패키지를 내려받고 채널별 전달 상태를 확인하세요." : "현재 제작물과 미승인 편집본을 구분해 살핀 뒤, 출고할 항목을 선택하세요."}</p></div>
+        <dl className={deliveryStyles.metrics}><div><dt>현재 제작 파일</dt><dd>{files.length}<small>개</small></dd></div><div><dt>제작 완료 항목</dt><dd>{completedOutputs(job).length}<small>종</small></dd></div><div><dt>출고 승인②</dt><dd className={deliveryStyles.state}>{job.state === "release_approved" ? "승인 완료" : "확인 필요"}</dd></div></dl>
+        <div className={deliveryStyles.quickActions}><a href={`#delivery-preview-${job.id}`} className="button primary">제작물 확인 <Icon name="arrow" size={16}/></a><a href={`#delivery-release-${job.id}`} className="button secondary">출고 단계로 이동</a><Link href={`/scripts/${encodeURIComponent(job.id)}`} className="button text">원고 수정</Link></div>
+      </section>
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
       {job.error && (
         <div className="notice error" role="alert">
@@ -2091,10 +2083,8 @@ function Delivery({
           <span>{job.error}</span>
         </div>
       )}
-      <VersionHistoryPanel key={`history-${job.id}`} job={job} />
-      <EditorialAssetsPanel job={job} />
-      <ImprovementPanel key={job.id} job={job} />
-      <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
+      <section className={deliveryStyles.section} aria-labelledby={`delivery-preview-${job.id}`}>
+      <header className={deliveryStyles.sectionHeading}><span>01</span><div><h2 id={`delivery-preview-${job.id}`} data-outline-title="현재 제작물">현재 제작물</h2><p>지금 제작된 글·영상·이미지를 읽고 내려받으세요.</p></div></header>
       {files.length === 0 ? (
         <Empty
           title={
@@ -2231,6 +2221,13 @@ function Delivery({
               ))}
             </div>
           </details>
+        </>
+      )}
+      </section>
+      <section className={deliveryStyles.section} aria-labelledby={`delivery-release-${job.id}`}>
+      <header className={deliveryStyles.sectionHeading}><span>02</span><div><h2 id={`delivery-release-${job.id}`} data-outline-title="출고 승인">출고 승인</h2><p>전달할 완료 항목을 고른 뒤 현재 파일 버전을 확인하세요.</p></div></header>
+      {files.length === 0 ? <p className={deliveryStyles.empty}>제작물이 준비되면 이곳에서 출고 항목을 선택할 수 있어요.</p> : <>
+          {requiresThumbnail && !job.manifest?.selected_thumbnail_id && <div className={deliveryStyles.attention} role="status"><strong>영상 썸네일을 먼저 선택해 주세요.</strong><p>썸네일을 선택하면 출고 승인 단계로 이어갈 수 있어요.</p><a className="button secondary small" href={`#delivery-preview-${job.id}`} onClick={()=>setPreview(videoFile?.id ?? job.manifest?.thumbnail_candidates?.[0]?.id)}>영상·썸네일 확인</a></div>}
           <OutputChoices
             job={job}
             selected={releaseOutputs}
@@ -2407,10 +2404,22 @@ function Delivery({
               </div>
             </div>
           )}
-        </>
-      )}
+        </>}
+      </section>
+      <section className={deliveryStyles.section} aria-labelledby={`delivery-channels-${job.id}`}>
+      <header className={deliveryStyles.sectionHeading}><span>03</span><div><h2 id={`delivery-channels-${job.id}`} data-outline-title="채널 전달">채널 전달</h2><p>출고 승인과 실제 플랫폼 전달 상태를 각각 확인하세요.</p></div></header>
+        <ChannelHandoffPanel key={`staging-${job.id}`} job={job} busy={busy} action={action} />
+        {job.selections?.video && <YoutubePanel key={`youtube-${job.id}`} job={job} youtubeConfigured={youtubeConfigured} requestBlockedReason={requestBlockedReason} busy={busy} action={action} />}
+        <details className={deliveryStyles.disclosure}><summary>뉴스레터 회차 · 별도 승인③</summary><NewsletterPanel key={`newsletter-${job.id}`} job={job} busy={busy} action={action} /></details>
+      </section>
+      <section className={deliveryStyles.section} aria-labelledby={`delivery-history-${job.id}`}>
+      <header className={deliveryStyles.sectionHeading}><span>04</span><div><h2 id={`delivery-history-${job.id}`} data-outline-title="편집본·이전 기록">편집본·이전 기록</h2><p>미승인 새 편집본은 현재 제작물과 구분해서 검토하세요.</p></div></header>
+      <EditorialAssetsPanel job={job} />
+      <VersionHistoryPanel key={`history-${job.id}`} job={job} />
+      <details className={deliveryStyles.disclosure}><summary>개선 요청과 추가 영상 설정</summary><ImprovementPanel key={job.id} job={job} /><JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} /></details>
       <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
-    </>
+      </section>
+    </div>
   );
 }
 
