@@ -110,3 +110,23 @@ def test_english_source_has_only_its_matching_channel_schema_and_export(tmp_path
     assert english['copy_mode'] == 'channel_adapted'
     assert (tmp_path / english['file']).read_text(encoding='utf-8').startswith(packet['channel_posts']['instagram_english'])
     assert next(r for r in rows if r['channel_key'] == 'threads_main')['state'] == 'needs_review'
+
+
+def test_user_selected_blog_and_short_titles_survive_model_refine_and_are_reviewed(tmp_path, monkeypatch):
+    from office.editorial import prepare_source
+    original = original_markdown()
+    store, job = preservation_job(tmp_path, monkeypatch, original)
+    titles = {'blog': '상세 설정을 보존한 블로그 제목', 'shorts': '동기화 꿀팁'}
+    store.update_job(job['id'], channel_titles=titles)
+    reviewed = []
+    class RenamingProvider(AdaptedProvider):
+        def generate(self, role, messages, schema, options=None):
+            if role not in ('gen', 'refine'):
+                p = json.loads(messages[-1]['content'])['packet']
+                reviewed.append((p['title'], p['video']['title']))
+            return super().generate(role, messages, schema, options)
+    result = prepare_source(store, job['id'], provider=RenamingProvider(original, refine_once=True))
+    assert len(reviewed) == 6 and all(pair == (titles['blog'], titles['shorts']) for pair in reviewed)
+    assert result['source_packet']['title'] == titles['blog']
+    assert result['source_packet']['video']['title'] == titles['shorts']
+    assert result['source_packet']['body'] == original and result['source_approval'] is None

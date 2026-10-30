@@ -1,6 +1,7 @@
 """One detailed source, separately reviewed social copies. Never approves or publishes."""
 import re
 from urllib.parse import unquote, urlsplit, urlunsplit
+from .store import WorkflowError
 
 VERSION = "channel-copy-1"
 CHANNEL_COPY = {
@@ -21,6 +22,15 @@ def copy_schema(language='ko'):
 
 
 COPY_SCHEMA = copy_schema()
+
+
+def title_overrides(value):
+    if value is None:
+        return {}
+    if (not isinstance(value, dict) or set(value) - {'blog', 'shorts'}
+            or any(not isinstance(text, str) or not text.strip() or len(text) > 200 for text in value.values())):
+        raise WorkflowError('선택한 매체별 제목은 blog·shorts의 1~200자 문자열이어야 합니다')
+    return dict(value)
 
 
 def source_link(packet):
