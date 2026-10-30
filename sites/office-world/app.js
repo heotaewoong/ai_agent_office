@@ -1915,6 +1915,9 @@
         this.overview.detachControl();
         s.activeCamera = this.walk;
         this.player.av.root.setEnabled(true);
+        // Starting movement returns keyboard input from the toolbar to the scene.
+        world.canvas.tabIndex = 0;
+        world.canvas.focus({ preventScroll: true });
         $('help').hidden = false;
         $('btn-reset').hidden = true;
         $('btn-exit').hidden = false;

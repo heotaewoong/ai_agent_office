@@ -135,3 +135,20 @@ test('vehicle form controls keep keyboard navigation and keyup always releases m
   onKey.call(controls, event('w', false), false);
   assert.equal(controls.keys.size, 0);
 });
+
+test('starting walk hands keyboard focus to the scene while mobile overview keeps its controls', () => {
+  for (const phone of [false, true]) {
+    const element = tag => ({ closest: selector => selector.split(',').some(part => part.trim().startsWith(tag)) ? {} : null });
+    const button = element('button'), document = { activeElement: button, body: { classList: { toggle() {} } } };
+    const canvas = { ...element('canvas'), tabIndex: -1, focus(options) { assert.equal(options.preventScroll, true); document.activeElement = this; } };
+    const space = { view: 'overview' }, world = { canvas, scene: {} }, nodes = new Map();
+    const $ = id => { if (!nodes.has(id)) nodes.set(id, { setAttribute() {} }); return nodes.get(id); };
+    const hud = { hideAgentCard() {} };
+    const controls = { keys: new Set(), player: { av: { root: { setEnabled() {} } } }, overview: { detachControl() {}, attachControl() {} }, walk: {} };
+    method('setView', { space, world, document, hud, $, isPhone: () => phone }).call(controls, 'walk');
+    method('onKey', { space, world, hud }).call(controls, { key: 'w', target: document.activeElement, preventDefault() {} }, true);
+    assert.equal(space.view, phone ? 'overview' : 'walk');
+    assert.equal(controls.keys.has('w'), !phone, 'walk must accept movement without an extra canvas click');
+    assert.equal(document.activeElement, phone ? button : canvas);
+  }
+});
