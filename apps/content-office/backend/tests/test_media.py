@@ -762,7 +762,8 @@ def test_photo_backgrounds_render_ken_burns_video_with_static_footage_text(tmp_p
     assert {"overlay-01.png", "overlay-02.png", "background-01.png"} <= set(files)
     video = next(s for s in probe(files["short.mp4"])["streams"] if s["codec_type"] == "video")
     assert (video["width"], video["height"]) == (1080, 1920)
-    assert json.loads(files["clip-01.json"].read_text(encoding="utf-8"))["still_motion"] == "ken-burns-v1"
+    # 장면 클립 기록은 출고 목록에 넣지 않는 내부 파일이라 제작 폴더에서 직접 읽는다
+    assert json.loads((files["short.mp4"].parent / "clip-01.json").read_text(encoding="utf-8"))["still_motion"] == "ken-burns-v1"
 
 
 @requires_ffmpeg
