@@ -15,7 +15,7 @@ for (const width of [1440, 390]) {
     const reader = panel.getByLabel("독자 (비우면 프리셋 값)", { exact: true });
     await reader.fill("직접 지정한 독자를 보존합니다");
     const size = await reader.evaluate(el => ({ font: parseFloat(getComputedStyle(el).fontSize), height: el.getBoundingClientRect().height, width: el.getBoundingClientRect().width }));
-    expect(size.font).toBeGreaterThanOrEqual(16);expect(size.height).toBeGreaterThanOrEqual(48);expect(size.width).toBeGreaterThan(200);
+    expect(size.font).toBeGreaterThanOrEqual(16);expect(size.height).toBeGreaterThanOrEqual(112);expect(size.height).toBeLessThan(180);expect(size.width).toBeGreaterThan(200);
     await panel.getByText("브리프 바꾸기", { exact: true }).click();
     await panel.getByText("브리프 바꾸기", { exact: true }).click();
     await expect(reader).toHaveValue("직접 지정한 독자를 보존합니다");

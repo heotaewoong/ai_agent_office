@@ -3917,7 +3917,7 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
   font: inherit; font-size: 16px; line-height: 1.7; color: var(--ink); background: #fff;
 }
 .brief-fields textarea { min-height: 112px; resize: vertical; }
-.studio-section .brief-fields textarea { min-height: 112px; font-size: 16px; line-height: 1.7; }
+.studio-section .brief-panel .brief-fields textarea { min-height: 112px; font-size: 16px; line-height: 1.7; }
 .brief-fields .muted { font-size: 13px; line-height: 1.8; margin-top: 8px; }
 @media(max-width:760px) {
   .brief-fields { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 18px; }
