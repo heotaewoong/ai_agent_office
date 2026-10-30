@@ -472,6 +472,8 @@
       applyDpr();
       const scene = new B.Scene(this.engine);
       this.scene = scene;
+      // Hover has no mesh action; clicks and workshop ray picking remain enabled.
+      scene.skipPointerMovePicking = true;
       this.applyDpr = applyDpr;
       scene.clearColor = new B.Color4(0.02, 0.03, 0.09, 1);
       scene.ambientColor = new B.Color3(0.31, 0.36, 0.46);
@@ -1376,6 +1378,21 @@
       add(this.box('chair-seat', 0.62, 0.1, 0.62, '#1f2440'), 0, 0.6, 1.0);
       add(this.box('chair-back', 0.62, 0.7, 0.1, '#1f2440'), 0, 1.0, 1.3);
       add(this.box('chair-post', 0.08, 0.45, 0.08, '#2b2f44'), 0, 0.35, 1.0);
+      // The screen changes with task state. Only merge immutable furniture in desk-local space.
+      const groups = new Map();
+      for (const mesh of g.getChildMeshes()) {
+        if (mesh === screen) continue;
+        if (!groups.has(mesh.material)) groups.set(mesh.material, []);
+        groups.get(mesh.material).push(mesh);
+      }
+      for (const parts of groups.values()) {
+        if (parts.length < 2) continue;
+        const name = parts[0].name, pickable = parts.some(mesh => mesh.isPickable);
+        parts.forEach(mesh => { mesh.parent = null; });
+        const merged = B.Mesh.MergeMeshes(parts, true, true, undefined, false, false);
+        merged.name = 'desk-static-' + name; merged.parent = g;
+        merged.metadata = { stageId: st.id }; merged.isPickable = pickable;
+      }
       const sit = this.local(st, x + Math.sin(rotY) * 1.0, 0, z + Math.cos(rotY) * 1.0);
       st.desks.push({ slot, sitPos: sit, faceY: st.rotY + rotY + Math.PI, screen, taken: null, localX: x, localZ: z, rotY });
     },
@@ -1800,9 +1817,9 @@
         this.ssao = ssao;
       }
 
-      // 후처리: MSAA 4배 + FXAA, 블룸, ACES 톤 매핑, 약한 비네트
+      // FXAA handles edges once; avoid a second 4x multisampled post-process buffer.
       const pipeline = new B.DefaultRenderingPipeline('post', true, s, [this.overview, this.walk]);
-      pipeline.samples = 4;
+      pipeline.samples = 1;
       pipeline.fxaaEnabled = true;
       if (QUALITY !== 'low') {
         pipeline.bloomEnabled = true;
