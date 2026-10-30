@@ -13,7 +13,8 @@ def test_existing_articles_are_classified_without_mutating_saved_records():
 
 def test_registry_has_explicit_language_topics_and_unique_https_sources(tmp_path):
     rows = load_sources()
-    assert len(rows) == 11
+    assert len(rows) == 16
+    assert {'youtube-openai', 'youtube-google', 'hacker-news', 'google-news', 'google-trends'} <= {row['id'] for row in rows}
     assert all(row['segment'] in ('ai', 'exam') and row['language'] in ('en','ko') and row['topics'] for row in rows)
     path = tmp_path / 'feeds.json'
     path.write_text(json.dumps(rows + rows[:1]), encoding='utf-8')
@@ -34,7 +35,7 @@ def test_dashboard_adds_source_metadata_without_rewriting_saved_articles(tmp_pat
     assert result.status_code == 200
     body = result.json()
     assert body['articles'][0]['segment'] == 'ai'
-    assert len(body['source_registry']) == 11
+    assert len(body['source_registry']) == 16
     assert store.articles_list()[0] == row
 
 

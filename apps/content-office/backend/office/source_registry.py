@@ -22,12 +22,24 @@ def classify_article(article):
     return {**article, 'segment': segment, 'topics': article.get('topics') or source.get('topics', []), 'language': article.get('language') or source.get('language', 'unknown')}
 
 
+def diverse_sources(rows, limit):
+    buckets = {}
+    for row in rows:
+        buckets.setdefault(row.get('feed_id', 'unknown'), []).append(row)
+    result = []
+    while any(buckets.values()) and len(result) < limit:
+        for bucket in buckets.values():
+            if bucket and len(result) < limit:
+                result.append(bucket.pop(0))
+    return result
+
+
 def visible_articles(rows, limit=80):
     """Reserve slots per axis so a busy AI feed cannot hide all exam notices."""
     picked = set()
     for segment in ('exam', 'ai'):
-        picked.update(row['id'] for row in [r for r in rows if r.get('segment') == segment][:limit//2])
+        picked.update(row['id'] for row in diverse_sources([r for r in rows if r.get('segment') == segment], limit//2))
     for row in rows:
         if len(picked) >= limit: break
         picked.add(row['id'])
-    return [row for row in rows if row['id'] in picked]
+    return diverse_sources([row for row in rows if row['id'] in picked], limit)

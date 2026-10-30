@@ -115,6 +115,8 @@ async function request<T>(
 }
 
 export const api = {
+  discovery: () => request<import('./discovery').DiscoveryStatus>('/discovery'),
+  saveDiscovery: (body: import('./discovery').ResearchConfig & { expected_hash: string }) => request<import('./discovery').DiscoveryStatus>('/discovery', 'PUT', body),
   versionHistory: (jobId: string) => request<ContentHistory>(`/jobs/${encodeURIComponent(jobId)}/history`),
   jobClipProfile: (jobId: string) => request<{source_hash:string|null;override_hash:string;effective:{id:string;paid:boolean};global_profile_id:string}>(`/jobs/${encodeURIComponent(jobId)}/clip-profile`),
   setJobClipProfile: (jobId: string, body: {source_hash:string;profile:"none"|"global";override_hash:string}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/clip-profile`,"PUT",body),

@@ -121,5 +121,67 @@
       "직업교육"
     ],
     "language": "ko"
+  },
+  {
+    "id": "youtube-openai",
+    "name": "OpenAI · YouTube",
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCXZCJLdBC09xxGZ6gcdrc6A",
+    "format": "youtube",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en",
+    "channel_id": "UCXZCJLdBC09xxGZ6gcdrc6A"
+  },
+  {
+    "id": "youtube-google",
+    "name": "Google Developers · YouTube",
+    "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw",
+    "format": "youtube",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en",
+    "channel_id": "UC_x5XG1OV2P6uZZ5FSM9Ttw"
+  },
+  {
+    "id": "hacker-news",
+    "name": "Hacker News · AI 커뮤니티",
+    "url": "https://hacker-news.firebaseio.com/v0/topstories.json",
+    "format": "hn-api",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "google-news",
+    "name": "Google 뉴스 · AI 자동화",
+    "url": "https://news.google.com/rss/search?q=AI%20automation%20when%3A7d&hl=ko&gl=KR&ceid=KR%3Ako",
+    "format": "google-news",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "ko"
+  },
+  {
+    "id": "google-trends",
+    "name": "Google Trends · 주제별 급상승",
+    "url": "https://trends.google.com/trending/rss?geo=KR",
+    "format": "google-trends",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "ko"
   }
 ]

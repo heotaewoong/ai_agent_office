@@ -898,6 +898,8 @@ def create_app(store: Store | None = None):
     register_owned_source(app, store)
     from .api_improvements import register as register_improvements
     register_improvements(app, store)
+    from .api_discovery import register as register_discovery
+    register_discovery(app, store)
     return app
 
 

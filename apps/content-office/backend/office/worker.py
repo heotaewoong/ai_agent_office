@@ -14,6 +14,9 @@ def process_task(store, task):
     payload = task["payload"]
     if task["kind"] == "refresh":
         return refresh(store)
+    if task['kind'] == 'discover':
+        from .discovery import run
+        return run(store, payload.get('config_hash'))
     job_id = payload.get("job_id")
     if task['kind']=='private_delivery':
         from .delivery_queue import process

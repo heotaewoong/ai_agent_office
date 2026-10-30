@@ -88,14 +88,25 @@ def korean_cards(store, articles, provider=None, limit=None):
     return articles
 
 
-def refresh(store, provider=None):
-    report = collect_feeds(store.root)
+def refresh(store, provider=None, *, metadata_only=False):
+    from . import discovery
+    discovery_config = discovery.config(store)
+    report = collect_feeds(store.root, feeds=discovery.feeds_for(discovery_config))
     articles = deduplicate_events(enrich(report.pop("articles")))
     report["active_article_ids"] = [article["id"] for article in articles]
     report["eligible_items"] = len(articles)
-    articles = korean_cards(store, articles, provider=provider)
+    if not metadata_only:
+        articles = korean_cards(store, articles, provider=provider)
+    else:
+        previous = {row['id']: row for row in store.articles_list()}
+        from .korean import card_source_hash
+        for article in articles:
+            old = (previous.get(article['id']) or {}).get('card_ko')
+            if old and old.get('source_hash') == card_source_hash(article):
+                article['card_ko'] = old
     store.save_articles(articles)
     store.set_setting("feed_report", report)
+    discovery.record(store, discovery_config, articles, report)
     store.event("rss_refreshed", {"role": "RSS 연구", "total_items": report["total_items"], "eligible_items": report["eligible_items"], "failed_feeds": [f["name"] for f in report["feeds"] if f["state"] != "ok"]})
     return report
 

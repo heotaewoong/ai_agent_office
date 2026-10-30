@@ -131,6 +131,10 @@ def rank_articles(articles, current=None, days=7):
             continue
         url = normalize_url(article["url"])
         if url in seen:
+            previous = next((r for r in ranked if normalize_url(r['url']) == url), None)
+            if previous is not None and article.get('signals'):
+                previous['signals'] = {**previous.get('signals', {}), **article['signals']}
+                previous['related_sources'] = [*previous.get('related_sources', []), {'url': article.get('discussion_url', article['url']), 'feed_name': article.get('feed_name'), 'reason': '같은 원문을 가리키는 공개 반응 지표'}]
             continue
         seen.add(url)
         text = (article["title"] + " " + article.get("summary", "")).lower()
@@ -140,6 +144,10 @@ def rank_articles(articles, current=None, days=7):
         practical = any(word in text for word in ("api", "open source", "release", "ads", "training", "developer", "tool"))
         article["score"] = round(freshness + 20 + (25 if agent else 8) + (20 if practical else 10), 1)
         article["score_reasons"] = [f"최근 {age_days:.1f}일 이내 발표", "공식 RSS 출처", "에이전트·실무 자동화 관련" if agent else "AI 산업·활용 변화", "실행·영상 설명 소재가 구체적" if practical else "추가 원문 검토 필요"]
+        source_note = {'community': 'HN 커뮤니티 제보 · 원문 검증 필요', 'youtube': 'YouTube 공개 채널 피드 · 영상 본문 미검증',
+                       'news_aggregator': 'Google 뉴스 중개 · 원출처 확인 필요', 'search_trend': 'Google 급상승 검색 · 사실 검증 아님'}.get(article.get('source_kind'))
+        if source_note:
+            article['score_reasons'][1] = source_note
         article["score_note"] = "편집 규칙 점수이며 성과 측정치가 아닙니다"
         if article.get("segment") == "exam":
             article["score"] = round(freshness + 40, 1)
@@ -180,8 +188,16 @@ def collect_feeds(root: Path, feeds=None):
             if feed.get("format") == "moe-board":
                 from .education_sources import parse_moe
                 articles = parse_moe(raw, feed)
+            elif feed.get('format') == 'hn-api':
+                from .public_sources import hn_articles
+                articles = hn_articles(raw, feed, fetch_public)
             else:
                 articles = parse_feed(raw, feed)
+                if feed.get('format') in ('youtube', 'google-news', 'google-trends'):
+                    from .public_sources import annotate_feed
+                    original_count = len(articles)
+                    articles = annotate_feed(raw, articles, feed)
+                    record['raw_items'] = original_count
             path = raw_dir / f"{feed['id']}.xml"
             path.write_bytes(raw)
             record.update(state="ok", count=len(articles), resolved_url=resolved, content_type=content_type, sha256=hashlib.sha256(raw).hexdigest(), error=None)

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { officeHref, officeRoute, type View } from "../lib/navigation";
 import { filterNews, newsSegment, newsSegments, newsEmptyState } from "../lib/news";
 import { DecisionHome } from "./decision-home";
+import { DiscoveryPanel } from './discovery-panel';
 import { api, OfficeApiError } from "../lib/api";
 import { createDashboardRefreshGuard } from "../lib/dashboard-refresh";
 import type {
@@ -617,6 +618,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
               </>}
               {view === "news" && (
                 <>
+                  <DiscoveryPanel />
                   <section className="brief-banner" aria-label="수집 현황">
                     <div className="brief-copy">
                       <span className="brief-label">
