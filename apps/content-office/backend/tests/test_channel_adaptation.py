@@ -81,6 +81,19 @@ def test_utf8_permalink_is_readable_without_decoding_reserved_url_syntax():
     assert not source_link({'source_article_url': 'https://example.com:bad/a'})
 
 
+def test_layout_only_changes_do_not_count_as_channel_adaptation():
+    packet = {'body': '상세 원문을 보존해요.', 'channel_posts': copies()}
+    packet['channel_posts']['threads_main'] = '상세\n 원문을\t보존해요.'
+    assert any('threads_main' in issue and '상세 블로그' in issue
+               for issue in adaptation_issues(packet))
+    packet['channel_posts'] = copies()
+    packet['channel_posts']['threads_main'] = 'ＡＩ 자동화 점검'
+    packet['channel_posts']['x_main'] = 'AI자동화점검'
+    before = copy.deepcopy(packet)
+    assert any('동일 문구' in issue for issue in adaptation_issues(packet))
+    assert packet == before
+
+
 def test_unsupported_language_does_not_become_ready_from_korean_copy(tmp_path):
     packet = {'title': '제목', 'body': '상세 본문', 'channel_posts': copies()}
     write_channel_handoffs(packet, tmp_path, source_hash='a' * 64, language='ko')
