@@ -108,5 +108,18 @@
       "자동화"
     ],
     "language": "en"
+  },
+  {
+    "id": "moe-exam",
+    "name": "교육부 · 수험·대학·직업교육",
+    "url": "https://www.moe.go.kr/boardCnts/listRenew.do?boardID=294&m=020402&s=moe",
+    "format": "moe-board",
+    "segment": "exam",
+    "topics": [
+      "수험생",
+      "대학",
+      "직업교육"
+    ],
+    "language": "ko"
   }
 ]

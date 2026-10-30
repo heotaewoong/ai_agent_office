@@ -369,3 +369,21 @@ def test_photo_rights_verify_actual_bytes_and_never_trust_cached_claims(tmp_path
     (tmp_path / "source-photo-01.png").write_bytes(b"changed after caching")
     rights = json.loads(write_rights_manifest(source, tmp_path).read_text(encoding="utf-8"))
     assert rights["source_photo_verification"] == "unverified_or_incomplete" and rights["external_visual_assets"] == []
+
+
+def test_original_export_keeps_photos_original_file_and_title_options_together(tmp_path, monkeypatch):
+    from office import feeds
+    from office.exports import write_blog_exports
+    source = photo_packet(["https://blog.kakaocdn.net/photo?signature=private"])
+    source["body"] += "저자 원문입니다. " * 1000
+    original = source["body"]
+    source.update(titles=["제목 첫 안", "제목 둘째 안", "제목 셋째 안"], hashtags=["#원문", "#사진", "#보존", "#학습", "#기록"])
+    raw = photo_bytes()
+    monkeypatch.setattr(feeds, "fetch_public", lambda url, **kwargs: (raw, url, "image/png"))
+    files = write_blog_exports(source, tmp_path)
+    names = {path.name for path in files}
+    assert {"source-original.md", "source-photos.json", "source-photo-01.png", "title-options.txt", "tistory.html"}.issubset(names)
+    assert (tmp_path / "source-original.md").read_bytes() == original.encode("utf-8") and source["body"] == original
+    assert (tmp_path / "title-options.txt").read_text(encoding="utf-8").splitlines() == source["titles"]
+    html = (tmp_path / "tistory.html").read_text(encoding="utf-8")
+    assert 'src="source-photo-01.png"' in html and "#원문 #사진 #보존 #학습 #기록" in html
