@@ -31,7 +31,16 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
 def codex_binary():
-    return shutil.which(os.environ.get("CONTENT_OFFICE_CODEX_BIN", "codex"))
+    explicit = os.environ.get("CONTENT_OFFICE_CODEX_BIN")
+    if explicit:
+        return shutil.which(explicit)
+    found = shutil.which("codex")
+    if found:
+        return found
+    for candidate in (Path.home() / ".local/node/bin/codex", Path.home() / ".npm-global/bin/codex"):
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
 
 
 def codex_home():
@@ -73,10 +82,11 @@ def run_codex(prompt):
     # Bill the ChatGPT plan only: an API key in the environment would switch Codex to paid API usage.
     env = {key: value for key, value in os.environ.items() if key not in ("OPENAI_API_KEY", "CODEX_API_KEY")}
     env["CODEX_HOME"] = str(home)
+    env["PATH"] = str(Path(binary).parent) + os.pathsep + env.get("PATH", "")
     with tempfile.TemporaryDirectory(prefix="codex-image-") as work:
         try:
             completed = subprocess.run(
-                [binary, "exec", "--skip-git-repo-check", "--sandbox", "read-only", "--json",
+                [binary, "exec", "--ignore-user-config", "--disable", "shell_tool", "--disable", "unified_exec", "-c", 'forced_login_method="chatgpt"', "--skip-git-repo-check", "--sandbox", "read-only", "--json",
                  "-c", 'model_reasoning_effort="low"', "-C", work, prompt],
                 stdin=subprocess.DEVNULL, capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=TIMEOUT_SECONDS, env=env)

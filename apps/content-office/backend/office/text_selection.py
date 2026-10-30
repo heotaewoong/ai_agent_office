@@ -8,6 +8,7 @@ from .providers import OPENAI_PRICES, PRICES, provider_for
 from .store import WorkflowError, canonical, now
 
 PROFILES = {
+    "codex-subscription-text": "Codex 구독 · 글·검수",
     'gemini-3.8-flash': 'Gemini 3.8 Flash · 글',
     'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite · 글 (가벼움)',
     'gpt-5.4-mini': 'OpenAI gpt-5.4-mini · 글',
@@ -25,6 +26,9 @@ def current_model(store):
 
 def profile_summary(store):
     identity = current_model(store)
+    if identity == "codex-subscription-text":
+        from .codex_text_provider import subscription_status
+        return {**store.setting("text_profile", {"id": identity}), "id": identity, "name": PROFILES[identity], "model": identity, "provider": "codex-subscription", "paid": False, "automatic_fallback": False, **subscription_status(), "key_source": "앱 실행 계정의 Codex ChatGPT 로그인", "note": "구독 한도 사용. 원고·검수·퀴즈·카드 문구에 적용하며 API로 자동 전환하지 않습니다"}
     provider = provider_for(identity)
     price = (OPENAI_PRICES if provider == 'openai' else PRICES)[identity]
     record = store.setting('text_profile', {'id': identity})

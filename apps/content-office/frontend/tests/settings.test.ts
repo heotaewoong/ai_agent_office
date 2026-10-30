@@ -14,9 +14,9 @@ import {
 } from "../lib/settings.ts";
 
 test("프로필 선택지는 서버 등록값과 같다", () => {
-  assert.deepEqual(PROFILE_OPTIONS.voice.map((o) => o.id), ["windows-heami", "gemini-kore", "openai-tts"]);
+  assert.deepEqual(PROFILE_OPTIONS.voice.filter((o) => !o.disabled).map((o) => o.id), ["windows-heami", "gemini-kore", "openai-tts"]);
   assert.deepEqual(PROFILE_OPTIONS.image.map((o) => o.id), ["none", "openai-gpt-image", "codex-subscription"]);
-  assert.deepEqual(PROFILE_OPTIONS.clip.map((o) => o.id), ["none", "runway-gen4-turbo", "runway-gen4.5"]);
+  assert.deepEqual(PROFILE_OPTIONS.clip.filter((o) => !o.disabled).map((o) => o.id), ["none", "runway-gen4-turbo", "runway-gen4.5"]);
   assert.ok(PROFILE_OPTIONS.image.find((o) => o.id === "openai-gpt-image")!.paid);
   assert.equal(PROFILE_OPTIONS.image.find((o) => o.id === "codex-subscription")!.paid, false);
 });
@@ -112,7 +112,7 @@ test("text model profile options and warnings follow the chosen provider", () =>
 
 test("글 모델의 연결 판정은 선택 프로필을 전역 Gemini 표시보다 우선한다", () => {
   for (const profile of PROFILE_OPTIONS.text) {
-    const requiredKey = profile.id.startsWith("gpt-") ? "OPENAI_API_KEY" : "GEMINI_API_KEY";
+    const requiredKey = profile.subscription ? "ChatGPT 로그인" : profile.id.startsWith("gpt-") ? "OPENAI_API_KEY" : "GEMINI_API_KEY";
     const ready = settingsWarnings({ configured: false, text: { id: profile.id, configured: true } });
     assert.ok(!ready.some((warning) => warning.includes("글 모델") || warning.includes("원고 작성")), profile.id);
     const missing = settingsWarnings({ configured: true, text: { id: profile.id, configured: false } });
@@ -157,4 +157,12 @@ test("비용 안내는 승인 전 글 호출과 승인 후 선택 제작을 구�
   for (const medium of ["음성", "배경 이미지", "생성 영상"]) assert.ok(after.includes(medium), medium);
   assert.ok(after.includes("승인 자체는") && after.includes("시작하지 않습니다"));
   assert.ok(!PROFILE_COST_GUIDANCE.join(" ").includes("승인① 뒤 실제 제작에서만"));
+});
+
+
+test("subscription text keeps API-key readiness separate and unsupported media disabled", () => {
+ assert.ok(PROFILE_OPTIONS.text.some(o=>o.id==="codex-subscription-text" && o.subscription && !o.paid));
+ for(const kind of ["voice","clip"] as const) assert.ok(PROFILE_OPTIONS[kind].some(o=>o.disabled && o.label.includes("Codex")));
+ assert.deepEqual(settingsWarnings({configured:false,text:{id:"codex-subscription-text",configured:true}}),[]);
+ assert.ok(settingsWarnings({configured:true,text:{id:"codex-subscription-text",configured:false}}).some(x=>x.includes("ChatGPT 로그인")));
 });

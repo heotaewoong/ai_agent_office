@@ -45,9 +45,11 @@ export function SettingsPanel({
   };
   const parsedMinutes = validWindowMinutes(minutes);
   const budget = dashboard.budget;
+  const selectedProfiles = GROUPS.map(group => ({title: group.title, option: PROFILE_OPTIONS[group.kind].find(option => option.id === current[group.kind])}));
 
   async function choose(kind: ProfileKind, id: string) {
     const option = PROFILE_OPTIONS[kind].find((o) => o.id === id);
+    if (!option || option.disabled) return;
     await action("제작 설정 변경", () => api.setProfile(kind, id), `${option?.label ?? id}(으)로 바꿨습니다. 새 제작 요청부터 적용됩니다.`);
   }
 
@@ -70,7 +72,7 @@ export function SettingsPanel({
   return (
     <div className="settings-layout">
       <section className="settings-card" aria-label="키 연결 상태">
-        <h2>서버 키 연결</h2>
+        <h2>연결·로그인 상태</h2>
         <p className="settings-help">키는 EC2의 환경 파일에만 있고 화면에는 연결 여부만 보입니다. 선택한 제공자와 기능에 필요한 키를 확인하세요. 키를 바꾸면 앱을 다시 시작해야 합니다.</p>
         <ul className="key-chips">
           {keyChips(provider).map((chip) => (
@@ -94,8 +96,13 @@ export function SettingsPanel({
       </section>
 
       <section className="settings-card" aria-label="제작 프로필">
-        <h2>제작 프로필</h2>
+        <h2>어떤 방식으로 콘텐츠를 만들까요?</h2>
+        <p className="settings-help">글·배경은 Codex 구독을 선택할 수 있습니다. 음성은 별도 합성 기능이며, 사진에 줌·자막을 붙이는 일반 영상은 생성 영상 모델 없이도 만듭니다. 선택 → 연결 상태 확인 → 원고 검토 → 제작 순서로 진행하세요.</p>
         {PROFILE_COST_GUIDANCE.map((note) => <p className="settings-help" key={note}>{note}</p>)}
+        <div className="profile-summary" role="status" aria-label="선택한 제작 방식">
+          {selectedProfiles.map(({title, option}) => <p key={title}><strong>{title}</strong> · {option?.label ?? "상태 확인 중"} · {option ? option.subscription ? "구독 한도 사용" : option.paid ? "별도 API 과금" : "추가 API 과금 없음" : "미확인"}</p>)}
+          <p>선택을 바꾸면 새 요청부터 적용됩니다. 기존 제작물과 승인 기록은 바꾸지 않습니다. 이 PC의 로그인과 EC2 작업자의 로그인은 별개입니다.</p>
+        </div>
         <div className="profile-groups">
           {GROUPS.map((group) => (
             <fieldset key={group.kind} className="profile-group" disabled={busy}>
@@ -109,13 +116,14 @@ export function SettingsPanel({
                     type="radio"
                     name={`profile-${group.kind}`}
                     value={option.id}
+                    disabled={Boolean(option.disabled)}
                     checked={current[group.kind] === option.id}
                     onChange={() => void choose(group.kind, option.id)}
                   />
                   <span>
                     <strong>
                       {option.label}
-                      {option.paid ? <em className="paid-tag">유료</em> : <em className="free-tag">무료</em>}
+                      {option.disabled ? <em className="paid-tag">미지원</em> : option.subscription ? <em className="free-tag">구독 한도</em> : option.paid ? <em className="paid-tag">API 과금</em> : <em className="free-tag">추가 과금 없음</em>}
                     </strong>
                     <small>{option.hint}</small>
                   </span>

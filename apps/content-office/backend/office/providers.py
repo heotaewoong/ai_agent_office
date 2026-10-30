@@ -100,6 +100,9 @@ class Provider:
 
     def generate(self, role, messages, schema, options=None):
         options = {"max_tokens": 8192, "temperature": 0.5, **(options or {})}
+        if self.model == "codex-subscription-text":
+            from .codex_text_provider import generate
+            return generate(self, role, messages, schema, options)
         provider = provider_for(self.model)
         if provider is None:
             raise WorkflowError("모델의 검증된 단가가 없어 호출을 보류합니다")

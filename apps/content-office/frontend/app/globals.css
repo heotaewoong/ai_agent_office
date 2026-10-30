@@ -4281,3 +4281,16 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
   .profile-group { min-width: 0; }
   .key-chips li { flex-wrap: wrap; min-width: 0; max-width: 100%; }
 }
+
+/* Subscription profiles: cost badges stay legible on narrow settings cards. */
+.profile-summary { padding:16px; margin:16px 0; border:1px solid var(--line,#ddd); border-radius:10px; background:var(--surface,#fff); }
+.profile-summary p { margin:6px 0; font-size:13px; overflow-wrap:anywhere; }
+.profile-option > span {min-width:0;flex:1;}
+.profile-option strong {display:flex;flex-wrap:wrap;align-items:center;gap:6px;}
+.profile-option .free-tag,.profile-option .paid-tag {flex:none;white-space:nowrap;}
+.profile-option:has(input:disabled) {opacity:.7;cursor:not-allowed;}
+@media(max-width:760px){.profile-groups{grid-template-columns:minmax(0,1fr)}.profile-group{min-width:0}.profile-option{min-width:0}}
+
+.profile-groups{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+@media(min-width:1400px){.profile-groups{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:760px){.profile-groups{grid-template-columns:minmax(0,1fr)}}
