@@ -77,3 +77,16 @@ jobs:
       - name: 화면 빌드
         working-directory: apps/content-office/frontend
         run: node node_modules/next/dist/bin/next build --webpack
+
+      - name: 뉴스 조사 브라우저 계약 검사 · 실제 API 호출 없음
+        working-directory: apps/content-office/frontend
+        run: |
+          npx playwright install --with-deps chromium
+          node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3110 > /tmp/office-discovery-preview.log 2>&1 &
+          discovery_preview_pid=$!
+          trap 'kill "$discovery_preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3110/news > /dev/null; then break; fi
+            sleep 0.5
+          done
+          npx playwright test tests/browser/discovery.spec.ts --workers=1
