@@ -73,7 +73,7 @@ export function YoutubePanel({
 
   useEffect(() => {
     void load();
-    if (!(job.tasks??[]).some(t=>t.kind==='private_delivery'&&['queued','running'].includes(t.state))) return;
+    if (!(job.tasks??[]).some(t=>t.kind==='private_delivery'&&['queued','running'].includes(t.state??''))) return;
     const timer=setInterval(()=>void load(),4_000);
     return ()=>clearInterval(timer);
   }, [load, job.release_approval?.version, queuedDeliveryState]);
