@@ -869,30 +869,44 @@ test("목차를 오가도 저장하지 않은 원고가 유지되고 숨긴 구�
   expect(fixture.writes).toEqual([]);
 });
 
-test('게시 대상 저장은 조사만 자동 요청하고 작업 시간·원고·승인을 쓰지 않는다', async ({ page }) => {
-  const fixture = await harness(page);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/news?seg=ai');
-  const panel = page.getByRole('region', { name: '게시할 곳에 맞춰 소식과 트렌드 조사' });
-  await panel.getByRole('checkbox', { name: 'LinkedIn', exact: true }).check();
-  await panel.getByLabel('조사 주제', { exact: true }).fill('AI agent');
-  await panel.getByRole('button', { name: '선택 저장하고 자동 조사' }).click();
-  await expect(panel.getByText(/설정과 조사 요청을 저장했습니다/)).toBeVisible();
-  expect(fixture.writes).toHaveLength(1);
-  expect(fixture.writes[0].path).toBe('/api/discovery');
-  expect(fixture.writes[0].csrf).toBe('contract-token');
-  expect(fixture.writes[0].body).toMatchObject({ platforms: ['youtube', 'tistory', 'linkedin'], topic: 'AI agent', expected_hash: 'a'.repeat(64) });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+test("작업실 목차는 핵심 제작물 6개만 표시하고 세부 패널을 펼쳐도 늘어나지 않는다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  await page.goto("/scripts/contract-test-job");
+  const outline = page.getByRole("navigation", { name: "이 페이지 목차", exact: true });
+  const links = outline.locator(".outline-links a");
+  await expect(links).toHaveCount(6);
+  await expect(links).toHaveText(["01제작 설정", "02블로그 글·제목", "03카드뉴스", "04영상", "05퀴즈", "06버전·작업 기록"]);
+  await page.getByText("제작 비용과 상한 확인", { exact: true }).click();
+  await page.getByText("원고 검수 결과 · 통과", { exact: true }).click();
+  await page.getByRole("button", { name: "근거 0", exact: true }).click();
+  await expect(links).toHaveCount(6);
+  await expect(page.locator(".studio-section")).toHaveCount(6);
+  await links.filter({ hasText: "영상" }).click();
+  await expect(page.getByRole("heading", { name: "영상", exact: true })).toBeFocused();
+  await expect(page.locator(".outline-location")).toContainText("영상");
+  await links.filter({ hasText: "블로그 글·제목" }).click();
+  await expect(page.locator(".outline-location")).toContainText("블로그 글·제목");
+  await expect(page.getByText("검증용 영상 계획", { exact: true })).toBeVisible();
+  expect(fixture.writes).toEqual([]);
 });
 
-test('조사 결과는 출처 실패와 누적 반응을 구분하고 조회만으로 업무를 쓰지 않는다', async ({ page }) => {
-  const fixture = await harness(page);
-  await page.goto('/news?seg=ai');
-  const panel = page.getByRole('region', { name: '게시할 곳에 맞춰 소식과 트렌드 조사' });
-  await panel.getByText('수집 출처·실패 상태 확인 (2개)', { exact: true }).click();
-  await expect(panel.getByText('HN · 수집 실패', { exact: true })).toBeVisible();
-  await panel.getByText('YouTube·Shorts에 맞춰 살펴볼 후보 1건', { exact: true }).click();
-  await expect(panel.getByText(/누적 조회 123/)).toBeVisible();
-  await expect(panel.getByRole('link', { name: 'AI agent 공개 영상' })).toHaveAttribute('href', 'https://www.youtube.com/watch?v=synthetic');
+test("모바일 제작물 목차 이동은 편집 내용을 보존하고 큰 구역과 현재 위치를 일치시킨다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/scripts/contract-test-job");
+  const body = page.getByLabel("본문 · Markdown", { exact: true });
+  await body.fill("저장하지 않은 원고를 유지합니다.");
+  const select = page.getByRole("combobox", { name: "목차 바로 이동", exact: true });
+  for (const title of ["카드뉴스", "영상", "퀴즈", "블로그 글·제목"]) {
+    await select.selectOption({ label: `${({"카드뉴스": 3, "영상": 4, "퀴즈": 5, "블로그 글·제목": 2})[title]}. ${title}` });
+    const heading = page.getByRole("heading", { name: title, exact: true });
+    await expect(heading).toBeFocused();
+    await expect(heading).toBeInViewport();
+    await expect(page.locator(".outline-location")).toContainText(title);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  }
+  await expect(body).toHaveValue("저장하지 않은 원고를 유지합니다.");
+
   expect(fixture.writes).toEqual([]);
 });

@@ -542,7 +542,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {view !== "world" && <PageOutline scope={`${view}-${activeId}`} />}
+          {view !== "world" && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio"} />}
 
           {visibleError && (
             <div className="notice error" role="alert">
@@ -807,10 +807,10 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       </div>
                     ) : view === "studio" ? (
                       <>
-                      <JobBudgetPanel key={`budget-${job.id}`} jobId={job.id} globalCap={dashboard.budget.cap_krw} refreshKey={job.updated_at} busy={!!busy || !connected} />
                       <Studio
                         key={job.id}
                         job={job}
+                        globalCap={dashboard.budget.cap_krw}
                         model={dashboard.provider?.model}
                         requestBlockedReason={requestBlockedReason}
                         intake={intakeDrafts[job.id]}
@@ -1141,6 +1141,7 @@ function DraftTaskStatus({ job }: { job: Job }) {
 
 function Studio({
   job,
+  globalCap,
   model,
   requestBlockedReason,
   intake,
@@ -1157,6 +1158,7 @@ function Studio({
   onDelivery,
 }: {
   job: Job;
+  globalCap: number;
   model?: string;
   requestBlockedReason?: string;
   intake?: IntakeDraft;
@@ -1183,7 +1185,7 @@ function Studio({
   const [selections, setSelections] = useState<Selections>(
     job.selections ?? defaultSelections,
   );
-  const [editorTab, setEditorTab] = useState<"write" | "evidence" | "video">(
+  const [editorTab, setEditorTab] = useState<"write" | "evidence">(
     "write",
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
@@ -1277,7 +1279,15 @@ function Studio({
           <span>{job.error}</span>
         </div>
       )}
+      <section className="studio-section" aria-labelledby={`studio-setup-${job.id}`}>
+        <header className="studio-section-heading"><span className="studio-section-number">01</span><div><h2 id={`studio-setup-${job.id}`} data-outline-title="제작 설정">제작 설정</h2><p>독자와 혜택을 먼저 정하세요. 비용 상한과 기존 설정을 확인할 수 있어요.</p></div></header>
+        <details className="studio-disclosure"><summary>제작 비용과 상한 확인</summary>
+          <JobBudgetPanel key={`budget-${job.id}`} jobId={job.id} globalCap={globalCap} refreshKey={job.updated_at} busy={busy} />
+        </details>
+        <details className="studio-disclosure"><summary>대상 독자·해결할 문제·기대 결과</summary>
       <BriefPanel key={`brief-${job.id}`} job={job} busy={locked} action={action} cached={cachedBrief} onDraftChange={onBriefDraftChange} />
+        </details>
+        <details className="studio-disclosure"><summary>무료 PDF·상품 링크·쿠폰 선택</summary>
       <OfferPanel
         key={`offer-${job.id}`}
         job={job}
@@ -1286,6 +1296,7 @@ function Studio({
         busy={locked}
         action={action}
       />
+        </details>
       {job.article?.origin === "idea" && (
         <div ref={packagingPanel} tabIndex={-1} aria-label="제목·썸네일·후크 기획">
           <PackagingPanel
@@ -1310,6 +1321,9 @@ function Studio({
         dirty={dirty}
         action={action}
       />
+      </section>
+      <section className="studio-section" aria-labelledby={`studio-blog-${job.id}`}>
+        <header className="studio-section-heading"><span className="studio-section-number">02</span><div><h2 id={`studio-blog-${job.id}`} data-outline-title="블로그 글·제목">블로그 글·제목</h2><p>제목과 본문을 읽고 수정하세요. 저장·검수 후 승인①을 하면 선택한 제작물을 만들어요.</p></div></header>
       <div className="editor-panel">
         {job.article?.operator_source_text && <p className="muted" role="status">
           현재 등록 방식: {job.article.preserve_original === true ? "원문 보존 · 영상 파생" : "요약·재작성"} · 등록 원문 {job.article.operator_source_text.length.toLocaleString("ko-KR")}자 · 현재 본문 {body.length.toLocaleString("ko-KR")}자.
@@ -1330,13 +1344,6 @@ function Studio({
             >
               <Icon name="source" size={16} />
               근거 {evidenceItems.length}
-            </button>
-            <button
-              className={editorTab === "video" ? "active" : ""}
-              onClick={() => setEditorTab("video")}
-            >
-              <Icon name="play" size={15} />
-              영상·SNS 대본
             </button>
           </div>
           <span className="editor-save-state">
@@ -1412,18 +1419,6 @@ function Studio({
               </div>
             </div>
           )
-        ) : editorTab === "video" ? (
-          <>
-            <VideoPlan packet={job.source_packet} />
-            {job.source_packet?.channel_posts && <section className="panel">
-              <h3>매체별 SNS 요약본</h3>
-              <p className="muted">블로그는 상세 원문을 유지합니다. 아래 요약본과 숏폼 대본도 승인① 전에 확인하세요. 원문 링크는 출고 파일에 덧붙입니다.</p>
-              {Object.entries(job.source_packet.channel_posts).map(([key, text]) => <details key={key}>
-                <summary>{({threads_main: "Threads", linkedin_personal: "LinkedIn", instagram_main: "Instagram", x_main: "X"} as Record<string, string>)[key] ?? key} · {text.length}자</summary>
-                <p style={{whiteSpace: "pre-wrap", overflowWrap: "anywhere"}}>{text}</p>
-              </details>)}
-            </section>}
-          </>
         ) : (
           <div className="evidence-list">
             {evidenceItems.length ? (
@@ -1477,7 +1472,7 @@ function Studio({
       )}
       {sourceReady && (
         <>
-          <QualityPanel job={job} />
+          <details className="studio-disclosure"><summary>원고 검수 결과 · {quality?.status === "passed" && !quality.critical ? "통과" : "확인 필요"}</summary><QualityPanel job={job} /></details>
           <section className="channel-panel">
             <div className="section-heading">
               <div>
@@ -1737,7 +1732,29 @@ function Studio({
           바로 만들거나 다시 만들 수도 있어요.
         </p>
       )}
-      <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      </section>
+      <section className="studio-section" aria-labelledby={`studio-cards-${job.id}`}>
+        <header className="studio-section-heading"><span className="studio-section-number">03</span><div><h2 id={`studio-cards-${job.id}`} data-outline-title="카드뉴스">카드뉴스</h2><p>이미지와 문구를 검토하고 내려받으세요. 제작·재제작에는 승인 원고가 필요해요.</p></div></header>
+        <CardsPanel job={job} busy={locked} action={action} blockedReason={requestBlockedReason} />
+      </section>
+      <section className="studio-section" aria-labelledby={`studio-video-${job.id}`}>
+        <header className="studio-section-heading"><span className="studio-section-number">04</span><div><h2 id={`studio-video-${job.id}`} data-outline-title="영상">영상</h2><p>장면별 대본과 추가 클립 설정을 확인하세요. 완성 영상은 제작·출고함에서 재생해요.</p></div><button className="button secondary small" onClick={onDelivery}>완성 영상 확인</button></header>
+        <VideoPlan packet={job.source_packet} />
+        <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
+        {job.source_packet?.channel_posts && <details className="studio-disclosure"><summary>채널별 SNS 문구 확인</summary>
+          <p className="muted">블로그 상세 본문과 별도로 만든 문구입니다. 승인① 전에 함께 확인하세요.</p>
+          {Object.entries(job.source_packet.channel_posts).map(([key, text]) => <details key={key} className="studio-disclosure">
+            <summary>{({threads_main: "Threads", linkedin_personal: "LinkedIn", instagram_main: "Instagram", x_main: "X"} as Record<string, string>)[key] ?? key} · {text.length}자</summary>
+            <p style={{whiteSpace: "pre-wrap", overflowWrap: "anywhere"}}>{text}</p>
+          </details>)}
+        </details>}
+      </section>
+      <section className="studio-section" aria-labelledby={`studio-quiz-${job.id}`}>
+        <header className="studio-section-heading"><span className="studio-section-number">05</span><div><h2 id={`studio-quiz-${job.id}`} data-outline-title="퀴즈">퀴즈</h2><p>승인 원고를 바탕으로 만든 문제와 정답·해설을 확인하세요.</p></div></header>
+        <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      </section>
+      <section className="studio-section" aria-labelledby={`studio-history-${job.id}`}>
+        <header className="studio-section-heading"><span className="studio-section-number">06</span><div><h2 id={`studio-history-${job.id}`} data-outline-title="버전·작업 기록">버전·작업 기록</h2><p>이전 원고와 새 편집본, 개선 요청 및 진행 상태를 확인하세요.</p></div></header>
       <VersionHistoryPanel key={`history-${job.id}`} job={job} />
       <EditorialAssetsPanel job={job} editLocked={locked || dirty} onLoadDraft={(draft) => {
         if (locked || dirty) return;
@@ -1746,9 +1763,8 @@ function Studio({
         requestAnimationFrame(() => document.getElementById("draft-body")?.focus());
       }} />
       <ImprovementPanel key={job.id} job={job} />
-      <JobClipProfile key={`clip-${job.id}`} job={job} busy={busy} action={action} />
-      <CardsPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       <TaskProgress job={job} busy={busy} requestBlockedReason={requestBlockedReason} action={action} />
+      </section>
     </>
   );
 }

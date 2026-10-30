@@ -38,12 +38,12 @@ def cards_payload(job):
     return {"version": cards.get("version"), "generated_at": cards.get("generated_at"), "source_hash": cards.get("source_hash"), "slides": [{key: slide.get(key) for key in SLIDE_KEYS} for slide in cards.get("slides", [])], "checks": cards.get("checks")}
 
 
-def artifact_records(job):
-    """제작 manifest 파일 + 현재 원고의 퀴즈 JSON + 카드 PNG."""
+def artifact_records(job, *, include_stale_cards=False):
+    """출고용 현재 파일. 화면 미리보기에서는 이전 카드 PNG도 읽을 수 있다."""
     yield from (job.get("manifest") or {}).get("files", [])
     for output in ("quiz", "cards"):
         record = job.get(output) or {}
-        if record.get("source_hash") != job.get("source_hash"):
+        if record.get("source_hash") != job.get("source_hash") and not (output == "cards" and include_stale_cards):
             continue
         if output == "quiz" and record.get("artifact"):
             yield record["artifact"]
@@ -186,7 +186,7 @@ def register(app, store):
         if not artifact_id.startswith("asset_") or len(artifact_id) > 80:
             raise HTTPException(404, "파일을 찾을 수 없습니다")
         for job in store.jobs():
-            for file in artifact_records(job):
+            for file in artifact_records(job, include_stale_cards=True):
                 if file.get("id") == artifact_id:
                     path = _verified_path(store, file)
                     return FileResponse(path, media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream", filename=path.name, content_disposition_type="inline")

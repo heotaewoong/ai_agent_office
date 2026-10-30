@@ -401,3 +401,22 @@ def test_reader_shows_title_once_without_changing_stored_export():
     assert "<h2>다른 소제목</h2>" in preview
     other = blog_reader_html("다른 제목", fragment, "draft")
     assert "<h2>같은 제목 &amp; 확인</h2>" in other
+
+
+@pytest.mark.parametrize("closed", [True, False])
+def test_fenced_code_does_not_inherit_inline_code_background(closed):
+    from html.parser import HTMLParser
+    from office.exports import safe_fragment, blog_reader_html
+    class Styles(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.code = None
+        def handle_starttag(self, tag, attrs):
+            if tag == "code": self.code = dict(attrs).get("style", "")
+    html = safe_fragment("```text\nhttp://127.0.0.1:8384/" + ("\n```" if closed else ""))
+    reader = Styles(); reader.feed(html)
+    style = dict(item.split(":", 1) for item in reader.code.split(";") if item)
+    assert style["background"] == "transparent" and style["color"] == "inherit"
+    assert "http://127.0.0.1:8384/" in html
+    # Stored old fragments also need the preview fix without rewriting their bytes.
+    preview = blog_reader_html("원고", '<pre style="background:#17242b;color:#f2f7f8"><code>명령어</code></pre>')
+    assert "pre code{color:inherit;background:transparent;padding:0}" in preview
