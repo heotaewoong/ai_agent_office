@@ -784,3 +784,55 @@ test("출고 확인 중 항목을 바꾸면 이전 출력 선택으로 승인하
   ).toHaveCount(0);
   expect(context.writes).toEqual([]);
 });
+
+test("공통 목차는 키보드 이동·현재 위치·구역 경계를 제공하고 업무를 쓰지 않는다", async ({ page }) => {
+  const fixture = await harness(page, true, true);
+  await page.goto("/publish?job=contract-test-job");
+  const outline = page.getByRole("navigation", { name: "이 페이지 목차", exact: true });
+  await expect(outline).toBeVisible();
+  const links = outline.locator(".outline-links a");
+  expect(await links.count()).toBeGreaterThan(3);
+  await expect(page.getByRole("link", { name: /상세페이지 제작실/ })).toHaveAttribute("href", "/detail-lab/");
+  await expect(page.getByRole("link", { name: /상세페이지 제작실/ })).toHaveAttribute("target", "_blank");
+  const destination = links.nth(2);
+  const href = await destination.getAttribute("href");
+  await destination.focus();
+  await page.keyboard.press("Enter");
+  const target = page.locator(`[id="${href!.slice(1)}"]`);
+  await expect(target).toBeFocused();
+  await expect(destination).toHaveAttribute("aria-current", "location");
+  await expect(target).toBeInViewport();
+  expect(await target.evaluate(el => el.getBoundingClientRect().top)).toBeGreaterThan(100);
+  expect(await page.locator(".outline-panel").count()).toBeGreaterThan(2);
+  expect(fixture.writes).toEqual([]);
+});
+
+test("모바일 목차 선택은 화면 안에서 이동하고 설정 화면에도 적용된다", async ({ page }) => {
+  const fixture = await harness(page, true, true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/settings");
+  const select = page.getByRole("combobox", { name: "목차 바로 이동", exact: true });
+  await expect(select).toBeVisible();
+  const options = await select.locator("option").all();
+  expect(options.length).toBeGreaterThan(2);
+  const value = await options.at(-1)!.getAttribute("value");
+  await select.selectOption(value!);
+  await expect(page.locator(`[id="${value}"]`)).toBeFocused();
+  await expect(page.locator(`[id="${value}"]`)).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(fixture.writes).toEqual([]);
+});
+
+test("목차를 오가도 저장하지 않은 원고가 유지되고 숨긴 구역은 제외된다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  await page.goto("/scripts/contract-test-job");
+  await page.getByRole("button", { name: "원고 편집", exact: true }).click();
+  const body = page.getByLabel("본문 · Markdown", { exact: true });
+  await body.fill("목차 이동 뒤에도 보존할 수정 중 원고");
+  const links = page.getByRole("navigation", { name: "이 페이지 목차", exact: true }).locator(".outline-links a");
+  await links.last().click();
+  await links.first().click();
+  await expect(body).toHaveValue("목차 이동 뒤에도 보존할 수정 중 원고");
+  await expect(page.getByRole("button", { name: "원고 승인", exact: true })).toBeDisabled();
+  expect(fixture.writes).toEqual([]);
+});
