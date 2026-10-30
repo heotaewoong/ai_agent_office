@@ -4,6 +4,50 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { Article, Dashboard, Job } from "../../lib/types";
 
+for (const width of [1440, 390]) {
+  test(`원고 시작 폼 ${width}px에서 넓은 편집칸과 입력 보존·진행 조건을 제공한다`, async ({ page }) => {
+    const fixture = await harness(page, true);
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/news");
+    const panel = page.getByRole("region", { name: "내 원고로 콘텐츠 만들기", exact: true });
+    const title = panel.getByLabel("콘텐츠 제목", { exact: false });
+    const body = panel.getByLabel("원고·자료·만들고 싶은 내용", { exact: false });
+    const submit = panel.getByRole("button", { name: "내 원고로 작업실 열기" });
+    await expect(submit).toBeDisabled();
+    await title.fill("내가 준비한 콘텐츠");
+    await body.fill("직접 작성한 원고를 입력 방식 전환 뒤에도 유지합니다. ".repeat(5));
+    await panel.getByRole("button", { name: /티스토리 글 가져오기/ }).click();
+    await expect(panel.getByLabel("티스토리 공개 글 주소", { exact: true })).toBeVisible();
+    await panel.getByRole("button", { name: /직접 쓰거나 붙여넣기/ }).click();
+    await expect(body).toHaveValue("직접 작성한 원고를 입력 방식 전환 뒤에도 유지합니다. ".repeat(5));
+    await expect(submit).toBeDisabled();
+    await panel.getByRole("checkbox").check();
+    await expect(submit).toBeEnabled();
+    const size = await body.evaluate(el => ({ width: el.getBoundingClientRect().width, parentWidth: el.closest("fieldset")!.getBoundingClientRect().width, font: parseFloat(getComputedStyle(el).fontSize), height: el.getBoundingClientRect().height }));
+    expect(size.width / size.parentWidth).toBeGreaterThan(.75);
+    expect(size.height).toBeGreaterThanOrEqual(300);
+    expect(size.font).toBeGreaterThanOrEqual(16);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(fixture.writes).toEqual([]);
+  });
+}
+
+test("원고 시작 폼의 가져오기 실패는 입력을 보존하고 다시 시도할 수 있다", async ({ page }) => {
+  const fixture = await harness(page, true);
+  await page.route("**/api/owned-source/preview", route => route.fulfill({ status: 400, json: { detail: "공개 글을 확인할 수 없습니다. 직접 붙여넣어 주세요." } }));
+  await page.goto("/news");
+  const panel = page.getByRole("region", { name: "내 원고로 콘텐츠 만들기", exact: true });
+  const body = panel.getByLabel("원고·자료·만들고 싶은 내용", { exact: false });
+  await body.fill("실패해도 보존할 원고");
+  await panel.getByRole("button", { name: /티스토리 글 가져오기/ }).click();
+  await panel.getByLabel("티스토리 공개 글 주소", { exact: true }).fill("https://example.tistory.com/entry/test");
+  await panel.getByRole("button", { name: "본문 가져와 확인하기" }).click();
+  await expect(panel.getByRole("alert")).toContainText("공개 글을 확인할 수 없습니다");
+  await expect(body).toHaveValue("실패해도 보존할 원고");
+  await expect(panel.getByRole("button", { name: "본문 가져와 확인하기" })).toBeEnabled();
+  expect(fixture.writes).toEqual([]);
+});
+
 // These are explicitly isolated API contract tests, not live workflow completion.
 // Article inputs come from the actual public RSS research snapshot; a synthetic
 // review packet is used only to exercise approval controls without approving news.
