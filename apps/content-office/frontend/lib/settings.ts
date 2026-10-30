@@ -1,4 +1,4 @@
-import type { Delivery, Job, ProviderStatus } from "./types";
+import type { ClipEstimate, Delivery, Job, ProviderStatus } from "./types";
 
 export type ProfileKind = "text" | "voice" | "image" | "clip";
 export type ProfileOption = { id: string; label: string; paid: boolean; hint: string; disabled?: boolean; subscription?: boolean };
@@ -26,8 +26,10 @@ export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
   clip: [
     { id: "codex-video-unsupported", label: "Codex 구독 생성 영상", paid: false, disabled: true, hint: "구독의 영상 자동 생성 연결은 지원하지 않습니다. 정지 이미지 줌·자막 편집은 생성 영상 없이도 가능합니다." },
     { id: "none", label: "일반 영상 · 이미지 줌·자막 편집", paid: false, hint: "별도 생성 영상 API 없이 MP4를 만듭니다. 내레이션은 음성에서 선택한 방식과 비용을 따릅니다." },
-    { id: "runway-gen4-turbo", label: "Runway Gen-4 Turbo", paid: true, hint: "clip: generated 장면만 5초 · 500원 예약 · 최대 3장면" },
-    { id: "runway-gen4.5", label: "Runway Gen-4.5", paid: true, hint: "clip: generated 장면만 5초 · 1,200원 예약 · 최대 3장면" },
+    { id: "pexels-stock", label: "Pexels 무료 실사 영상", paid: false, hint: "무료 · 실제 촬영 영상 · PEXELS_API_KEY 필요 · 출처 표기" },
+    { id: "runway-grok-lite", label: "Runway Grok Imagine 1.5 Lite · 추천", paid: true, hint: "가장 저렴 · 720p 5초 16크레딧($0.16, 예약 320원) · 기본 첫 장면 1개만" },
+    { id: "runway-gen4-turbo", label: "Runway Gen-4 Turbo", paid: true, hint: "5초 25크레딧(예약 500원) · 기본 첫 장면 1개만" },
+    { id: "runway-gen4.5", label: "Runway Gen-4.5", paid: true, hint: "5초 60크레딧(예약 1,200원) · 기본 첫 장면 1개만" },
   ],
 };
 
@@ -65,13 +67,63 @@ export function settingsWarnings(provider: ProviderStatus | undefined): string[]
     warnings.push("Codex 구독 배경을 골랐지만 서버의 앱 계정에 codex 설치·로그인이 없습니다. 영상·카드 제작이 실패합니다.");
   else if (p.image?.id && p.image.id !== "none" && !p.image.configured)
     warnings.push("배경 이미지를 켰지만 OPENAI_API_KEY가 서버에 없습니다. 영상·카드 제작이 실패합니다.");
-  if (p.clip?.id && p.clip.id !== "none") {
+  if (p.clip?.id === "pexels-stock") {
+    if (!p.clip.configured && !p.clip.pexels_configured)
+      warnings.push("Pexels 실사 영상을 골랐지만 PEXELS_API_KEY가 서버에 없습니다. 장면은 정지 화면으로 만들어집니다.");
+  } else if (p.clip?.id && p.clip.id !== "none") {
     if (!p.clip.configured)
       warnings.push("생성 영상을 켰지만 RUNWAYML_API_SECRET이 서버에 없습니다.");
     if (!p.image?.id || p.image.id === "none")
       warnings.push("생성 영상은 배경 이미지 프로필이 함께 켜져 있어야 합니다. 지금은 유료 영상 호출 전에 거부됩니다.");
   }
+  warnings.push(...unavailableSelectionWarnings(p));
   return warnings;
+}
+
+const KIND_TITLES: Record<ProfileKind, string> = { text: "글 모델", voice: "음성", image: "배경 이미지", clip: "생성 영상" };
+
+function selectedId(p: ProviderStatus, kind: ProfileKind): string | undefined {
+  return kind === "text" ? p.text?.id ?? p.text?.model ?? p.model : p[kind]?.id;
+}
+
+// Options the server cannot run right now are hidden, not just disabled; they reappear once runnable.
+// Without availability data (older server) every option stays visible.
+export function visibleProfileOptions(provider: ProviderStatus | undefined, kind: ProfileKind): ProfileOption[] {
+  // 이 서버에서 돌지 않는 선택지(지원 안 함으로 표시된 것 포함)는 목록에서 뺀다. 'none'은 항상 보인다.
+  const states = provider?.availability?.[kind];
+  const supported = PROFILE_OPTIONS[kind].filter((option) => option.id === "none" || !option.disabled);
+  if (!states) return supported;
+  return supported.filter((option) => option.id === "none" || states[option.id]?.available !== false);
+}
+
+// One clear line when the saved selection can no longer run, naming it and the fix.
+export function unavailableSelectionWarnings(provider: ProviderStatus | undefined): string[] {
+  const p = provider ?? {};
+  const lines: string[] = [];
+  for (const kind of ["text", "voice", "image", "clip"] as ProfileKind[]) {
+    const id = selectedId(p, kind);
+    const state = id ? p.availability?.[kind]?.[id] : undefined;
+    if (id && id !== "none" && state && !state.available) {
+      const label = PROFILE_OPTIONS[kind].find((o) => o.id === id)?.label ?? id;
+      lines.push(`${KIND_TITLES[kind]}: 저장된 선택 '${label}'은(는) 지금 이 서버에서 실행할 수 없습니다 — ${state.reason}. 아래 목록에서 실행 가능한 항목을 고르세요.`);
+    }
+  }
+  return lines;
+}
+
+export const PROFILE_CHANGE_NOTE = "다음 제작부터 적용됩니다. 이미 만든 영상은 작업실의 '현재 설정으로 다시 제작'으로 다시 만들 수 있어요.";
+
+export function dailyClipUsage(provider: ProviderStatus | undefined): string | null {
+  const clip = provider?.clip;
+  if (!clip?.paid) return null;
+  const cap = clip.clip_limits?.daily_paid_clips ?? 3;
+  const perVideo = clip.clip_limits?.max_clips_per_video ?? 1;
+  return `오늘 유료 클립 ${clip.paid_clips_today ?? 0}/${cap}개 사용 · 영상당 최대 ${perVideo}개`;
+}
+
+// The produce button shows the paid items first and needs a second, in-page click to confirm.
+export function paidProduceNotice(estimate: ClipEstimate | null | undefined): string | null {
+  return estimate?.paid && estimate.clips > 0 ? estimate.label : null;
 }
 
 export function keyChips(provider: ProviderStatus | undefined): { label: string; env: string; ok: boolean }[] {
@@ -80,7 +132,8 @@ export function keyChips(provider: ProviderStatus | undefined): { label: string;
   const chips = [
     { label: "Gemini", env: "GEMINI_API_KEY", ok: Boolean(text.env === "GEMINI_API_KEY" ? text.configured : p.configured) },
     { label: "OpenAI", env: "OPENAI_API_KEY", ok: Boolean(text.env === "OPENAI_API_KEY" ? text.configured : p.image?.openai_configured ?? (p.image?.id === "codex-subscription" ? false : p.image?.configured)) },
-    { label: "Runway", env: "RUNWAYML_API_SECRET", ok: Boolean(p.clip?.configured) },
+    { label: "Runway", env: "RUNWAYML_API_SECRET", ok: Boolean(p.clip?.runway_configured ?? (p.clip?.id === "pexels-stock" ? false : p.clip?.configured)) },
+    { label: "Pexels", env: "PEXELS_API_KEY", ok: Boolean(p.clip?.pexels_configured) },
     { label: "YouTube", env: "YOUTUBE_CLIENT_ID 등", ok: Boolean(p.youtube?.configured) },
   ];
   if(p.text?.id === "codex-subscription-text" || p.image?.id === "codex-subscription") chips.push({label:"Codex 구독",env:"앱 계정의 ChatGPT 로그인",ok:Boolean(p.text?.id === "codex-subscription-text" ? p.text.configured : p.image?.configured)});

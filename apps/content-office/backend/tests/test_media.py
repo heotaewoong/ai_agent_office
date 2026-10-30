@@ -576,7 +576,7 @@ def test_social_card_planning_failure_preserves_independent_blog(tmp_path,monkey
     assert '계획 도구' in manifest['output_status']['cards']['error']
 
 
-def test_overlay_only_scene_is_transparent_outside_text_panels(tmp_path):
+def test_overlay_only_scene_is_a_footage_layer_transparent_where_the_clip_shows(tmp_path):
     from office.media import draw_scene
     from PIL import Image
     scene = {'caption': '오버레이 확인', 'narration': '발음 전용', 'visual': '설명: 글자만 겹침'}
@@ -584,11 +584,84 @@ def test_overlay_only_scene_is_transparent_outside_text_panels(tmp_path):
     draw_scene({'title': '제목'}, scene, 0, 1, path, overlay_only=True)
     image = Image.open(path)
     assert image.mode == 'RGBA' and image.size == (1080, 1920)
-    assert image.getpixel((1040, 1500))[3] == 0
-    assert image.getpixel((300, 280))[3] > 0
-    assert image.getpixel((300, 700))[3] == 255
+    # The clip shows through the middle; the top and bottom only get a soft dark gradient.
+    assert image.getpixel((540, 1000))[3] == 0
+    assert 0 < image.getpixel((540, 20))[3] < 255 and 0 < image.getpixel((540, 1900))[3] < 255
+    # The caption is drawn opaque near the top third, never as a full-width opaque slide panel.
+    caption = image.crop((70, 280, 1010, 680))
+    assert caption.getchannel('A').getextrema()[1] == 255
+    for y in range(560, 1620, 20):
+        row = [image.getpixel((x, y))[3] for x in range(60, 1020, 8)]
+        assert sum(alpha == 255 for alpha in row) < len(row) * .6, y
     meta = json.loads(path.with_suffix('.json').read_text(encoding='utf-8'))
-    assert meta['drawing_source'] == 'overlay_only+approved_scene_fields'
+    assert meta['drawing_source'] == 'overlay_only+approved_scene_fields' and meta['layout'] == 'footage_overlay'
+
+
+def photo(tmp_path, color=(200, 40, 40), name='photo.png'):
+    from PIL import Image
+    path = tmp_path / name
+    Image.new('RGB', (1024, 1536), color).save(path, 'PNG')
+    return path
+
+
+def test_photo_scene_is_full_bleed_with_outlined_caption_and_translucent_lower_third(tmp_path):
+    from office.media import draw_scene
+    from PIL import Image
+    background = photo(tmp_path)
+    flow = {'caption': '근거를 확인하고 승인', 'narration': '발음 전용', 'visual': 'flow: 근거 확인 → 원고 승인 → 제작'}
+    path = tmp_path / 'scene.png'
+    draw_scene({'title': '제목'}, flow, 0, 3, path, background=background)
+    image = Image.open(path).convert('RGB')
+    # Middle of the frame is the untouched photograph, not a navy blend.
+    assert image.getpixel((540, 1000)) == (200, 40, 40)
+    assert image.getpixel((200, 900)) == (200, 40, 40)
+    # A dark outline surrounds the white headline.
+    darkest, brightest = image.crop((70, 280, 1010, 680)).convert('L').getextrema()
+    assert brightest > 235, 'white caption glyphs'
+    # The photo under the top gradient never gets this dark; only the glyph outline does.
+    assert darkest < 30, 'dark outline around glyphs'
+    meta = json.loads(path.with_suffix('.json').read_text(encoding='utf-8'))
+    assert meta['layout'] == 'footage_overlay' and meta['title_metrics']['stroke_width'] > 0
+    assert meta['drawing_source'] == 'generated_background+approved_scene_fields'
+    assert meta['kind'] == 'flow' and meta['lower_third']['box'][3] <= 1610
+    top, bottom = meta['lower_third']['box'][1], meta['lower_third']['box'][3]
+    assert bottom - top <= 520
+    # The lower third is translucent: the photo still tints it.
+    r, g, b = image.getpixel((72, top + 14))
+    assert r > b and (r, g, b) != (200, 40, 40)
+
+
+def test_photo_scene_keeps_metric_metadata_for_comparison_and_numbers(tmp_path):
+    from office.media import draw_scene
+    background = photo(tmp_path)
+    comparison = tmp_path / 'comparison.png'
+    draw_scene({'title': '제목'}, {'caption': '조건 판단 · 선택지 · 점수', 'narration': '발음',
+               'visual': 'comparison: 조건에 해당? / 어떤 선택? / 정한 척도는?'}, 1, 5, comparison, background=background)
+    meta = json.loads(comparison.with_suffix('.json').read_text(encoding='utf-8'))
+    # The larger footage headline may wrap; the approved caption text itself is unchanged.
+    assert ' '.join(meta['title_metrics']['displayed_text'].split()) == '조건 판단 · 선택지 · 점수'
+    assert len(meta['comparison_metrics']) == 3
+    numbers = tmp_path / 'numbers.png'
+    draw_scene({'title': '제목'}, {'caption': '과제 507개 · 평가 20회 · 학습 50단계', 'narration': '발음',
+               'visual': 'number: 507개 / 20회 / 50단계'}, 0, 1, numbers, background=background)
+    meta = json.loads(numbers.with_suffix('.json').read_text(encoding='utf-8'))
+    assert len(meta['number_metrics']) == 3 and all(not m['overflow'] for m in meta['number_metrics'])
+    explanation = tmp_path / 'explanation.png'
+    draw_scene({'title': '제목'}, {'caption': '한 줄 설명', 'narration': '발음', 'visual': '노트북 앞의 손'}, 0, 1, explanation, background=background)
+    meta = json.loads(explanation.with_suffix('.json').read_text(encoding='utf-8'))
+    assert meta['kind'] == 'explanation' and meta['lower_third'] is None
+
+
+def test_still_photo_scene_moves_with_ken_burns_under_a_static_text_layer(tmp_path):
+    from office.media import still_motion_command
+    args = [str(a) for a in still_motion_command(tmp_path / 'bg.png', tmp_path / 'overlay.png', tmp_path / 'voice.wav', 4.0, tmp_path / 'clip-01.mp4', 1)]
+    assert args[args.index('-loop') + 1] == '1' and str(tmp_path / 'bg.png') in args and str(tmp_path / 'overlay.png') in args
+    graph = args[args.index('-filter_complex') + 1]
+    assert 'zoompan=' in graph and 's=1080x1920' in graph and 'overlay=0:0' in graph
+    assert '/96' in graph  # the move spans the whole 4 s scene at 24 fps, not 3 s then a freeze
+    other = [str(a) for a in still_motion_command(tmp_path / 'bg.png', tmp_path / 'overlay.png', tmp_path / 'voice.wav', 4.0, tmp_path / 'clip-02.mp4', 2)]
+    assert other[other.index('-filter_complex') + 1] != graph
+    assert args[args.index('-t') + 1] == '4.0' and args[-1] == str(tmp_path / 'clip-01.mp4')
 
 
 def test_clip_command_loops_generated_clip_under_overlay_for_voice_duration(tmp_path):
@@ -628,6 +701,106 @@ def test_generated_clip_requires_background_before_any_paid_call(tmp_path):
         scene_clip(clips, tmp_path, 1, None)
     assert scene_clip(clips, tmp_path, 0, None) == (None, None)
     assert scene_clip(None, tmp_path, 1, tmp_path / 'bg.png') == (None, None)
+
+
+def test_stock_clip_renderer_runs_without_background_and_falls_back_only_on_declared_errors(tmp_path):
+    from office.media import obtain_clip, scene_clip
+    calls = []
+
+    class Unavailable(WorkflowError):
+        pass
+
+    def stock(scene_index, background, out_path):
+        calls.append((scene_index, background))
+        if scene_index == 1:
+            raise Unavailable('Pexels 검색 HTTP 429')
+        out_path.write_bytes(b'clip')
+        return {'provider': 'pexels', 'attribution': {'name': 'Kim'}}
+    stock.generated_scenes = [0, 1]
+    stock.needs_background = False
+    stock.fallback_errors = (Unavailable,)
+    path, meta = scene_clip(stock, tmp_path, 0, None)
+    assert path.name == 'generated-01.mp4' and meta['provider'] == 'pexels' and calls == [(0, None)]
+    assert obtain_clip(stock, tmp_path, 1, None) == (None, None, {'scene': 2, 'reason': 'Pexels 검색 HTTP 429'})
+
+    def broken(scene_index, background, out_path):
+        raise WorkflowError('승인된 장면 번호만')
+    broken.generated_scenes = [0]
+    broken.needs_background = False
+    broken.fallback_errors = (Unavailable,)
+    with pytest.raises(WorkflowError, match='승인'):
+        obtain_clip(broken, tmp_path, 0, None)
+
+
+def test_clip_summary_and_rights_and_description_credit_stock_creators(tmp_path):
+    from office.exports import stock_credit_line, write_rights_manifest
+    from office.media import clip_summary
+    attribution = {'source': 'Pexels', 'name': 'Kim', 'user_url': 'https://www.pexels.com/@kim', 'page_url': 'https://www.pexels.com/video/a-1/',
+                   'pexels_video_id': 1, 'license_url': 'https://www.pexels.com/license/'}
+    clips = [{'provider': 'pexels', 'model': 'stock-footage', 'disclosure': 'Pexels 무료 실사 스톡 영상', 'scene': 1, 'sha256': 'a' * 64, 'attribution': attribution},
+             {'provider': 'pexels', 'model': 'stock-footage', 'disclosure': 'Pexels 무료 실사 스톡 영상', 'scene': 3, 'sha256': 'b' * 64, 'attribution': {**attribution, 'name': 'Lee', 'pexels_video_id': 2}}]
+    summary = clip_summary(clips)
+    assert summary['scenes'] == [1, 3] and [a['name'] for a in summary['attributions']] == ['Kim', 'Lee']
+    # A reused manifest summary rebuilds the same attributions.
+    assert clip_summary([{**summary, 'scene': s} for s in summary['scenes']]) == summary
+    assert stock_credit_line(summary['attributions']) == '영상 소스: Pexels (Kim, Lee) · https://www.pexels.com'
+    packet = {'title': 't', 'body': 'b', 'evidence': []}
+    rights = json.loads(write_rights_manifest(packet, tmp_path, stock_footage=summary['attributions']).read_text(encoding='utf-8'))
+    assert rights['visual_source'].endswith('+pexels_stock_footage')
+    assert {a['pexels_video_id'] for a in rights['external_visual_assets']} == {1, 2}
+    assert all(a['license_url'] == 'https://www.pexels.com/license/' for a in rights['external_visual_assets'])
+    plain = json.loads(write_rights_manifest(packet, tmp_path).read_text(encoding='utf-8'))
+    assert plain['visual_source'] == 'first_party_programmatic_shapes_and_text' and plain['external_visual_assets'] == []
+
+
+@requires_ffmpeg
+def test_photo_backgrounds_render_ken_burns_video_with_static_footage_text(tmp_path):
+    from office.media import produce, probe
+    store, job_id = approved_job(tmp_path, blog=False)
+    manifest = produce(store, job_id, voice_renderer=tone_renderer(), background_renderer=background_renderer())
+    files = {x["name"]: store.artifacts / x["path"] for x in manifest["files"]}
+    assert {"overlay-01.png", "overlay-02.png", "background-01.png"} <= set(files)
+    video = next(s for s in probe(files["short.mp4"])["streams"] if s["codec_type"] == "video")
+    assert (video["width"], video["height"]) == (1080, 1920)
+    assert json.loads(files["clip-01.json"].read_text(encoding="utf-8"))["still_motion"] == "ken-burns-v1"
+
+
+@requires_ffmpeg
+def test_stock_footage_scenes_render_credit_pexels_and_fall_back_to_stills(tmp_path):
+    import shutil as sh
+    from office.media import command, produce, probe
+    store, job_id = approved_job(tmp_path)
+    sample = tmp_path / "sample.mp4"
+    command([sh.which("ffmpeg"), "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=720x1280:rate=24", "-t", "1", "-pix_fmt", "yuv420p", sample])
+
+    class Unavailable(WorkflowError):
+        pass
+
+    def stock(scene_index, background, out_path):
+        assert background is None
+        if scene_index == 1:
+            raise Unavailable("Pexels 검색 HTTP 429")
+        sh.copyfile(sample, out_path)
+        return {"provider": "pexels", "model": "stock-footage", "disclosure": "Pexels 무료 실사 스톡 영상",
+                "attribution": {"source": "Pexels", "name": "Kim", "page_url": "https://www.pexels.com/video/x-1/", "pexels_video_id": 1,
+                                "license_url": "https://www.pexels.com/license/"}}
+    stock.cache_key = stock.asset_cache_key = "pexels-stock:test"
+    stock.generated_scenes = [0, 1]
+    stock.needs_background = False
+    stock.fallback_errors = (Unavailable,)
+    manifest = produce(store, job_id, voice_renderer=tone_renderer(), clip_renderer=stock)
+    files = {x["name"]: store.artifacts / x["path"] for x in manifest["files"]}
+    assert manifest["output_status"]["video"]["state"] == "completed"
+    assert manifest["clips"]["provider"] == "pexels" and manifest["clips"]["scenes"] == [1]
+    assert manifest["media"]["clip_issues"] == [{"scene": 2, "reason": "Pexels 검색 HTTP 429"}]
+    assert "영상 소스: Pexels (Kim)" in files["description.txt"].read_text(encoding="utf-8")
+    rights = json.loads(files["asset-rights.json"].read_text(encoding="utf-8"))
+    assert rights["external_visual_assets"][0]["pexels_video_id"] == 1
+    scene = json.loads(files["scene-01.json"].read_text(encoding="utf-8"))
+    assert scene["drawing_source"] == "stock_footage_frame+approved_scene_fields" and scene["layout"] == "footage_overlay"
+    assert json.loads(files["scene-02.json"].read_text(encoding="utf-8"))["drawing_source"] == "approved_scene_fields"
+    video = next(s for s in probe(files["short.mp4"])["streams"] if s["codec_type"] == "video")
+    assert (video["width"], video["height"]) == (1080, 1920)
 
 
 @requires_ffmpeg

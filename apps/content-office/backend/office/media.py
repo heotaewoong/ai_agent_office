@@ -12,9 +12,9 @@ import re
 import shutil
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
-from .exports import korean_font, write_blog_exports, write_reference_pdf, write_rights_manifest, write_video_exports
+from .exports import korean_font, stock_credit_line, write_blog_exports, write_reference_pdf, write_rights_manifest, write_video_exports
 from .store import WorkflowError, digest, canonical
-RENDER_VERSION = 'office-media-5-preserved-source-photos'
+RENDER_VERSION = 'office-media-6-footage-overlay-preserved-source-photos'
 VOICE_CACHE_VERSION = 'office-media-1'
 
 def command(args, timeout=180):
@@ -163,7 +163,7 @@ def wrap_text(draw, text, font, width):
     return lines
 
 
-def text_box(draw, text, box, size=56, fill='#ffffff', *, minimum_size=20, truncate=False, font_path=None, line_gap=None):
+def text_box(draw, text, box, size=56, fill='#ffffff', *, minimum_size=20, truncate=False, font_path=None, line_gap=None, stroke_width=0, stroke_fill=None):
     x, y, width, height = box
     face = str(font_path or korean_font())
     def fitted(value):
@@ -187,8 +187,14 @@ def text_box(draw, text, box, size=56, fill='#ffffff', *, minimum_size=20, trunc
         raise WorkflowError('화면 문장이 너무 깁니다. 제목이나 장면 자막을 줄여주세요')
     font, lines, line_height, font_size = result
     for index, line in enumerate(lines):
-        draw.text((x, y + index * line_height), line, font=font, fill=fill)
-    return {'font_size': font_size, 'lines': len(lines), 'overflow': False, 'truncated': shortened, 'displayed_text': '\n'.join(lines)}
+        if stroke_width:
+            draw.text((x, y + index * line_height), line, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=stroke_fill or '#000000')
+        else:
+            draw.text((x, y + index * line_height), line, font=font, fill=fill)
+    metrics = {'font_size': font_size, 'lines': len(lines), 'overflow': False, 'truncated': shortened, 'displayed_text': '\n'.join(lines)}
+    if stroke_width:
+        metrics['stroke_width'] = stroke_width
+    return metrics
 
 
 NUMBER_VALUE = r'[+−-]?\d+(?:[,.]\d+)*(?:천만|백만|천|백|만|억|조|[KMBT])?'
@@ -290,7 +296,8 @@ def approved_display_title(plan):
 
 
 def cover_background(source, size=(1080, 1920)):
-    """Scale a generated background to cover the frame, then dim it so the local text layer stays readable."""
+    """Scale a generated photo or footage frame to cover the frame. It is not dimmed: the footage layer's
+    top/bottom gradient and outlined text keep the words readable while the picture stays real."""
     with Image.open(source) as opened:
         background = opened.convert('RGB')
     width, height = background.size
@@ -299,25 +306,124 @@ def cover_background(source, size=(1080, 1920)):
     scale = max(size[0] / width, size[1] / height)
     resized = background.resize((max(size[0], math.ceil(width * scale)), max(size[1], math.ceil(height * scale))), Image.LANCZOS)
     left, top = (resized.width - size[0]) // 2, (resized.height - size[1]) // 2
-    frame = resized.crop((left, top, left + size[0], top + size[1]))
-    # 생성 배경이 보이도록 35%만 눌러 두고, 글자 가독성은 굵은 제목과 장면 패널이 맡는다.
-    return Image.blend(frame, Image.new('RGB', size, '#0b1327'), 0.35)
+    return resized.crop((left, top, left + size[0], top + size[1]))
+
+
+ACCENTS = ['#6de8d5', '#9aa7ff', '#ffc684', '#94d9ff']
+OUTLINE = '#05070d'
+LOWER_THIRD_FILL = (8, 12, 24, 170)
+LOWER_THIRD_X = (60, 960)
+LOWER_THIRD_BOTTOM = 1600
+
+
+def footage_gradient(size=(1080, 1920)):
+    """Transparent layer with a dark fade at the top (headline) and bottom (lower third, footer) only."""
+    width, height = size
+    column = Image.new('L', (1, height))
+    column.putdata([int(round(max(205 * max(0.0, 1 - y / 820) ** 1.4,
+                                  215 * max(0.0, (y - 1180) / (height - 1180)) ** 1.3))) for y in range(height)])
+    layer = Image.new('RGBA', size, (4, 8, 18, 0))
+    layer.putalpha(column.resize(size))
+    return layer
+
+
+def lower_third(layer, content, accent):
+    """Compact translucent panel above the Shorts UI. Returns (comparison_metrics, number_metrics, box or None)."""
+    kind = content['kind']
+    comparison_metrics, number_metrics = [], []
+    if kind == 'flow':
+        items, row = content['steps'], 84
+    elif kind == 'comparison':
+        items, row = content['comparison'], 80
+    elif kind == 'number':
+        items, row = content['numbers'], 88
+    else:
+        items, row = [p for p in content['key_phrases'] if p != content['caption']][:4], 110
+    if not items:
+        return comparison_metrics, number_metrics, None
+    pad = 28
+    columns = kind in ('comparison', 'number') and len(items) <= 2
+    height = (150 if kind == 'comparison' else 210 if len(items) == 1 else 180) if columns else pad * 2 + len(items) * row
+    left, right = LOWER_THIRD_X
+    top = LOWER_THIRD_BOTTOM - height
+    panel = Image.new('RGBA', layer.size, (0, 0, 0, 0))
+    ImageDraw.Draw(panel).rounded_rectangle((left, top, right, LOWER_THIRD_BOTTOM), 28, fill=LOWER_THIRD_FILL)
+    layer.alpha_composite(panel)
+    draw = ImageDraw.Draw(layer)
+    bold = korean_font('bold')
+    if columns:
+        count = len(items)
+        gap = 100 if count == 2 else 0
+        width = (right - left - pad * 2 - gap) // count
+        for order, item in enumerate(items):
+            x = left + pad + order * (width + gap)
+            if kind == 'comparison':
+                draw.rectangle((x, top + 30, x + 64, top + 36), fill=accent if order % 2 == 0 else '#9aa7ff')
+                comparison_metrics.append(text_box(draw, item, (x, top + 50, width, height - 66), 50, minimum_size=26, truncate=True, font_path=bold))
+            else:
+                number_metrics.append(text_box(draw, item['value'], (x, top + 26, width, height - 44), 130 if count == 1 else 90, accent,
+                                               minimum_size=36, truncate=True, font_path=bold))
+        if count == 2 and kind == 'comparison':
+            draw.text((left + pad + width + gap // 2, top + 80), 'VS', font=ImageFont.truetype(str(bold), 38), fill=accent, anchor='mm')
+    else:
+        for order, item in enumerate(items):
+            y = top + pad + order * row
+            if kind == 'flow':
+                draw.ellipse((left + 30, y + 8, left + 86, y + 64), fill=accent)
+                draw.text((left + 58, y + 37), str(order + 1), font=ImageFont.truetype(str(bold), 32), fill='#0b1327', anchor='mm')
+                if order < len(items) - 1:
+                    draw.line((left + 58, y + 66, left + 58, y + row + 6), fill=accent, width=3)
+                text_box(draw, item, (left + 110, y + 6, right - left - 140, row - 18), 44, minimum_size=24, truncate=True)
+            elif kind == 'number':
+                number_metrics.append(text_box(draw, item['value'], (left + 40, y + 4, right - left - 80, row - 14), 64, accent, minimum_size=28, truncate=True, font_path=bold))
+            else:
+                draw.rectangle((left + 30, y + 10, left + 38, y + row - 22), fill=accent)
+                metrics = text_box(draw, item, (left + 60, y + 4, right - left - 90, row - 16), 46 if kind == 'explanation' else 44, minimum_size=24, truncate=True)
+                if kind == 'comparison':
+                    comparison_metrics.append(metrics)
+    return comparison_metrics, number_metrics, {'box': [left, top, right, LOWER_THIRD_BOTTOM], 'rows': len(items), 'fill_rgba': list(LOWER_THIRD_FILL)}
+
+
+def footage_layer(content, index, total):
+    """News-footage style text layer: outlined headline near the top third, compact lower third, no slide panels."""
+    layer = footage_gradient()
+    accent = ACCENTS[index % 4]
+    draw = ImageDraw.Draw(layer)
+    text_box(draw, 'HeoBrain / AI 개념 노트', (70, 150, 900, 50), 30, accent, stroke_width=3, stroke_fill=OUTLINE)
+    title_metrics = text_box(draw, content['caption'], (70, 290, 940, 370), 92, minimum_size=50, font_path=korean_font('bold'),
+                             line_gap=14, stroke_width=7, stroke_fill=OUTLINE)
+    comparison_metrics, number_metrics, box = lower_third(layer, content, accent)
+    draw = ImageDraw.Draw(layer)
+    text_box(draw, f'{index+1:02} / {total:02} · 출처와 한계는 설명란 확인', (70, 1640, 880, 44), 27, '#e8eef8', stroke_width=3, stroke_fill=OUTLINE)
+    return layer, {'title_metrics': title_metrics, 'comparison_metrics': comparison_metrics, 'number_metrics': number_metrics,
+                   'lower_third': box, 'layout': 'footage_overlay'}
 
 
 def draw_scene(plan, scene, index, total, path, *, background=None, background_meta=None, overlay_only=False):
     content = scene_content(scene, index)
-    if overlay_only:
-        # Transparent text layer composited over a generated clip; the clip supplies the picture.
-        image = Image.new('RGBA', (1080, 1920), (0, 0, 0, 0))
-    else:
-        image = cover_background(background) if background else Image.new('RGB', (1080, 1920), '#0b1327')
+    if overlay_only or background:
+        # Real picture (photo, stock clip or generated clip) underneath: footage layout instead of slide panels.
+        layer, extra = footage_layer(content, index, total)
+        if overlay_only:
+            layer.save(path, 'PNG')
+        else:
+            frame = cover_background(background).convert('RGBA')
+            frame.alpha_composite(layer)
+            frame.convert('RGB').save(path, 'PNG')
+        record = {**content, **extra, 'drawing_source': 'overlay_only+approved_scene_fields' if overlay_only else 'approved_scene_fields'}
+        if background and not overlay_only:
+            meta = background_meta or {}
+            source_kind = str(meta.get('source_kind') or 'generated_background')[:40]
+            record.update(drawing_source=source_kind + '+approved_scene_fields', background_sha256=file_hash(background),
+                          background_provider=str(meta.get('provider', 'injected'))[:80],
+                          background_disclosure=str(meta.get('disclosure', '생성 배경 이미지'))[:200])
+        write_json(path.with_suffix('.json'), record)
+        return content['kind']
+    image = Image.new('RGB', (1080, 1920), '#0b1327')
     draw = ImageDraw.Draw(image)
-    accent = ['#6de8d5', '#9aa7ff', '#ffc684', '#94d9ff'][index % 4]
-    if overlay_only:
-        draw.rounded_rectangle((60, 80, 1020, 570), 28, fill=(11, 19, 39, 200))
-    else:
-        for n in range(4):
-            draw.arc((760-n*35, -170+n*50, 1320+n*35, 390+n*50), 70, 310, fill='#1b2c48', width=3)
+    accent = ACCENTS[index % 4]
+    for n in range(4):
+        draw.arc((760-n*35, -170+n*50, 1320+n*35, 390+n*50), 70, 310, fill='#1b2c48', width=3)
     text_box(draw, 'HeoBrain / AI 개념 노트', (85, 100, 900, 70), 32, accent)
     # The current scene is the headline. The approved global title remains in
     # the plan/thumbnail, rather than competing with every scene's explanation.
@@ -364,17 +470,9 @@ def draw_scene(plan, scene, index, total, path, *, background=None, background_m
             draw.rounded_rectangle((80, y, 1000, y+height), 32, fill='#192c45')
             draw.rectangle((115, y+35, 125, y+height-35), fill=accent)
             text_box(draw, phrase, (165, y+50, 760, height-85), 58, minimum_size=28)
-    if overlay_only:
-        draw.rounded_rectangle((60, 1770, 1020, 1875), 20, fill=(11, 19, 39, 200))
     text_box(draw, f'{index+1:02} / {total:02} · 출처와 한계는 설명란 확인', (85, 1790, 910, 70), 28, '#b8c9e4')
     image.save(path, 'PNG')
     record = {**content, 'title_metrics': title_metrics, 'comparison_metrics': comparison_metrics, 'number_metrics': number_metrics, 'drawing_source': 'approved_scene_fields'}
-    if overlay_only:
-        record['drawing_source'] = 'overlay_only+approved_scene_fields'
-    if background:
-        record.update(drawing_source='generated_background+approved_scene_fields', background_sha256=file_hash(background),
-                      background_provider=str((background_meta or {}).get('provider', 'injected'))[:80],
-                      background_disclosure=str((background_meta or {}).get('disclosure', '생성 배경 이미지'))[:200])
     write_json(path.with_suffix('.json'), record)
     return kind
 
@@ -513,16 +611,53 @@ def scene_background(background_renderer, folder, index):
 
 
 def scene_clip(clip_renderer, folder, index, background):
-    """Fetch a generated clip for an opted-in scene. Needs the generated background as the input frame."""
+    """Fetch a clip for an opted-in scene. Generated (Runway) clips need the generated background as the input
+    frame; a renderer that declares needs_background = False (free stock footage) works from the scene alone."""
     if clip_renderer is None or index not in list(getattr(clip_renderer, 'generated_scenes', [])):
         return None, None
-    if not background:
+    if getattr(clip_renderer, 'needs_background', True) and not background:
         raise WorkflowError('생성 영상 장면에는 배경 이미지 프로필이 켜져 있어야 합니다. 유료 영상은 호출하지 않았습니다')
     path = folder / f'generated-{index + 1:02}.mp4'
     meta = clip_renderer(index, background, path) or {}
     if not path.is_file():
         raise WorkflowError('생성 영상 렌더러가 파일을 만들지 않았습니다')
     return path, meta
+
+
+def obtain_clip(clip_renderer, folder, index, background):
+    """scene_clip, except a renderer's declared fallback errors (free stock footage unavailable) keep the still scene."""
+    try:
+        path, meta = scene_clip(clip_renderer, folder, index, background)
+    except tuple(getattr(clip_renderer, 'fallback_errors', ()) or ()) as error:
+        return None, None, {'scene': index + 1, 'reason': str(error)[:200]}
+    return path, meta, None
+
+
+def poster_frame(generated, folder, index):
+    """One real frame of a stock clip for the scene PNG / cover. Optional: failure keeps the plain card."""
+    poster = folder / f'footage-frame-{index + 1:02}.png'
+    try:
+        command([executable('ffmpeg'), '-y', '-v', 'error', '-ss', '0.5', '-i', generated, '-frames:v', '1', poster], 120)
+    except WorkflowError:
+        return None
+    return poster if poster.is_file() else None
+
+
+def still_motion_command(background, overlay, audio, duration, out, index):
+    """Ken Burns for a still photo: slow 7% zoom (in on even scenes, out with a sideways drift on odd ones) over the
+    whole voice duration, under the static text layer. Upscaled 2x first so zoompan's integer crop does not jitter."""
+    frames = max(1, round(float(duration) * 24))
+    if index % 2:
+        zoom, x = f'1.07-0.07*on/{frames}', f'(iw-iw/zoom)*(0.3+0.4*on/{frames})'
+    else:
+        zoom, x = f'1+0.07*on/{frames}', '(iw-iw/zoom)/2'
+    graph = ('[0:v]scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,'
+             f"zoompan=z='{zoom}':x='{x}':y='(ih-ih/zoom)/2':d=1:s=1080x1920:fps=24,setsar=1[bg];"
+             '[bg][1:v]overlay=0:0:format=auto[v]')
+    return [shutil.which('ffmpeg') or 'ffmpeg', '-y', '-v', 'error', '-loop', '1', '-framerate', '24', '-i', background, '-i', overlay, '-i', audio,
+            '-filter_complex', graph, '-map', '[v]', '-map', '2:a', '-t', str(duration),
+            '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', out]
 
 
 def clip_command(generated, overlay, audio, duration, out):
@@ -581,28 +716,47 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
     templates = []
     backgrounds = []
     clips = []
+    clip_issues = []
     for index, (scene, audio, duration) in enumerate(zip(scenes, audios, durations)):
         if check_current:
             check_current()
         image = folder / f'scene-{index + 1:02}.png'
         background, background_meta = scene_background(background_renderer, folder, index)
-        templates.append(draw_scene(plan, scene, index, len(scenes), image, background=background, background_meta=background_meta))
+        generated, generated_meta, issue = obtain_clip(clip_renderer, folder, index, background)
+        if issue:
+            clip_issues.append(issue)
+        still, still_meta = background, background_meta
+        if generated and not background:
+            # Stock footage needs no generated background; a real frame of it makes the scene card and cover.
+            poster = poster_frame(generated, folder, index)
+            if poster:
+                still, still_meta = poster, {'provider': (generated_meta or {}).get('provider', 'injected'), 'source_kind': 'stock_footage_frame',
+                                             'disclosure': (generated_meta or {}).get('disclosure', '실사 영상 프레임')}
+                paths.append(poster)
+        templates.append(draw_scene(plan, scene, index, len(scenes), image, background=still, background_meta=still_meta))
         paths.extend([image, image.with_suffix('.json')] + ([background] if background else []))
         if background_meta:
             backgrounds.append(background_meta)
-        generated, generated_meta = scene_clip(clip_renderer, folder, index, background)
         clip = folder / f'clip-{index + 1:02}.mp4'
         clip_meta = clip.with_suffix('.json')
         cached_clip = json.loads(clip_meta.read_text(encoding="utf-8")) if clip_meta.is_file() else {}
-        if generated:
+        if generated or still:
             overlay = folder / f'overlay-{index + 1:02}.png'
             draw_scene(plan, scene, index, len(scenes), overlay, overlay_only=True)
-            paths.extend([overlay, overlay.with_suffix('.json'), generated])
+            paths.extend([overlay, overlay.with_suffix('.json')])
+        if generated:
+            paths.append(generated)
             clips.append({**generated_meta, 'scene': index + 1, 'sha256': file_hash(generated)})
             clip_key = digest({'generated': file_hash(generated), 'overlay': file_hash(overlay), 'audio': file_hash(audio), 'version': RENDER_VERSION})
             if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
                 command(clip_command(generated, overlay, audio, duration, clip), 300)
                 write_json(clip_meta, {'key': clip_key, 'sha256': file_hash(clip), 'generated_clip': True})
+        elif still:
+            clip_key = digest({'still': file_hash(still), 'overlay': file_hash(overlay), 'audio': file_hash(audio), 'motion': 'ken-burns-v1',
+                               'index': index, 'duration': duration, 'version': RENDER_VERSION})
+            if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
+                command(still_motion_command(still, overlay, audio, duration, clip, index), 300)
+                write_json(clip_meta, {'key': clip_key, 'sha256': file_hash(clip), 'still_motion': 'ken-burns-v1'})
         else:
             clip_key = digest({'image': file_hash(image), 'audio': file_hash(audio), 'version': RENDER_VERSION})
             if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
@@ -636,6 +790,8 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
         media['background'] = background_summary(backgrounds)
     if clips:
         media['clips'] = clip_summary(clips)
+    if clip_issues:
+        media['clip_issues'] = clip_issues
     write_json(folder / 'media.json', media)
     paths.append(folder / 'media.json')
     return {'files': paths, 'media': media, 'thumbnails': thumbs, 'backgrounds': backgrounds, 'clips': clips}
@@ -643,9 +799,16 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
 
 def clip_summary(clips):
     first = clips[0]
-    return {'provider': str(first.get('provider', 'injected'))[:80], 'model': str(first.get('model', ''))[:80],
-            'disclosure': str(first.get('disclosure', '생성 영상 장면'))[:200], 'scenes': [int(c['scene']) for c in clips],
-            'count': len(clips)}
+    summary = {'provider': str(first.get('provider', 'injected'))[:80], 'model': str(first.get('model', ''))[:80],
+               'disclosure': str(first.get('disclosure', '생성 영상 장면'))[:200], 'scenes': [int(c['scene']) for c in clips],
+               'count': len(clips)}
+    # Stock footage credits its creators; a reused manifest summary already carries the list.
+    attributions = [dict(c['attribution']) for c in clips if isinstance(c.get('attribution'), dict)]
+    if not attributions and isinstance(first.get('attributions'), list):
+        attributions = [dict(a) for a in first['attributions'] if isinstance(a, dict)]
+    if attributions:
+        summary['attributions'] = attributions
+    return summary
 
 
 def background_summary(backgrounds):
@@ -776,6 +939,13 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                     raise WorkflowError('한국어 폰트를 확인한 뒤 영상 제작을 다시 요청하세요. 유료 음성은 호출하지 않았습니다')
                 exports = write_video_exports(packet, folder, job.get('offer'))
                 rendered = render_short(packet['video'], folder, voice_renderer=voice_renderer, check_current=check_current, source_text=packet['body'], voice_cache_dir=voice_cache_dir, background_renderer=background_renderer, clip_renderer=clip_renderer)
+                credits = (rendered['media'].get('clips') or {}).get('attributions')
+                if credits:
+                    description = folder / 'description.txt'
+                    text = description.read_text(encoding='utf-8')
+                    line = stock_credit_line(credits)
+                    if line not in text:
+                        description.write_text(text.rstrip('\n') + '\n\n' + line + '\n', encoding='utf-8')
                 media, thumbs = rendered['media'], rendered['thumbnails']
                 backgrounds = backgrounds or rendered['backgrounds']
                 clips = clips or rendered['clips']
@@ -797,7 +967,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
             if not completed:
                 reasons = '; '.join(status.get('error', '') for status in output_status.values())
                 raise WorkflowError(reasons or '완료된 제작물이 없습니다')
-            shared = write_rights_manifest(packet, folder)
+            stock = clip_summary(clips).get('attributions') if clips and 'video' in completed else None
+            shared = write_rights_manifest(packet, folder, stock_footage=stock)
             from .exports import write_campaign_exports
             campaign_files = write_campaign_exports(job.get('offer'), folder)
             files = [shared, *campaign_files] + [path for paths in output_files.values() for path in paths]
@@ -809,7 +980,12 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 manifest['warnings'].append('배경은 생성 이미지이며 한국어 글자는 로컬 레이어입니다. 출고 전 화면 검토가 필요합니다')
             if clips and 'video' in completed:
                 manifest['clips'] = clip_summary(clips)
-                manifest['warnings'].append('일부 장면은 생성 영상입니다. 손·글자·로고·피사체 변형을 실제로 재생해 확인하세요')
+                if manifest['clips']['provider'] == 'pexels':
+                    manifest['warnings'].append('일부 장면은 Pexels 실사 스톡 영상입니다. 장면 내용과 맞는지, 인물·상표·워터마크가 보이지 않는지 재생해 확인하세요. 출처는 설명란과 asset-rights.json에 기록했습니다')
+                else:
+                    manifest['warnings'].append('일부 장면은 생성 영상입니다. 손·글자·로고·피사체 변형을 실제로 재생해 확인하세요')
+            if (media or {}).get('clip_issues') and 'video' in completed:
+                manifest['warnings'].append(f"{len(media['clip_issues'])}개 장면은 실사 영상을 받지 못해 정지 화면으로 만들었습니다. 유료 대체 호출은 하지 않았습니다")
             if thumbs:
                 local_reviews = json.loads((folder / 'thumbnail-review.json').read_text(encoding="utf-8"))['candidates']
                 by_name = {review['name']: review for review in local_reviews}

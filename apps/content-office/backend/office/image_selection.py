@@ -29,6 +29,16 @@ def profile_summary(store):
     return summary
 
 
+def availability(store=None):
+    """Whether each background option would actually run on this server right now (same checks as `configured`)."""
+    from .codex_image_provider import codex_status
+    openai = bool(os.environ.get('OPENAI_API_KEY'))
+    codex = codex_status()['configured']
+    return {'none': {'available': True, 'reason': ''},
+            'openai-gpt-image': {'available': openai, 'reason': '' if openai else 'OPENAI_API_KEY가 서버에 없습니다'},
+            'codex-subscription': {'available': codex, 'reason': '' if codex else '이 서버의 앱 계정에 codex CLI 설치와 ChatGPT 로그인(codex login)이 없습니다'}}
+
+
 def select_profile(store, identity, *, actor):
     if identity not in PROFILES or not isinstance(actor, str) or not actor.strip():
         raise WorkflowError('등록된 프로필과 선택한 운영자 정보가 필요합니다')

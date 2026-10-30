@@ -39,9 +39,11 @@ CARD_STYLE = ("인스타그램 카드뉴스의 배경 이미지. 카드 주제�
               "현대적인 3D 일러스트 또는 깔끔한 사진 스타일, 밝고 선명한 색, 한 화면에 한 가지 주제. 실존 인물 얼굴은 그리지 않는다. "
               "글자·문자·숫자·로고·화면 속 UI 글씨·워터마크를 절대 넣지 않는다 (no text, no letters, no numbers). "
               "아래쪽 40%는 글자를 얹을 수 있도록 어둡고 단순한 바닥·배경으로 둔다.")
-STYLE = ("세로 숏폼 영상의 배경 일러스트. 어두운 남색 계열의 차분한 추상 배경, 부드러운 빛과 단순한 도형. "
-         "사진처럼 과장하거나 인물 얼굴을 그리지 않음. 글자·문자·숫자·로고·워터마크를 절대 넣지 않음 (no text). "
-         "화면 중앙과 하단은 자막을 얹을 수 있도록 단순하게 비워 둠.")
+# 2026-10-30: the owner rejected the illustration look ("PPT 그림 같어") and asked for real footage.
+STYLE = ("세로 9:16 숏폼 영상의 배경. 실사 사진. 다큐멘터리/보도 사진 같은 자연광, 실제 사무실·사람의 손·노트북·서류 등 구체적 사물, "
+         "얕은 심도, 35mm 렌즈 느낌. 일러스트·3D·아이콘·도형·그래픽 금지. 글자·숫자·로고·화면 속 글씨 금지 (no text, no letters, no numbers, no logos). "
+         "실존 인물 얼굴 클로즈업 금지. 화면 위쪽 1/3과 아래쪽 1/4은 비교적 단순하게 두어 자막을 얹을 수 있게 한다.")
+PROMPT_VERSION = "photoreal-documentary-v1"
 
 
 class KnownUsageOverrun(WorkflowError):
@@ -53,9 +55,12 @@ class KnownUsageOverrun(WorkflowError):
 def scene_prompt(scene):
     caption = str(scene.get("caption", "")).strip()
     visual = str(scene.get("visual", "")).strip()
+    footage = str(scene.get("footage", "")).strip()
     parts = [STYLE, "주제: " + caption]
     if visual:
-        parts.append("시각 요소: " + visual)
+        parts.append("장면 참고(도표나 글자로 그리지 말고 실제 사물·행동이 보이는 사진으로): " + visual)
+    if footage:
+        parts.append("촬영 대상: " + footage[:120])
     return "\n".join(parts)[:4000]
 
 
@@ -104,6 +109,7 @@ class ImageProvider:
     def asset_cache_key(self):
         request = {key: self.config[key] for key in ("provider", "model", "size", "quality", "output_format", "moderation", "n")}
         request["prompt_style"] = STYLE
+        request["prompt_version"] = PROMPT_VERSION
         return "openai-image-asset:" + digest(request)
 
     def _authorized(self, scene_index=None):
@@ -206,7 +212,9 @@ class ImageProvider:
         prompt = scene_prompt(scenes[scene_index])
         payload = {"model": self.config["model"], "prompt": prompt, "n": self.config["n"], "size": self.config["size"],
                    "quality": self.config["quality"], "output_format": self.config["output_format"], "moderation": self.config["moderation"]}
-        key = "image:" + digest({"payload": payload, "source_hash": self.source_hash, "job_id": self.job_id})
+        # Scene inputs only (no source_hash): re-approving unrelated edits must not pay again for the same picture,
+        # and an unchanged first frame keeps the Runway clip cache valid too.
+        key = "image:" + digest({"payload": payload, "job_id": self.job_id, "prompt_version": PROMPT_VERSION})
         return self._generate(key, payload, prompt, out_path, {"scene_index": scene_index}, lambda: self._authorized(scene_index),
                               "image", None, self.config["size"], "OpenAI 생성 배경 이미지")
 

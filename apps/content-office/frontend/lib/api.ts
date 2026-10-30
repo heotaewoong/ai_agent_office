@@ -1,4 +1,5 @@
 import type { ArchitectureOverview } from "./architecture";
+import type { ClipEstimate } from "./types";
 import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
 import type { DailyCollectPatch, DailyCollectStatus } from "./daily-collect";
 import type { PublicLeadFormInfo } from "./public-lead";
@@ -186,8 +187,10 @@ export const api = {
       selections,
       ...(autoProduce ? {auto_produce:true} : {}),
     }),
-  produce: (id: string) =>
-    request(`/jobs/${encodeURIComponent(id)}/produce`, "POST", {}),
+  produce: (id: string, confirmPaidClips = false) =>
+    request(`/jobs/${encodeURIComponent(id)}/produce`, "POST", confirmPaidClips ? { confirm_paid_clips: true } : {}),
+  productionEstimate: (id: string) =>
+    request<{ clips: ClipEstimate }>(`/jobs/${encodeURIComponent(id)}/production-estimate`),
   reviewRelease: (
     id: string,
     version: string,

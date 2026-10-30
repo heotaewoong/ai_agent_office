@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import type { Dashboard } from "../lib/types";
-import { PROFILE_COST_GUIDANCE, PROFILE_OPTIONS, keyChips, settingsWarnings, validWindowMinutes, type ProfileKind } from "../lib/settings";
+import { PROFILE_CHANGE_NOTE, PROFILE_COST_GUIDANCE, PROFILE_OPTIONS, dailyClipUsage, keyChips, settingsWarnings, validWindowMinutes, visibleProfileOptions, type ProfileKind } from "../lib/settings";
 import { Icon } from "./icons";
 import { ChannelsPanel } from "./channels-panel";
 import { DailyCollectPanel } from "./daily-collect-panel";
@@ -15,7 +15,7 @@ const GROUPS: { kind: ProfileKind; title: string; description: string }[] = [
   { kind: "text", title: "글 모델", description: "원고 생성·비평·평가·국어 검수·퀴즈·카드뉴스 문구를 쓰는 모델. 실패해도 다른 제공자로 자동 전환하지 않습니다" },
   { kind: "voice", title: "음성", description: "영상 내레이션을 만드는 방식" },
   { kind: "image", title: "배경 이미지", description: "영상·카드 장면의 배경. 한국어 글자는 항상 로컬에서 얹습니다" },
-  { kind: "clip", title: "생성 영상", description: "원고에서 clip: generated로 지정한 장면만 짧은 생성 영상으로" },
+  { kind: "clip", title: "생성 영상 · 실사 영상", description: "Pexels 무료 실사 영상(장면별) 또는 유료 Runway 클립(기본 첫 장면 1개). 이 서버에서 실행할 수 있는 항목만 보입니다" },
 ];
 
 function money(value: number | undefined) {
@@ -50,7 +50,7 @@ export function SettingsPanel({
   async function choose(kind: ProfileKind, id: string) {
     const option = PROFILE_OPTIONS[kind].find((o) => o.id === id);
     if (!option || option.disabled) return;
-    await action("제작 설정 변경", () => api.setProfile(kind, id), `${option?.label ?? id}(으)로 바꿨습니다. 새 제작 요청부터 적용됩니다.`);
+    await action("제작 설정 변경", () => api.setProfile(kind, id), `${option?.label ?? id}(으)로 바꿨습니다. ${PROFILE_CHANGE_NOTE}`);
   }
 
   async function openWindow() {
@@ -110,7 +110,8 @@ export function SettingsPanel({
                 {group.title}
                 <small>{group.description}</small>
               </legend>
-              {PROFILE_OPTIONS[group.kind].map((option) => (
+              {group.kind === "clip" && dailyClipUsage(provider) && <p className="settings-help">{dailyClipUsage(provider)}</p>}
+              {visibleProfileOptions(provider, group.kind).map((option) => (
                 <label key={option.id} className={`profile-option ${current[group.kind] === option.id ? "selected" : ""}`}>
                   <input
                     type="radio"

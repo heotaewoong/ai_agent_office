@@ -324,3 +324,10 @@ def test_missing_original_blocks_before_state_research_or_provider_work(tmp_path
     with pytest.raises(WorkflowError, match="직접 제공"):
         prepare_source(store, job["id"])
     assert store.job(job["id"]) == before and store.events(job["id"]) == events
+
+
+def test_scene_schema_offers_english_footage_keywords_for_stock_search():
+    from office.editorial import SCENE_SCHEMA
+    assert SCENE_SCHEMA["properties"]["footage"] == {"type": "string"}
+    # Optional: older approved scripts without it still validate and fall back to a keyword map.
+    assert "footage" not in SCENE_SCHEMA["required"]

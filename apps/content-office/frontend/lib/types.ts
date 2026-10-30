@@ -267,7 +267,16 @@ export type ProviderProfile = {
   automatic_fallback?: boolean;
   key_source?: string | null;
   note?: string;
+  runway_configured?: boolean;
+  pexels_configured?: boolean;
+  license_url?: string;
+  credits_per_clip?: number;
+  reservation_krw_per_clip?: number;
+  paid_clips_today?: number;
+  clip_limits?: { max_clips_per_video?: number; daily_paid_clips?: number; hard_max_clips_per_video?: number; hard_max_daily_paid_clips?: number };
 };
+export type ProfileAvailability = Partial<Record<"text" | "voice" | "image" | "clip", Record<string, { available: boolean; reason: string }>>>;
+export type ClipEstimate = { paid: boolean; clips: number; credits: number; reservation_krw: number; usd?: number; model?: string; label: string; daily_cap?: number; used_today?: number; note?: string };
 export type ProviderStatus = {
   model?: string;
   configured?: boolean;
@@ -276,9 +285,10 @@ export type ProviderStatus = {
   image?: ProviderProfile;
   clip?: ProviderProfile;
   text?: ProviderProfile;
+  availability?: ProfileAvailability;
   youtube?: { configured?: boolean; visibility?: string; automatic_retry?: boolean; channels?: string[] };
 };
-export type ProfileSummaries = { voice: VoiceProfile; image: ProviderProfile; clip: ProviderProfile; text?: ProviderProfile };
+export type ProfileSummaries = { voice: VoiceProfile; image: ProviderProfile; clip: ProviderProfile; text?: ProviderProfile; availability?: ProfileAvailability };
 export type Delivery = {
   id: string;
   channel: string;

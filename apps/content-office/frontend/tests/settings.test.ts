@@ -11,12 +11,17 @@ import {
   deliveryStateLabel,
   canReconcile,
   studioUrl,
+  visibleProfileOptions,
+  unavailableSelectionWarnings,
+  paidProduceNotice,
+  dailyClipUsage,
+  PROFILE_CHANGE_NOTE,
 } from "../lib/settings.ts";
 
 test("프로필 선택지는 서버 등록값과 같다", () => {
   assert.deepEqual(PROFILE_OPTIONS.voice.filter((o) => !o.disabled).map((o) => o.id), ["windows-heami", "gemini-kore", "openai-tts"]);
   assert.deepEqual(PROFILE_OPTIONS.image.map((o) => o.id), ["none", "openai-gpt-image", "codex-subscription"]);
-  assert.deepEqual(PROFILE_OPTIONS.clip.filter((o) => !o.disabled).map((o) => o.id), ["none", "runway-gen4-turbo", "runway-gen4.5"]);
+  assert.deepEqual(PROFILE_OPTIONS.clip.filter((o) => !o.disabled).map((o) => o.id), ["none", "pexels-stock", "runway-grok-lite", "runway-gen4-turbo", "runway-gen4.5"]);
   assert.ok(PROFILE_OPTIONS.image.find((o) => o.id === "openai-gpt-image")!.paid);
   assert.equal(PROFILE_OPTIONS.image.find((o) => o.id === "codex-subscription")!.paid, false);
 });
@@ -59,7 +64,7 @@ test("OpenAI 음성은 OPENAI_API_KEY 연결을 경고하고 단가를 안내한
 
 test("키 연결 표시는 값이 아니라 연결 여부만", () => {
   const chips = keyChips({ configured: true, image: { configured: false }, clip: { configured: true }, youtube: { configured: false } });
-  assert.deepEqual(chips.map((c) => [c.label, c.ok]), [["Gemini", true], ["OpenAI", false], ["Runway", true], ["YouTube", false]]);
+  assert.deepEqual(chips.map((c) => [c.label, c.ok]), [["Gemini", true], ["OpenAI", false], ["Runway", true], ["Pexels", false], ["YouTube", false]]);
 });
 
 test("작업 시간은 1~360분 정수만", () => {
@@ -165,4 +170,47 @@ test("subscription text keeps API-key readiness separate and unsupported media d
  for(const kind of ["voice","clip"] as const) assert.ok(PROFILE_OPTIONS[kind].some(o=>o.disabled && o.label.includes("Codex")));
  assert.deepEqual(settingsWarnings({configured:false,text:{id:"codex-subscription-text",configured:true}}),[]);
  assert.ok(settingsWarnings({configured:true,text:{id:"codex-subscription-text",configured:false}}).some(x=>x.includes("ChatGPT 로그인")));
+});
+
+test("Pexels 실사 영상은 무료이고 키·출처 표기를 안내하며, 키가 없으면 경고한다", () => {
+  const pexels = PROFILE_OPTIONS.clip.find((o) => o.id === "pexels-stock")!;
+  assert.equal(pexels.paid, false);
+  for (const word of ["무료", "실제 촬영 영상", "PEXELS_API_KEY", "출처 표기"]) assert.ok(pexels.hint.includes(word), word);
+  const grok = PROFILE_OPTIONS.clip.find((o) => o.id === "runway-grok-lite")!;
+  assert.ok(grok.paid && grok.label.includes("추천") && PROFILE_OPTIONS.clip.filter((o) => o.paid)[0].id === "runway-grok-lite");
+  const base = { configured: true, voice: { id: "gemini-kore" }, image: { id: "none" } };
+  const missing = settingsWarnings({ ...base, clip: { id: "pexels-stock", configured: false, pexels_configured: false } });
+  assert.ok(missing.some((w) => w.includes("PEXELS_API_KEY")));
+  assert.ok(!missing.some((w) => w.includes("RUNWAYML_API_SECRET") || w.includes("배경 이미지 프로필")));
+  assert.deepEqual(settingsWarnings({ ...base, clip: { id: "pexels-stock", configured: true, pexels_configured: true } }), []);
+  const chips = keyChips({ configured: true, clip: { id: "pexels-stock", configured: true, pexels_configured: true, runway_configured: false } });
+  assert.deepEqual(chips.filter((c) => ["Runway", "Pexels"].includes(c.label)).map((c) => [c.label, c.ok]), [["Runway", false], ["Pexels", true]]);
+});
+
+test("서버에서 실행할 수 없는 선택지는 숨기고 'none'은 항상 보인다", () => {
+  const availability = {
+    image: { none: { available: true, reason: "" }, "openai-gpt-image": { available: true, reason: "" }, "codex-subscription": { available: false, reason: "codex 로그인이 없습니다" } },
+    clip: { none: { available: false, reason: "x" }, "pexels-stock": { available: false, reason: "PEXELS_API_KEY가 서버에 없습니다" }, "runway-grok-lite": { available: true, reason: "" }, "runway-gen4-turbo": { available: true, reason: "" }, "runway-gen4.5": { available: true, reason: "" } },
+  };
+  assert.deepEqual(visibleProfileOptions({ availability }, "image").map((o) => o.id), ["none", "openai-gpt-image"]);
+  assert.deepEqual(visibleProfileOptions({ availability }, "clip").map((o) => o.id), ["none", "runway-grok-lite", "runway-gen4-turbo", "runway-gen4.5"]);
+  // An older server without availability data keeps every option visible.
+  assert.deepEqual(visibleProfileOptions({}, "voice").map((o) => o.id), PROFILE_OPTIONS.voice.filter((o) => !o.disabled).map((o) => o.id));
+  const saved = { availability, image: { id: "codex-subscription", configured: false }, clip: { id: "none" } };
+  const lines = unavailableSelectionWarnings(saved);
+  assert.equal(lines.length, 1);
+  assert.ok(lines[0].includes("Codex 구독 배경") && lines[0].includes("codex 로그인이 없습니다") && lines[0].includes("실행 가능한 항목"));
+  assert.ok(settingsWarnings(saved).includes(lines[0]));
+  assert.deepEqual(unavailableSelectionWarnings({ availability, image: { id: "openai-gpt-image" }, clip: { id: "none" } }), []);
+  assert.ok(PROFILE_CHANGE_NOTE.includes("다음 제작부터") && PROFILE_CHANGE_NOTE.includes("현재 설정으로 다시 제작"));
+});
+
+test("유료 클립 제작은 예상 항목을 먼저 보여 주고 하루 사용량을 표시한다", () => {
+  assert.equal(paidProduceNotice(null), null);
+  assert.equal(paidProduceNotice({ paid: false, clips: 0, credits: 0, reservation_krw: 0, label: "" }), null);
+  const label = "유료: 영상 클립 1개 · 약 16크레딧($0.16, 예약 320원)";
+  assert.equal(paidProduceNotice({ paid: true, clips: 1, credits: 16, reservation_krw: 320, label }), label);
+  assert.equal(dailyClipUsage({ clip: { id: "none", paid: false } }), null);
+  assert.equal(dailyClipUsage({ clip: { id: "runway-grok-lite", paid: true, paid_clips_today: 2, clip_limits: { daily_paid_clips: 3, max_clips_per_video: 1 } } }),
+    "오늘 유료 클립 2/3개 사용 · 영상당 최대 1개");
 });

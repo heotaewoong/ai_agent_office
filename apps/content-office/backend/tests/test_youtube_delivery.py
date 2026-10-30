@@ -819,3 +819,18 @@ def test_missing_response_channel_is_unknown_until_read_reconciliation_confirms_
     assert result['state'] == 'private' and result['reason'] is None
     assert result['processing_status'] == 'succeeded' and len(session.puts) == 1
     assert session.gets[-1]['params']['part'] == 'snippet,status,processingDetails'
+
+
+def test_stock_footage_description_credits_pexels_instead_of_calling_it_generated(tmp_path):
+    from office.youtube_delivery import video_metadata
+    job = {'title': '실사 영상', 'source_packet': {'video': {'title': '실사 영상', 'description': '설명'}}}
+    attributions = [{'name': 'Kim'}, {'name': 'Lee'}]
+    stock = video_metadata(job, {'media': {}, 'clips': {'provider': 'pexels', 'attributions': attributions}}, {})
+    text = stock['snippet']['description']
+    assert '영상 소스: Pexels (Kim, Lee)' in text and '생성 이미지·영상' not in text
+    generated = video_metadata(job, {'media': {}, 'clips': {'provider': 'runway'}}, {})
+    assert '생성 이미지·영상' in generated['snippet']['description'] and 'Pexels' not in generated['snippet']['description']
+    described = tmp_path / 'description.txt'
+    described.write_text('설명\n\n영상 소스: Pexels (Kim) · https://www.pexels.com\n', encoding='utf-8')
+    once = video_metadata(job, {'media': {}, 'clips': {'provider': 'pexels', 'attributions': attributions}}, {'description.txt': described})
+    assert once['snippet']['description'].count('Pexels') == 1

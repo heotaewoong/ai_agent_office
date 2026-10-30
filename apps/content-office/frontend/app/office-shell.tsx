@@ -41,6 +41,7 @@ import {
 import { Icon } from "./icons";
 import { WorldView } from "./world-view";
 import { SettingsPanel } from "./settings-panel";
+import { ProduceButton } from "./produce-button";
 import { ArchitectureView } from "./architecture-view";
 import { YoutubePanel, ChannelHandoffPanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
@@ -1544,14 +1545,15 @@ function Studio({
             </div>
             <div className="approval-actions">
               {["source_approved", "release_review", "partial_release_review"].includes(job.state) ? (
-                <button
+                <ProduceButton
+                  jobId={job.id}
                   className={job.state === "source_approved" ? "button primary" : "button secondary"}
                   disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
-                  onClick={() =>
+                  onProduce={(confirmPaidClips) =>
                     void action(
                       "콘텐츠 제작",
                       async () => {
-                        await api.produce(job.id);
+                        await api.produce(job.id, confirmPaidClips);
                         onDelivery();
                       },
                       "콘텐츠 제작을 요청했습니다. 제작·출고함에서 진행 상황을 확인하세요.",
@@ -1560,7 +1562,7 @@ function Studio({
                 >
                   {job.state === "source_approved" ? "선택 항목 제작 시작" : "현재 설정으로 다시 제작"}
                   <Icon name="arrow" size={17} />
-                </button>
+                </ProduceButton>
               ) : (
                 <>
                   <button
@@ -2050,20 +2052,21 @@ function Delivery({
             ? "승인한 원고로 선택 항목을 제작하세요."
             : "원고 승인과 제작이 끝나면 블로그·영상·썸네일 파일이 표시됩니다."}
           {job.state === "source_approved" && (
-            <button
+            <ProduceButton
+              jobId={job.id}
               className="button primary"
               disabled={busy || Boolean(requestBlockedReason)}
-              onClick={() =>
+              onProduce={(confirmPaidClips) =>
                 void action(
                   "콘텐츠 제작",
-                  () => api.produce(job.id),
+                  () => api.produce(job.id, confirmPaidClips),
                   "선택한 콘텐츠 제작을 요청했습니다.",
                 )
               }
             >
               제작 시작
               <Icon name="arrow" size={17} />
-            </button>
+            </ProduceButton>
           )}
         </Empty>
       ) : (

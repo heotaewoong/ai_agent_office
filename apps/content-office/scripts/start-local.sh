@@ -2,6 +2,11 @@
 set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 app_dir="$(cd -- "$script_dir/.." && pwd)"
+# Node(next)·Codex CLI가 설치된 사용자 Node 폴더를 항상 실행 경로에 넣는다. 이 경로 없이 띄우면
+# Codex 구독 배경처럼 CLI가 필요한 기능이 '연결 안 됨'으로 보인다(2026-10-30 실제 사고).
+if [[ -d "$HOME/.local/node/bin" && ":$PATH:" != *":$HOME/.local/node/bin:"* ]]; then
+  export PATH="$HOME/.local/node/bin:$PATH"
+fi
 if [[ -n "${OFFICE_ENV_FILE:-}" ]]; then
   set -a
   source "$OFFICE_ENV_FILE"

@@ -365,7 +365,20 @@ def write_video_exports(packet: dict, folder: Path, offer: dict | None = None) -
             write_text(folder, "description.txt", description)]
 
 
-def write_rights_manifest(packet: dict, folder: Path) -> Path:
+PEXELS_LICENSE_URL = "https://www.pexels.com/license/"
+
+
+def stock_credit_line(attributions) -> str:
+    """Pexels asks apps to show Pexels as the source and credit creators when possible."""
+    names = []
+    for item in attributions or []:
+        name = str((item or {}).get("name") or "").strip()[:80]
+        if name and name not in names:
+            names.append(name)
+    return "영상 소스: Pexels" + (f" ({', '.join(names)})" if names else "") + " · https://www.pexels.com"
+
+
+def write_rights_manifest(packet: dict, folder: Path, stock_footage=None) -> Path:
     manifest = {"status": "not_commercially_cleared", "visual_source": "first_party_programmatic_shapes_and_text", "external_visual_assets": [], "font": "System Korean font used for rendering; font files are not distributed", "evidence": [{"id": e.get("id"), "url": e.get("url"), "claim": e.get("claim")} for e in packet.get("evidence", [])], "limitations": ["자료 출처 링크는 이미지·원문 재배포 허가가 아닙니다", "판매용 PDF 및 외부 상품 권리는 별도 검토가 필요합니다", "실제 서비스 화면·타사 로고·실제 시험 문항을 복제하지 않았습니다"]}
     urls = _source_photo_urls(packet["body"]) if packet.get("preserve_original") is True else []
     if urls:
@@ -406,6 +419,17 @@ def write_rights_manifest(packet: dict, folder: Path) -> Path:
         manifest.update(visual_source="first_party_programmatic_shapes_and_owner_supplied_references", external_visual_assets=verified,
                         external_visual_references=references, source_photo_verification="complete" if complete else "unverified_or_incomplete")
         manifest["limitations"].append("원문 참조 사진의 로컬 바이트 보존을 확인했습니다. 소유권·초상권·상업 이용 허가는 별도 확인이 필요합니다" if complete else "원문 참조 사진의 보존 결과가 미확인이거나 일부만 확인됐습니다. 사진을 포함한 블로그의 완성을 뜻하지 않습니다. 소유권·상업 이용 허가도 미확인입니다")
+    stock = [item for item in (stock_footage or []) if isinstance(item, dict)]
+    if stock:
+        manifest["visual_source"] += "+pexels_stock_footage"
+        manifest["external_visual_assets"] = list(manifest["external_visual_assets"]) + [{
+            "provider": "pexels", "pexels_video_id": item.get("pexels_video_id"), "page_url": str(item.get("page_url") or "")[:300],
+            "creator": str(item.get("name") or "")[:120], "creator_url": str(item.get("user_url") or "")[:300],
+            "license_url": PEXELS_LICENSE_URL, "rights": "pexels_license",
+            "commercial_status": "pexels_license_free_use_attribution_appreciated"} for item in stock]
+        manifest["stock_credit"] = stock_credit_line(stock)
+        manifest["limitations"].append("Pexels 라이선스: 무료·상업 이용·편집 가능, 출처 표기 권장. 편집 없이 그대로 재판매·스톡 사이트 재배포 금지, "
+                                        "영상 속 인물·상표가 제품을 보증하는 것처럼 쓰지 않습니다. 인물·상표·사유 재산 노출은 출고 전 사람이 확인합니다")
     return write_text(folder, "asset-rights.json", json.dumps(manifest, ensure_ascii=False, indent=2))
 
 

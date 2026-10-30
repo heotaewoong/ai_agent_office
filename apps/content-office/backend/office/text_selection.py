@@ -40,6 +40,16 @@ def profile_summary(store):
             'note': '원고 생성·비평·평가·수정·국어 검수·퀴즈·카드뉴스 호출에 쓰는 모델입니다. 새 요청부터 적용되며 실패해도 다른 제공자로 넘어가지 않습니다'}
 
 
+def availability(store=None):
+    """Each text model runs only when its provider key is present on this server."""
+    result = {}
+    for identity in PROFILES:
+        env = KEY_ENV[provider_for(identity)]
+        ok = bool(os.environ.get(env))
+        result[identity] = {'available': ok, 'reason': '' if ok else f'{env}가 서버에 없습니다'}
+    return result
+
+
 def select_profile(store, identity, *, actor):
     if identity not in PROFILES or not isinstance(actor, str) or not actor.strip():
         raise WorkflowError('등록된 프로필과 선택한 운영자 정보가 필요합니다')

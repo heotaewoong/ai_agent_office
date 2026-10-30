@@ -136,6 +136,16 @@ class ProfileChoice(BaseModel):
     profile: str
 
 
+class ProduceRequest(BaseModel):
+    # Paid generated clips start only after the operator saw the estimate and confirmed it on the page.
+    confirm_paid_clips: bool = False
+
+
+class ClipLimitsRequest(BaseModel):
+    max_clips_per_video: int
+    daily_paid_clips: int
+
+
 class WindowRequest(BaseModel):
     minutes: int
 
@@ -380,7 +390,7 @@ def create_app(store: Store | None = None):
         jobs = store.jobs()
         if compact:
             jobs = [_job_summary(job, compact=True) for job in jobs]
-        return {"articles": visible_articles([classify_article(article) for article in articles]), "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
+        return {"articles": visible_articles([classify_article(article) for article in articles]), "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'availability': profile_availability(), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
 
     @app.get("/api/space")
     def space():
@@ -491,17 +501,31 @@ def create_app(store: Store | None = None):
             contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None)['hash']
         return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract)
 
+    @app.get("/api/jobs/{job_id}/production-estimate")
+    def production_estimate(job_id: str):
+        # Read-only: what the next production may pay for generated clips. Never calls a provider.
+        from .video_selection import paid_clip_estimate
+        return {"clips": paid_clip_estimate(store, store.job(job_id))}
+
     @app.post("/api/jobs/{job_id}/produce", status_code=202)
-    def produce(job_id: str):
+    def produce(job_id: str, body: ProduceRequest | None = None):
         require_open_window()
         job = store.require_source_approval(job_id)
+        from .video_selection import paid_clip_estimate
+        estimate = paid_clip_estimate(store, job)
+        if estimate["paid"] and not (body and body.confirm_paid_clips):
+            raise WorkflowError(estimate["label"] + ". 유료 영상 클립이 포함되어 화면에서 확인한 뒤에만 제작을 시작합니다")
         from .media import production_contract
         from .voice_selection import renderer_for_job
         from .image_selection import background_renderer_for_job
         from .video_selection import clip_renderer_for_job
         from .channels import registry
         contract = production_contract(renderer_for_job(store, job), job['selections'], image_renderer=background_renderer_for_job(store, job), clip_renderer=clip_renderer_for_job(store, job), channel_registry=registry(store) if job['selections'].get('blog') else None)
-        task = store.enqueue("produce", {"job_id": job_id, "source_hash": job["source_hash"], "production_contract": contract['hash']}, key=f"produce:{job_id}:{job['source_hash']}:{contract['hash']}")
+        payload = {"job_id": job_id, "source_hash": job["source_hash"], "production_contract": contract['hash']}
+        if estimate["paid"]:
+            payload.update(paid_clips_confirmed=True, paid_clip_estimate={k: estimate[k] for k in ("clips", "credits", "reservation_krw", "model")})
+            store.event("paid_clips_confirmed", {**payload["paid_clip_estimate"], "actor": "local-operator-ui"}, job_id)
+        task = store.enqueue("produce", payload, key=f"produce:{job_id}:{job['source_hash']}:{contract['hash']}")
         if task["state"] == "queued":
             store.update_job(job_id, state="production_queued")
         return task
@@ -640,19 +664,39 @@ def create_app(store: Store | None = None):
 
     from .api_quiz_cards import register as register_quiz_cards; register_quiz_cards(app, store)  # 퀴즈·카드뉴스 라우트와 /api/artifacts/{id}(manifest 파일 + 퀴즈 JSON + 카드 PNG) 서빙
 
+    def profile_availability():
+        from . import image_selection, text_selection, video_selection, voice_selection
+        return {"text": text_selection.availability(store), "voice": voice_selection.availability(store),
+                "image": image_selection.availability(store), "clip": video_selection.availability(store)}
+
     def profile_summaries():
         from .voice_selection import profile_summary as voice_summary
         from .image_selection import profile_summary as image_summary
         from .video_selection import profile_summary as clip_summary
         from .text_selection import profile_summary as text_summary
-        return {"voice": voice_summary(store), "image": image_summary(store), "clip": clip_summary(store), "text": text_summary(store)}
+        return {"voice": voice_summary(store), "image": image_summary(store), "clip": clip_summary(store), "text": text_summary(store),
+                "availability": profile_availability()}
+
+    @app.get("/api/settings/profiles")
+    def read_profiles():
+        return profile_summaries()
 
     @app.post("/api/settings/profiles")
     def choose_profile(choice: ProfileChoice):
         # Choosing a profile is free and never calls a provider; costs happen only after approval①.
+        # Only an option that would actually run on this server right now can be saved.
         from . import image_selection, text_selection, video_selection, voice_selection
         module = {"voice": voice_selection, "image": image_selection, "clip": video_selection, "text": text_selection}[choice.kind]
+        state = module.availability(store).get(choice.profile)
+        if state is not None and not state["available"]:
+            raise WorkflowError(f"지금 이 서버에서는 고를 수 없습니다: {state['reason']}")
         module.select_profile(store, choice.profile, actor="local-operator-ui")
+        return profile_summaries()
+
+    @app.post("/api/settings/clip-limits")
+    def choose_clip_limits(request: ClipLimitsRequest):
+        from .video_selection import set_clip_limits
+        set_clip_limits(store, max_clips_per_video=request.max_clips_per_video, daily_paid_clips=request.daily_paid_clips, actor="local-operator-ui")
         return profile_summaries()
 
     @app.post("/api/session/window")

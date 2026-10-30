@@ -86,7 +86,7 @@ flowchart TD
 | 무료 자료 | `summary-checklist.pdf` |
 | 공통 | `asset-rights.json`, 출력별 상태·파일 해시·부모 원고를 가진 manifest |
 | 출고 승인 후 | 선택 제작물과 `handoff.json`을 포함한 ZIP |
-| 생성 배경·영상 선택 시 | 장면별 `background-NN.png`, 생성 장면의 `generated-NN.mp4`와 글자 레이어 `overlay-NN.png`, manifest의 `background`·`clips` 고지 |
+| 생성 배경·영상 선택 시 | 장면별 `background-NN.png`, 사진·영상 장면의 글자 레이어 `overlay-NN.png`, 생성/실사 장면의 `generated-NN.mp4`, 실사 영상 첫 프레임 `footage-frame-NN.png`, manifest의 `background`·`clips`(Pexels면 `attributions`)·`media.clip_issues` 고지 |
 | YouTube 비공개 업로드 후 | 상태 폴더 설정의 업로드 장부(`deliveries`): 상태·외부 ID·자산 해시·대사 시각 |
 
 출고 ZIP은 ②에서 승인하고 선택한 manifest 파일만 담습니다. 별도로 생성한 최신 퀴즈 JSON·카드뉴스 초안을 자동 첨부하지 않습니다. 카드뉴스의 **전체 ZIP 내려받기**는 현재 화면의 버전·원고 해시와 일치하는 6~8장 PNG 및 검토 명세를 묶는 별도 검토 ZIP입니다. 검사 경고는 명세에 남기고 출고 승인②를 대신하지 않습니다. 누락·중복 이미지·변조·이전 원고·버전 변경은 다운로드를 막습니다. 새 카드 PNG는 기존 글자 배치를 보존한 1080×1440(3:4)이며 미리보기는 이미지를 자르지 않습니다. 초안을 다시 만들거나 초안 파일이 손상돼도 이미 승인된 ZIP의 구성원별 내용 해시는 달라지지 않습니다.
@@ -258,6 +258,7 @@ npm run build
 | `GEMINI_API_KEY` | 기존 Gemini 연결. 환경으로만 전달하며 UI·ZIP·저장소에 넣지 않습니다 |
 | `OPENAI_API_KEY` | 배경 이미지 프로필 `openai-gpt-image`를 고른 경우에만 필요합니다. 실행하는 운영자가 자신의 키를 환경 파일에 넣으며, 영수증·UI·ZIP·저장소에 기록하지 않습니다 |
 | `RUNWAYML_API_SECRET` | 생성 영상 프로필 `runway-*`를 고른 경우에만 필요합니다. 같은 규칙으로 환경으로만 전달합니다 |
+| `PEXELS_API_KEY` | 무료 실사 영상 프로필 `pexels-stock`용 무료 키. 환경으로만 전달하며 영수증·이벤트·ZIP에 기록하지 않습니다 |
 | `CODEX_HOME` · `CONTENT_OFFICE_CODEX_BIN` | 배경 이미지 프로필 `codex-subscription`용. 기본은 실행 계정의 `~/.codex`와 PATH의 `codex`입니다. 키가 아니라 ChatGPT 로그인을 쓰므로 환경 파일에 비밀값을 넣지 않습니다 |
 | `YOUTUBE_CLIENT_ID` · `YOUTUBE_CLIENT_SECRET` · `YOUTUBE_<채널키>_REFRESH_TOKEN` | YouTube 비공개 업로드를 요청할 때만 필요한 채널 소유자의 OAuth 자격입니다. refresh token은 채널 키마다 따로 둡니다(`YOUTUBE_MAIN_KO_REFRESH_TOKEN`, `YOUTUBE_ENGLISH_REFRESH_TOKEN`). 예전 `YOUTUBE_REFRESH_TOKEN`은 `youtube_main_ko`로만 읽습니다. refresh token은 환경변수 대신 화면의 'YouTube 연결'로 받을 수도 있습니다(환경변수가 우선). 장부·이벤트·ZIP에 기록하지 않습니다 |
 | `OFFICE_SECRETS_FILE` | 'YouTube 연결'로 받은 refresh token 파일. 기본 `~/.config/heobrain-content-office/youtube-tokens.json`. 상태 폴더(`OFFICE_STATE_DIR`)와 코드 저장소 안은 거부합니다. 0600으로 만들며 백업·복사 시 비밀값으로 다룹니다 |
@@ -304,10 +305,29 @@ codex login status
 
 생성 영상 프로필은 세 번째 선택입니다. 기본값 `none`은 모든 장면을 정지 화면에 줌 효과로 만듭니다. `runway-gen4-turbo`(5초 25크레딧, 500원 예약) 또는 `runway-gen4.5`(5초 60크레딧, 1,200원 예약)를 고르면, 승인 원고의 장면 중 `"clip": "generated"`로 지정한 장면만 Runway image-to-video로 5초 720×1280 클립을 받습니다. 선택 사항인 `"motion"` 필드로 카메라 움직임을 지시할 수 있습니다. 입력 프레임은 그 장면의 생성 배경이므로 배경 이미지 프로필이 함께 켜져 있어야 하며, 없으면 유료 호출 전에 거부합니다. 글자는 투명한 로컬 레이어로 클립 위에 얹고 FFmpeg가 음성 길이만큼 반복·자릅니다. 한 업무에 최대 3개 장면, 업무당 3,000원 하위한도입니다. 작업이 제한 시간 안에 끝나지 않으면 결과 불명으로 남기고 영수증의 `task_id`로 나중에 대사합니다. 제공자 산출물 URL은 24~48시간 뒤 만료되므로 받은 파일을 상태 폴더에 보관합니다. 환경변수는 `RUNWAYML_API_SECRET`입니다.
 
+2026-10-30부터 Runway는 **훅 1개만** 기본입니다. 한 영상에서 `"clip": "generated"`로 지정한 첫 장면(지정이 없으면 첫 장면) 1개만 유료 클립으로 만들고 나머지는 사진 배경(천천히 움직이는 줌) 또는 Pexels 실사 영상을 씁니다. 운영자는 영상당 1~3개, 하루(한국 시간, 모든 업무 합계) 0~10개 한도를 정할 수 있습니다(기본 1개·3개). 가장 저렴한 `runway-grok-lite`(Grok Imagine 1.5 Lite, `ratio: auto_720p`, 5초 = 3크레딧×5 + 시작 프레임 1크레딧 = 16크레딧 $0.16, 예약 320원)를 추천합니다. 첫 유료 클립 전에 `GET /v1/organization`의 `creditBalance`를 확인해 잔액이 부족하거나 확인하지 못하면 호출하지 않습니다. 클립 캐시 키는 모델·첫 프레임 해시·프롬프트·비율·길이만 쓰므로, 장면이 같으면 원고를 다시 승인해도 다시 결제하지 않습니다. 화면의 제작 버튼은 유료 클립이 있으면 "유료: 영상 클립 1개 · 약 16크레딧" 같은 예상 항목을 먼저 보여 주고 한 번 더 눌러야 시작하며, 서버도 확인 없는 유료 제작 요청(`confirm_paid_clips` 없음)과 확인 표시가 없는 작업자 작업을 거부합니다. 기본 프로필은 `none`이고 어떤 자동 경로도 바꾸지 않습니다.
+
 ```bash
 .venv/bin/python -m office.video_selection status
-.venv/bin/python -m office.video_selection set --profile runway-gen4-turbo
+.venv/bin/python -m office.video_selection set --profile runway-grok-lite
+.venv/bin/python -m office.video_selection limits --per-video 1 --daily 3
 ```
+
+#### Pexels 무료 실사 영상 (`pexels-stock`)
+
+"PPT 그림 같다"는 피드백에 따라 실제 촬영 영상을 장면 배경으로 쓰는 무료 프로필입니다. 배경 이미지가 필요 없고 비용 예약도 없습니다.
+
+1. https://www.pexels.com/api/ 에서 무료 계정으로 API 키를 받습니다(신청 사유에 내부 콘텐츠 제작 도구라고 적음).
+2. 서버 환경 파일에 `PEXELS_API_KEY=...`를 넣고 앱을 다시 시작합니다. 키가 없으면 제작 설정 목록에 이 항목이 나오지 않습니다.
+3. 제작 설정 → 생성 영상에서 "Pexels 무료 실사 영상"을 고릅니다.
+
+동작: 장면마다 `GET https://api.pexels.com/videos/search?query=…&orientation=portrait&size=medium&per_page=15`(헤더 `Authorization: <키>`)로 검색해, 세로·가로 720px 이상 MP4 중 1080×1920을 우선 골라 60MB 한도·타임아웃으로 받고 MP4 머리말과 ffprobe로 영상인지 확인합니다. 검색어는 원고 장면의 `footage`(영어 2~4단어, 새 원고부터 모델이 작성) → 없으면 한국어 시각 지시의 흔한 사물 단어를 영어로 바꾼 작은 사전 → ASCII 자막 → `office desk laptop` 순입니다. 유료 모델로 검색어를 만들지 않습니다. 받은 파일은 검색어 해시로 상태 폴더 `stock-assets/`에 영수증(검색어·Pexels 영상 ID·페이지 URL·작가·라이선스 URL·SHA-256)과 함께 캐시하고, 업무당 새 다운로드는 최대 8개입니다. 검색·다운로드가 실패하면 그 장면만 정지 화면으로 만들고 `media.clip_issues`와 이벤트에 남깁니다(유료 대체 없음). FFmpeg가 음성 길이에 맞춰 자르거나 반복합니다.
+
+라이선스(https://www.pexels.com/license/): 무료·상업 이용·편집 가능, 출처 표기는 필수는 아니지만 권장됩니다. 편집 없이 그대로 재판매하거나 다른 스톡 사이트에 재배포할 수 없고, 영상 속 인물·상표가 제품을 보증하는 것처럼 쓰면 안 됩니다. API 지침은 Pexels를 출처로 보여 주고 가능하면 작가를 표기하라고 하므로 `description.txt`와 YouTube 설명에 `영상 소스: Pexels (작가명) · https://www.pexels.com`을 넣고 `asset-rights.json`의 `external_visual_assets`에 영상별 기록을 남깁니다. 기본 한도는 시간당 200회·월 20,000회 요청입니다. 출고 전 영상 속 인물·상표·워터마크를 사람이 확인합니다.
+
+#### 사진·영상 위 화면 구성
+
+배경 사진(OpenAI/Codex)이나 영상이 있는 장면은 슬라이드 패널 대신 보도 영상형 레이어를 씁니다. 사진은 남색으로 덮지 않고 화면 전체에 보이며, 위·아래만 어둡게 그라데이션합니다. 장면 자막은 위쪽 1/3에 검은 외곽선이 있는 큰 흰 글씨로, 흐름·비교·숫자는 하단의 반투명 패널(rgba 8,12,24,170)로만 보입니다. 사진 장면은 글자를 고정한 채 사진만 7% 천천히 확대·축소(켄 번스)합니다. 배경 이미지 프롬프트는 2026-10-30부터 다큐멘터리 실사 사진 스타일이며(`PROMPT_VERSION=photoreal-documentary-v1`), 예전 일러스트 배경 캐시는 재사용하지 않습니다. 배경이 없는 장면은 기존 글자 카드 그대로입니다.
 
 유료 모델을 사용할 수 없거나 단가 검증 기간이 지나면 보류합니다. 자동 유료 대체 호출은 없습니다. 외부 모델로 원본111문서·Windows 소스·자격 파일을 통째 전송하지 않습니다. 배경 이미지 프롬프트에는 승인된 장면의 자막과 시각 지시만 들어갑니다.
 
@@ -315,7 +335,9 @@ codex login status
 
 왼쪽 메뉴 "제작 설정"에서 음성·배경 이미지·생성 영상 프로필을 고르고, 서버 키의 연결 여부(값은 표시하지 않음)와 경고를 확인하고, 작업 시간을 열 수 있습니다. 같은 화면 아래 "채널" 표에서 채널 레지스트리(아래 절)를 봅니다. 작업 시간을 열면 Linux(EC2)에서는 작업자와 감시 프로세스도 함께 시작해 PID 장부에 기록하므로 `stop-local.sh`로 같이 멈춥니다. Windows는 기존처럼 `start-windows.ps1 -Worker -Watcher`를 씁니다. 사이드바의 남은 시간 표시를 누르면 이 화면으로 이동합니다. "제작·출고함"에서 영상을 고르면 아래에 YouTube 비공개 업로드 버튼과 업로드 기록·대사 버튼이 나옵니다.
 
-API: `POST /api/settings/profiles` (`{"kind": "voice|image|clip", "profile": "..."}`), `POST /api/session/window` (`{"minutes": 1~360}`), `GET /api/channels`, `PUT /api/channels/{key}`.
+제작 설정 목록에는 **지금 이 서버에서 실행할 수 있는 항목만** 보입니다(OpenAI 항목은 `OPENAI_API_KEY`, Gemini는 `GEMINI_API_KEY`, Windows Heami는 Windows에서만, Codex 구독은 앱 계정의 codex CLI와 로그인, Runway는 `RUNWAYML_API_SECRET`과 0보다 큰 크레딧 잔액(5분 캐시), Pexels는 `PEXELS_API_KEY`). 조건이 갖춰지면 자동으로 다시 보입니다. 서버도 실행할 수 없는 항목의 선택을 409로 거부합니다. 이미 저장된 선택이 실행할 수 없게 되면 경고 한 줄로 이름과 해결 방법을 보여 줍니다. 바꾼 설정은 다음 제작부터 적용되며, 이미 만든 영상은 작업실의 '현재 설정으로 다시 제작'으로 다시 만들 수 있습니다.
+
+API: `GET`·`POST /api/settings/profiles` (`{"kind": "text|voice|image|clip", "profile": "..."}`, 응답의 `availability`), `POST /api/settings/clip-limits` (`{"max_clips_per_video": 1~3, "daily_paid_clips": 0~10}`), `GET /api/jobs/{id}/production-estimate`, `POST /api/jobs/{id}/produce` (`{"confirm_paid_clips": true}`는 유료 클립이 있을 때만), `POST /api/session/window` (`{"minutes": 1~360}`), `GET /api/channels`, `PUT /api/channels/{key}`.
 
 ### YouTube 비공개 업로드
 

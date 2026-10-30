@@ -48,3 +48,14 @@ def test_unknown_profile_is_rejected_and_blog_only_never_constructs_paid_voice(t
     select_profile(store, 'gemini-kore', actor='test-operator')
     store.review_source(job['id'], job['source_hash'], 'approved', 'fixture-operator', {'blog': True, 'video': False})
     assert renderer_for_job(store, store.job(job['id'])) is None
+
+
+
+def test_voice_availability_follows_platform_and_keys(monkeypatch):
+    from office import voice_selection
+    monkeypatch.delenv('GEMINI_API_KEY', raising=False)
+    monkeypatch.setenv('OPENAI_API_KEY', 'k')
+    monkeypatch.setattr(voice_selection.os, 'name', 'posix')
+    result = voice_selection.availability()
+    assert result['windows-heami']['available'] is False and 'Windows' in result['windows-heami']['reason']
+    assert result['gemini-kore']['available'] is False and result['openai-tts'] == {'available': True, 'reason': ''}

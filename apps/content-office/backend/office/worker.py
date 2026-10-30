@@ -34,6 +34,9 @@ def process_task(store, task):
         renderer = renderer_for_job(store, current)
         background = background_renderer_for_job(store, current)
         clips = clip_renderer_for_job(store, current)
+        if getattr(clips, 'paid', False) and payload.get('paid_clips_confirmed') is not True:
+            # Paid clips need the operator's on-page confirmation; no automatic path may start them.
+            raise WorkflowError('유료 영상 클립은 운영자가 화면에서 확인한 제작에서만 만듭니다. 제작을 다시 요청하세요')
         if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips, channel_registry=registry(store) if current['selections'].get('blog') else None)['hash']:
             raise WorkflowError('대기 중 제작 설정이 변경되었습니다. 현재 설정으로 제작을 다시 요청하세요')
         store.update_job(job_id, state="producing", error=None)

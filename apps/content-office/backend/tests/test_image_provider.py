@@ -224,3 +224,40 @@ def test_source_change_after_renderer_creation_invalidates(tmp_path, monkeypatch
     with pytest.raises(WorkflowError, match='승인|변경'):
         renderer(0, store.root / 'bg.png')
     assert transport.calls == []
+
+
+def test_scene_background_prompt_asks_for_documentary_photography_not_illustration(tmp_path):
+    from office.image_provider import PROMPT_VERSION, SIZE, STYLE, ImageProvider, scene_prompt
+    assert SIZE == '1024x1536'
+    prompt = scene_prompt({**SCENES[1], 'footage': 'team reviewing documents'})
+    assert prompt.startswith(STYLE)
+    for required in ('실사 사진', '자연광', '얕은 심도', '35mm', '일러스트·3D·아이콘·도형·그래픽 금지', '글자·숫자·로고', '실존 인물 얼굴 클로즈업 금지'):
+        assert required in prompt, required
+    assert '추상 배경' not in prompt and '단순한 도형' not in prompt
+    # A diagram instruction becomes subject matter for a photo, never drawn text; the English footage words help.
+    assert '도표나 글자로 그리지' in prompt and 'team reviewing documents' in prompt
+    store, job_id = approved_fixture(tmp_path)
+    provider = ImageProvider(store, job_id=job_id, allow_paid=True)
+    assert PROMPT_VERSION.startswith('photoreal')
+    old_request = {key: provider.config[key] for key in ('provider', 'model', 'size', 'quality', 'output_format', 'moderation', 'n')}
+    from office.store import digest
+    old_style = ("세로 숏폼 영상의 배경 일러스트. 어두운 남색 계열의 차분한 추상 배경, 부드러운 빛과 단순한 도형. "
+                 "사진처럼 과장하거나 인물 얼굴을 그리지 않음. 글자·문자·숫자·로고·워터마크를 절대 넣지 않음 (no text). "
+                 "화면 중앙과 하단은 자막을 얹을 수 있도록 단순하게 비워 둠.")
+    assert provider.asset_cache_key != 'openai-image-asset:' + digest({**old_request, 'prompt_style': old_style})
+
+
+def test_reapproved_source_with_unchanged_scene_reuses_background_without_paying_again(tmp_path, monkeypatch):
+    from office.image_provider import make_openai_background_renderer
+    monkeypatch.setenv('OPENAI_API_KEY', 'test-placeholder')
+    store, job_id = approved_fixture(tmp_path)
+    transport = recording_transport(ImageResponse(output_tokens=1600))
+    first = make_openai_background_renderer(store, job_id=job_id, allow_paid=True, transport=transport)(1, store.root / 'a.png')
+    spent = store.budget()['spent_krw']
+    packet = store.job(job_id)['source_packet']
+    packet['body'] = packet['body'] + ' 본문만 고쳤습니다.'
+    job = store.save_source(job_id, packet)
+    store.review_source(job_id, job['source_hash'], 'approved', 'op', {'video': True, 'cards': True})
+    again = make_openai_background_renderer(store, job_id=job_id, allow_paid=True, transport=transport)(1, store.root / 'b.png')
+    assert again == first and len(transport.calls) == 1 and store.budget()['spent_krw'] == spent
+    assert (store.root / 'a.png').read_bytes() == (store.root / 'b.png').read_bytes()

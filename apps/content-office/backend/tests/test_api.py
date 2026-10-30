@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 from office.api import create_app
-from office.store import Store, digest
+from office.store import Store, WorkflowError, digest
 
 
 @pytest.fixture
@@ -671,8 +671,13 @@ def test_public_origin_is_opt_in_https_only_and_marks_cookie_secure(tmp_path, mo
     assert client.post("/api/jobs", json={"article_ids": ["one"]}, headers={"Origin": public}).status_code == 403
 
 
-def test_profile_settings_route_selects_without_cost_and_rejects_unknown(context):
+def test_profile_settings_route_selects_without_cost_and_rejects_unknown(context, monkeypatch):
     store, client, headers = context
+    # Only options that would actually run can be saved, so this server has the keys these options need.
+    from office import video_provider
+    for name in ("OPENAI_API_KEY", "RUNWAYML_API_SECRET", "GEMINI_API_KEY"):
+        monkeypatch.setenv(name, "test-key")
+    monkeypatch.setattr(video_provider, "runway_credit_balance", lambda store, **kwargs: 100)
     before = store.budget()
     response = client.post("/api/settings/profiles", json={"kind": "image", "profile": "openai-gpt-image"}, headers=headers)
     assert response.status_code == 200 and response.json()["image"]["id"] == "openai-gpt-image"
@@ -697,3 +702,62 @@ def test_work_window_route_opens_window_and_reports_services(context, monkeypatc
     assert body["work_window"]["authorization_source"] == "local_operator_ui" and body["services"]["note"] == "fixture"
     assert store.setting("work_window")["authorization_source"] == "local_operator_ui"
     assert client.post("/api/session/window", json={"minutes": 30}, headers=headers).status_code == 409
+
+
+def test_unavailable_profile_is_listed_with_reason_and_refused_without_saving(context, monkeypatch):
+    from office import codex_image_provider
+    store, client, headers = context
+    for name in ("OPENAI_API_KEY", "PEXELS_API_KEY", "RUNWAYML_API_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(codex_image_provider, "codex_status", lambda: {"configured": False, "daily_cap_images": 20})
+    listed = client.get("/api/settings/profiles").json()["availability"]
+    assert listed["image"]["codex-subscription"]["available"] is False and "codex" in listed["image"]["codex-subscription"]["reason"]
+    assert listed["image"]["none"] == {"available": True, "reason": ""} and listed["clip"]["none"]["available"] is True
+    assert listed["clip"]["pexels-stock"]["available"] is False and "PEXELS_API_KEY" in listed["clip"]["pexels-stock"]["reason"]
+    assert set(listed) == {"text", "voice", "image", "clip"}
+    refused = client.post("/api/settings/profiles", json={"kind": "image", "profile": "codex-subscription"}, headers=headers)
+    assert refused.status_code == 409 and "codex" in refused.json()["detail"]
+    assert store.setting("image_profile") is None
+    assert client.post("/api/settings/profiles", json={"kind": "clip", "profile": "pexels-stock"}, headers=headers).status_code == 409
+    assert client.post("/api/settings/profiles", json={"kind": "image", "profile": "none"}, headers=headers).status_code == 200
+    assert "availability" in client.get("/api/dashboard").json()["provider"]
+
+
+def video_job(store):
+    job = store.create_job(store.article("one"))
+    scenes = [{"narration": "첫 장면입니다.", "caption": "첫 장면", "visual": "노트북"}, {"narration": "둘째 장면.", "caption": "둘째", "visual": "책상"}]
+    source = store.save_source(job["id"], {"title": "영상 원고", "body": "완성 원고", "quality": {"status": "passed", "critical": False},
+                                           "video": {"title": "영상", "description": "", "scenes": scenes}})
+    store.review_source(job["id"], source["source_hash"], "approved", "operator", {"blog": False, "video": True})
+    return store.job(job["id"])
+
+
+def test_paid_clip_production_needs_on_page_confirmation_and_workers_refuse_unconfirmed(context, monkeypatch):
+    from office import image_selection, video_selection
+    from office.worker import process_task
+    store, client, headers = context
+    monkeypatch.setenv("RUNWAYML_API_SECRET", "test-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    client.post("/api/session/window", json={"minutes": 30}, headers=headers)
+    image_selection.select_profile(store, "openai-gpt-image", actor="op")
+    video_selection.select_profile(store, "runway-grok-lite", actor="op")
+    job = video_job(store)
+    estimate = client.get(f"/api/jobs/{job['id']}/production-estimate").json()["clips"]
+    assert estimate["paid"] is True and estimate["clips"] == 1 and estimate["credits"] == 16
+    refused = client.post(f"/api/jobs/{job['id']}/produce", json={}, headers=headers)
+    assert refused.status_code == 409 and "유료: 영상 클립 1개" in refused.json()["detail"]
+    assert not [t for t in store.tasks() if t["kind"] == "produce"]
+    confirmed = client.post(f"/api/jobs/{job['id']}/produce", json={"confirm_paid_clips": True}, headers=headers)
+    assert confirmed.status_code == 202 and confirmed.json()["payload"]["paid_clips_confirmed"] is True
+    with pytest.raises(WorkflowError, match="확인한 제작에서만"):
+        process_task(store, {"id": "task_x", "kind": "produce", "payload": {"job_id": job["id"], "source_hash": job["source_hash"]}})
+    assert store.budget()["reserved_krw"] == 0
+    video_selection.select_profile(store, "none", actor="op")
+    assert client.get(f"/api/jobs/{job['id']}/production-estimate").json()["clips"]["paid"] is False
+
+
+def test_clip_limits_route_validates_operator_input(context):
+    store, client, headers = context
+    ok = client.post("/api/settings/clip-limits", json={"max_clips_per_video": 2, "daily_paid_clips": 4}, headers=headers)
+    assert ok.status_code == 200 and ok.json()["clip"]["clip_limits"]["daily_paid_clips"] == 4
+    assert client.post("/api/settings/clip-limits", json={"max_clips_per_video": 5, "daily_paid_clips": 4}, headers=headers).status_code == 409

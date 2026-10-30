@@ -18,7 +18,7 @@ import struct
 import subprocess
 import tempfile
 
-from .image_provider import MAX_IMAGE_BYTES, STYLE, ImageProvider
+from .image_provider import MAX_IMAGE_BYTES, PROMPT_VERSION, STYLE, ImageProvider
 from .speech_provider import _hash, _json, _lock
 from .store import WorkflowError, digest, now
 
@@ -129,7 +129,7 @@ class CodexImageProvider(ImageProvider):
 
     @property
     def asset_cache_key(self):
-        return "codex-image-asset:" + digest({"provider": PROFILE_ID, "model": MODEL, "size": self.config["size"], "prompt_style": STYLE})
+        return "codex-image-asset:" + digest({"provider": PROFILE_ID, "model": MODEL, "size": self.config["size"], "prompt_style": STYLE, "prompt_version": PROMPT_VERSION})
 
     def _generate(self, key, payload, prompt, out_path, receipt_extra, reauthorize, request_kind, cap, size, disclosure):
         self.assets.mkdir(parents=True, exist_ok=True)

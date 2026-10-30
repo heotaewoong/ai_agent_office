@@ -149,8 +149,13 @@ def video_metadata(job, manifest, paths):
     disclosure = str((manifest.get("media") or {}).get("voice_disclosure", "합성 음성"))
     if "합성 음성" not in description:
         description += f"\n\n이 영상의 내레이션은 {disclosure}입니다."
-    if manifest.get("background") or manifest.get("clips"):
+    clips = manifest.get("clips") or {}
+    stock = clips.get("provider") == "pexels"
+    if manifest.get("background") or (clips and not stock):
         description += "\n일부 화면은 생성 이미지·영상입니다."
+    if stock and "Pexels" not in description:
+        from .exports import stock_credit_line
+        description += "\n" + stock_credit_line(clips.get("attributions"))
     description = description.strip()[:MAX_DESCRIPTION]
     tags, used = [], 0
     for tag in plan.get("tags", []) if isinstance(plan.get("tags"), list) else []:
