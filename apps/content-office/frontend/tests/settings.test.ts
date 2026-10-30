@@ -187,13 +187,13 @@ test("Pexels 실사 영상은 무료이고 키·출처 표기를 안내하며, �
   assert.deepEqual(chips.filter((c) => ["Runway", "Pexels"].includes(c.label)).map((c) => [c.label, c.ok]), [["Runway", false], ["Pexels", true]]);
 });
 
-test("서버에서 실행할 수 없는 선택지는 숨기고 'none'은 항상 보인다", () => {
+test("실행 불가 선택지도 표시하고 'none'은 항상 사용할 수 있다", () => {
   const availability = {
     image: { none: { available: true, reason: "" }, "openai-gpt-image": { available: true, reason: "" }, "codex-subscription": { available: false, reason: "codex 로그인이 없습니다" } },
     clip: { none: { available: false, reason: "x" }, "pexels-stock": { available: false, reason: "PEXELS_API_KEY가 서버에 없습니다" }, "runway-grok-lite": { available: true, reason: "" }, "runway-gen4-turbo": { available: true, reason: "" }, "runway-gen4.5": { available: true, reason: "" } },
   };
-  assert.deepEqual(visibleProfileOptions({ availability }, "image").map((o) => o.id), ["none", "openai-gpt-image"]);
-  assert.deepEqual(visibleProfileOptions({ availability }, "clip").map((o) => o.id), ["none", "runway-grok-lite", "runway-gen4-turbo", "runway-gen4.5"]);
+  assert.deepEqual(visibleProfileOptions({ availability }, "image").map((o) => o.id), ["none", "openai-gpt-image", "codex-subscription"]);
+  assert.deepEqual(visibleProfileOptions({ availability }, "clip").map((o) => o.id), ["none", "pexels-stock", "runway-grok-lite", "runway-gen4-turbo", "runway-gen4.5"]);
   // An older server without availability data keeps every option visible.
   assert.deepEqual(visibleProfileOptions({}, "voice").map((o) => o.id), PROFILE_OPTIONS.voice.filter((o) => !o.disabled).map((o) => o.id));
   const saved = { availability, image: { id: "codex-subscription", configured: false }, clip: { id: "none" } };
@@ -213,4 +213,14 @@ test("유료 클립 제작은 예상 항목을 먼저 보여 주고 하루 사�
   assert.equal(dailyClipUsage({ clip: { id: "none", paid: false } }), null);
   assert.equal(dailyClipUsage({ clip: { id: "runway-grok-lite", paid: true, paid_clips_today: 2, clip_limits: { daily_paid_clips: 3, max_clips_per_video: 1 } } }),
     "오늘 유료 클립 2/3개 사용 · 영상당 최대 1개");
+});
+
+
+test("키 연결이 사라져도 OpenAI·Runway 선택지를 숨기지 않고 실행 불가 이유를 표시한다", () => {
+ const provider={availability:{text:{"gpt-5.4-mini":{available:false,reason:"OPENAI_API_KEY가 없습니다"}},clip:{"runway-grok-lite":{available:false,reason:"RUNWAYML_API_SECRET가 없습니다"}}}};
+ const text=visibleProfileOptions(provider,"text").find(o=>o.id==="gpt-5.4-mini");
+ assert.ok(text);assert.equal(text.disabled,true);assert.match(text.hint,/OPENAI_API_KEY/);
+ const clip=visibleProfileOptions(provider,"clip").find(o=>o.id==="runway-grok-lite");
+ assert.ok(clip);assert.equal(clip.disabled,true);assert.match(clip.hint,/RUNWAYML_API_SECRET/);
+ assert.equal(visibleProfileOptions(provider,"clip").find(o=>o.id==="none")?.disabled,undefined);
 });

@@ -149,6 +149,25 @@ class DeploymentTests(unittest.TestCase):
             self.link_patch.start()
             self.addCleanup(self.link_patch.stop)
 
+    def test_saved_environment_path_is_reused_when_caller_omits_it(self):
+        env_file = self.h.state / 'runtime.env'
+        env_file.write_text('OPENAI_API_KEY=synthetic-fixture-only\n')
+        self.h.registry['env_file'] = str(env_file)
+        (self.h.state / 'runtime/services.json').write_text(json.dumps(self.h.registry))
+        with patch.dict(os.environ):
+            os.environ.pop('OFFICE_ENV_FILE', None)
+            operation = deploy.Deployment(self.h.repo, self.h.state, self.h.target,
+                runner=self.h.runner, lock_type=ProcessLock, identity=self.h.identity)
+        self.assertEqual(operation.env['OFFICE_ENV_FILE'], str(env_file.resolve()))
+        self.assertNotIn('synthetic-fixture-only', str(operation.env))
+        env_file.unlink()
+        with patch.dict(os.environ):
+            os.environ.pop('OFFICE_ENV_FILE', None)
+            with self.assertRaisesRegex(deploy.DeployError, 'environment file is missing'):
+                deploy.Deployment(self.h.repo, self.h.state, self.h.target,
+                    runner=self.h.runner, lock_type=ProcessLock, identity=self.h.identity)
+        self.assertEqual(self.h.running, {11, 12})
+
     def test_exact_success_preserves_business_data_and_previous_build(self):
         value = self.h.deployment()
         before = value.business_state()

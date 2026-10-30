@@ -86,14 +86,15 @@ function selectedId(p: ProviderStatus, kind: ProfileKind): string | undefined {
   return kind === "text" ? p.text?.id ?? p.text?.model ?? p.model : p[kind]?.id;
 }
 
-// Options the server cannot run right now are hidden, not just disabled; they reappear once runnable.
-// Without availability data (older server) every option stays visible.
+// Keep registered choices discoverable when a key or platform connection is unavailable.
 export function visibleProfileOptions(provider: ProviderStatus | undefined, kind: ProfileKind): ProfileOption[] {
-  // 이 서버에서 돌지 않는 선택지(지원 안 함으로 표시된 것 포함)는 목록에서 뺀다. 'none'은 항상 보인다.
   const states = provider?.availability?.[kind];
-  const supported = PROFILE_OPTIONS[kind].filter((option) => option.id === "none" || !option.disabled);
-  if (!states) return supported;
-  return supported.filter((option) => option.id === "none" || states[option.id]?.available !== false);
+  return PROFILE_OPTIONS[kind].filter(option => option.id === "none" || !option.disabled).map(option => {
+    const state = states?.[option.id];
+    return option.id !== "none" && state?.available === false
+      ? {...option, disabled:true, hint:`${option.hint} 현재 실행 불가: ${state.reason}`}
+      : option;
+  });
 }
 
 // One clear line when the saved selection can no longer run, naming it and the fix.

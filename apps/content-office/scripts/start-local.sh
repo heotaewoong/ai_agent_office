@@ -67,6 +67,8 @@ with ProcessLock(runtime / "services-management.lock"):
                 raise RuntimeError(f"{name} did not start; inspect {log}")
             services[name] = {**identity, "log": str(log), "cwd": str(cwd)}
         record = {"scope": "heobrain-content-office", "app_dir": str(app), "services": services, "ports": {"api": 8510, "frontend": 3110}}
+        if os.environ.get('OFFICE_ENV_FILE'):
+            record['env_file'] = str(Path(os.environ['OFFICE_ENV_FILE']).expanduser().resolve())
         registry.write_text(canonical(record))
         registry.chmod(0o600)
     except BaseException:

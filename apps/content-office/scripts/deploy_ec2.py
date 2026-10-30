@@ -93,8 +93,16 @@ class Deployment:
         self.validate_state_paths()
         self.runner, self.env = runner, os.environ.copy()
         self.env['OFFICE_STATE_DIR'] = str(self.state)
-        if self.env.get('OFFICE_ENV_FILE'):
-            self.env['OFFICE_ENV_FILE'] = str(Path(self.env['OFFICE_ENV_FILE']).expanduser().resolve())
+        # A caller omitting the environment path must not silently drop the live API keys.
+        env_file = self.env.get('OFFICE_ENV_FILE')
+        registry = self.state / 'runtime/services.json'
+        if not env_file and registry.is_file():
+            env_file = json.loads(registry.read_text(encoding='utf-8')).get('env_file')
+        if env_file:
+            env_path = Path(env_file).expanduser().resolve()
+            if not env_path.is_file():
+                raise DeployError('The saved runtime environment file is missing; no service was stopped.')
+            self.env['OFFICE_ENV_FILE'] = str(env_path)
         if lock_type is None or identity is None:
             sys.path.insert(0, str(self.app / 'backend'))
             from office.runtime import ProcessLock, process_identity
