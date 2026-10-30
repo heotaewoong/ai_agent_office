@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 import pytest
-from office.store import Store, WorkflowError
+from office.store import CostScopeExceeded, Store, WorkflowError
 
 
 def test_parallel_reservations_do_not_overrun_cap(tmp_path):
@@ -156,3 +156,47 @@ def test_job_settlement_records_real_overrun_and_blocks_further_calls(tmp_path):
     assert budget["spent_krw"] == 1100 and budget["overrun_krw"] == 100 and budget["remaining_krw"] == -100
     with pytest.raises(WorkflowError, match="업무의 합산 예산"):
         store.reserve_cost("speech_tts", 1, {"job_id": job_id})
+
+
+def test_parallel_run_scope_reservations_are_atomic(tmp_path):
+    store = Store(tmp_path)
+    scope = {"id": "synthetic-daily-run", "cap_krw": 100}
+
+    def reserve(_):
+        try:
+            return store.reserve_cost("model", 60, {}, scope=scope)["id"]
+        except CostScopeExceeded:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        ids = list(pool.map(reserve, range(2)))
+    assert sum(cost is not None for cost in ids) == 1
+    assert store.cost_scope_budget(scope)["reserved_krw"] == store.budget()["reserved_krw"] == 60
+
+
+def test_unknown_reservations_remain_in_run_cap_and_other_scopes_do_not_consume_it(tmp_path):
+    store = Store(tmp_path)
+    scope = {"id": "unknown-run", "cap_krw": 100}
+    first = store.reserve_cost("model", 80, {}, scope=scope)
+    store.unknown_cost(first["id"], "synthetic-lost-response")
+    store.reserve_cost("model", 80, {}, scope={"id": "other-run", "cap_krw": 100})
+    with pytest.raises(CostScopeExceeded):
+        store.reserve_cost("model", 21, {}, scope=scope)
+    assert store.cost_scope_budget(scope)["reserved_krw"] == 80
+    assert store.budget()["reserved_krw"] == 160
+    with store.connection() as db:
+        assert db.execute("SELECT state FROM costs WHERE id=?", (first["id"],)).fetchone()[0] == "unknown"
+
+
+def test_run_scope_never_bypasses_global_or_job_caps(tmp_path):
+    scope = {"id": "scoped-call", "cap_krw": 1000}
+    small = Store(tmp_path / "small", budget_krw=100)
+    with pytest.raises(WorkflowError, match="예산 한도"):
+        small.reserve_cost("model", 101, {}, scope=scope)
+    assert small.cost_scope_budget(scope)["reserved_krw"] == 0
+    store = Store(tmp_path / "normal")
+    job_id, _ = job_with_cap(store)
+    store.reserve_cost("speech_tts", 1000, {"job_id": job_id})
+    with pytest.raises(WorkflowError, match="업무의 합산 예산"):
+        store.reserve_cost("model", 1, {"job_id": job_id}, scope=scope)
+    assert store.cost_scope_budget(scope)["reserved_krw"] == 0

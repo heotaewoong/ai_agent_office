@@ -20,6 +20,10 @@ class UnknownTaskPending(WorkflowError):
     """A guarded output still has an unresolved task for the same source."""
 
 
+class CostScopeExceeded(WorkflowError):
+    """A paid call would exceed its explicit run budget before reaching the provider."""
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -634,7 +638,23 @@ class Store:
             self._event(db, "job_budget_set", {**configuration, "previous_cap_krw": current["cap_krw"]}, job_id)
             return self._job_budget(db, job_id)
 
-    def reserve_cost(self, kind, maximum_krw, data):
+    @staticmethod
+    def _cost_scope_budget(db, scope):
+        if (not isinstance(scope, dict) or not isinstance(scope.get("id"), str) or not scope["id"]
+                or len(scope["id"]) > 200 or type(scope.get("cap_krw")) is not int or scope["cap_krw"] <= 0):
+            raise WorkflowError("실행 비용 범위와 양의 정수 한도가 필요합니다")
+        spent, reserved = db.execute(
+            "SELECT COALESCE(SUM(CASE WHEN state='settled' THEN actual_krw ELSE 0 END),0), "
+            "COALESCE(SUM(CASE WHEN state IN ('reserved','unknown') THEN reserved_krw ELSE 0 END),0) "
+            "FROM costs WHERE json_extract(data,'$.cost_scope_id')=?", (scope["id"],)).fetchone()
+        return {"scope_id": scope["id"], "cap_krw": scope["cap_krw"], "spent_krw": spent,
+                "reserved_krw": reserved, "remaining_krw": scope["cap_krw"] - spent - reserved}
+
+    def cost_scope_budget(self, scope):
+        with self.connection() as db:
+            return self._cost_scope_budget(db, scope)
+
+    def reserve_cost(self, kind, maximum_krw, data, *, scope=None):
         if not math.isfinite(maximum_krw) or maximum_krw < 0:
             raise WorkflowError("잘못된 비용 한도입니다")
         maximum = math.ceil(maximum_krw)
@@ -649,6 +669,11 @@ class Store:
                 job_budget = self._job_budget(db, data["job_id"])
                 if job_budget["cap_krw"] is not None and maximum > job_budget["remaining_krw"]:
                     raise WorkflowError(f"이 업무의 합산 예산 {job_budget['cap_krw']:,}원 한도를 초과하여 호출을 보류합니다")
+            if scope is not None:
+                scope_budget = self._cost_scope_budget(db, scope)
+                if maximum > scope_budget["remaining_krw"]:
+                    raise CostScopeExceeded(f"이번 실행의 비용 상한({scope_budget['cap_krw']:,}원)을 넘는 최대 예약이 필요하여 호출을 보류합니다")
+                data = {**data, "cost_scope_id": scope["id"], "cost_scope_cap_krw": scope["cap_krw"]}
             cost_id = identifier("cost")
             db.execute("INSERT INTO costs VALUES(?,?,'reserved',?,NULL,?,?,?)", (cost_id, kind, maximum, canonical(data), now(), now()))
             return {"id": cost_id, "reserved_krw": maximum}

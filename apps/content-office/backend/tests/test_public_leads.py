@@ -9,7 +9,7 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from office import public_leads
+from office import leads, public_leads
 from office.api import create_app
 from office.store import Store
 
@@ -101,6 +101,8 @@ def test_happy_path_stores_masked_lead_with_server_consent_text_and_event_withou
     data = json.loads(rows[0][2])
     assert data["source"] == "youtube"
     assert data["consent"]["version"] == current()["consent_version"] and data["consent_text"] == current()["consent_text"]
+    assert data["consent"]["purpose"] == "lead_magnet_delivery"
+    assert leads.consent_snapshot(store)["recipient_count"] == 0
     signup = events(store, "lead_public_signup")
     assert [e["data"] for e in signup] == [{"magnet_key": "exam-d30-planner", "source": "youtube"}]
     assert "reader.one" not in json.dumps(store.events(limit=200)).lower()
@@ -146,6 +148,7 @@ def test_bad_or_missing_origin_is_rejected(office, client, origin):
     {"source": "tiktok"},
     {"email": "not-an-email"},
     {"consent_text": "클라이언트가 바꾼 동의 문구"},
+    {"consent_purpose": "newsletter"},
 ])
 def test_invalid_submissions_are_rejected_and_store_nothing(office, client, patch):
     store, _ = office
@@ -259,3 +262,34 @@ def test_lead_allowed_origins_must_be_https_origins(monkeypatch):
             public_leads.lead_allowed_origins()
     monkeypatch.delenv("OFFICE_LEAD_ALLOWED_ORIGINS")
     assert public_leads.lead_allowed_origins() == set()
+
+
+def test_public_source_named_newsletter_still_cannot_grant_newsletter(office, client):
+    from office.leads import consent_snapshot
+    store, _ = office
+    assert post(client, body(source="newsletter")).status_code == 202
+    assert consent_snapshot(store)["recipient_count"] == 0
+    assert not any(event["kind"].startswith("newsletter_") for event in store.events())
+
+
+def test_public_material_request_does_not_overwrite_existing_explicit_newsletter_grant(office, client):
+    from office import leads
+    store, _ = office
+    original, _ = leads.register_lead(store, email="reader.one@example.com", magnet_key=current()["key"], source="homepage",
+                                      consent_version="explicit-newsletter-v1", consent_text="별도 뉴스레터 수신에 동의합니다", consent_purpose="newsletter")
+    before = leads.consent_snapshot(store)
+    assert post(client, body()).status_code == 202
+    assert leads.leads(store)[0] == original and leads.consent_snapshot(store) == before
+
+
+def test_public_reregistration_after_withdrawal_never_reactivates_newsletter(office, client):
+    from office import leads
+    store, _ = office
+    original, _ = leads.register_lead(store, email="reader.one@example.com", magnet_key=current()["key"], source="homepage",
+                                      consent_version="explicit-newsletter-v1", consent_text="별도 뉴스레터 수신에 동의합니다", consent_purpose="newsletter")
+    leads.withdraw_lead(store, original["id"])
+    assert post(client, body()).status_code == 202
+    renewed = leads.leads(store)[0]
+    assert renewed["id"] == original["id"] and renewed["consent"]["purpose"] == "lead_magnet_delivery"
+    assert renewed["consent"]["withdrawn_at"] is None and leads.consent_snapshot(store)["recipient_count"] == 0
+    assert renewed["consent_history"][-1]["consent"]["withdrawn_at"] is not None

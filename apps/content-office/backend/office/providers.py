@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 import requests
 from jsonschema import Draft202012Validator, ValidationError
 
-from .store import Store, WorkflowError, canonical, digest
+from .store import CostScopeExceeded, Store, WorkflowError, canonical, digest
 
 PRICES = {
     "gemini-3.8-flash": {"input_usd_million": 0.75, "output_usd_million": 3.75},
@@ -82,9 +82,11 @@ def cache_key(provider, model, messages, schema, options):
 
 
 class Provider:
-    def __init__(self, store: Store, model=None, transport=None, *, job_id=None):
+    def __init__(self, store: Store, model=None, transport=None, *, job_id=None, cost_scope=None):
         self.store = store
         self.job_id = job_id
+        self.cost_scope = cost_scope
+        self.cost_scope_exhausted = False
         self.model = model or store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash")
         self.transport = transport or requests.post
 
@@ -131,7 +133,11 @@ class Provider:
         # UTF-8 byte length is a conservative token bound for these text-only inputs.
         input_bound = len(canonical(payload).encode("utf-8"))
         maximum = ((input_bound * price["input_usd_million"] + options["max_tokens"] * price["output_usd_million"]) / 1_000_000 * FX_RESERVATION_KRW) * 1.2
-        reservation = self.store.reserve_cost("model", maximum, {"role": role, "model": self.model, "provider": provider, "cache_key": key, "input_byte_bound": input_bound, "max_output_tokens": options["max_tokens"], "price": price, "price_source": price_source, "price_checked": price_checked, "fx_reservation_krw": FX_RESERVATION_KRW, "job_id": self.job_id})
+        try:
+            reservation = self.store.reserve_cost("model", maximum, {"role": role, "model": self.model, "provider": provider, "cache_key": key, "input_byte_bound": input_bound, "max_output_tokens": options["max_tokens"], "price": price, "price_source": price_source, "price_checked": price_checked, "fx_reservation_krw": FX_RESERVATION_KRW, "job_id": self.job_id}, scope=self.cost_scope)
+        except CostScopeExceeded:
+            self.cost_scope_exhausted = True
+            raise
         self.store.event("model_started", {"role": role, "model": self.model, "provider": provider, "reservation_id": reservation["id"], "input_hash": digest(messages), "schema_hash": digest(schema), "reserved_krw": reservation["reserved_krw"]}, self.job_id)
         try:
             response = self.transport(url, headers=headers, json=payload, timeout=(10, 150))

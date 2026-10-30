@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from office.store import Store, WorkflowError
+from office.store import CostScopeExceeded, Store, WorkflowError
 
 KST = timezone(timedelta(hours=9))
 AT_0703 = datetime(2026, 10, 30, 7, 3, tzinfo=KST)
@@ -46,8 +46,13 @@ class PaidProvider:
         self.store, self.krw, self.calls = store, krw, 0
 
     def generate(self, role, messages, schema, options=None):
-        cost = self.store.reserve_cost("model", self.krw, {"role": role})
-        self.store.settle_cost(cost["id"], self.krw, {})
+        maximum = self.krw[self.calls] if isinstance(self.krw, list) else self.krw
+        try:
+            cost = self.store.reserve_cost("model", maximum, {"role": role}, scope=self.cost_scope)
+        except CostScopeExceeded:
+            self.cost_scope_exhausted = True
+            raise
+        self.store.settle_cost(cost["id"], maximum, {})
         self.calls += 1
         return {}
 
@@ -140,6 +145,35 @@ def test_cost_cap_stops_summaries_and_closes_the_window(tmp_path):
     assert result["status"] == "stopped_cost_cap" and result["spent_krw"] == 80
     assert store.setting("work_window")["status"] == "closed"
     assert [e for e in store.events(limit=20) if e["kind"] == "daily_collect_finished"][0]["data"]["status"] == "stopped_cost_cap"
+
+
+@pytest.mark.parametrize("cap,charges,completed,used", [(10, [20], 0, 0), (100, [10, 200], 1, 10)])
+def test_first_or_larger_later_call_is_blocked_before_reservation_and_partial_collection_is_kept(tmp_path, cap, charges, completed, used):
+    store = Store(tmp_path)
+    enabled(store, max_krw=cap)
+    provider = PaidProvider(store, krw=charges)
+    result = run(store, refresh=FakeRefresh(calls=len(charges)), provider=provider)
+    assert provider.calls == completed
+    assert result["status"] == "stopped_cost_cap" and result["spent_krw"] == used
+    assert result["settled_krw"] == used and result["reserved_krw"] == 0 and result["over_cap"] is False
+    assert store.budget()["spent_krw"] == used and store.budget()["reserved_krw"] == 0
+    assert store.articles_list()[0]["id"] == "new-1" and store.setting("work_window")["status"] == "closed"
+    assert store.jobs() == [] and store.tasks() == []
+
+
+def test_run_cost_report_is_not_offset_by_another_jobs_settlement(tmp_path):
+    store = Store(tmp_path)
+    enabled(store, max_krw=100)
+    unrelated = store.reserve_cost("unrelated", 500, {})
+
+    def refresh(store, provider=None):
+        report = FakeRefresh(calls=1)(store, provider)
+        store.settle_cost(unrelated["id"], 5, {})
+        return report
+
+    result = run(store, refresh=refresh)
+    assert result["spent_krw"] == result["settled_krw"] == 40
+    assert result["reserved_krw"] == 0 and store.budget()["spent_krw"] == 45
 
 
 def test_failure_and_timeout_still_close_the_window(tmp_path):

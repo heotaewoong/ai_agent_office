@@ -185,7 +185,7 @@ def register(app, store, *, secret: bytes, public_origin: str | None):
         if body.consent_version != magnet["consent_version"]:
             return _reject(422, "동의 문구가 바뀌었어요. 페이지를 새로고침한 뒤 다시 확인해 주세요.")
         try:
-            leads_module.register_lead(store, email=body.email, magnet_key=magnet["key"], source=body.source, consent_version=magnet["consent_version"], consent_text=magnet["consent_text"])
+            leads_module.register_lead(store, email=body.email, magnet_key=magnet["key"], source=body.source, consent_version=magnet["consent_version"], consent_text=magnet["consent_text"], consent_purpose="lead_magnet_delivery")
         except WorkflowError:
             return _reject(422, "이메일 주소를 확인해 주세요.")
         store.event("lead_public_signup", {"magnet_key": magnet["key"], "source": body.source})

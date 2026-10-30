@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../lib/api";
-import { changeLeadForm, emptyLeadForm, LEAD_SOURCES, leadFormAfterSave, leadInputFromForm, leadSourceLabel, validEmail } from "../lib/leads";
+import { changeLeadForm, emptyLeadForm, LEAD_SOURCES, leadFormAfterSave, leadInputFromForm, leadSourceLabel, leadConsentPurposeLabel, validEmail } from "../lib/leads";
 import { formatDate } from "../lib/workflow";
 import type { Action, Lead, LeadInput, LeadSummary } from "../lib/types";
 import { Icon } from "./icons";
@@ -57,7 +57,7 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
     }
   }
 
-  const set = (key: keyof LeadInput, value: string) => {
+  const set = (key: keyof Omit<LeadInput, "consent_purpose">, value: string) => {
     setError("");
     setForm((f) => changeLeadForm(f, key, value));
   };
@@ -137,6 +137,11 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
               <span>이 이메일의 독자가 위 문구를 보고 동의한 사실을 직접 확인했습니다.</span>
             </label>
             <p className="muted">실제 동의 기록의 입력 실수를 줄이기 위한 확인입니다. 법률 준수를 보장하지 않습니다.</p>
+            <label className="media-review-check" htmlFor={`${uid}-newsletter-confirmed`}>
+              <input id={`${uid}-newsletter-confirmed`} type="checkbox" checked={form.newsletter_consent_confirmed} onChange={(event) => { const confirmed = event.target.checked; setError(""); setForm((current) => ({ ...current, newsletter_consent_confirmed: confirmed })); }} />
+              <span>뉴스레터 수신 동의를 별도로 확인했습니다.</span>
+            </label>
+            <p className="muted">이미 받은 별도 동의를 기록하는 확인이며, 체크만으로 실제 동의가 생기지는 않습니다. 선택하지 않으면 자료 전달 동의로만 기록합니다.</p>
           </fieldset>
           {error && (
             <p className="notice error" role="alert">
@@ -174,6 +179,7 @@ export function LeadsPanel({ busy, action }: { busy: boolean; action: Action }) 
                     <td>{lead.magnet_key}</td>
                     <td>{leadSourceLabel(lead.source)}</td>
                     <td>
+                      <small style={{ display: "block" }}>{leadConsentPurposeLabel(lead.consent.purpose)}</small>
                       {withdrawn ? (
                         <span className="cred missing">
                           <Icon name="alert" size={13} />
