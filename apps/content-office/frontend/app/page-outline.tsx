@@ -21,7 +21,8 @@ export function PageOutline({ scope }: { scope: string }) {
     const updatePosition = () => {
       frame = 0;
       const edge = (nav.current?.getBoundingClientRect().bottom ?? 0) + 32;
-      const current = nodes.filter((node) => node.getBoundingClientRect().top <= edge).at(-1) ?? nodes[0];
+      const atBottom = window.scrollY > 0 && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 2;
+      const current = atBottom ? nodes.at(-1) : nodes.filter((node) => node.getBoundingClientRect().top <= edge).at(-1) ?? nodes[0];
       setActive(current?.id ?? "");
     };
     const schedulePosition = () => {
