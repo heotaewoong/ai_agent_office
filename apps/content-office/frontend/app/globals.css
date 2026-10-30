@@ -4347,6 +4347,36 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .outline-target:focus-visible { outline: 3px solid #6c8d71; outline-offset: 6px; border-radius: 3px; }
 .outline-panel { border: 1px solid #d5dbcf; border-radius: 12px; background: var(--white); padding: 24px; margin-block: 24px; box-shadow: 0 3px 12px #24262104; }
 .outline-panel > .section-heading, .outline-panel > h2, .outline-panel > h3 { padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.studio-section { margin-block: 30px; padding: 26px; border: 1px solid #cbd5c7; border-top: 4px solid #6c8d71; border-radius: 14px; background: #fffefa; min-width: 0; }
+.studio-section-heading { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; padding-bottom: 22px; margin-bottom: 24px; border-bottom: 1px solid #dce3d7; }
+.studio-section-heading > div { flex: 1; min-width: 180px; }
+.studio-section-heading h2 { margin: 0 0 8px; font-size: 24px; line-height: 1.4; letter-spacing: -.5px; }
+.studio-section-heading p { font-size: 14px; line-height: 1.8; color: #4c5b49; max-width: 65ch; }
+.studio-section-number { display: grid; place-items: center; min-width: 38px; height: 38px; border-radius: 10px; background: #e6eee2; color: #31533b; font-size: 14px; font-weight: 700; }
+.studio-section .editor-panel { margin-block: 20px; }
+.studio-section .editor-fields { padding: 24px; }
+.studio-section .editor-fields label, .studio-section .body-label span { font-size: 13px; }
+.studio-section .editor-fields textarea { font-size: 16px; line-height: 1.95; color: #293d2d; min-height: 480px; }
+.studio-section .editor-foot p, .studio-section .muted, .studio-section .approval-panel p { font-size: 13px; line-height: 1.85; }
+.studio-section .tabs button { font-size: 14px; min-height: 48px; }
+.studio-section .editor-save-state { font-size: 11px; }
+.studio-disclosure { border: 1px solid #d9e0d4; border-radius: 9px; background: #f8faf4; margin-block: 14px; overflow: clip; }
+.studio-disclosure > summary { cursor: pointer; padding: 16px 18px; min-height: 48px; font-size: 14px; font-weight: 600; line-height: 1.7; }
+.studio-disclosure[open] > summary { border-bottom: 1px solid #d9e0d4; margin-bottom: 16px; background: #edf3e8; }
+.studio-disclosure > :not(summary) { margin-inline: 18px; }
+.studio-disclosure > :last-child:not(summary) { margin-bottom: 18px; }
+.studio-section .derived-panel { margin-top: 0; }
+@media (max-width: 760px) {
+  .studio-section { padding: 18px 14px; margin-block: 22px; }
+  .studio-section-heading { gap: 10px; padding-bottom: 18px; margin-bottom: 18px; }
+  .studio-section-heading h2 { font-size: 21px; }
+  .studio-section-heading > div { min-width: 0; flex-basis: calc(100% - 52px); }
+  .studio-section .editor-fields { padding: 16px; }
+  .studio-section .editor-toolbar { flex-wrap: wrap; padding: 8px 14px; }
+  .studio-section .editor-fields textarea { min-height: 360px; }
+  .studio-disclosure > summary { padding: 14px; }
+  .studio-disclosure > :not(summary) { margin-inline: 10px; }
+}
 .job-content > .approval-panel { border-top: 4px solid #6c8d71; }
 .job-content > .job-heading { padding-bottom: 16px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
 @media (min-width: 1100px) {
