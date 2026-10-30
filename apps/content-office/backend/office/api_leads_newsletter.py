@@ -37,6 +37,10 @@ class NewsletterReview(BaseModel):
     note: str | None = Field(default=None, max_length=500)
 
 
+class NewsletterSent(BaseModel):
+    expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class CouponInput(BaseModel):
     code: str | None = Field(default=None, max_length=64)
     discount_percent: int | None = Field(default=None, ge=1, le=100, strict=True)
@@ -110,8 +114,8 @@ def register(app, store):
         return newsletter.rebuild_issue(store, issue_id, actor=ACTOR)
 
     @app.post("/api/newsletters/{issue_id}/sent")
-    def newsletter_sent(issue_id: str):
-        return newsletter.mark_sent(store, issue_id, actor=ACTOR)
+    def newsletter_sent(issue_id: str, body: NewsletterSent):
+        return newsletter.mark_sent(store, issue_id, expected_hash=body.expected_hash, actor=ACTOR)
 
     @app.put("/api/jobs/{job_id}/offer")
     def set_offer(job_id: str, body: OfferInput):

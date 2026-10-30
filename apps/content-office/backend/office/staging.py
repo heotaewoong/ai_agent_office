@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 
 from .channel_handoff import SOCIAL_TARGETS
 from .channels import registry
+from .exports import SOURCE_PHOTO_NAME_PATTERN
 from .runtime import window_open
 from .store import WorkflowError, digest, now
 
@@ -94,6 +96,29 @@ def staging_view(store, job_id):
         if not row.get("public_url"):
             local_issues.append("대상 채널의 공개 주소를 확인하세요")
         required = ["short.mp4", "description.txt"] if platform == "youtube" else [BLOG_FILES.get(key) or SOCIAL_TARGETS[key][0]]
+        if key == "tistory_main":
+            required.extend(name for name in verified if name in ("source-original.md", "source-photos.json") or SOURCE_PHOTO_NAME_PATTERN.fullmatch(name))
+            if source.get("preserve_original") is True:
+                required.extend(["source-original.md", "source-photos.json"])
+                cache = verified.get("source-photos.json")
+                if cache:
+                    try:
+                        if cache[1].stat().st_size > 1024 * 1024:
+                            raise ValueError("photo_manifest_too_large")
+                        snapshot = json.loads(cache[1].read_text(encoding="utf-8"))
+                        if not isinstance(snapshot, dict):
+                            raise ValueError("invalid_photo_manifest")
+                        photos = snapshot.get("photos")
+                        if snapshot.get("version") != 1 or not isinstance(photos, list) or len(photos) > 8:
+                            raise ValueError("invalid_photo_manifest")
+                        for photo in photos:
+                            name = photo.get("filename") if isinstance(photo, dict) else None
+                            if not isinstance(name, str) or not SOURCE_PHOTO_NAME_PATTERN.fullmatch(name):
+                                raise ValueError("invalid_photo_name")
+                            required.append(name)
+                    except (OSError, UnicodeError, ValueError, TypeError):
+                        local_issues.append("원문 사진의 의존 파일 목록을 확인하지 못했습니다. 출고 묶음을 재검수하세요")
+            required = list(dict.fromkeys(required))
         output = "video" if platform == "youtube" else "blog"
         if output not in selected:
             local_issues.append(f"{output} 출력이 현재 출고 승인②에 포함되지 않았습니다")
@@ -166,6 +191,8 @@ def staging_view(store, job_id):
             can_upload = local_ready and bool(row.get("credentials_configured")) and row.get("publication_enabled") is True and opened and external_state == "not_attempted"
         else:
             issues.append("로컬 출고 파일만 준비합니다. 플랫폼 임시저장·예약 API는 연결하지 않았습니다")
+            if key == "tistory_main" and any(SOURCE_PHOTO_NAME_PATTERN.fullmatch(name) for name in required):
+                issues.append("HTML과 사진·원문·사진 목록은 같은 승인 ZIP으로 함께 전달하세요. HTML 한 파일만으로는 사진이 열리지 않습니다")
         if key == "x_main":
             status, local_ready = "paused", False
             issues = ["사용자 요청으로 X 채널은 보류했습니다"]

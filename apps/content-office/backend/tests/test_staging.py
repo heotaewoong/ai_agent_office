@@ -34,6 +34,46 @@ def row(view, key):
     return next(item for item in view["channels"] if item["channel_key"] == key)
 
 
+def released_photo_blog(tmp_path, missing=None):
+    from office.media import artifact_record
+    from office.store import digest
+    store = Store(tmp_path)
+    job = store.create_job({"id": "synthetic-photo-dependencies", "title": "합성 사진 묶음"})
+    original = "직접 쓴 합성 원문입니다.\n" * 25
+    job = store.register_source_input(job["id"], original, job["source_hash"], preserve_original=True)
+    job = store.save_source(job["id"], {**job["source_packet"], "audience": {"language": "ko"}, "quality": {"status": "passed", "critical": False}})
+    store.review_source(job["id"], job["source_hash"], "approved", "synthetic-operator", {"blog": True})
+    folder = store.artifacts / job["id"] / job["source_hash"] / "production-photo-fixture"
+    folder.mkdir(parents=True)
+    (folder / "tistory.html").write_text('<img src="source-photo-01.png">', encoding="utf-8")
+    (folder / "source-original.md").write_text(original, encoding="utf-8")
+    (folder / "source-photo-01.png").write_bytes(b"synthetic-photo-checksum-fixture")
+    (folder / "source-photos.json").write_text(json.dumps({"version": 1, "photos": [{"filename": "source-photo-01.png"}]}), encoding="utf-8")
+    files = [{**artifact_record(store.artifacts, path), "outputs": ["blog"]} for path in folder.iterdir() if path.name != missing]
+    manifest = {"source_hash": job["source_hash"], "files": files, "completed_outputs": ["blog"]}
+    manifest["hash"] = digest(manifest)
+    store.save_manifest_if_current(job["id"], job["source_hash"], store.job(job["id"])["selections"], manifest)
+    store.review_release(job["id"], manifest["hash"], "approved", "synthetic-operator", outputs=["blog"])
+    return store, job["id"]
+
+
+def test_tistory_preparation_includes_photo_original_and_manifest_dependencies(tmp_path):
+    store, job_id = released_photo_blog(tmp_path)
+    tistory = row(staging_view(store, job_id), "tistory_main")
+    assert tistory["local_ready"]
+    assert set(tistory["required_files"]) == {"tistory.html", "source-photo-01.png", "source-original.md", "source-photos.json"}
+    assert {file["name"] for file in tistory["files"]} == set(tistory["required_files"])
+    assert any("같은 승인 ZIP" in reason for reason in tistory["blockers"])
+
+
+@pytest.mark.parametrize("missing", ["source-photo-01.png", "source-original.md", "source-photos.json"])
+def test_tistory_is_not_ready_when_photo_bundle_dependency_is_not_in_manifest(tmp_path, missing):
+    store, job_id = released_photo_blog(tmp_path, missing=missing)
+    tistory = row(staging_view(store, job_id), "tistory_main")
+    assert missing in tistory["required_files"] and not tistory["local_ready"]
+    assert missing not in {file["name"] for file in tistory["files"]}
+
+
 def client(store):
     api = TestClient(create_app(store), base_url="http://localhost:8510")
     csrf = api.get("/api/session").json()["csrf"]

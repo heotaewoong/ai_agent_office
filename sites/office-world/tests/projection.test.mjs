@@ -62,7 +62,7 @@ function startup(f) {
   const world = { init() {}, buildStages(stages) { space.stages = stages; },
     buildAgents(agents) { space.agents = agents.map(agent => ({ ...agent, mode: 'seated' })); },
     updateAgentStatuses() {}, spawnFlow(flow) { calls.flows.push(flow); }, memoryTrip() { calls.trips++; } };
-  const globals = { world, hud: { init() {}, rebuild() {}, refresh() {} }, controls: { init() {}, setLayer() {}, animateCamera() {}, setView() {} },
+  const globals = { world, organization: Function('return (' + objectLiteral('organization') + ')')(), hud: { init() {}, rebuild() {}, refresh() {} }, controls: { init() {}, setLayer() {}, animateCamera() {}, setView() {} },
     data: f.data, embed: { init() {}, post(message) { calls.posts.push(message); } },
     workbench: { init() {} }, workshop: { init() {} }, results: { init() {} },
     space, REDUCED: false, document: f.document, $: f.$, setTimeout: f.setTimeout, setInterval: f.setInterval, clearInterval: f.clearInterval,

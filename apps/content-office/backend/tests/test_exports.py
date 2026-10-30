@@ -315,7 +315,9 @@ def test_local_source_photos_are_hashed_blog_artifacts_and_in_release_zip(tmp_pa
         assert b"signature=private" not in archive.read("source-photos.json")
 
 
-def test_source_photo_failure_preserves_independent_completed_video(tmp_path, monkeypatch):
+@pytest.mark.parametrize("cache", [None, b"{broken", b"[]", b"{}", b'{"version":1,"photos":null}', b'{"version":1,"photos":[{"unexpected":"signature=must-not-leak"}]}'])
+def test_source_photo_failure_preserves_independent_completed_video(tmp_path, monkeypatch, cache):
+    import json
     from office import feeds, media
     from office.store import WorkflowError
     from tests.test_media import approved_job, tone_renderer
@@ -328,9 +330,42 @@ def test_source_photo_failure_preserves_independent_completed_video(tmp_path, mo
         output = folder / "short.mp4"
         output.write_bytes(b"synthetic-video-for-partial-output-contract")
         return {"media": {"duration": 1.0}, "thumbnails": [], "backgrounds": [], "clips": [], "files": [output]}
+    original_writer = media.write_blog_exports
+    def with_cache(packet, folder, offer):
+        if cache is not None:
+            (folder / "source-photos.json").write_bytes(cache)
+        return original_writer(packet, folder, offer)
     monkeypatch.setattr(feeds, "fetch_public", unavailable)
     monkeypatch.setattr(media, "render_short", synthetic_video)
+    monkeypatch.setattr(media, "write_blog_exports", with_cache)
     result = media.produce(store, job_id, voice_renderer=tone_renderer())
     assert result["completed_outputs"] == ["video"] and result["output_status"]["blog"]["state"] == "failed"
     assert "short.mp4" in {row["name"] for row in result["files"]}
     assert "tistory.html" not in {row["name"] for row in result["files"]}
+    assert store.job(job_id)["manifest"]["hash"] == result["hash"]
+    rights_record = next(row for row in result["files"] if row["name"] == "asset-rights.json")
+    rights = json.loads((store.artifacts / rights_record["path"]).read_text(encoding="utf-8"))
+    assert rights["source_photo_verification"] == "unverified_or_incomplete"
+    assert rights["external_visual_assets"] == [] and rights["external_visual_references"][0]["verification"] == "unverified"
+    assert "signature=must-not-leak" not in json.dumps(rights) and "미확인" in " ".join(rights["limitations"])
+
+
+def test_photo_rights_verify_actual_bytes_and_never_trust_cached_claims(tmp_path, monkeypatch):
+    import json
+    from office import feeds
+    from office.exports import write_blog_exports, write_rights_manifest
+    raw = photo_bytes()
+    source = photo_packet(["https://blog.kakaocdn.net/photo?signature=not-for-manifest"])
+    monkeypatch.setattr(feeds, "fetch_public", lambda url, **kwargs: (raw, url, "image/png"))
+    write_blog_exports(source, tmp_path)
+    cache_path = tmp_path / "source-photos.json"
+    cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    cached["photos"][0].update(rights="commercially_cleared", source_url="https://attacker.invalid/?signature=leaked", extra="signature=leaked")
+    cache_path.write_text(json.dumps(cached), encoding="utf-8")
+    rights = json.loads(write_rights_manifest(source, tmp_path).read_text(encoding="utf-8"))
+    assert rights["source_photo_verification"] == "complete"
+    assert rights["external_visual_assets"][0]["rights"] == "owner_supplied_reference"
+    assert "attacker" not in json.dumps(rights) and "signature=" not in json.dumps(rights)
+    (tmp_path / "source-photo-01.png").write_bytes(b"changed after caching")
+    rights = json.loads(write_rights_manifest(source, tmp_path).read_text(encoding="utf-8"))
+    assert rights["source_photo_verification"] == "unverified_or_incomplete" and rights["external_visual_assets"] == []

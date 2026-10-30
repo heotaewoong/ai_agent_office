@@ -4204,6 +4204,24 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
   .arch-commits li { grid-template-columns: 1fr; gap: 4px; }
 }
 
+/* Shared URL navigation and explicit source categories. */
+.nav-item { text-decoration: none; color: inherit; }
+.news-segments { display: flex; flex-wrap: wrap; gap: 9px; margin: 16px 0 10px; }
+.news-segments a { display: flex; align-items: center; gap: 10px; padding: 11px 15px; border: 1px solid #c6d2c5; border-radius: 9px; background: #fffefa; color: #294c3b; text-decoration: none; font-weight: 650; }
+.news-segments a[aria-current] { background: #e5eee1; border-color: #497056; }
+.news-segments span { font-variant-numeric: tabular-nums; }
+.news-scope { color: #526258; font-size: 13px; line-height: 1.8; margin-bottom: 18px; }
+.decision-counts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 24px 0 32px; }
+.decision-counts > a { display: grid; gap: 12px; padding: 22px; border: 1px solid #d0d9cb; border-radius: 12px; background: #fffefa; text-decoration: none; color: #284b3b; }
+.decision-counts strong { font-size: 22px; }
+.decision-counts small { color: #526258; line-height: 1.7; }
+.decision-home section > p { color: #526258; line-height: 1.8; margin: 12px 0; }
+.decision-list { list-style: none; padding: 0; display: grid; gap: 10px; }
+.decision-list a { display: grid; grid-template-columns: 130px minmax(0,1fr) auto; gap: 15px; align-items: center; padding: 20px; background: #fffefa; border: 1px solid #d3dccf; border-radius: 10px; color: #294c3b; text-decoration: none; }
+.decision-list strong { overflow-wrap: anywhere; }
+@media(max-width:1000px) { .decision-counts { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:600px) { .decision-counts > a { padding: 16px; } .decision-list a { grid-template-columns: 1fr; gap: 8px; } }
+.article-original, .article-summary.pending { color: #596454; }
 /* ===== Mobile layout guard (≤760px) — 2026-10-30 =====
    Goal: at phone width the page itself never scrolls sideways.
    Wide things (nav strip, tables, code, diagrams) scroll inside their own box;

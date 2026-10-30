@@ -151,3 +151,23 @@ test("작업 예산은 읽기와 명시 PUT을 구분하고 읽은 설정 해시
     { url: "/api/jobs/job%20a%2F1/budget", method: "PUT", body: { cap_krw: 1000, expected_hash: hash } },
   ]);
 });
+
+test("뉴스레터 발송 표시는 열린 회차의 해시를 보내고 stale409를 최신 승인으로 바꿔 재요청하지 않는다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  const calls: unknown[] = [];
+  const oldHash = "a".repeat(64), currentHash = "b".repeat(64);
+  t.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    assert.equal(String(input), "/api/newsletters/issue%20a%2F1/sent");
+    assert.equal(init?.method, "POST");
+    const body = JSON.parse(String(init?.body));
+    calls.push(body);
+    return body.expected_hash === currentHash ? Response.json({ id: "issue a/1", state: "sent_manual" })
+      : Response.json({ detail: "회차 판본이 변경되었습니다" }, { status: 409 });
+  };
+  await assert.rejects(api.markNewsletterSent("issue a/1", oldHash), /판본이 변경/);
+  assert.deepEqual(calls, [{ expected_hash: oldHash }]);
+  assert.equal((await api.markNewsletterSent("issue a/1", currentHash)).state, "sent_manual");
+  assert.deepEqual(calls, [{ expected_hash: oldHash }, { expected_hash: currentHash }]);
+});

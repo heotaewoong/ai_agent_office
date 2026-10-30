@@ -257,8 +257,8 @@ export const api = {
     request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/review`, "POST", { decision, note, expected_hash: expectedHash }),
   rebuildNewsletter: (id: string) =>
     request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/rebuild`, "POST", {}),
-  markNewsletterSent: (id: string) =>
-    request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/sent`, "POST", {}),
+  markNewsletterSent: (id: string, expectedHash: string) =>
+    request<NewsletterIssue>(`/newsletters/${encodeURIComponent(id)}/sent`, "POST", { expected_hash: expectedHash }),
   // 오퍼 스냅샷
   setOffer: (jobId: string, offer: OfferInput) =>
     request<Job>(`/jobs/${encodeURIComponent(jobId)}/offer`, "PUT", offer),

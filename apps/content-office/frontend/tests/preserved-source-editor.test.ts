@@ -8,7 +8,7 @@ import { packagingRequired } from "../lib/packaging.ts";
 
 type Element = { type?: unknown; props: Record<string, any> };
 const require = createRequire(import.meta.url);
-const source = ts.createSourceFile("page.tsx", readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const source = ts.createSourceFile("office-shell.tsx", readFileSync(new URL("../app/office-shell.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const declaration = source.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "Studio");
 assert.ok(declaration);
 const compiled = ts.transpileModule(declaration.getText(source), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;

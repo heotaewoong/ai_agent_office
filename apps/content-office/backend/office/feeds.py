@@ -19,19 +19,11 @@ import requests
 from .store import now
 from .korean import clean_feed_summary
 
+from .source_registry import classify_article, load_sources
+
 MAX_BYTES = 3_000_000
-DEFAULT_FEEDS = [
-    {"id": "openai", "name": "OpenAI", "url": "https://openai.com/news/rss.xml"},
-    {"id": "google-ai", "name": "Google AI", "url": "https://blog.google/technology/ai/rss/"},
-    {"id": "deepmind", "name": "Google DeepMind", "url": "https://deepmind.google/blog/rss.xml"},
-    {"id": "microsoft-research", "name": "Microsoft Research", "url": "https://www.microsoft.com/en-us/research/feed/"},
-    {"id": "nvidia", "name": "NVIDIA", "url": "https://blogs.nvidia.com/feed/"},
-    {"id": "huggingface", "name": "Hugging Face", "url": "https://huggingface.co/blog/feed.xml"},
-    {"id": "arxiv-cs-ai", "name": "arXiv cs.AI", "url": "https://rss.arxiv.org/rss/cs.AI"},
-    {"id": "mit-ai", "name": "MIT AI", "url": "https://news.mit.edu/rss/topic/artificial-intelligence2"},
-    {"id": "google-developers", "name": "Google Developers", "url": "https://developers.googleblog.com/feeds/posts/default"},
-    {"id": "github-ai", "name": "GitHub AI", "url": "https://github.blog/ai-and-ml/feed/"},
-]
+
+DEFAULT_FEEDS = load_sources()
 
 
 def normalize_url(url: str) -> str:
@@ -126,7 +118,7 @@ def parse_feed(xml: str | bytes, feed: dict, current: datetime | None = None) ->
         date = parse_date(fields.get("pubDate") or fields.get("published") or fields.get("date") or fields.get("updated"))
         status = "unknown" if date is None else "future" if date > current + timedelta(minutes=5) else "valid"
         articles.append({"id": hashlib.sha256(canonical_url.encode()).hexdigest()[:24], "title": clean_text(fields["title"]), "url": canonical_url, "feed_id": feed["id"], "feed_name": feed["name"], "published_at": date.isoformat() if date else None, "date_status": status, "summary": clean_feed_summary(clean_text(fields.get("description") or fields.get("summary") or fields.get("content") or ""))[:700], "retrieved_at": now()})
-    return articles
+    return [classify_article({**article, **{key: feed[key] for key in ("segment", "topics", "language") if key in feed}}) for article in articles]
 
 
 def rank_articles(articles, current=None, days=7):

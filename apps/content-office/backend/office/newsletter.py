@@ -227,12 +227,14 @@ def rebuild_issue(store, issue_id, *, actor):
         return _write(db, current)
 
 
-def mark_sent(store, issue_id, *, actor):
+def mark_sent(store, issue_id, *, expected_hash, actor):
     """현재 원고·출고·동의와 승인③을 확인하고 오너의 수동 발송 기록만 남긴다."""
     if not str(actor or "").strip():
         raise WorkflowError("발송을 확인한 담당자가 필요합니다")
     with store.connection(transaction=True) as db:
         current = _load(db, issue_id)
+        if expected_hash != current["review_hash"]:
+            raise WorkflowError("회차 내용 또는 수신자 묶음이 변경되었습니다. 최신 회차를 다시 확인한 뒤 발송 기록을 남기세요")
         _require_issue_approval(current)
         _require_current_issue(db, store, current)
         current.update(state="sent_manual", sent_at=now())

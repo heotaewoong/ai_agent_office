@@ -241,10 +241,14 @@ def _save_photo_cache(path, photos):
     partial.replace(path)
 
 
+def _source_photo_urls(body):
+    return list(dict.fromkeys(match[2] for _, line in _photo_lines(body) for match in MARKDOWN_PHOTO.finditer(line) if _source_image_url(match[2])))
+
+
 def _localize_source_photos(packet, folder):
     from .feeds import fetch_public
     original = packet["body"]
-    urls = list(dict.fromkeys(match[2] for _, line in _photo_lines(original) for match in MARKDOWN_PHOTO.finditer(line) if _source_image_url(match[2])))
+    urls = _source_photo_urls(original)
     if len(urls) > 8:
         raise WorkflowError("원문 사진은 최대 8장까지 보존할 수 있습니다")
     cache_path = folder / "source-photos.json"
@@ -345,12 +349,45 @@ def write_video_exports(packet: dict, folder: Path, offer: dict | None = None) -
 
 def write_rights_manifest(packet: dict, folder: Path) -> Path:
     manifest = {"status": "not_commercially_cleared", "visual_source": "first_party_programmatic_shapes_and_text", "external_visual_assets": [], "font": "System Korean font used for rendering; font files are not distributed", "evidence": [{"id": e.get("id"), "url": e.get("url"), "claim": e.get("claim")} for e in packet.get("evidence", [])], "limitations": ["자료 출처 링크는 이미지·원문 재배포 허가가 아닙니다", "판매용 PDF 및 외부 상품 권리는 별도 검토가 필요합니다", "실제 서비스 화면·타사 로고·실제 시험 문항을 복제하지 않았습니다"]}
-    cache_path = folder / "source-photos.json"
-    if packet.get("preserve_original") is True and cache_path.is_file():
-        photos = json.loads(cache_path.read_text(encoding="utf-8"))["photos"]
-        if photos:
-            manifest.update(visual_source="first_party_programmatic_shapes_and_owner_supplied_references", external_visual_assets=photos)
-            manifest["limitations"].append("원문 참조 사진을 바이트 그대로 보존했습니다. 소유권·초상권·상업 이용 허가는 별도 확인이 필요합니다")
+    urls = _source_photo_urls(packet["body"]) if packet.get("preserve_original") is True else []
+    if urls:
+        try:
+            cache = json.loads((folder / "source-photos.json").read_text(encoding="utf-8"))
+            if not isinstance(cache, dict) or cache.get("version") != 1 or not isinstance(cache.get("photos"), list):
+                raise ValueError("invalid photo cache")
+            cached = {item["url_sha256"]: item for item in cache["photos"] if isinstance(item, dict)}
+        except (OSError, UnicodeError, ValueError, KeyError, TypeError):
+            cached = {}
+        references, verified = [], []
+        for number, url in enumerate(urls, 1):
+            url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+            reference = {"url_sha256": url_hash, "source_url": urlsplit(url)._replace(query="", fragment="").geturl(),
+                         "rights": "owner_supplied_reference", "commercial_status": "not_commercially_cleared", "verification": "unverified"}
+            record = cached.get(url_hash) or {}
+            try:
+                name = record.get("filename", "")
+                if not isinstance(name, str) or not SOURCE_PHOTO_NAME_PATTERN.fullmatch(name) or not name.startswith(f"source-photo-{number:02}."):
+                    raise ValueError("invalid photo name")
+                path = folder / name
+                if path.resolve().parent != folder.resolve() or not path.is_file() or path.stat().st_size > SOURCE_PHOTO_MAX_BYTES:
+                    raise ValueError("invalid photo path")
+                raw = path.read_bytes()
+                checksum = hashlib.sha256(raw).hexdigest()
+                if checksum != record.get("sha256") or len(raw) != record.get("bytes"):
+                    raise ValueError("invalid photo checksum")
+                info = _photo_info(raw)
+                extension = {"PNG": "png", "JPEG": "jpg", "WEBP": "webp"}[info["format"]]
+                if name != f"source-photo-{number:02}.{extension}":
+                    raise ValueError("invalid photo format")
+                reference["verification"] = "local_bytes_verified"
+                verified.append({**reference, "filename": name, "sha256": checksum, "bytes": len(raw), **info})
+            except (OSError, ValueError, KeyError, TypeError, WorkflowError):
+                pass
+            references.append(reference)
+        complete = len(verified) == len(references)
+        manifest.update(visual_source="first_party_programmatic_shapes_and_owner_supplied_references", external_visual_assets=verified,
+                        external_visual_references=references, source_photo_verification="complete" if complete else "unverified_or_incomplete")
+        manifest["limitations"].append("원문 참조 사진의 로컬 바이트 보존을 확인했습니다. 소유권·초상권·상업 이용 허가는 별도 확인이 필요합니다" if complete else "원문 참조 사진의 보존 결과가 미확인이거나 일부만 확인됐습니다. 사진을 포함한 블로그의 완성을 뜻하지 않습니다. 소유권·상업 이용 허가도 미확인입니다")
     return write_text(folder, "asset-rights.json", json.dumps(manifest, ensure_ascii=False, indent=2))
 
 

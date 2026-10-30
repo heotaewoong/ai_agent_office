@@ -1,4 +1,4 @@
-/* HeoBrain 오피스 월드 — 공간 투영 v1을 읽어 우주 위 잔디 섬 마을로 그린다.
+/* HeoBrain 오피스 월드 — 콘텐츠 공정 투영을 5개 분야별 팀 공간으로 보여준다.
    모듈: data(읽기·폴링) · world(장면) · hud(오버레이) · controls(입력·카메라). 모두 space 하나를 공유한다. */
 (() => {
   'use strict';
@@ -232,6 +232,44 @@
       if (!this.apiUrl || this.timer) return;
       this.timer = setInterval(() => { if (!document.hidden) this.load(false); }, 10000);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) this.load(false, true); });
+    },
+  };
+
+  // 기존 공간 ID는 지리 탐험 기록을 보존하고, 팀과 콘텐츠 공정은 별도로 투영한다.
+  const organization = {
+    project(d) {
+      const legacy = ['inbox', 'scripts', 'creative', 'outbox', 'ops'];
+      if (d.organizationVersion === 1 || d.stages.length !== 5 || !legacy.every(id => d.stages.some(st => st.id === id))) return d;
+      const teams = [
+        { id:'inbox', teamId:'life', name:'생활 비서 팀', color:'#f2a444', connection:'planned',
+          description:'네이버·Gmail의 AI Engineer 채용공고 요약과 답변할 메일 분류',
+          goals:['채용공고의 직무·요건·마감일 요약', '내가 답변해야 할 메일 분류'], approval:'메일 연결 준비' },
+        { id:'scripts', teamId:'content', name:'콘텐츠 자동화 팀', color:'#4f8df7', connection:'content',
+          description:'기존 콘텐츠 파이프라인의 원문·제작·검수·출고 준비',
+          goals:['블로그·영상·PPT·카드뉴스·HeoBrain.kr 상세페이지', '채널별 비공개·임시저장까지 준비하되 실제 연결 상태 구분'], approval:'기존 콘텐츠 공정 · 승인 ⓪①②③' },
+        { id:'creative', teamId:'dev', name:'개발 팀', color:'#8b6cf0', connection:'planned',
+          description:'기존 서비스 개선부터 전체 프로젝트 관리와 새 서비스 개발까지',
+          goals:['HeoBrain.kr·AI 오피스 유지보수와 테스트', '전체 개발 프로젝트 관리', '새 아이디어를 서비스로 구현'], approval:'개발 업무 연결 준비' },
+        { id:'outbox', teamId:'wiki', name:'옵시디언 팀', color:'#3ecfb2', connection:'planned',
+          description:'모든 팀의 결과·결정을 정리하는 공용 위키',
+          goals:['팀별 결과·결정·출처를 연결', '대화 보존·자료 수집·검색은 상세 범위 설계 중'], approval:'위키 연결 준비' },
+        { id:'ops', teamId:'stocks', name:'주식 팀', color:'#e2c15a', connection:'undecided',
+          description:'내 포트폴리오를 바탕으로 할 일을 정할 예정',
+          goals:['포트폴리오 활용 방향과 기능은 아직 미정'], approval:'기능 기획 중' },
+      ];
+      const workflowStages = d.stages;
+      const stages = workflowStages.map(st => ({ ...teams.find(team => team.id === st.id), url:'', view:'', items:[], workflowStages:[] }));
+      const content = stages.find(team => team.teamId === 'content');
+      const studio = workflowStages.find(st => st.id === 'scripts');
+      content.url = studio.url;
+      content.view = studio.view;
+      content.workflowStages = workflowStages;
+      content.workflowFlows = d.flows;
+      content.items = workflowStages.flatMap(st => st.items.map(it => ({ ...it, workflowStageId:st.id, workflowStageName:st.name })));
+      return { ...d, organizationVersion:1, office:{ ...d.office, name:'HeoBrain AI 오피스' }, stages,
+        agents:d.agents.map(a => ({ ...a, teamId:'content', workflowStageId:a.stageId, stageId:'scripts' })),
+        events:d.events.map(ev => ({ ...ev, workflowStageId:ev.stageId, stageId:'scripts' })),
+        workflowFlows:d.flows, flows:[] };
     },
   };
 
@@ -1433,8 +1471,14 @@
       space.stages.forEach((st) => st.desks.forEach((d) => { d.taken = null; }));
     },
 
+    standingSpot(index) {
+      // shortcut: 현재 콘텐츠 9개 역할 기준. 역할이 늘면 좌석·회의 구역을 확장한다.
+      return { x:-0.8 + (index % 3) * 1.8, z:-0.4 + Math.floor(index / 3) * 1.5 };
+    },
+
     buildAgents(agents) {
       this.clearAgents();
+      const standing = new Map();
       const skins = ['#f1c9a5', '#d9a57c', '#a9774f', '#f5d6b8', '#7a4a2e'];
       const shirts = ['#ff7a59', '#4f8df7', '#2ec4a6', '#f2a444', '#8b6cf0', '#e65fb8', '#59c3ff', '#c9d1ff'];
       const hairs = ['#2b1d14', '#5a3a22', '#1a1a1a', '#b56b3a', '#d8c7a8', '#3a2a5a'];
@@ -1450,7 +1494,10 @@
           av.root.rotation.y = desk.faceY;
           this.setPose(av, 'sit');
         } else {
-          const spot = this.local(st, 1.0 + (i % 3) * 1.2, 0, 1.5);
+          const index = standing.get(st.id) || 0;
+          standing.set(st.id, index + 1);
+          const p = this.standingSpot(index);
+          const spot = this.local(st, p.x, 0, p.z);
           agent.pos = spot; agent.mode = 'standing';
           av.root.position.copyFrom(spot);
           av.root.rotation.y = st.rotY + Math.PI;
@@ -1921,7 +1968,10 @@
 
     init() {
       $('panel-close').addEventListener('click', () => this.closePanel());
+      $('btn-command')?.addEventListener('click', () => this.openBrain());
       $('panel-body').addEventListener('click', (e) => {
+        const team = e.target.closest('[data-team]');
+        if (team) { this.openStage(team.dataset.team); return; }
         if (!embed.enabled) return;
         const act = e.target.closest('[data-action]');
         if (act) {
@@ -1972,8 +2022,8 @@
 
     rebuild(d) {
       $('office-name').textContent = `${d.office.name} · 오피스 월드`;
-      explorationNames.clear(); explorationNames.set('hub', '공유 기억 살펴보기');
-      space.stages.forEach((st) => explorationNames.set(st.id, `${st.name} 둘러보기`));
+      explorationNames.clear(); explorationNames.set('hub', '중앙 관제 구역 둘러보기');
+      space.stages.forEach((st, i) => explorationNames.set(st.id, `공중 ${i + 1}구역 · ${st.name} 둘러보기`));
       exploration();
       $('cards').querySelectorAll('.card.stage').forEach((el) => el.remove());
       this.cards.clear();
@@ -1990,17 +2040,20 @@
     },
 
     refresh(d) {
+      const command = $('btn-command');
+      if (command) command.disabled = false;
       space.stages.forEach((st) => {
         const el = this.cards.get(st.id);
         if (!el) return;
         const agents = space.agents.filter((a) => a.stageId === st.id);
         const running = agents.filter((a) => a.status === 'running').length;
         const human = st.items.filter((it) => it.needsHuman).length;
-        el.innerHTML = `<span class="card-dot"></span><span class="card-body"><span class="card-title">${esc(st.name)}</span><span class="card-meta"><span>${st.items.length}건</span><span class="running">${agents.length}명 · ${running} 실행</span>${human ? `<span class="human">사람 ${human}</span>` : ''}</span></span><span class="card-faces">${agents.map((a) => `<span class="face ${a.status}" style="--face:${a.av ? faceColor(a) : '#c9a'}" title="${esc(a.name)}"></span>`).join('')}</span>`;
+        const meta = st.teamId && st.connection !== 'content' ? esc(st.approval) : `<span>${st.items.length}건</span><span class="running">앱 역할 ${agents.length}개 · ${running} 실행</span>${human ? `<span class="human">사람 ${human}</span>` : ''}`;
+        el.innerHTML = `<span class="card-dot"></span><span class="card-body"><span class="card-title">${esc(st.name)}</span><span class="card-meta">${meta}</span></span><span class="card-faces">${agents.map((a) => `<span class="face ${a.status}" style="--face:${a.av ? faceColor(a) : '#c9a'}" title="${esc(a.name)}"></span>`).join('')}</span>`;
         el.classList.toggle('active', space.selectedStage === st.id);
       });
       const b = d.brain;
-      this.brainCard.innerHTML = `<span class="card-title">${esc(b.name)}</span><span class="card-meta"><span>${fmt(b.notes)} 절</span><span>원본 ${fmt(b.sources)}편</span></span><span class="card-meta"><span>${esc(b.label)}</span></span>`;
+      this.brainCard.innerHTML = d.organizationVersion === 1 ? '<span class="card-title">오비서 중앙 관제</span><span class="card-meta">5팀 업무 보기 · 팀별 직접 진입</span>' : `<span class="card-title">${esc(b.name)}</span><span class="card-meta"><span>${fmt(b.notes)} 절</span><span>원본 ${fmt(b.sources)}편</span></span><span class="card-meta"><span>${esc(b.label)}</span></span>`;
       $('tags').innerHTML = [...new Set(space.agents.map((a) => `${a.engine} · ${a.model}`.trim()))].filter((t) => t !== '·').map((t) => `<span class="tag">${esc(t)}</span>`).join('');
       const pill = $('source-pill');
       pill.className = `source-pill ${data.source === 'live' ? 'live' : ''} ${data.error ? 'error' : ''}`.trim();
@@ -2059,10 +2112,19 @@
       const bodyHtml = st.items.length ? st.items.map((it) => {
         const cls = it.needsHuman ? 'human' : /fail|error/.test(it.state) ? 'failed' : /writing|producing|research|measuring/.test(it.state) ? 'running' : '';
         const acts = embed.enabled ? `<div class="item-actions">${(data.source === 'live' ? it.actions : []).map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['action', it.id, a.id]))}"${data.error || space.pendingActions.has(it.id + ':' + a.id) ? ' disabled' : ''}>${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['open', it.id, it.view]))}">오피스에서 열기</button>` : ''}</div>` : '';
-        return `<div class="item${space.embedFocus === it.id ? ' active' : ''}" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div><div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
-      }).join('') : '<p class="panel-note">이 단계에 등록된 작업이 없습니다.</p>';
-      const footHtml = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}" data-focus-key="${esc(JSON.stringify(['enter', st.id]))}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener" data-focus-key="${esc(JSON.stringify(['stage-link', st.id]))}">${data.source === 'live' ? '오피스에서 열기' : '플레이북에서 보기'}</a>` : ''}<span class="panel-note">${embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.'}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
-      this.replaceContent($('panel-body'), bodyHtml, () => { $('panel-body').innerHTML = bodyHtml; });
+        return `<div class="item${space.embedFocus === it.id ? ' active' : ''}" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div>${it.workflowStageName ? `<div class="item-agent">${esc(it.workflowStageName)}</div>` : ''}<div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
+      }).join('') : `<p class="panel-note">${st.teamId ? '실제 업무 연결 전입니다. 등록된 실행 작업은 없습니다.' : '이 단계에 등록된 작업이 없습니다.'}</p>`;
+      const goals = st.teamId ? `<section class="team-goals"><p>${esc(st.description)}</p><ul>${st.goals.map(goal => `<li>${esc(goal)}</li>`).join('')}</ul>${st.connection === 'content' ? '<p class="panel-note">아래 상태는 기존 콘텐츠 앱의 기록입니다. Hermes 비서 연결이나 모든 채널 업로드 완료를 뜻하지 않습니다.</p>' : '<p class="panel-note">메일·파일 조회나 비서 실행을 이 화면에서 시작하지 않습니다.</p>'}</section>` : '';
+      const workflow = st.workflowStages?.length ? `<section class="workflow-map"><h3>콘텐츠 팀 내부 공정</h3>${st.workflowStages.map(step => {
+        const safeUrl = /^(https?:\/\/|\/(?!\/))/.test(step.url || '') ? step.url : '';
+        const key = esc(JSON.stringify(['workflow', step.id]));
+        const link = embed.enabled && step.view ? `<button type="button" class="item-link" data-open="${esc(step.view)}" data-item="" data-focus-key="${key}">공정 열기</button>` : safeUrl ? `<a class="item-link" href="${esc(safeUrl)}" target="_blank" rel="noopener" data-focus-key="${key}">공정 열기</a>` : '';
+        return `<div><span>${esc(step.name)} · ${step.items.length}건</span>${link}</div>`;
+      }).join('')}</section>` : '';
+      const stageNote = st.teamId && st.connection !== 'content' ? '팀의 업무 범위만 정리한 상태입니다. 실제 비서 연결·실행 전입니다.' : embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.';
+      const footHtml = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}" data-focus-key="${esc(JSON.stringify(['enter', st.id]))}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener" data-focus-key="${esc(JSON.stringify(['stage-link', st.id]))}">${data.source === 'live' ? '오피스에서 열기' : '플레이북에서 보기'}</a>` : ''}<span class="panel-note">${esc(stageNote)}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
+      const teamBody = goals + workflow + bodyHtml;
+      this.replaceContent($('panel-body'), teamBody, () => { $('panel-body').innerHTML = teamBody; });
       this.replaceContent($('panel-foot'), footHtml, () => { $('panel-foot').innerHTML = footHtml; });
       panel.hidden = false;
       if (!silent) {
@@ -2072,7 +2134,10 @@
     },
 
     openBrain() {
+      if (!space.data) return;
       if(results.opened)results.close();
+      if(workshop.opened)workshop.setOpen(false);
+      if(space.rosterOpen)workbench.setRoster(false);
       if (space.layer !== 'office') controls.setLayer('office');
       exploration('hub');
       const b = space.data.brain;
@@ -2083,9 +2148,19 @@
       $('panel-sub').textContent = `${fmt(b.notes)}절 · 원본 ${fmt(b.sources)}편`;
       $('panel-body').innerHTML = `<p class="panel-note">${esc(b.label)}. 검색 결과는 과거 계획과 근거이며 현재 지시나 실행 권한이 아닙니다.</p>` + space.agents.map((a) => `<div class="item"><span class="item-stripe ${a.status === 'running' ? 'running' : a.status === 'waiting' ? 'human' : a.status === 'error' ? 'failed' : ''}"></span><div><div class="item-title">${esc(a.name)}</div><div class="item-state">${esc(a.engine)} · ${esc(a.model)} · ${statusLabel(a.status)}</div><div class="item-agent">${esc(a.task)}</div></div></div>`).join('');
       $('panel-foot').innerHTML = '<span class="panel-note">동료 상태는 투영 데이터의 값 그대로입니다. 공간이 진행률을 추정하지 않습니다.</span>';
+      if (space.data.organizationVersion === 1) {
+        $('panel-title').textContent = '오비서 중앙 관제';
+        $('panel-sub').textContent = '중앙 접수와 팀별 직접 지시를 위한 5팀 구성';
+        $('panel-body').innerHTML = '<p class="panel-note">먼저 팀을 선택해 맡길 업무와 연결 상태를 확인하세요. 실제 비서 배정·업무 전달은 EC2 이전 후 연결할 예정입니다.</p>' + space.stages.map(st => `<button type="button" class="team-choice" data-team="${esc(st.id)}"><strong>${esc(st.name)}</strong><span>${esc(st.description)}</span><small>${esc(st.approval)}</small></button>`).join('') + `<details class="team-memory"><summary>현재 콘텐츠 앱의 참고 기억</summary><p class="panel-note">${esc(b.name)} · ${fmt(b.notes)}절 · 원본 ${fmt(b.sources)}편. ${esc(b.label)}. 전 팀 공용 위키·전체 대화 자동 보존과는 별개입니다.</p></details>`;
+        $('panel-foot').innerHTML = '<span class="panel-note">팀 구성을 바꿔도 기존 콘텐츠 작업·승인·결과 ID와 지리 탐험 기록은 보존합니다.</span>';
+      }
       panel.hidden = false;
       this.cards.forEach((el) => el.classList.remove('active'));
       controls.focusHub();
+      if (space.data.organizationVersion === 1) {
+        $('panel-body').scrollTop = 0;
+        $('panel-body').querySelector('.team-choice')?.focus({ preventScroll:true });
+      }
     },
 
     closePanel() {
@@ -2114,6 +2189,7 @@
       space.stages.forEach((st) => {
         const el = this.cards.get(st.id);
         if (!el) return;
+        if (!walk && controls.focused && controls.focused !== st.id) { el.hidden = true; return; }
         if ((space.layer === 'meadow' && walk) || (walk && B.Vector3.Distance(st.pos, ppos) > 30)) { el.hidden = true; return; }
         const pr = this.project(st.pos.add(new B.Vector3(0, 5.6, 0)));
         if (!pr.visible || pr.x < -200 || pr.x > w + 200 || pr.y < -100 || pr.y > h + 100) { el.hidden = true; return; }
@@ -2751,6 +2827,7 @@
     let simTimer = null;
     data.onChange((d) => {
       if (!d) { if (space.data) hud.refresh(space.data); return; } // 폴링 실패: 마지막 상태 유지, 상태 표시만 갱신
+      d = organization.project(d);
       const first = !space.data;
       const stageKey = d.stages.map((s) => s.id).join('|');
       const agentKey = d.agents.map((a) => a.id).join('|');
@@ -2762,7 +2839,7 @@
         world.buildAgents(d.agents);
         hud.rebuild(d);
       } else {
-        space.stages.forEach((st) => { const nx = d.stages.find((s) => s.id === st.id); if (nx) Object.assign(st, { items: nx.items, name: nx.name, approval: nx.approval, url: nx.url, view: nx.view }); });
+        space.stages.forEach((st) => { const nx = d.stages.find((s) => s.id === st.id); if (nx) Object.assign(st, { items: nx.items, name: nx.name, approval: nx.approval, url: nx.url, view: nx.view, teamId:nx.teamId, description:nx.description, goals:nx.goals, connection:nx.connection, workflowStages:nx.workflowStages }); });
         if (agentKey !== prevAgentKey) world.buildAgents(d.agents); else world.updateAgentStatuses(d.agents);
         hud.refresh(d);
       }

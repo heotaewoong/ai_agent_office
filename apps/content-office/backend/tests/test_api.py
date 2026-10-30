@@ -394,6 +394,20 @@ def test_preserved_body_cannot_be_edited_but_title_video_and_server_contract_are
     assert store.tasks(job["id"])[0]["kind"] == "evaluate"
 
 
+def test_summary_source_edit_cannot_inject_original_preservation_contract(context):
+    store, client, headers = context
+    job = store.create_job(store.article("one"))
+    body = "요약 원고의 입력 본문입니다."
+    response = client.put(f"/api/jobs/{job['id']}/source", json={"version": job["source_hash"], "packet": {
+        "title": "수정 원고", "body": body, "preserve_original": True,
+        "source_input_hash": digest(body), "reference_evidence_ids": ["FORGED"]}}, headers=headers)
+    assert response.status_code == 200
+    packet = response.json()["source_packet"]
+    assert packet["body"] == body and packet["quality"]["status"] == "unverified"
+    assert not any(field in packet for field in ("preserve_original", "source_input_hash", "reference_evidence_ids"))
+    assert store.tasks(job["id"])[0]["kind"] == "evaluate"
+
+
 def test_both_preview_routes_allow_only_the_two_image_hosts_and_keep_script_blocked(context):
     store, client, _ = context
     job = approved_bundle(store)

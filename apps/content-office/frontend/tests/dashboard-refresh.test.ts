@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { createDashboardRefreshGuard } from "../lib/dashboard-refresh.ts";
 
-const page = ts.createSourceFile("page.tsx", readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const page = ts.createSourceFile("page.tsx", readFileSync(new URL("../app/office-shell.tsx", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
 function pageFunction(name: "loadDashboard" | "action" | "effect") {
   let code = "";

@@ -1,4 +1,7 @@
 export type Article = {
+  segment?: "exam" | "ai" | "unclassified";
+  topics?: string[];
+  language?: string;
   id: string;
   title: string;
   url: string;
@@ -329,6 +332,8 @@ export type Dashboard = {
   articles: Article[];
   jobs: JobMetadata[];
   feeds: Feed[];
+  source_registry?: { id: string; segment: "exam" | "ai"; name: string; language: string; topics: string[] }[];
+  feed_report?: { checked_at?: string; partial_failure?: boolean };
   budget: {
     cap_krw: number;
     spent_krw: number;

@@ -141,17 +141,21 @@ export function NewsletterPanel({ job, busy, action }: { job: Job; busy: boolean
                       {copied === issue.id ? "복사됨" : "Markdown 복사"}
                     </button>
                     {issue.state === "approved" && (
+                      <>
+                      {!reviewToken && <p className="field-error" role="alert">발송 표시할 회차 판본을 확인하지 못했습니다. 다시 불러온 본문과 수신자 묶음을 확인하세요.</p>}
                       <button
                         className="button secondary small"
                         type="button"
-                        disabled={busy}
+                        disabled={busy || !reviewToken}
                         onClick={() => {
+                          if (busy || !reviewToken) return;
                           if (!window.confirm("메일러에서 실제로 보낸 뒤에만 표시하세요. 발송 완료로 기록할까요?")) return;
-                          void run("발송 완료 표시", () => api.markNewsletterSent(issue.id), "발송 완료로 표시했습니다.");
+                          void run("발송 완료 표시", () => api.markNewsletterSent(issue.id, reviewToken), "발송 완료로 표시했습니다.");
                         }}
                       >
                         발송 완료로 표시
                       </button>
+                      </>
                     )}
                   </div>
                 </div>

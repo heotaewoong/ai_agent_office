@@ -1,0 +1,112 @@
+[
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "url": "https://openai.com/news/rss.xml",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "google-ai",
+    "name": "Google AI",
+    "url": "https://blog.google/technology/ai/rss/",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "deepmind",
+    "name": "Google DeepMind",
+    "url": "https://deepmind.google/blog/rss.xml",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "microsoft-research",
+    "name": "Microsoft Research",
+    "url": "https://www.microsoft.com/en-us/research/feed/",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "nvidia",
+    "name": "NVIDIA",
+    "url": "https://blogs.nvidia.com/feed/",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "huggingface",
+    "name": "Hugging Face",
+    "url": "https://huggingface.co/blog/feed.xml",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "arxiv-cs-ai",
+    "name": "arXiv cs.AI",
+    "url": "https://rss.arxiv.org/rss/cs.AI",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "mit-ai",
+    "name": "MIT AI",
+    "url": "https://news.mit.edu/rss/topic/artificial-intelligence2",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "google-developers",
+    "name": "Google Developers",
+    "url": "https://developers.googleblog.com/feeds/posts/default",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "github-ai",
+    "name": "GitHub AI",
+    "url": "https://github.blog/ai-and-ml/feed/",
+    "segment": "ai",
+    "topics": [
+      "AI",
+      "자동화"
+    ],
+    "language": "en"
+  }
+]
