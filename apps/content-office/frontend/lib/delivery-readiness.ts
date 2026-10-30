@@ -34,6 +34,15 @@ export function requirePrivateUploadResult(record: Delivery): void {
     throw new Error(`YouTube 기록: ${deliveryRecordLabel(record)}. 완료로 처리하지 않았습니다. 업로드 장부와 Studio를 확인하고 결과가 불명이면 대사하세요.`);
 }
 
+export function requirePrivateDeliveryResult(record: Delivery, channelKey: string): "private" | "pending_owner" {
+  if (record.channel_key && record.channel_key !== channelKey) throw new Error("전달 결과의 채널이 선택한 채널과 다릅니다.");
+  if (record.state === "pending_owner" && record.auth_location === "owner_pc" && record.channel_key === channelKey
+      && record.visibility === "private" && !record.external_id && /^delivery_[a-f0-9]{16}$/.test(record.id))
+    return "pending_owner";
+  requirePrivateUploadResult(record);
+  return "private";
+}
+
 export function deliveryRecordLabel(record: Pick<Delivery, "state" | "privacy_status" | "external_id">): string {
   if (record.state === "private" && (record.privacy_status !== "private" || !studioUrl(record.external_id)))
     return "업로드 기록 있음 · 비공개 범위/영상 ID 확인 필요";

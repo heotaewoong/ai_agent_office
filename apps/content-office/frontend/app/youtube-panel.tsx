@@ -5,7 +5,7 @@ import { api } from "../lib/api";
 import type { Channel, ChannelStagingSnapshot, Delivery as DeliveryRecord, Job } from "../lib/types";
 import { canReconcile, studioUrl } from "../lib/settings";
 import { localeLabel, youtubeChannels } from "../lib/channels";
-import { deliveryRecordLabel, packetLanguage, requirePrivateUploadResult, requireStagingSnapshot, sourceChannelMismatch, stagingExternalLabel, stagingLocalLabel, youtubePreflight } from "../lib/delivery-readiness";
+import { deliveryRecordLabel, packetLanguage, requirePrivateDeliveryResult, requireStagingSnapshot, sourceChannelMismatch, stagingExternalLabel, stagingLocalLabel, youtubePreflight } from "../lib/delivery-readiness";
 import { formatDate, safeArtifactUrl } from "../lib/workflow";
 import { Icon } from "./icons";
 
@@ -43,6 +43,7 @@ export function YoutubePanel({
   const readiness = youtubePreflight(job, channel, requestBlockedReason);
   const mismatch = channel ? sourceChannelMismatch(job, channel) : null;
   const queuedDeliveryState=(job.tasks??[]).filter(t=>t.kind==='private_delivery').map(t=>t.id+':'+t.state).join('|');
+  const ownerPending = records.some(record => record.state === "pending_owner");
 
   useEffect(() => {
     let alive = true;
@@ -73,10 +74,10 @@ export function YoutubePanel({
 
   useEffect(() => {
     void load();
-    if (!(job.tasks??[]).some(t=>t.kind==='private_delivery'&&['queued','running'].includes(t.state??''))) return;
+    if (!ownerPending && !(job.tasks??[]).some(t=>t.kind==='private_delivery'&&['queued','running'].includes(t.state??''))) return;
     const timer=setInterval(()=>void load(),4_000);
     return ()=>clearInterval(timer);
-  }, [load, job.release_approval?.version, queuedDeliveryState]);
+  }, [load, job.release_approval?.version, queuedDeliveryState, ownerPending]);
 
   async function upload() {
     if (!readiness.ok || busy) return;
@@ -84,8 +85,8 @@ export function YoutubePanel({
     if (!window.confirm(`승인된 영상을 ${name} 채널에 비공개(private)로 올립니다. 진행할까요?`)) return;
     await action("YouTube 비공개 업로드", async () => {
       const record = await api.deliverYoutube(job.id, channelKey);
-      requirePrivateUploadResult(record);
-    }, `${name} 채널의 비공개 응답과 영상 ID를 확인했습니다. 영상 처리·재생 상태는 YouTube Studio에서 확인하세요.`);
+      requirePrivateDeliveryResult(record, channelKey);
+    }, "전달 요청을 확인했습니다. 아래 기록에서 PC 전달 대기와 실제 비공개 완료를 구분해 확인하세요.");
     await load();
   }
 
@@ -94,7 +95,7 @@ export function YoutubePanel({
     await load();
   }
 
-  const blocking = records.some((r) => ["created", "accepted", "unknown", "needs_review"].includes(r.state));
+  const blocking = records.some((r) => ["created", "accepted", "unknown", "needs_review", "pending_owner"].includes(r.state));
 
   return (
     <section className="youtube-panel" aria-label="YouTube 비공개 업로드">
@@ -125,7 +126,7 @@ export function YoutubePanel({
           {channel && (
             <small className="muted">
               {channel.key} · {localeLabel(channel.locale)} ·{" "}
-              {channel.credentials_configured ? "자격 설정 있음 · 실제 OAuth 미검증" : `YOUTUBE_${channel.key.replace(/^youtube_/, "").toUpperCase()}_REFRESH_TOKEN 없음`}
+              {channel.auth_location === "owner_pc" ? (channel.credentials_configured ? "본인 PC 인증 연결됨 · 로그인 정보는 PC에 보관" : "본인 PC 인증 실행기 연결 필요") : (channel.credentials_configured ? "자격 설정 있음 · 실제 OAuth 미검증" : `YOUTUBE_${channel.key.replace(/^youtube_/, "").toUpperCase()}_REFRESH_TOKEN 없음`)}
               {channel.publication_enabled ? "" : " · 제작 설정에서 발행 허용이 꺼져 있습니다"}
             </small>
           )}

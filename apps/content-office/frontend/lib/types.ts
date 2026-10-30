@@ -295,6 +295,7 @@ export type ProviderStatus = {
 };
 export type ProfileSummaries = { voice: VoiceProfile; image: ProviderProfile; clip: ProviderProfile; text?: ProviderProfile; availability?: ProfileAvailability };
 export type Delivery = {
+  auth_location?: "owner_pc";
   id: string;
   channel: string;
   channel_key?: string;
@@ -508,6 +509,7 @@ export type Brief = {
 };
 export type ChannelDelivery = "youtube_api" | "manual" | "notify";
 export type Channel = {
+  auth_location?: "owner_pc";
   key: string;
   platform: string;
   label: string;

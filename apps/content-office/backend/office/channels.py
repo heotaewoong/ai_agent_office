@@ -63,6 +63,9 @@ def _refresh_token(key):
 
 def youtube_credentials(key):
     """세 값이 모두 있을 때만 자격을 돌려준다. 저장소에는 절대 쓰지 않는다."""
+    from .owner_auth import enabled
+    if enabled():
+        return None
     definition = CHANNELS.get(key)
     if not definition or definition["platform"] != "youtube":
         raise WorkflowError(f"'{key}'은(는) YouTube 채널이 아닙니다")
@@ -81,6 +84,9 @@ def missing_credential_names(key):
 
 
 def configured_youtube_channels():
+    from .owner_auth import enabled, available_keys
+    if enabled():
+        return [key for key in available_keys() if key in CHANNELS and CHANNELS[key]["platform"] == "youtube"]
     return [key for key, row in CHANNELS.items() if row["platform"] == "youtube" and youtube_credentials(key) is not None]
 
 
@@ -93,6 +99,10 @@ def _row(key, overrides):
     row = dict(CHANNELS[key])
     row.update({field: value for field, value in (overrides.get(key) or {}).items() if field in EDITABLE_FIELDS})
     row["credentials_configured"] = bool(row["platform"] == "youtube" and youtube_credentials(key) is not None)
+    from .owner_auth import enabled, available_keys
+    if enabled() and row["platform"] == "youtube":
+        row["auth_location"] = "owner_pc"
+        row["credentials_configured"] = key in available_keys()
     return row
 
 

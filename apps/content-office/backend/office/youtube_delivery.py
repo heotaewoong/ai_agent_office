@@ -224,6 +224,9 @@ def _finalize(store, record, body):
 
 
 def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_CHANNEL):
+    from .owner_auth import enabled, stage_delivery
+    if enabled():
+        return stage_delivery(store, job_id, channel_key, actor)
     if not window_open(store):
         raise WorkflowError("허용된 작업 시간이 종료됐습니다. 업로드는 시작하지 않았습니다")
     session = session or requests
