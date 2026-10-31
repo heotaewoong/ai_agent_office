@@ -1,8 +1,8 @@
 import {test,expect,type Page} from '@playwright/test';
 
-async function harness(page:Page) {
+async function harness(page:Page, defaultFormat?:"shorts") {
   const hash='a'.repeat(64),id='thumbnail-contract';let revision=1;
-  let state:any={revision:'1'.repeat(64),current_source_hash:hash,source_hash:hash,stale:false,title:'합성 검증 원고',candidates:[1,2,3].map(n=>({id:String(n),title:'합성 검증 원고',angle:`방향 ${n}`,url:`/api/thumbnail-contract/image-${n}`,portrait_url:`/api/thumbnail-contract/image-${n}-shorts`,provenance:{provider:'synthetic-test'}}))};
+  let state:any={default_format:defaultFormat,revision:'1'.repeat(64),current_source_hash:hash,source_hash:hash,stale:false,title:'합성 검증 원고',candidates:[1,2,3].map(n=>({id:String(n),title:'합성 검증 원고',angle:`방향 ${n}`,url:`/api/thumbnail-contract/image-${n}`,portrait_url:`/api/thumbnail-contract/image-${n}-shorts`,provenance:{provider:'synthetic-test'}}))};
   const job={id,title:'합성 검증 원고',state:'source_review',source_hash:hash,article:{id:'one',title:'합성 시험',url:'https://example.com'},selections:{blog:false,video:true,pdf:false,cards:false},source_packet:{title:'합성 검증 원고',body:'합성 화면 시험입니다. 실제 콘텐츠가 아닙니다.',video:{scenes:[]},quality:{status:'pending'}},tasks:[],events:[],drafts:[]};
   const dashboard={articles:[],jobs:[job],feeds:[],agents:[],tasks:[],events:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:'open',authorized_end:new Date(Date.now()+3600000).toISOString()},provider:{model:'synthetic',configured:false},knowledge:{}};
   const writes:{path:string;body:any;csrf?:string}[]=[];
@@ -60,4 +60,13 @@ for(const width of [1440,375])test(`썸네일 ${width}px 비교·확대·참조�
   expect(writes.at(-1)?.body).toMatchObject({candidate_id:'edited',finalize:true,format:'shorts'});
   expect(writes.every(w=>w.path.includes('/thumbnail-studio/')&&w.csrf==='synthetic-token')).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+
+test('새 쇼츠는 세로 원본이 기본이며 조회가 선택을 대신하지 않는다',async({page})=>{
+  const writes=await harness(page,'shorts');await page.goto('/publish?job=thumbnail-contract');
+  const panel=page.getByRole('region',{name:'썸네일 3장을 비교하고 다듬으세요'});
+  await expect(panel.getByRole('radio',{name:/Shorts 세로 표지/})).toBeChecked();
+  await expect(panel.getByRole('img').first()).toHaveJSProperty('naturalHeight',1920);
+  expect(writes).toEqual([]);
 });

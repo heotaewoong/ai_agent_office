@@ -21,6 +21,11 @@ def enabled(store, job):
     return bool(job.get('thumbnail_auto_enabled', store.setting('thumbnail_studio_default', False)) and job.get('selections', {}).get('video'))
 
 
+def default_format(job):
+    from .video_platforms import selected_platforms
+    return 'shorts' if any(p in ('youtube_shorts', 'instagram_reels') for p in selected_platforms(job.get('source_packet'))) else 'landscape'
+
+
 def context(store, job_id, expected=None):
     job = store.job(job_id)
     if expected is not None and job.get('source_hash') != expected:
@@ -43,7 +48,7 @@ def snapshot(store, job_id):
             'revision': digest(state), 'stale': bool(state and state.get('source_hash') != job.get('source_hash')),
             'current_source_hash': job.get('source_hash'), 'provider': 'openai-gpt-image',
             'per_image_reservation_krw': 200, 'job_cap_krw': 2000,
-            'automatic_on_video_production': True}
+            'automatic_on_video_production': True, 'default_format': default_format(job)}
 
 
 def checked_state(job, revision):
@@ -94,6 +99,8 @@ def compose(artwork, output, title, *, portrait=False):
     partial = output.with_suffix('.partial.png')
     image.save(partial, 'PNG')
     partial.replace(output)
+    return {'dimensions': list(image.size), 'title_box': list(box), 'title_fit': True,
+            'format': 'shorts' if portrait else 'landscape', 'text_reflowed': True}
 
 
 def candidate_path(store, state, candidate, kind='image'):
@@ -104,6 +111,10 @@ def candidate_path(store, state, candidate, kind='image'):
     if hashlib.sha256(path.read_bytes()).hexdigest() != record['sha256']:
         raise WorkflowError('썸네일 파일이 변경됐습니다. 자동 재생성하지 않습니다')
     validate_picture(path)
+    if kind in ('image', 'portrait'):
+        with Image.open(path) as image:
+            if image.size != ((1080, 1920) if kind == 'portrait' else (1280, 720)):
+                raise WorkflowError('썸네일 규격이 맞지 않습니다. 잘라서 출고하지 않습니다')
     return path
 
 
@@ -127,13 +138,14 @@ def add_candidate(store, job_id, source_hash, artwork, *, angle, provenance, par
         shutil.copyfile(artwork, target)
     _, _, title = context(store, job_id, source_hash)
     image = directory / f'thumbnail-{key[:8]}.png'
-    compose(target, image, title)
+    landscape_check = compose(target, image, title)
     portrait = directory / f'thumbnail-{key[:8]}-shorts.png'
-    compose(target, portrait, title, portrait=True)
+    portrait_check = compose(target, portrait, title, portrait=True)
     candidate = {'id': key, 'title': title, 'angle': angle, 'parent_id': parent_id, 'instruction': instruction,
                  'created_at': now(), 'provenance': provenance,
                  'artwork': artifact_record(store.artifacts, target), 'image': artifact_record(store.artifacts, image),
-                 'portrait': artifact_record(store.artifacts, portrait)}
+                 'portrait': artifact_record(store.artifacts, portrait),
+                 'layout_checks': {'landscape': landscape_check, 'shorts': portrait_check}}
     with store.connection(transaction=True) as db:
         job = store._job(db, job_id)
         if job.get('source_hash') != source_hash:
@@ -145,6 +157,7 @@ def add_candidate(store, job_id, source_hash, artwork, *, angle, provenance, par
         existing = next((c for c in state['candidates'] if c['id'] == key), None)
         if existing:
             existing['portrait'] = candidate['portrait']
+            existing['layout_checks'] = candidate['layout_checks']
         else:
             state['candidates'].append(candidate)
         state.update(updated_at=now())
@@ -272,12 +285,12 @@ def production_candidates(store, job_id, folder, *, provider_factory=ThumbnailPr
     paths = []
     for index, candidate in enumerate(candidates):
         target = folder / f'thumbnail-{index+1:02}.png'
-        shutil.copyfile(candidate_path(store, state, candidate), target)
+        shutil.copyfile(candidate_path(store, state, candidate, image_kind(default_format(job))), target)
         paths.append(target)
     from .media import write_json
     write_json(folder / 'thumbnail-review.json', {'assessment_kind': 'generated_artwork_human_review_required',
                'candidates': [{'name': p.name, 'title': state['title'], 'angle': c['angle'],
-                               'studio_id': c['id'], 'scores': {'source_alignment': 0, 'title_fit': 0},
+                               'studio_id': c['id'], 'format': default_format(job), 'layout_checks': c.get('layout_checks', {}), 'scores': {'source_alignment': 0, 'title_fit': 0},
                                'human_selection': 'pending'} for p, c in zip(paths, candidates)]})
     return paths
 
@@ -289,7 +302,7 @@ def attach_to_manifest(store, job_id, manifest):
     if state.get('source_hash') != manifest.get('source_hash') or len(state.get('candidates', [])) < 3:
         return manifest
     records = []
-    kind = image_kind(state.get('finalized_format') or state.get('selected_format') or 'landscape')
+    kind = image_kind(state.get('finalized_format') or state.get('selected_format') or default_format(job))
     for candidate in state['candidates']:
         if not candidate.get(kind):
             raise WorkflowError('선택한 규격의 썸네일 파일을 먼저 준비하세요')

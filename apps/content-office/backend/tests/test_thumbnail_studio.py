@@ -114,6 +114,8 @@ def test_production_requires_approval_and_reuses_three(fixture, tmp_path):
     paths = production_candidates(store, job['id'], tmp_path, provider_factory=FakeProvider)
     assert len(paths) == 3 and len(FakeProvider.calls) == 3
     assert all(p.exists() for p in paths)
+    for path in paths:
+        with Image.open(path) as image: assert image.size == (1080,1920)
 
 
 def test_selected_reference_request_uses_official_edit_endpoint(fixture, monkeypatch):
@@ -215,3 +217,38 @@ def test_both_sizes_served_and_invalid_format_rejected(fixture):
         with Image.open(io.BytesIO(response.content)) as image:
             assert image.size == size
     assert client.get(c['url']+'?format=invalid').status_code == 422
+
+
+def test_shorts_defaults_and_layout_evidence_with_wrong_ratio_blocked(fixture):
+    from office.thumbnail_studio import attach_to_manifest
+    from office.media import artifact_record
+    store, job = fixture
+    state = make(fixture)
+    assert state['default_format'] == 'shorts'
+    c = state['candidates'][0]
+    check = c['layout_checks']['shorts']
+    assert check['dimensions'] == [1080,1920] and check['title_fit'] and check['text_reflowed']
+    x,y,w,h = check['title_box']
+    assert x >= 80 and x+w <= 1000 and y >= 285 and y+h <= 1635
+    manifest=attach_to_manifest(store, job['id'], {'source_hash':job['source_hash'],'files':[]})
+    assert all('-shorts.png' in a['name'] for a in manifest['thumbnail_candidates'])
+    assert manifest['selected_thumbnail_id'] is None
+    path=candidate_path(store,state,c,'portrait')
+    Image.new('RGB',(1280,720)).save(path)
+    c['portrait']=artifact_record(store.artifacts,path)
+    with pytest.raises(WorkflowError,match='규격'):
+        candidate_path(store,state,c,'portrait')
+
+
+def test_overflowing_title_blocks_output_instead_of_cropping(fixture,tmp_path,monkeypatch):
+    from office.thumbnail_studio import compose
+    from office import media
+    original=media.text_box
+    def overflow(draw,text,*args,**kwargs):
+        return {'overflow':True} if text=='overflow-fixture' else original(draw,text,*args,**kwargs)
+    monkeypatch.setattr(media,'text_box',overflow)
+    source=tmp_path/'source.png';Image.new('RGB',(1536,1024)).save(source)
+    output=tmp_path/'must-not-exist.png'
+    with pytest.raises(WorkflowError,match='제목'):
+        compose(source,output,'overflow-fixture',portrait=True)
+    assert not output.exists()

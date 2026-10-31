@@ -7,7 +7,7 @@ import styles from "./thumbnail-studio.module.css";
 
 export type ThumbnailFormat = "landscape"|"shorts";
 type Candidate = {id:string; title:string; angle:string; url:string; portrait_url?:string|null; parent_id?:string|null; instruction?:string; provenance?:{provider?:string; model?:string}};
-export type ThumbnailState = {revision:string; current_source_hash?:string; source_hash?:string; title?:string; stale:boolean; candidates:Candidate[]; selected_id?:string|null; finalized_id?:string|null; selected_format?:ThumbnailFormat; finalized_format?:ThumbnailFormat|null; task?:{id:string; state:string; result?:{error?:string}}|null};
+export type ThumbnailState = {revision:string; current_source_hash?:string; source_hash?:string; title?:string; stale:boolean; candidates:Candidate[]; selected_id?:string|null; finalized_id?:string|null; selected_format?:ThumbnailFormat; finalized_format?:ThumbnailFormat|null; default_format?:ThumbnailFormat; task?:{id:string; state:string; result?:{error?:string}}|null};
 
 export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedReason?:string; action:Action}) {
   const [data,setData]=useState<ThumbnailState|null>(null);
@@ -23,7 +23,7 @@ export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedRe
   const load=useCallback(async()=>{const seq=++requestId.current;try {const next=await api.thumbnailStudio(job.id);if(seq===requestId.current){setData(next);setError("");}}catch(e){if(seq===requestId.current)setError(e instanceof Error?e.message:"썸네일을 불러오지 못했습니다");}},[job.id,job.source_hash]);
   useEffect(()=>{setData(null);setReviewed(false);setInstruction("");setLarge(null);void load();return()=>{requestId.current++;};},[load]);
   useEffect(()=>{if(large)dialog.current?.showModal();},[large]);
-  useEffect(()=>{if(data?.selected_format)setFormat(data.selected_format);},[data?.selected_format]);
+  useEffect(()=>{if(data?.selected_format)setFormat(data.selected_format);else if(data?.default_format)setFormat(data.default_format);},[data?.selected_format,data?.default_format]);
   const pending=data?.task?.state==="queued"||data?.task?.state==="running";
   useEffect(()=>{if(!pending)return;const timer=setInterval(()=>void load(),2500);return()=>clearInterval(timer);},[pending,load]);
   useEffect(()=>setReviewed(false),[data?.selected_id,data?.revision,format]);
@@ -40,7 +40,7 @@ export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedRe
     <fieldset className={styles.formats}><legend>썸네일 규격 · 글자가 잘리지 않는 원본</legend>
       <label><input type="radio" name={`thumb-format-${job.id}`} checked={format==="landscape"} onChange={()=>{setFormat("landscape");setLarge(null);}}/> YouTube 일반 영상 · 16:9 · 1280×720</label>
       <label><input type="radio" name={`thumb-format-${job.id}`} checked={format==="shorts"} disabled={!data?.candidates.length||data.candidates.some(c=>!c.portrait_url)} onChange={()=>{setFormat("shorts");setLarge(null);}}/> Shorts 세로 표지 · 9:16 · 1080×1920</label>
-      <p>가로 표지를 세로로 잘라 쓰지 마세요. 세로 표지는 원본 그림에 제목을 다시 배치합니다. Shorts 맞춤 표지는 계정 인증과 YouTube Studio의 지원 여부를 별도로 확인해야 합니다.</p>
+      <p>가로 표지를 세로로 잘라 쓰지 마세요. 쇼츠 제작은 9:16 표지를 기본 준비하며, 세로 표지는 원본 그림에 제목을 다시 배치하고 규격·제목 넘침을 검사합니다. Shorts 맞춤 표지는 계정 인증과 YouTube Studio의 지원 여부를 별도로 확인해야 합니다.</p>
     </fieldset>
     {error&&<p role="alert" className="notice">{error} <button type="button" className="button text" onClick={()=>void load()}>다시 불러오기</button></p>}
     {!data&&!error&&<p role="status">현재 원고의 썸네일을 확인하고 있어요.</p>}
