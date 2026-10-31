@@ -171,9 +171,7 @@ class ImageProvider:
         reservation = self._reserve(key, payload, request_kind, cap)
         self.store.event("image_request_started", {"reservation_id": reservation["id"], "model": payload["model"], "scope": self.config["budget_scope_id"]}, self.job_id)
         try:
-            response = self.transport("https://api.openai.com/v1/images/generations",
-                                      headers={"Authorization": "Bearer " + os.environ["OPENAI_API_KEY"], "Content-Type": "application/json"},
-                                      json=payload, timeout=(10, 180))
+            response = self._request(payload)
         except requests.RequestException:
             self.store.unknown_cost(reservation["id"], "image_network_result_unknown")
             raise WorkflowError("이미지 요청 결과가 불명입니다. 예약을 유지하고 자동 재호출하지 않습니다") from None
@@ -186,6 +184,11 @@ class ImageProvider:
             self.store.unknown_cost(reservation["id"], "image_response_unreadable")
             raise WorkflowError("이미지 응답을 읽지 못해 비용 예약을 유지합니다") from None
         return reservation, data
+
+    def _request(self, payload):
+        return self.transport("https://api.openai.com/v1/images/generations",
+                              headers={"Authorization": "Bearer " + os.environ["OPENAI_API_KEY"], "Content-Type": "application/json"},
+                              json=payload, timeout=(10, 180))
 
     def _settle(self, reservation, data):
         try:

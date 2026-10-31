@@ -167,6 +167,7 @@ export type Event = {
   [key: string]: unknown;
 };
 export type Job = {
+  thumbnail_studio?: {source_hash?:string;candidates?:unknown[]};
   id: string;
   article: Article;
   title: string;

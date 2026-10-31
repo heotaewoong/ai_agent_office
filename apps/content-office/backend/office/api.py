@@ -156,6 +156,7 @@ class ProfileChoice(BaseModel):
 class ProduceRequest(BaseModel):
     # Paid generated clips start only after the operator saw the estimate and confirmed it on the page.
     confirm_paid_clips: bool = False
+    confirm_paid_thumbnails: bool = Field(default=False, strict=True)
 
 
 class ClipLimitsRequest(BaseModel):
@@ -174,6 +175,20 @@ class AutoDeploySwitch(BaseModel):
 
 class ThumbnailChoice(BaseModel):
     artifact_id: str
+
+
+class ThumbnailArtworkRequest(BaseModel):
+    source_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+    revision: str = Field(pattern=r'^[0-9a-f]{64}$')
+    edit_id: str | None = Field(default=None, max_length=80)
+    instruction: str = Field(default='', max_length=1200)
+    confirm_paid: bool = Field(default=False, strict=True)
+
+
+class ThumbnailArtworkChoice(BaseModel):
+    candidate_id: str = Field(min_length=1, max_length=80)
+    revision: str = Field(pattern=r'^[0-9a-f]{64}$')
+    finalize: bool = Field(default=False, strict=True)
 
 
 class EvidenceInput(BaseModel):
@@ -560,6 +575,9 @@ def create_app(store: Store | None = None):
             from .channels import registry
             job=store.job(job_id)
             selections={key:bool((review.selections if review.selections is not None else job['selections']).get(key,False)) for key in ('blog','video','pdf','cards')}
+            from .thumbnail_studio import enabled
+            if enabled(store, {**job, 'selections': selections}):
+                raise WorkflowError('원고 승인 후 제작 버튼에서 썸네일 이미지 비용을 확인해 주세요. 지금은 일반 원고 승인을 선택하세요')
             contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None)['hash']
         return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract)
 
@@ -582,12 +600,18 @@ def create_app(store: Store | None = None):
     def production_estimate(job_id: str):
         # Read-only: what the next production may pay for generated clips. Never calls a provider.
         from .video_selection import paid_clip_estimate
-        return {"clips": paid_clip_estimate(store, store.job(job_id))}
+        job = store.job(job_id)
+        from .thumbnail_studio import enabled
+        return {"clips": paid_clip_estimate(store, job), 'thumbnail_artwork': enabled(store, job)}
 
     @app.post("/api/jobs/{job_id}/produce", status_code=202)
     def produce(job_id: str, body: ProduceRequest | None = None):
         require_open_window()
         job = store.require_source_approval(job_id)
+        from .thumbnail_studio import enabled
+        thumbnails = enabled(store, job)
+        if thumbnails and not (body and body.confirm_paid_thumbnails):
+            raise WorkflowError('원고 기반 썸네일 3장 포함 제작 비용을 화면에서 확인하세요. 기존 후보는 재사용합니다')
         from .video_selection import paid_clip_estimate
         estimate = paid_clip_estimate(store, job)
         if estimate["paid"] and not (body and body.confirm_paid_clips):
@@ -597,8 +621,10 @@ def create_app(store: Store | None = None):
         from .image_selection import background_renderer_for_job
         from .video_selection import clip_renderer_for_job
         from .channels import registry
-        contract = production_contract(renderer_for_job(store, job), job['selections'], image_renderer=background_renderer_for_job(store, job), clip_renderer=clip_renderer_for_job(store, job), channel_registry=registry(store) if job['selections'].get('blog') else None)
+        contract = production_contract(renderer_for_job(store, job), job['selections'], image_renderer=background_renderer_for_job(store, job), clip_renderer=clip_renderer_for_job(store, job), channel_registry=registry(store) if job['selections'].get('blog') else None, thumbnail_artwork=thumbnails)
         payload = {"job_id": job_id, "source_hash": job["source_hash"], "production_contract": contract['hash']}
+        if thumbnails:
+            payload['thumbnail_artwork_confirmed'] = True
         if estimate["paid"]:
             payload.update(paid_clips_confirmed=True, paid_clip_estimate={k: estimate[k] for k in ("clips", "credits", "reservation_krw", "model")})
             store.event("paid_clips_confirmed", {**payload["paid_clip_estimate"], "actor": "local-operator-ui"}, job_id)
@@ -671,6 +697,44 @@ def create_app(store: Store | None = None):
         job = store.require_source_approval(job_id)
         manifest = verify_files(job, ['video'])
         return store.select_thumbnail(job_id, choice.artifact_id, manifest.get("hash"), "local-operator")
+
+    @app.get('/api/jobs/{job_id}/thumbnail-studio')
+    def thumbnail_studio_state(job_id: str):
+        from .thumbnail_studio import snapshot
+        return snapshot(store, job_id)
+
+    @app.post('/api/jobs/{job_id}/thumbnail-studio/generate', status_code=202)
+    def thumbnail_studio_generate(job_id: str, body: ThumbnailArtworkRequest):
+        require_open_window()
+        from .thumbnail_studio import context, snapshot, checked_state
+        job, _, _ = context(store, job_id, body.source_hash)
+        if snapshot(store, job_id)['revision'] != body.revision:
+            raise WorkflowError('썸네일 판본이 바뀌었습니다. 현재 비교를 다시 확인하세요')
+        if body.edit_id:
+            state = checked_state(job, body.revision)
+            if state.get('selected_id') != body.edit_id or not body.instruction.strip():
+                raise WorkflowError('이미지를 먼저 선택하고 수정 요청을 적어 주세요')
+        if body.confirm_paid is not True:
+            raise WorkflowError('이미지 비용을 확인해야 생성할 수 있습니다')
+        payload = {'job_id': job_id, 'source_hash': body.source_hash, 'revision': body.revision,
+                   'edit_id': body.edit_id, 'instruction': body.instruction.strip(), 'paid_confirmed': True}
+        task = store.enqueue('thumbnail_artwork', payload, 'thumbnail-artwork:' + digest(payload), guard_unknown_scope=True)
+        store.update_job(job_id, thumbnail_auto_enabled=True)
+        return task
+
+    @app.post('/api/jobs/{job_id}/thumbnail-studio/choose')
+    def thumbnail_studio_choose(job_id: str, body: ThumbnailArtworkChoice):
+        from .thumbnail_studio import choose
+        return choose(store, job_id, body.candidate_id, body.revision, finalize=body.finalize)
+
+    @app.get('/api/jobs/{job_id}/thumbnail-studio/files/{candidate_id}')
+    def thumbnail_studio_file(job_id: str, candidate_id: str):
+        from .thumbnail_studio import candidate_path
+        state = store.job(job_id).get('thumbnail_studio') or {}
+        candidate = next((c for c in state.get('candidates', []) if c['id'] == candidate_id), None)
+        if not candidate:
+            raise WorkflowError('현재 썸네일 후보를 찾지 못했습니다')
+        return FileResponse(candidate_path(store, state, candidate), media_type='image/png', headers={'Cache-Control': 'no-store'})
 
     @app.get('/api/jobs/{job_id}/review-package')
     def download_review_package(job_id: str):

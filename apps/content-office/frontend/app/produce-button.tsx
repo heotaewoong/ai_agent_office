@@ -22,20 +22,21 @@ export function ProduceButton({
 }) {
   const [estimate, setEstimate] = useState<ClipEstimate | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [thumbnails,setThumbnails]=useState(false);
 
   useEffect(() => {
     let alive = true;
     setConfirming(false);
     api
       .productionEstimate(jobId)
-      .then((result) => alive && setEstimate(result.clips))
+      .then((result) => {if(alive){setEstimate(result.clips);setThumbnails(!!result.thumbnail_artwork);}})
       .catch(() => alive && setEstimate(null));
     return () => {
       alive = false;
     };
   }, [jobId]);
 
-  const notice = paidProduceNotice(estimate);
+  const notice = [paidProduceNotice(estimate),thumbnails?"원고 기반 썸네일 이미지 3장 자동 생성 · 최대 600원 예약 · 기존 후보 재사용":""].filter(Boolean).join(" · ");
   if (!notice)
     return (
       <button className={className} disabled={disabled} onClick={() => void onProduce(false)}>

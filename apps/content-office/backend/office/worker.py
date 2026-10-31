@@ -18,6 +18,18 @@ def process_task(store, task):
         from .discovery import run
         return run(store, payload.get('config_hash'))
     job_id = payload.get("job_id")
+    if task['kind'] == 'thumbnail_artwork':
+        from .thumbnail_studio import generate
+        current = store.job(job_id)
+        if payload.get('source_hash') != current.get('source_hash'):
+            raise WorkflowError('썸네일 생성 대기 중 원고가 변경됐습니다')
+        if payload.get('edit_id'):
+            from .thumbnail_studio import checked_state
+            checked_state(current, payload['revision'])
+        if payload.get('paid_confirmed') is not True:
+            raise WorkflowError('이미지 비용 확인이 필요합니다')
+        result = generate(store, job_id, payload['source_hash'], edit_id=payload.get('edit_id'), instruction=payload.get('instruction', ''))
+        return {'job_id': job_id, 'source_hash': payload['source_hash'], 'thumbnail_revision': result['revision']}
     if task['kind']=='private_delivery':
         from .delivery_queue import process
         return process(store,payload)
@@ -32,6 +44,7 @@ def process_task(store, task):
         from .video_selection import clip_renderer_for_job
         from .channels import registry
         current = store.require_source_approval(job_id)
+        from .thumbnail_studio import enabled, generate
         if payload["source_hash"] != current["source_hash"]:
             raise WorkflowError("대기 중인 제작의 원고 버전이 변경되었습니다")
         renderer = renderer_for_job(store, current)
@@ -40,8 +53,12 @@ def process_task(store, task):
         if getattr(clips, 'paid', False) and payload.get('paid_clips_confirmed') is not True:
             # Paid clips need the operator's on-page confirmation; no automatic path may start them.
             raise WorkflowError('유료 영상 클립은 운영자가 화면에서 확인한 제작에서만 만듭니다. 제작을 다시 요청하세요')
-        if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips, channel_registry=registry(store) if current['selections'].get('blog') else None)['hash']:
+        if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips, channel_registry=registry(store) if current['selections'].get('blog') else None, thumbnail_artwork=enabled(store, current))['hash']:
             raise WorkflowError('대기 중 제작 설정이 변경되었습니다. 현재 설정으로 제작을 다시 요청하세요')
+        if enabled(store, current):
+            if payload.get('thumbnail_artwork_confirmed') is not True:
+                raise WorkflowError('자동 썸네일 이미지 비용을 확인하고 제작을 다시 요청하세요')
+            generate(store, job_id, current['source_hash'])
         store.update_job(job_id, state="producing", error=None)
         # 제작과 함께 같은 원고의 퀴즈·카드뉴스를 자동으로 줄 세운다. 이미 현재 버전 결과가 있으면 건너뛴다.
         from .quiz import enqueue_missing_outputs
@@ -84,7 +101,7 @@ def run_once(store, owner):
         store.finish_task(task["id"], owner, {"error": message, "automatic_retry": False}, state="unknown" if uncertain else "failed")
         job_id = task["payload"].get("job_id")
         # 퀴즈·카드뉴스는 부가 산출물이라 실패해도 작업 상태(출고 흐름)를 막지 않는다. 실패 기록은 작업·이벤트에 남는다.
-        if job_id and task["kind"] not in ("quiz", "cards", "private_delivery"):
+        if job_id and task["kind"] not in ("quiz", "cards", "private_delivery", "thumbnail_artwork"):
             with store.connection(transaction=True) as db:
                 current = store._job(db, job_id)
                 if current.get("source_hash") == task["payload"].get("_source_hash_at_claim"):

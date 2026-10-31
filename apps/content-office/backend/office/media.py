@@ -107,7 +107,7 @@ def background_identity(renderer):
     return str(getattr(renderer, 'cache_key', getattr(renderer, '__qualname__', 'injected-background-renderer')))
 
 
-def production_contract(voice_renderer, selections, image_renderer=None, clip_renderer=None, channel_registry=None):
+def production_contract(voice_renderer, selections, image_renderer=None, clip_renderer=None, channel_registry=None, thumbnail_artwork=False):
     """Bind outputs to actual code, font bytes, the selected voice, background image and generated clip configuration."""
     renderer = voice_renderer or local_voice
     visual = any(selections.get(kind) for kind in ('video', 'cards', 'pdf'))
@@ -140,6 +140,8 @@ def production_contract(voice_renderer, selections, image_renderer=None, clip_re
     if selections.get('cards'):
         config['cards_implementation_sha256']=file_hash(Path(__file__).with_name('cards.py'))
         config['cards_pipeline_sha256']=file_hash(Path(__file__).with_name('social_production.py'))
+    if thumbnail_artwork and selections.get('video'):
+        config['thumbnail_artwork'] = file_hash(Path(__file__).with_name('thumbnail_studio.py'))
     return {**config, 'hash': digest(config)}
 
 def wrap_text(draw, text, font, width):
@@ -875,7 +877,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
     source_folder = root / job_id / source_hash
     from .channels import registry
     channel_registry = registry(store) if selections.get('blog') else None
-    contract = production_contract(voice_renderer, selections, image_renderer=background_renderer, clip_renderer=clip_renderer, channel_registry=channel_registry)
+    from .thumbnail_studio import enabled
+    contract = production_contract(voice_renderer, selections, image_renderer=background_renderer, clip_renderer=clip_renderer, channel_registry=channel_registry, thumbnail_artwork=enabled(store, job))
     # Every attempt owns its directory; a retry must not overwrite earlier review files.
     folder = source_folder / ('production-' + contract['hash'][:24] + '-' + identifier('take'))
     voice_cache_dir = root / job_id / 'voices'
@@ -943,6 +946,13 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                     raise WorkflowError('한국어 폰트를 확인한 뒤 영상 제작을 다시 요청하세요. 유료 음성은 호출하지 않았습니다')
                 exports = write_video_exports(packet, folder, job.get('offer'))
                 rendered = render_short(packet['video'], folder, voice_renderer=voice_renderer, check_current=check_current, source_text=packet['body'], voice_cache_dir=voice_cache_dir, background_renderer=background_renderer, clip_renderer=clip_renderer)
+                from .thumbnail_studio import enabled
+                if enabled(store, job):
+                    from .thumbnail_studio import production_candidates
+                    old_thumbs = set(rendered['thumbnails'])
+                    rendered['files'] = [p for p in rendered['files'] if p not in old_thumbs]
+                    rendered['thumbnails'] = production_candidates(store, job_id, folder)
+                    rendered['files'].extend(rendered['thumbnails'])
                 credits = (rendered['media'].get('clips') or {}).get('attributions')
                 if credits:
                     description = folder / 'description.txt'
@@ -1010,7 +1020,9 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 best = max(eligible, key=lambda candidate: (sum(candidate['scores'].values()), candidate['scores']['source_alignment']), default=None)
                 manifest['best_candidate_id'] = best['id'] if best else None
                 manifest['thumbnail_recommendation_note'] = '로컬 가독성·대비·제목 배치·원고 표현 일치 기준의 검토 제안입니다. 사람의 최종 선택이 필요합니다.'
-            manifest['hash'] = digest({'source_hash': source_hash, 'selections': selections, 'production_contract': contract, 'output_status': output_status, 'files': records, 'thumbnail_candidates': manifest['thumbnail_candidates'], 'best_candidate_id': manifest.get('best_candidate_id'), 'version': RENDER_VERSION})
+            from .thumbnail_studio import attach_to_manifest
+            manifest = attach_to_manifest(store, job_id, manifest)
+            manifest['hash'] = digest({'source_hash': source_hash, 'selections': selections, 'production_contract': contract, 'output_status': output_status, 'files': manifest['files'], 'thumbnail_candidates': manifest['thumbnail_candidates'], 'selected_thumbnail_id': manifest.get('selected_thumbnail_id'), 'best_candidate_id': manifest.get('best_candidate_id'), 'version': RENDER_VERSION})
             check_current()
             write_json(folder / 'manifest.json', manifest)
             # The Store transaction closes the check/write race with source edits.

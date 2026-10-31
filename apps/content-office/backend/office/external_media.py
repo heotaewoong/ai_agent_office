@@ -214,6 +214,8 @@ def adopt_reviewed(store, job_id, expected_hash, reviewed):
         'imported_external_media': packet['external_media'], 'production_method': 'imported_edited_media',
         'warnings': ['재렌더·새 모델 호출 없이 기존 편집본을 가져왔습니다', '비공개 검토용입니다. 공개 게시 전에 권리·혜택을 재검수하세요', '표지를 선택하고 영상·음성·자막 확인 후 출고 승인②을 해주세요'],
     }
+    from .thumbnail_studio import attach_to_manifest
+    manifest = attach_to_manifest(store, job_id, manifest)
     manifest['hash'] = digest(manifest)
     (folder / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), 'utf8')
     return store.save_manifest_if_current(job_id, expected_hash, selections, manifest)

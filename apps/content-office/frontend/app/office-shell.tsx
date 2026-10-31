@@ -48,6 +48,7 @@ import { reuseUnchangedJob } from "../lib/job-snapshot";
 import { filterJobs, jobFilterStates } from "../lib/job-filters";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
+import { ThumbnailStudio } from "./thumbnail-studio";
 import { ArchitectureView } from "./architecture-view";
 import { YoutubePanel, ChannelHandoffPanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
@@ -1280,6 +1281,7 @@ function Studio({
       </div>
       <WorkflowSteps state={job.state} />
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
+      <ThumbnailStudio key={job.id} job={job} blockedReason={requestBlockedReason} action={action}/>
       {job.error && (
         <div className="notice error" role="alert">
           <Icon name="alert" size={18} />
@@ -2468,6 +2470,7 @@ function ThumbnailChoices({
   onPreview: (id: string) => void;
 }) {
   const candidates = job.manifest?.thumbnail_candidates ?? [];
+  if (job.thumbnail_studio?.source_hash === job.source_hash && job.thumbnail_studio?.candidates?.length) return null;
   if (!candidates.length) return null;
   const scoreLabels: Record<string, string> = {
     readability: "가독성",
