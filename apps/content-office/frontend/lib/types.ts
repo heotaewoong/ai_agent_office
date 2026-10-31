@@ -174,6 +174,7 @@ export type Job = {
   error?: string | null;
   source_hash?: string;
   source_packet?: SourcePacket | null;
+  video_delivery?: {platforms:("youtube_shorts"|"instagram_reels")[];hash:string;selected_at?:string};
   packaging?: PackagingRecord | null;
   manifest?: {
     hash: string;

@@ -27,3 +27,6 @@ test("빈 제목·빈 썸네일 글자는 문제", () => {
   const issues = validatePackagingBrief({ ...good, titles: ["a", "  ", "c"], thumbnails: [{ text: "", visual: "v" }, { text: "a", visual: "v" }, { text: " ", visual: "v" }] });
   assert.deepEqual(issues, ["제목 2안이 비어 있습니다", "썸네일 1안 글자가 비어 있습니다", "썸네일 3안 글자가 비어 있습니다"]);
 });
+
+
+test('본문이 있으면 정해진 제목을 다시 후보로 고르도록 막지 않는다',()=>{assert.equal(packagingRequired({article:{origin:'idea'} as never,packaging:null,source_packet:{body:'작성한 원고'} as never}),false);});

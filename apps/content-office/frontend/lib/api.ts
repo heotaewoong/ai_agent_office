@@ -30,6 +30,7 @@ import type {
   ChannelPatch,
   Quiz,
   Cards,
+  Task,
   TaskAccepted,
   Calendar,
   ReaderQuestion,
@@ -115,7 +116,7 @@ async function request<T>(
 }
 
 export const api = {
-  setVideoPlatforms: (id: string, platforms: ("youtube_shorts" | "instagram_reels")[], version: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/video-platforms`, "PUT", {platforms, version}),
+  setVideoPlatforms: (id: string, platforms: ("youtube_shorts" | "instagram_reels")[], version: string, deliveryHash="") => request<Job>(`/jobs/${encodeURIComponent(id)}/video-platforms`, "PUT", {platforms, version, delivery_hash:deliveryHash}),
   prepareExternalMedia: (jobId: string, body: {version:string;draft_id:string}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/prepare`, "POST", body),
   adoptExternalMedia: (jobId: string, body: {version:string;reviewed:boolean}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/adopt`, "POST", body),
   discovery: () => request<import('./discovery').DiscoveryStatus>('/discovery'),
@@ -224,6 +225,8 @@ export const api = {
       ...(outputs ? { outputs } : {}),
       ...(privateDeliveryChannel ? {private_delivery_channel:privateDeliveryChannel} : {}),
     }),
+  thumbnailImages: (id:string) => request<any>(`/jobs/${encodeURIComponent(id)}/thumbnail-images`),
+  requestThumbnailImages: (id:string, body:{source_hash:string;manifest_hash:string;parent_artifact_id?:string;feedback:string;confirm_paid:boolean}) => request<Task>(`/jobs/${encodeURIComponent(id)}/thumbnail-images`,"POST",body),
   selectThumbnail: (id: string, artifactId: string) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/thumbnail`, "POST", {
       artifact_id: artifactId,

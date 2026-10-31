@@ -18,6 +18,9 @@ def process_task(store, task):
         from .discovery import run
         return run(store, payload.get('config_hash'))
     job_id = payload.get("job_id")
+    if task["kind"] == "thumbnail_images":
+        from .thumbnail_images import generate
+        return generate(store, payload)
     if task['kind']=='private_delivery':
         from .delivery_queue import process
         return process(store,payload)
@@ -84,7 +87,7 @@ def run_once(store, owner):
         store.finish_task(task["id"], owner, {"error": message, "automatic_retry": False}, state="unknown" if uncertain else "failed")
         job_id = task["payload"].get("job_id")
         # 퀴즈·카드뉴스는 부가 산출물이라 실패해도 작업 상태(출고 흐름)를 막지 않는다. 실패 기록은 작업·이벤트에 남는다.
-        if job_id and task["kind"] not in ("quiz", "cards", "private_delivery"):
+        if job_id and task["kind"] not in ("quiz", "cards", "private_delivery", "thumbnail_images"):
             with store.connection(transaction=True) as db:
                 current = store._job(db, job_id)
                 if current.get("source_hash") == task["payload"].get("_source_hash_at_claim"):

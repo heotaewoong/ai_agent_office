@@ -368,20 +368,13 @@ def write_video_exports(packet: dict, folder: Path, offer: dict | None = None) -
     files = [write_text(folder, "youtube-script.md", script),
              write_text(folder, "youtube-plan.json", json.dumps(plan, ensure_ascii=False, indent=2)),
              write_text(folder, "description.txt", description)]
-    from .video_platforms import selected_platforms, PLATFORMS
-    targets = selected_platforms(packet)
-    if 'video_platforms' in packet:
-        files.append(write_text(folder, 'video-platforms.json', json.dumps({
-            'selected': targets, 'labels': [PLATFORMS[key] for key in targets],
-            'master': 'short.mp4', 'external_published': False, 'operator_review_required': True,
-        }, ensure_ascii=False, indent=2)))
-    if 'instagram_reels' in targets:
-        language = (packet.get('audience') or {}).get('language', 'ko')
-        key = 'instagram_english' if language == 'en' else 'instagram_main'
-        caption = str((packet.get('channel_posts') or {}).get(key) or plan.get('description') or packet['title'])
-        if line and line not in caption:
-            caption += '\n\n' + line
-        files.append(write_text(folder, 'instagram-reels-caption.txt', caption + '\n'))
+    # Destination choices belong to release metadata; prepare a neutral Reels caption now.
+    language = (packet.get('audience') or {}).get('language', 'ko')
+    key = 'instagram_english' if language == 'en' else 'instagram_main'
+    caption = str((packet.get('channel_posts') or {}).get(key) or plan.get('description') or packet['title'])
+    if line and line not in caption:
+        caption += '\n\n' + line
+    files.append(write_text(folder, 'instagram-reels-caption.txt', caption + '\n'))
     return files
 
 

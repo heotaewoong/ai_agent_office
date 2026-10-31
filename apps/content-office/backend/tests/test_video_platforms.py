@@ -21,19 +21,22 @@ def test_invalid_destinations_rejected(value):
  with pytest.raises(WorkflowError):selected_platforms({'video_platforms':value})
 
 
-def test_selection_binds_new_source_without_models_or_tasks(tmp_path):
- s,j=fixture(tmp_path);s.review_source(j['id'],j['source_hash'],'approved','test')
+def test_destination_changes_preserve_source_approval_and_files(tmp_path):
+ from office.video_platforms import effective_packet
+ s,j=fixture(tmp_path);j=s.review_source(j['id'],j['source_hash'],'approved','test')
+ j=s.save_manifest_if_current(j['id'],j['source_hash'],j['selections'],{'hash':'a'*64,'source_hash':j['source_hash'],'files':[],'completed_outputs':[]})
+ s.update_job(j['id'],release_approval={'decision':'approved','version':j['manifest']['hash']})
  budget=s.budget();updated=set_platforms(s,j['id'],j['source_hash'],['instagram_reels'])
- assert updated['source_hash']!=j['source_hash']
- assert updated['source_packet']['body']==j['source_packet']['body']
- assert updated['source_packet']['video']==j['source_packet']['video']
- assert updated['source_packet']['video_platform_registry']
- assert updated['source_approval'] is updated['release_approval'] is updated['manifest'] is None
- assert s.budget()==budget
- with s.connection() as db:assert db.execute('SELECT COUNT(*) FROM tasks').fetchone()[0]==0
+ assert updated['source_hash']==j['source_hash']
+ assert updated['source_packet']==j['source_packet']
+ assert updated['source_approval']==j['source_approval']
+ assert updated['release_approval'] is None and updated['manifest']['files']==j['manifest']['files']
+ assert updated['manifest']['hash']!=j['manifest']['hash']
+ assert effective_packet(updated)['video_platforms']==['instagram_reels']
+ assert updated['video_delivery']['channel_registry'] and s.budget()==budget
+ with pytest.raises(WorkflowError):set_platforms(s,j['id'],j['source_hash'],['youtube_shorts'],expected_delivery_hash='stale')
  regenerated=s.save_source(j['id'],{**j['source_packet'],'title':'새 제목'},expected_hash=updated['source_hash'])
- assert regenerated['source_packet']['video_platforms']==['instagram_reels']
- assert regenerated['source_packet']['video_platform_registry']==updated['source_packet']['video_platform_registry']
+ assert regenerated['video_delivery']==updated['video_delivery']
 
 
 def test_stale_selection_and_pending_task_preserve_job(tmp_path):
@@ -51,8 +54,7 @@ def test_video_exports_reuse_master_but_split_caption(tmp_path):
  files=write_video_exports(packet,folder)
  assert 'instagram-reels-caption.txt' in [p.name for p in files]
  assert (folder/'instagram-reels-caption.txt').read_text()=='인스타그램용 캡션\n'
- plan=json.loads((folder/'video-platforms.json').read_text());assert plan['master']=='short.mp4' and plan['external_published'] is False
- assert plan['selected']==['youtube_shorts','instagram_reels']
+ assert not (folder/'video-platforms.json').exists()  # No stale destination list in production files.
 
 
 def test_instagram_only_cannot_use_youtube_release_gate(tmp_path):
@@ -62,12 +64,12 @@ def test_instagram_only_cannot_use_youtube_release_gate(tmp_path):
 
 
 def test_api_requires_csrf_and_valid_platforms(tmp_path):
- s,j=fixture(tmp_path);c=TestClient(create_app(s),base_url='http://localhost:8510');url=f'/api/jobs/{j["id"]}/video-platforms';body={'version':j['source_hash'],'platforms':['instagram_reels']}
+ s,j=fixture(tmp_path);c=TestClient(create_app(s),base_url='http://localhost:8510');url=f'/api/jobs/{j["id"]}/video-platforms';body={'version':j['source_hash'],'platforms':['instagram_reels'],'delivery_hash':''}
  assert c.put(url,json=body).status_code==403
  csrf=c.get('/api/session').json()['csrf'];headers={'X-Office-CSRF':csrf,'Origin':'http://localhost:8510'}
  assert c.put(url,json={**body,'platforms':['unknown']},headers=headers).status_code==422
  response=c.put(url,json=body,headers=headers);assert response.status_code==200
- assert response.json()['source_packet']['video_platforms']==['instagram_reels']
+ assert response.json()['video_delivery']['platforms']==['instagram_reels']
 
 
 def test_video_only_reels_staging_keeps_channel_snapshot_and_no_external_draft(tmp_path):

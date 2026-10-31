@@ -64,6 +64,7 @@ import { OwnedSourceIntake } from "./owned-source-intake";
 import { EditorialAssetsPanel } from "./editorial-assets-panel";
 import { VersionHistoryPanel } from "./version-history-panel";
 import { ImprovementPanel } from "./improvement-panel";
+import { ThumbnailImagesPanel } from "./thumbnail-images-panel";
 import { VideoPlatformsPanel } from "./video-platforms-panel";
 import { JobClipProfile } from "./job-clip-profile";
 import { productionNext } from "../lib/production-next";
@@ -1196,7 +1197,6 @@ function Studio({
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
   const [approvalError, setApprovalError] = useState("");
-  const [platformsDirty, setPlatformsDirty] = useState(false);
   const packagingPanel = useRef<HTMLDivElement>(null);
   const stale = baseHash !== job.source_hash && dirty;
   useEffect(() => {
@@ -1224,7 +1224,7 @@ function Studio({
   const sourceReady = Boolean(job.source_packet?.body);
   const evidenceItems =
     job.source_packet?.evidence ?? job.article?.evidence ?? [];
-  const passed = canApproveSource(job, dirty || stale || (selections.video && platformsDirty));
+  const passed = canApproveSource(job, dirty || stale);
   const selectionCount = Object.values(selections).filter(Boolean).length;
 
   function edit(nextTitle: string, nextBody: string) {
@@ -1304,7 +1304,7 @@ function Studio({
         action={action}
       />
         </details>
-      {job.article?.origin === "idea" && (
+      {job.article?.origin === "idea" && !job.source_packet?.body && (
         <div ref={packagingPanel} className="outline-target" tabIndex={-1} aria-label="제목·썸네일·후크 기획">
           <PackagingPanel
             key={job.packaging?.packaging_hash ?? "new"}
@@ -1314,6 +1314,7 @@ function Studio({
           />
         </div>
       )}
+      {job.source_packet?.body && <p className="notice">확정 제목: <strong>{job.source_packet.title}</strong>. 썸네일은 이 원고를 기준으로 <Link href={`/publish?job=${encodeURIComponent(job.id)}`}>제작·출고함에서 실제 이미지 3종을 비교·개선하고 직접 확정</Link>하세요.</p>}
       <EvidenceIntake
         job={job}
         model={model}
@@ -1502,8 +1503,8 @@ function Studio({
                   {
                     id: "video",
                     icon: "play",
-                    title: "세로 영상 · 멀티플랫폼",
-                    description: "Shorts · Reels · 자막 · 표지",
+                    title: "세로 영상 제작",
+                    description: "영상 · 음성 · 자막 · 표지",
                   },
                   {
                     id: "pdf",
@@ -1552,7 +1553,6 @@ function Studio({
                 </label>
               ))}
             </div>
-            <VideoPlatformsPanel key={`video-platforms-${job.source_hash}`} job={job} enabled={selections.video} busy={locked || dirty || stale} action={action} onSaved={onSaved} onDirtyChange={setPlatformsDirty}/>
           </section>
           <div className="approval-panel">
             <div>
@@ -1566,8 +1566,6 @@ function Studio({
               <p>
                 {dirty
                   ? "변경 내용을 먼저 저장하고 재검수를 기다려 주세요."
-                  : selections.video && platformsDirty
-                    ? "선택한 영상 플랫폼을 먼저 저장해 주세요. 저장하지 않은 목적지로 승인·제작하지 않습니다."
                     : quality?.status !== "passed" || quality.critical
                     ? "독립 검수 통과와 중대 오류 해소가 필요합니다."
                     : "근거·숫자·표현을 확인했다면 현재 버전을 승인하세요."}
@@ -1579,7 +1577,7 @@ function Studio({
                   key={`produce-${job.source_hash}-${job.clip_profile_override?.selected_at??'global'}`}
                   jobId={job.id}
                   className={job.state === "source_approved" ? "button primary" : "button secondary"}
-                  disabled={locked || dirty || stale || (selections.video && platformsDirty) || Boolean(requestBlockedReason)}
+                  disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
                   onProduce={(confirmPaidClips) =>
                     void action(
                       "콘텐츠 제작",
@@ -1766,7 +1764,7 @@ function Studio({
       <section className="studio-section" aria-labelledby={`studio-history-${job.id}`}>
         <header className="studio-section-heading"><span className="studio-section-number">06</span><div><h2 id={`studio-history-${job.id}`} data-outline-title="버전·작업 기록">버전·작업 기록</h2><p>이전 원고와 새 편집본, 개선 요청 및 진행 상태를 확인하세요.</p></div></header>
       <VersionHistoryPanel key={`history-${job.id}`} job={job} />
-      <EditorialAssetsPanel job={job} editLocked={locked || dirty || (selections.video && platformsDirty)} onLoadDraft={(draft) => {
+      <EditorialAssetsPanel job={job} editLocked={locked || dirty} onLoadDraft={(draft) => {
         if (locked || dirty) return;
         edit(draft.title, draft.body);
         setEditorTab("write");
@@ -2040,6 +2038,7 @@ function Delivery({
 }) {
   const [preview, setPreview] = useState<string>();
   const [releaseVersion, setReleaseVersion] = useState<string>();
+  const [platformsDirty, setPlatformsDirty] = useState(false);
   const [privateChannel,setPrivateChannel]=useState<""|"youtube_main_ko"|"youtube_english">("");
   const [mediaReviewed, setMediaReviewed] = useState(false);
   const [releaseOutputs, setReleaseOutputs] = useState<OutputKind[]>(() =>
@@ -2103,6 +2102,7 @@ function Delivery({
         <div className={deliveryStyles.quickActions}><a href={`#delivery-preview-${job.id}`} className="button primary">제작물 확인 <Icon name="arrow" size={16}/></a><a href={`#delivery-release-${job.id}`} className="button secondary">출고 단계로 이동</a><Link href={`/scripts/${encodeURIComponent(job.id)}`} className="button text">원고 수정</Link></div>
       </section>
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
+      {job.selections?.video && <ThumbnailImagesPanel key={`thumbnail-images-${job.source_hash}`} job={job} busy={busy||Boolean(job.tasks?.some(t=>t.kind==="thumbnail_images"&&["queued","running","unknown"].includes(t.state??"")))} action={action}/>}
       {job.error && (
         <div className="notice error" role="alert">
           <Icon name="alert" size={18} />
@@ -2225,7 +2225,7 @@ function Delivery({
               />
             )}
           </div>
-          {!blogFormat && (
+          {job.selections?.video && (
             <ThumbnailChoices
               job={job}
               busy={busy}
@@ -2261,6 +2261,7 @@ function Delivery({
               영상·썸네일 확인
             </a>
           </div>}
+          <VideoPlatformsPanel key={`delivery-platforms-${job.source_hash}-${job.video_delivery?.hash??"legacy"}`} job={job} enabled={Boolean(job.selections?.video)} busy={busy} action={action} onSaved={()=>{setReleaseVersion(undefined);setMediaReviewed(false);}} onDirtyChange={setPlatformsDirty}/>
           <OutputChoices
             job={job}
             selected={releaseOutputs}
@@ -2319,6 +2320,7 @@ function Delivery({
                     className="button primary"
                     disabled={
                       busy ||
+                      platformsDirty ||
                       !validReleaseOutputs(job, releaseOutputs) ||
                       Boolean(
                         requiresThumbnail &&
@@ -2468,6 +2470,7 @@ function ThumbnailChoices({
   onPreview: (id: string) => void;
 }) {
   const candidates = job.manifest?.thumbnail_candidates ?? [];
+  const pending = job.tasks?.some(t=>t.kind==="thumbnail_images" && ["queued","running","unknown"].includes(t.state??""));
   if (!candidates.length) return null;
   const scoreLabels: Record<string, string> = {
     readability: "가독성",
@@ -2493,7 +2496,7 @@ function ThumbnailChoices({
       </div>
       <p className="thumbnail-note">
         이미지를 눌러 크게 보고, 출고할 썸네일 한 안을 선택하세요. 점수는 로컬
-        편집 기준이며 클릭 성과 예측이 아닙니다.
+        편집 기준이며 클릭 성과 예측이 아닙니다. OpenAI 후보는 실제 생성 이미지이며, 기존 글자·도형 표지는 AI 이미지가 아닙니다.
       </p>
       <div className="thumbnail-grid">
         {candidates.map((candidate, index) => {
@@ -2551,7 +2554,7 @@ function ThumbnailChoices({
                 <button
                   className={`button small ${selected ? "secondary" : "primary"}`}
                   disabled={
-                    busy ||
+                    busy || Boolean(pending) ||
                     selected ||
                     !["release_review", "partial_release_review"].includes(
                       job.state,

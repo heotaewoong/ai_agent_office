@@ -54,3 +54,7 @@ def test_blank_titles_and_thumbnail_text_are_rejected():
     assert not report["passed"]
     assert "제목 1안이 비어 있습니다" in report["issues"] and "제목 2안이 비어 있습니다" in report["issues"]
     assert "썸네일 1안 글자가 비어 있습니다" in report["issues"]
+
+
+def test_existing_body_uses_fixed_title_without_reselecting_packaging():
+    require_packaging({'article': {'origin': 'idea'}, 'source_packet': {'title': '이미 확정', 'body': '이미 작성한 원고'}, 'packaging': None})

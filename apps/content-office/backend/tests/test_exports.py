@@ -81,7 +81,7 @@ def test_photo_inside_code_fence_is_never_loaded():
 def test_video_handoff_has_narration_scenes_and_direct_evidence(tmp_path):
     from office.exports import write_video_exports
     files = write_video_exports(packet(), tmp_path)
-    assert {p.name for p in files} == {"youtube-script.md", "youtube-plan.json", "description.txt"}
+    assert {p.name for p in files} == {"youtube-script.md", "youtube-plan.json", "description.txt", "instagram-reels-caption.txt"}
     assert "근거를 먼저 확인합니다." in (tmp_path / "youtube-script.md").read_text(encoding="utf-8")
     assert "https://example.com/research" in (tmp_path / "description.txt").read_text(encoding="utf-8")
     assert "합성 음성" in (tmp_path / "description.txt").read_text(encoding="utf-8")

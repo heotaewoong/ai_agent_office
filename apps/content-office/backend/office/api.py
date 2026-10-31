@@ -137,6 +137,7 @@ class VideoPlatformsInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     version: str
     platforms: list[Literal['youtube_shorts', 'instagram_reels']] = Field(min_length=1, max_length=2)
+    delivery_hash: str
 
 
 class ExternalMediaPrepare(BaseModel):
@@ -170,6 +171,15 @@ class WindowRequest(BaseModel):
 class AutoDeploySwitch(BaseModel):
     model_config = ConfigDict(extra="forbid")
     enabled: bool
+
+
+class ThumbnailImagesInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_hash: str
+    manifest_hash: str
+    parent_artifact_id: str | None = None
+    feedback: str = Field(default="", max_length=1500)
+    confirm_paid: bool = Field(default=False, strict=True)
 
 
 class ThumbnailChoice(BaseModel):
@@ -566,7 +576,7 @@ def create_app(store: Store | None = None):
     @app.put('/api/jobs/{job_id}/video-platforms')
     def choose_video_platforms(job_id: str, body: VideoPlatformsInput):
         from .video_platforms import set_platforms
-        return set_platforms(store, job_id, body.version, body.platforms)
+        return set_platforms(store, job_id, body.version, body.platforms, body.delivery_hash)
 
     @app.post("/api/jobs/{job_id}/external-media/prepare")
     def prepare_external_media(job_id: str, body: ExternalMediaPrepare):
@@ -665,6 +675,17 @@ def create_app(store: Store | None = None):
             from .staging import auto_prepare_staging
             auto_prepare_staging(store, job_id, "local-operator")
         return saved
+
+    @app.get("/api/jobs/{job_id}/thumbnail-images")
+    def thumbnail_images_view(job_id: str):
+        from .thumbnail_images import view
+        return view(store, job_id)
+
+    @app.post("/api/jobs/{job_id}/thumbnail-images", status_code=202)
+    def request_thumbnail_images(job_id: str, body: ThumbnailImagesInput):
+        require_open_window()
+        from .thumbnail_images import enqueue
+        return enqueue(store, job_id, body.source_hash, body.manifest_hash, parent_id=body.parent_artifact_id, feedback=body.feedback, confirmed=body.confirm_paid)
 
     @app.post("/api/jobs/{job_id}/thumbnail")
     def choose_thumbnail(job_id: str, choice: ThumbnailChoice):

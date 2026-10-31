@@ -363,6 +363,8 @@ class Store:
                 raise WorkflowError("썸네일 대상 제작물 버전이 변경되었습니다")
             if approval.get("decision") != "approved" or approval.get("version") != job["source_hash"] or approval.get("selections") != job["selections"]:
                 raise WorkflowError("현재 원고 승인①이 필요합니다")
+            if db.execute("SELECT 1 FROM tasks WHERE kind='thumbnail_images' AND state IN ('queued','running','unknown') AND json_extract(payload,'$.job_id')=?", (job_id,)).fetchone():
+                raise WorkflowError("썸네일 생성·개선 결과를 확인한 뒤 최종 선택하세요")
             if artifact_id not in {candidate["id"] for candidate in manifest.get("thumbnail_candidates", [])}:
                 raise WorkflowError("현재 제작물의 썸네일 후보가 아닙니다")
             if manifest.get("selected_thumbnail_id") == artifact_id:
@@ -395,6 +397,8 @@ class Store:
             if not selected or not selected.issubset(requested) or not selected.issubset(completed):
                 raise WorkflowError('완료된 제작물만 출고할 수 있습니다. 미완료 항목을 제외하고 선택하세요')
             if decision == "approved" and 'video' in selected:
+                if db.execute("SELECT 1 FROM tasks WHERE kind='thumbnail_images' AND state IN ('queued','running','unknown') AND json_extract(payload,'$.job_id')=?", (job_id,)).fetchone():
+                    raise WorkflowError("썸네일 생성·개선 결과를 먼저 확인하세요")
                 candidates = {candidate["id"] for candidate in manifest.get("thumbnail_candidates", [])}
                 if manifest.get("selected_thumbnail_id") not in candidates:
                     raise WorkflowError("썸네일 후보를 비교하고 최종안을 먼저 선택하세요")

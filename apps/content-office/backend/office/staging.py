@@ -24,7 +24,7 @@ def _context(store, job):
     deliveries = [r for r in ledger.values() if isinstance(r, dict) and r.get("job_id") == job["id"] and r.get("manifest_hash") == manifest_hash]
     context = {"source_hash": job.get("source_hash"), "manifest": job.get("manifest"),
                "source_approval": job.get("source_approval"), "selections": job.get("selections"),
-               "release": job.get("release_approval"), "offer": job.get("offer"),
+               "release": job.get("release_approval"), "offer": job.get("offer"), "video_delivery": job.get("video_delivery"),
                "channels": rows, "deliveries": deliveries, "window_open": window_open(store)}
     return rows, deliveries, digest(context), context["window_open"]
 
@@ -77,7 +77,8 @@ def _safe_file(record):
 def staging_view(store, job_id):
     job = store.job(job_id)
     rows, ledger, context_hash, opened = _context(store, job)
-    source = job.get("source_packet") or {}
+    from .video_platforms import effective_packet
+    source = effective_packet(job)
     audience = source.get("audience")
     language = audience.get("language") if isinstance(audience, dict) else None
     blockers, verified, selected = [], {}, set()
