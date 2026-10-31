@@ -4482,4 +4482,11 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .card-compare-evidence dd { margin: 0 0 8px; overflow-wrap: anywhere; }
 @media(max-width:720px) { .card-version-compare { padding: 15px; } .card-compare-controls, .card-compare-columns { grid-template-columns: minmax(0,1fr); } .card-compare-controls select { font-size: 16px; } }
 .card-compare-error { padding: 16px; } .card-compare-error p { padding: 0 0 8px; }
-
+.job-list { min-width: 0; }
+@media(max-width:1020px) {
+  .job-sidebar { display: block; overflow-x: visible; }
+  .job-sidebar > .section-heading { display: flex; }
+  .job-filters { padding: 0 0 14px; }
+  .job-list { display: flex; gap: 9px; overflow-x: auto; align-items: stretch; }
+  .job-list > .small-empty { min-width: 100%; }
+}

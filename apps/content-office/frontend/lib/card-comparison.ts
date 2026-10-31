@@ -29,4 +29,3 @@ export function cardVersionChoices(history:ContentHistory):CardVersion[] {
 export function comparedCardNumbers(left?:CardVersion,right?:CardVersion) {
   return [...new Set([...(left?.cards??[]),...(right?.cards??[])].map(c=>c.number))].sort((a,b)=>a-b);
 }
-

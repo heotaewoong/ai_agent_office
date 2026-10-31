@@ -34,4 +34,3 @@ export function CardVersionCompare({history}:{history:ContentHistory}) {
     </>}
   </section>;
 }
-

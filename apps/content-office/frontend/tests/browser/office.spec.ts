@@ -1098,6 +1098,8 @@ for (const width of [1440,390]) {
     const body=page.getByLabel('본문 · Markdown',{exact:true});
     await body.fill('검색 중에도 보존해야 하는 미저장 원고');
     const sidebar=page.getByRole('region',{name:'콘텐츠 작업 목록',exact:true});
+    const filterWidth=await sidebar.locator('.job-filters').evaluate(el=>el.getBoundingClientRect().width);
+    expect(filterWidth).toBeGreaterThan(width<500?260:150);
     await sidebar.getByLabel('제작 종류',{exact:true}).selectOption('video');
     await expect(sidebar.getByRole('button',{name:/다른 영상 작업/})).toBeVisible();
     await expect(sidebar.getByText('현재 편집 중인 작업은 계속 열려 있습니다.')).toBeVisible();
@@ -1149,4 +1151,3 @@ for (const width of [1440,390]) {
     expect(audit.violations).toEqual([]);
   });
 }
-

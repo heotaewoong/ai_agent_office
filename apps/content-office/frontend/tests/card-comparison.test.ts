@@ -22,5 +22,3 @@ test('보관 카드가 없는 이력에 과거 판본을 만들어 넣지 않는
   assert.deepEqual(cardVersionChoices({job_id:'empty',sources:[],productions:[],drafts:[]}),[]);
   assert.deepEqual(comparedCardNumbers(),[]);
 });
-
-

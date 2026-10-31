@@ -778,7 +778,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       <div className="job-filter-summary"><span role="status" aria-live="polite">{jobs.length}개 중 {visibleJobs.length}개</span><button type="button" className="inline-button" disabled={!jobQuery && jobStateFilter === 'all' && jobOutputFilter === 'all'} onClick={clearJobFilters}>조건 지우기</button></div>
                       {activeId && !visibleJobs.some(item => item.id === activeId) && <p className="job-filter-current">현재 편집 중인 작업은 계속 열려 있습니다.</p>}
                     </div>}
-                    {jobs.length === 0 ? (
+                    <div className="job-list">{jobs.length === 0 ? (
                       <div className="small-empty">
                         <p>진행 중인 작업이 없어요.</p>
                         <button
@@ -810,7 +810,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                           </span>
                         </button>
                       ))
-                    )}
+                    )}</div>
                   </section>
                   <section className="job-content">
                     {!activeId ? (
@@ -2813,5 +2813,3 @@ function Activity({
     </div>
   );
 }
-
-
