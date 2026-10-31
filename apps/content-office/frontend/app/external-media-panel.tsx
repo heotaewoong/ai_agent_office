@@ -8,7 +8,7 @@ export function ExternalMediaPanel({job, editLocked=false}:{job:Job;editLocked?:
   const [reviewed,setReviewed]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState("");
-  const spec=job.source_packet?.external_media as {version?:string;draft_id?:string;scope?:string;channel_pack?:{cards?:string[];platforms?:{name:string;label:string}[]}}|undefined;
+  const spec=job.source_packet?.external_media as {version?:string;draft_id?:string;scope?:string;channel_pack?:{cards?:string[];platforms?:{name:string;label:string;text?:string}[]}}|undefined;
   const prepared=spec?.version==="external-media-v1" && Boolean(spec.draft_id);
   const readyDraft=(job.drafts??[]).find(d=>["short.mp4","source-original.md","captions.srt","thumbnail-01.png","description.txt"].every(name=>d.assets?.some(a=>a.name===name)));
   if(!prepared&&!readyDraft)return null;
@@ -38,7 +38,7 @@ export function ExternalMediaPanel({job, editLocked=false}:{job:Job;editLocked?:
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12}}>
           {spec.channel_pack.cards?.map((name,index)=><a key={name} href={`${base}${encodeURIComponent(name)}`} target="_blank" rel="noopener noreferrer"><img src={`${base}${encodeURIComponent(name)}`} alt={`승인 대기 카드뉴스 ${index+1} / 8`} loading="lazy" style={{width:"100%",height:"auto"}}/></a>)}
         </div>
-        <ul>{spec.channel_pack.platforms?.map(post=><li key={post.name}><a href={`${base}${encodeURIComponent(post.name)}`} target="_blank" rel="noopener noreferrer">{post.label} 원고 전체 읽기</a></li>)}</ul>
+        <div>{spec.channel_pack.platforms?.map(post=><details key={post.name}><summary>{post.label} 원고 전체 읽기</summary><pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",lineHeight:1.8}}>{post.text??"원고 내용을 새로 불러와 주세요."}</pre></details>)}</div>
         <p>이 묶음은 사람이 검토하는 편집 결과입니다. 자동 카드 품질 검사를 통과했다고 표시하지 않습니다.</p>
       </section>}
       <p className="notice">모델 검수 통과 판정이 아닙니다. 음성·자막·후기 사용권과 미확정 혜택 표현을 직접 검토해 주세요. 비공개 검토용이며 공개 사용 승인과는 다릅니다.</p>

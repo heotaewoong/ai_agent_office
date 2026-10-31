@@ -81,6 +81,16 @@ def _text(path):
         raise WorkflowError('원문·자막의 UTF-8 형식을 확인하세요') from None
 
 
+def _channel_pack(paths):
+    if not set(PACK_NAMES).issubset(paths):
+        return None
+    return {
+        'cards': list(PACK_CARDS),
+        'platforms': [{'name': name, 'label': label, 'text': _text(paths[name])} for name, label in PACK_TEXTS.items()],
+        'review': 'operator_required', 'public_distribution_cleared': False,
+    }
+
+
 def validate_packet(store, job):
     packet = job.get('source_packet') or {}
     spec = packet.get('external_media') or {}
@@ -89,6 +99,8 @@ def validate_packet(store, job):
     _, records, paths = files_for(store, job, spec.get('draft_id'))
     if {n: records[n]['sha256'] for n in paths} != spec.get('asset_hashes') or packet.get('body') != _text(paths['source-original.md']):
         raise WorkflowError('검토 원문 또는 연결 파일 판본이 변경되었습니다')
+    if spec.get('channel_pack') != _channel_pack(paths):
+        raise WorkflowError('화면에 표시된 채널 원고와 연결 파일이 다릅니다')
     if packet.get('source_input_hash') != digest(packet['body']):
         raise WorkflowError('원문 보존 해시가 다릅니다')
     return records, paths
@@ -99,7 +111,9 @@ def prepare_review(store, job_id, draft_id, expected_hash):
     if job.get('source_hash') != expected_hash or job['state'] in BUSY:
         raise WorkflowError('현재 원고 판본·작업 상태를 다시 확인하세요')
     draft, records, paths = files_for(store, job, draft_id)
-    if draft.get('source_hash_snapshot') != expected_hash:
+    current_spec = (job.get('source_packet') or {}).get('external_media') or {}
+    same_prepared = current_spec.get('draft_id') == draft_id and current_spec.get('asset_hashes') == {n: records[n]['sha256'] for n in paths}
+    if draft.get('source_hash_snapshot') != expected_hash and not same_prepared:
         raise WorkflowError('이전 원고의 검토본입니다. 현재 원고와 대조해 다시 등록하세요')
     text, caption = _text(paths['source-original.md']), _text(paths['captions.srt'])
     spoken = []
@@ -137,10 +151,7 @@ def prepare_review(store, job_id, draft_id, expected_hash):
                            'technical': info, 'scope': 'private_review_only'},
     }
     if set(PACK_NAMES).issubset(paths):
-        packet['external_media']['channel_pack'] = {
-            'cards': list(PACK_CARDS), 'platforms': [{'name': name, 'label': label} for name, label in PACK_TEXTS.items()],
-            'review': 'operator_required', 'public_distribution_cleared': False,
-        }
+        packet['external_media']['channel_pack'] = _channel_pack(paths)
     return store.save_source(job_id, packet, expected_hash=expected_hash)
 
 

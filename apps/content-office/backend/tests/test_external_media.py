@@ -220,3 +220,22 @@ def test_invalid_channel_bundle_does_not_replace_original(tmp_path, monkeypatch,
     other = register_assets(store, job['id'], job['source_hash'], '잘못된 묶음', '검토', files)
     with pytest.raises(WorkflowError):module.prepare_review(store,job['id'],other['id'],job['source_hash'])
     assert store.job(job['id']) == job
+
+
+def test_visible_platform_copy_must_equal_verified_asset(tmp_path, monkeypatch):
+    store, job, draft = pack_context(tmp_path, monkeypatch)
+    current = module.prepare_review(store, job['id'], draft['id'], job['source_hash'])
+    packet = current['source_packet']
+    assert packet['external_media']['channel_pack']['platforms'][0]['text'].startswith('tistory-article.md')
+    packet['external_media']['channel_pack']['platforms'][0]['text'] = '다르게 표시된 원고'
+    changed = store.save_source(job['id'], packet, expected_hash=current['source_hash'])
+    with pytest.raises(WorkflowError):module.adopt_reviewed(store,job['id'],changed['source_hash'],True)
+    assert store.job(job['id'])['source_approval'] is None
+
+
+def test_same_verified_bundle_can_refresh_review_without_approval(tmp_path, monkeypatch):
+    store, job, draft = pack_context(tmp_path, monkeypatch)
+    current = module.prepare_review(store, job['id'], draft['id'], job['source_hash'])
+    refreshed = module.prepare_review(store, job['id'], draft['id'], current['source_hash'])
+    assert refreshed['source_packet'] == current['source_packet']
+    assert refreshed['source_approval'] is refreshed['manifest'] is None
