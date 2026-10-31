@@ -33,6 +33,7 @@
   <button type="button" class="world-toolbar-btn" id="btn-roster" aria-pressed="false" aria-controls="roster-panel">동료 목록</button>
   <button type="button" class="world-toolbar-btn world-primary" id="btn-results" aria-label="작업·결과" aria-pressed="false" aria-controls="panel">작업·결과</button>
   <button type="button" class="world-toolbar-btn" id="btn-build" aria-pressed="false" aria-controls="build-panel">건축</button>
+  <button type="button" class="world-toolbar-btn" id="world-music-toggle" aria-pressed="false" disabled>음악 켜기</button>
   <details class="world-tools" id="world-tools">
     <summary aria-label="환경과 이동 설정">환경</summary>
     <div class="world-tools-body">
@@ -42,6 +43,12 @@
       <small>화질 변경 시 도시를 다시 엽니다. 탐험·차량 기록은 유지됩니다.</small>
       <label class="world-motion-label"><input type="checkbox" id="world-motion"> 배경 움직임 줄이기</label>
       <small>기기의 움직임 감소 설정도 존중합니다.</small>
+      <h3>배경음악</h3>
+      <label for="world-music-volume">음악 크기</label>
+      <input id="world-music-volume" type="range" min="0" max="1" step="0.05" value="0.25">
+      <p id="world-music-status" role="status">음악을 확인하고 있습니다.</p>
+      <small>‘Titan’ · Scott Buckley · <a href="https://www.scottbuckley.com.au/library/titan/" target="_blank" rel="noopener noreferrer">CC BY 4.0 · 음악 출처</a></small>
+      <small>'Titan' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au</small>
       <h3>전망 바로 보기</h3>
       <div class="world-view-links"><button type="button" data-world-view="meadow">지상 미래도시</button><button type="button" data-world-view="office">우리 팀 공중도시</button><button type="button" data-world-view="arrival">도착 터미널</button><button type="button" data-world-view="atrium">대표 오피스</button><button type="button" data-world-view="cruiser">우주순양함 전망</button></div>
       <p id="world-setting-status" role="status"></p>
@@ -125,6 +132,8 @@
 
 <script src="vendor/babylon.min.js" integrity="sha384-XWDhZlDaQiQswcIih2hJSTHcXZ+5aa7eDjhmXUjN/YuQl/fDKbGGgKmCA/ROcanP" crossorigin="anonymous"></script>
 <script src="app.js?v=office-quality-20261031"></script>
+<audio id="world-music" preload="none" loop></audio>
+<script type="module" src="music-controls.js"></script>
 <script type="module" src="activities.js"></script>
 <script type="module" src="expedition.js"></script>
 <script type="module" src="play-hub.js?v=20261030"></script>

@@ -760,3 +760,14 @@ EC2에 보관한 완성 영상은 재렌더 없이 원문·SRT·표지·설명�
 기존 목적지 미기록 작업은 YouTube Shorts로 해석한다. 새 원고 생성에도 선택을 보존한다. 명시적으로 선택한 새 제작에는 video-platforms.json을 남기고, Reels 선택 시 instagram-reels-caption.txt를 만든다. 같은 세로 MP4 마스터를 재사용하며 별도 영상 렌더가 아니다. 음성 CTA·자막 위치·표지와 실제 플랫폼 수용 여부는 별도 검토한다.
 
 제작·출고함의 목적지 요약과 채널별 준비 상태가 선택을 반영한다. Reels의 영상+캡션은 blog 출력 없이 video 승인②로 준비할 수 있고, 제작 당시 대상 채널 스냅샷과 현재 설정을 대조한다. YouTube 미선택 시 서버/PC공통 전송 게이트가 거절한다. 채널 선택은 공개/업로드 권한 부여가 아니다. Instagram 외부 임시저장/게시 API는 미연결이며, X 보류·언어 구분·기존 사람 승인 규칙은 유지한다.
+
+
+### 3D 오피스 배경음악 (명시적 재생)
+
+기존 Babylon.js 장면은 유지하며 네이티브 HTMLAudioElement로 배경음악을 재생합니다. 추가 패키지는 없습니다. 매 방문 기본 꺼짐, 상단 **음악 켜기**, 환경의 음량 조절, 탭 숨김/페이지 종료 시 정지를 제공합니다. 자동 재개·소셜 인증·제작 승인·비용 장부는 변경하지 않습니다.
+
+음원은 공개 Git에 포함하지 않습니다. 운영 상태 폴더의 `world-media/titan.mp3`만 허용하며 SHA-256 `fb921a09cc6181228b14945c7a6b90b50a83f4f38a37644a383bf7c70ea83729`와 크기/경로를 검증합니다. `/api/world/music/status`와 `/api/world/music/audio`는 기존 인증 경계를 유지하는 읽기 전용 경로입니다. 누락·변조 시 사용 불가로 표시하며 다른 파일이나 제공자로 대체하지 않습니다.
+
+음원: [Titan — Scott Buckley](https://www.scottbuckley.com.au/library/titan/), [공식 사용 조건](https://www.scottbuckley.com.au/library/using-this-music/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). 표기: 'Titan' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au. 오피스에서는 원곡을 반복 재생하고 음량을 조절합니다. 영상 발췌·페이드·음량 조정은 별도 영상 제작 기록에 남깁니다. 공개 영상 승인 시에는 설명에도 출처를 표기해야 합니다.
+
+검사: `node --test sites/office-world/tests/music.test.mjs`, 백엔드 `python -m pytest -q tests/test_api_world_music.py`. 제거는 버튼/오디오/모듈 import와 API register를 함께 되돌립니다. 음원 원본과 기존 영상은 임의 삭제하지 않습니다.

@@ -932,6 +932,8 @@ def create_app(store: Store | None = None):
     register_improvements(app, store)
     from .api_discovery import register as register_discovery
     register_discovery(app, store)
+    from .api_world_music import register as register_world_music
+    register_world_music(app, store)
     return app
 
 
