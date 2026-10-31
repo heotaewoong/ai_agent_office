@@ -40,6 +40,10 @@ for(const width of [1440,375])test(`썸네일 ${width}px 비교·확대·참조�
   await expect(cover).toHaveJSProperty('naturalWidth',1080);
   await expect(cover).toHaveJSProperty('naturalHeight',1920);
   const box=await cover.boundingBox();expect(Math.abs(box!.width/box!.height-9/16)).toBeLessThan(.01);
+  await panel.getByRole('button',{name:'후보 2 크게 보기',exact:true}).click();
+  const enlarged=page.getByRole('dialog',{name:'썸네일 크게 보기'}).getByRole('img');
+  const largeBox=await enlarged.boundingBox();expect(largeBox!.height).toBeLessThanOrEqual(750);expect(Math.abs(largeBox!.width/largeBox!.height-9/16)).toBeLessThan(.01);
+  await page.keyboard.press('Escape');
   await panel.getByRole('button',{name:'이 이미지 선택',exact:true}).first().click();
   const edit=panel.getByLabel('선택 이미지에서 바꾸고 싶은 부분',{exact:true});await expect(edit).toBeVisible();
   expect(await edit.evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
