@@ -1476,7 +1476,7 @@ function Studio({
             <div className="section-heading">
               <div>
                 <p className="eyebrow">MAKE IT YOURS</p>
-                <h3>어디에 전할까요?</h3>
+                <h3>무엇을 만들까요?</h3>
               </div>
               <span className="muted">
                 원고 승인과 함께 제작 항목이 저장돼요
