@@ -75,7 +75,8 @@ def compose(artwork, output, title, *, portrait=False):
     from .media import text_box, korean_font
     validate_picture(artwork)
     with Image.open(artwork) as source:
-        image = ImageOps.fit(source.convert('RGB'), ((1080, 1920) if portrait else (1280, 720)), method=Image.Resampling.LANCZOS)
+        image = ImageOps.fit(source.convert('RGB'), ((1080, 1920) if portrait else (1280, 720)), method=Image.Resampling.LANCZOS,
+                             centering=(0.8, 0.5) if portrait else (0.5, 0.5))
     shade = Image.new('RGBA', image.size)
     draw = ImageDraw.Draw(shade)
     for x in range(image.width):
