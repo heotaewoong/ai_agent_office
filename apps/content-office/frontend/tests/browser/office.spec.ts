@@ -1105,6 +1105,8 @@ for (const width of [1440,390]) {
     await expect(sidebar.getByText('현재 편집 중인 작업은 계속 열려 있습니다.')).toBeVisible();
     await sidebar.getByLabel('작업 검색',{exact:true}).fill('없는 제목');
     await expect(sidebar.getByText('조건에 맞는 작업이 없습니다.')).toBeVisible();
+    const filterAudit=await new AxeBuilder({page}).include('.job-sidebar').analyze();
+    expect(filterAudit.violations).toEqual([]);
     await expect(body).toHaveValue('검색 중에도 보존해야 하는 미저장 원고');
     await sidebar.getByRole('button',{name:'검색 조건 지우기',exact:true}).click();
     await expect(sidebar.getByRole('status')).toHaveText('2개 중 2개');
