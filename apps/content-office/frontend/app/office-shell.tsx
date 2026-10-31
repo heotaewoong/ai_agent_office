@@ -1303,7 +1303,7 @@ function Studio({
         action={action}
       />
         </details>
-      <div ref={packagingPanel} className="outline-target" tabIndex={-1}>
+      <div ref={packagingPanel} className="outline-target" tabIndex={-1} role="region" aria-label="원고 제목·썸네일 제작 안내">
         <p className="notice">원고 제목: <strong>{job.source_packet?.title || job.title}</strong>. 원고를 작성·검토한 뒤 <Link href={`/publish?job=${encodeURIComponent(job.id)}`}>제작·출고함에서 같은 제목의 실제 이미지 3종을 비교·개선하고 직접 확정</Link>하세요.</p>
       </div>
       <EvidenceIntake

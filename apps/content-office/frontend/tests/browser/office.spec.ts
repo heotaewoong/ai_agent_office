@@ -111,57 +111,32 @@ const designPackaging = {
 };
 
 for (const width of [1440, 390]) {
-  test(`패키지 기획 ${width}px 후보 비교·미리보기는 입력을 보존하고 확정을 호출하지 않는다`, async ({ page }) => {
-    const fixture = await harness(page, true);
-    fixture.replaceJob({ ...fixture.getJob(), article: { ...fixture.getJob().article!, origin: "idea" }, packaging: designPackaging });
-    await page.setViewportSize({ width, height: 1000 });
-    await page.goto("/scripts/contract-test-job");
-    const panel = page.getByRole("region", { name: "제목·썸네일·훅 기획", exact: true });
-    const title = panel.getByLabel("제목 2안", { exact: true });
-    await title.fill("수정한 두 번째 제목");
-    const second = panel.getByRole("radio", { name: "제목 2안 선택", exact: true });
-    await second.focus();
-    await second.press("Space");
-    await expect(second).toBeChecked();
-    await expect(panel.getByRole("complementary", { name: "선택한 제목 미리보기" })).toContainText("수정한 두 번째 제목");
-    await panel.getByRole("radio", { name: "제목 1안 선택", exact: true }).check();
-    await second.check();
-    await expect(title).toHaveValue("수정한 두 번째 제목");
-    await expect(panel.getByText("수정 중 · 확정 전", { exact: true })).toBeVisible();
-    expect(await title.evaluate(el => getComputedStyle(el).fontSize)).toBe("16px");
-    expect(await panel.getByLabel("훅 (첫 문장)", { exact: true }).evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(200);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    if (width === 1440) {
-      const audit = await new AxeBuilder({ page }).include('[aria-label="제목·썸네일·훅 기획"]').withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-      expect(audit.violations.map(v=>({ id:v.id, targets:v.nodes.map(n=>n.target) }))).toEqual([]);
-    }
+  test(`작업실 ${width}px는 정해진 제목을 보존하고 이미지 비교를 출고함으로 안내한다`, async ({ page }) => {
+    const fixture=await harness(page,true);
+    fixture.replaceJob({...fixture.getJob(),article:{...fixture.getJob().article!,origin:'idea'},packaging:designPackaging});
+    await page.setViewportSize({width,height:1000});
+    await page.goto('/scripts/contract-test-job');
+    const guide=page.getByRole('region',{name:'원고 제목·썸네일 제작 안내'});
+    await expect(guide).toBeVisible();
+    await expect(page.getByRole('radio',{name:'제목 2안 선택',exact:true})).toHaveCount(0);
+    await expect(page.getByRole('checkbox',{name:/Instagram Reels/})).toHaveCount(0);
+    await expect(guide.getByRole('link')).toHaveAttribute('href','/publish?job=contract-test-job');
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+    if(width===1440){const audit=await new AxeBuilder({page}).include('[aria-label="원고 제목·썸네일 제작 안내"]').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();expect(audit.violations).toEqual([]);}
     expect(fixture.writes).toEqual([]);
   });
 }
 
-test("패키지 기획은 초과 문구를 차단하고 선택한 제목과 기존 필드를 함께 확정한다", async ({ page }) => {
-  const fixture = await harness(page, true);
-  fixture.replaceJob({ ...fixture.getJob(), article: { ...fixture.getJob().article!, origin: "idea" }, packaging: designPackaging });
-  const requests: unknown[] = [];
-  await page.route("**/api/jobs/contract-test-job/packaging", async route => {
-    const brief = route.request().postDataJSON();
-    requests.push(brief);
-    fixture.replaceJob({ ...fixture.getJob(), packaging: { ...brief, packaging_hash: "packaging-design-v2" } });
-    await route.fulfill({ json: fixture.getJob() });
-  });
-  await page.goto("/scripts/contract-test-job");
-  const panel = page.getByRole("region", { name: "제목·썸네일·훅 기획", exact: true });
-  const thumb = panel.getByLabel("썸네일 1안 글자", { exact: true });
-  await thumb.fill("한".repeat(13));
-  await panel.getByRole("button", { name: "다시 확정", exact: true }).click();
-  await expect(panel.getByRole("alert")).toContainText("12자를 넘습니다");
-  expect(requests).toEqual([]);
-  await thumb.fill(designPackaging.thumbnails[0].text);
-  await panel.getByRole("radio", { name: "제목 2안 선택", exact: true }).check();
-  await panel.getByRole("button", { name: "다시 확정", exact: true }).click();
-  await expect.poll(()=>requests.length).toBe(1);
-  const { packaging_hash, ...brief } = designPackaging;
-  expect(requests[0]).toEqual({ ...brief, chosen_title: designPackaging.titles[1] });
+test('출고함 이미지 제작은 원고·작업 시간 준비 전에는 호출하지 않는다',async({page})=>{
+ const fixture=await harness(page,true);const requests:unknown[]=[];
+ await page.route('**/api/jobs/contract-test-job/thumbnail-images',async route=>{
+  if(route.request().method()==='POST'){requests.push(route.request().postDataJSON());await route.fulfill({json:{}});return;}
+  await route.fulfill({json:{model:'synthetic',title:fixture.getJob().title,source_hash:fixture.getJob().source_hash,manifest_hash:null,ready:false,blockers:['원고①와 현재 영상 제작물이 필요합니다','작업 시간 종료'],candidates:[],history:[],initial_reservation_krw:600,refine_reservation_krw:200,job_cap_krw:2000}});
+ });
+ await page.goto('/publish?job=contract-test-job');
+ const panel=page.getByRole('region',{name:'원고 기반 썸네일 이미지 제작'});
+ await expect(panel).toBeVisible();await expect(panel.getByRole('button',{name:'원고 기반 이미지 3종 생성'})).toBeDisabled();
+ expect(requests).toEqual([]);expect(fixture.writes).toEqual([]);
 });
 
 // Article inputs come from the actual public RSS research snapshot; a synthetic

@@ -6,7 +6,7 @@ type Studio={model:string;title:string;source_hash:string;manifest_hash?:string;
 export function ThumbnailImagesPanel({job,busy,action}:{job:Job;busy:boolean;action:Action}){
  const [status,setStatus]=useState<Studio|null>(null),[error,setError]=useState('');
  const [parent,setParent]=useState(''),[feedback,setFeedback]=useState(''),[confirmed,setConfirmed]=useState(false);
- useEffect(()=>{let active=true;api.thumbnailImages(job.id).then(s=>{if(active){setStatus(s);setError('');}}).catch(()=>{if(active)setError('이미지 제작 상태를 읽지 못했습니다. 화면을 새로고침해 주세요.');});return()=>{active=false;};},[job.id,job.source_hash,job.manifest?.hash,job.updated_at]);
+ useEffect(()=>{let active=true;api.thumbnailImages(job.id).then(s=>{if(!s||typeof s.ready!=='boolean'||!Array.isArray(s.blockers)||!Array.isArray(s.candidates)||!Array.isArray(s.history)||(s.source_hash??null)!==(job.source_hash??null)||(s.manifest_hash??null)!==(job.manifest?.hash??null))throw new Error('stale image status');if(active){setStatus(s);setError('');}}).catch(()=>{if(active){setStatus(null);setError('이미지 제작 상태를 읽지 못했습니다. 화면을 새로고침해 주세요.');}});return()=>{active=false;};},[job.id,job.source_hash,job.manifest?.hash,job.updated_at]);
  const ready=Boolean(status?.ready)&&!busy&&confirmed;
  async function request(refine:boolean){
   if(!ready||!status?.manifest_hash||(refine&&(!parent||!feedback.trim())))return;
