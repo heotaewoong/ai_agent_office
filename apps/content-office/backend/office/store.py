@@ -199,6 +199,11 @@ class Store:
             job = self._job(db, job_id)
             if expected_offer_hash is not _UNSET and offer_hash(job.get("offer")) != expected_offer_hash:
                 raise WorkflowError("원고를 만드는 동안 상품·쿠폰 조건이 변경되어 옛 결과를 저장하지 않았습니다")
+            previous_platforms = (job.get('source_packet') or {}).get('video_platforms')
+            if 'video_platforms' not in packet and previous_platforms is not None:
+                packet = {**packet, 'video_platforms': previous_platforms, 'video_platform_registry': (job.get('source_packet') or {}).get('video_platform_registry', [])}
+            from .video_platforms import selected_platforms
+            selected_platforms(packet)
             version = source_version(packet, job.get("offer"))
             if expected_hash is not _UNSET and job["source_hash"] != expected_hash:
                 raise WorkflowError("작업 도중 원고 버전이 변경되어 옛 결과를 저장하지 않았습니다")

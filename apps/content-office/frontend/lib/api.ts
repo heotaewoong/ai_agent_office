@@ -115,6 +115,7 @@ async function request<T>(
 }
 
 export const api = {
+  setVideoPlatforms: (id: string, platforms: ("youtube_shorts" | "instagram_reels")[], version: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/video-platforms`, "PUT", {platforms, version}),
   prepareExternalMedia: (jobId: string, body: {version:string;draft_id:string}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/prepare`, "POST", body),
   adoptExternalMedia: (jobId: string, body: {version:string;reviewed:boolean}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/adopt`, "POST", body),
   discovery: () => request<import('./discovery').DiscoveryStatus>('/discovery'),

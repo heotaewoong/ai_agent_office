@@ -133,6 +133,12 @@ class Review(BaseModel):
     outputs: list[Literal['blog', 'video', 'cards', 'pdf']] | None = None
 
 
+class VideoPlatformsInput(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: str
+    platforms: list[Literal['youtube_shorts', 'instagram_reels']] = Field(min_length=1, max_length=2)
+
+
 class ExternalMediaPrepare(BaseModel):
     version: str
     draft_id: str
@@ -556,6 +562,11 @@ def create_app(store: Store | None = None):
             selections={key:bool((review.selections if review.selections is not None else job['selections']).get(key,False)) for key in ('blog','video','pdf','cards')}
             contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None)['hash']
         return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract)
+
+    @app.put('/api/jobs/{job_id}/video-platforms')
+    def choose_video_platforms(job_id: str, body: VideoPlatformsInput):
+        from .video_platforms import set_platforms
+        return set_platforms(store, job_id, body.version, body.platforms)
 
     @app.post("/api/jobs/{job_id}/external-media/prepare")
     def prepare_external_media(job_id: str, body: ExternalMediaPrepare):

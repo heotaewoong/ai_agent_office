@@ -103,6 +103,8 @@ def _save(store, record, *, reserve=False):
 
 def _released_video(store, job_id):
     job = store.job(job_id)
+    from .video_platforms import require_platform
+    require_platform(job.get('source_packet'), 'youtube_shorts')
     from .offers import require_offer_ready, require_campaign_packet
     require_offer_ready(job.get("offer"))
     require_campaign_packet(job.get("source_packet"), job.get("offer"))

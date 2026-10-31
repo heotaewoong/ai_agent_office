@@ -365,9 +365,24 @@ def write_video_exports(packet: dict, folder: Path, offer: dict | None = None) -
     if line:
         description += "\n\n" + line
     description += "\n\n이 영상의 내레이션은 합성 음성입니다. 게시 전 원문·음성·자막·대표 이미지를 확인하세요.\n"
-    return [write_text(folder, "youtube-script.md", script),
-            write_text(folder, "youtube-plan.json", json.dumps(plan, ensure_ascii=False, indent=2)),
-            write_text(folder, "description.txt", description)]
+    files = [write_text(folder, "youtube-script.md", script),
+             write_text(folder, "youtube-plan.json", json.dumps(plan, ensure_ascii=False, indent=2)),
+             write_text(folder, "description.txt", description)]
+    from .video_platforms import selected_platforms, PLATFORMS
+    targets = selected_platforms(packet)
+    if 'video_platforms' in packet:
+        files.append(write_text(folder, 'video-platforms.json', json.dumps({
+            'selected': targets, 'labels': [PLATFORMS[key] for key in targets],
+            'master': 'short.mp4', 'external_published': False, 'operator_review_required': True,
+        }, ensure_ascii=False, indent=2)))
+    if 'instagram_reels' in targets:
+        language = (packet.get('audience') or {}).get('language', 'ko')
+        key = 'instagram_english' if language == 'en' else 'instagram_main'
+        caption = str((packet.get('channel_posts') or {}).get(key) or plan.get('description') or packet['title'])
+        if line and line not in caption:
+            caption += '\n\n' + line
+        files.append(write_text(folder, 'instagram-reels-caption.txt', caption + '\n'))
+    return files
 
 
 PEXELS_LICENSE_URL = "https://www.pexels.com/license/"

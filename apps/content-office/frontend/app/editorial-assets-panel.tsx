@@ -1,4 +1,5 @@
 "use client";
+import {VideoPlatformsSummary} from "./video-platforms-panel";
 import {ExternalMediaPanel} from "./external-media-panel";
 import type {EditorialDraft, Job} from "../lib/types";
 import {formatBytes} from "../lib/workflow";
@@ -14,7 +15,7 @@ export function EditorialAssetsPanel({job,onLoadDraft,editLocked=false}:{job:Job
   const drafts=(job.drafts??[]).filter(d=>d.assets?.length);
   if(!drafts.length)return null;
   return <section className="editor-panel editorial-panel" aria-label="새 편집 결과 검토">
-    <ExternalMediaPanel key={job.source_hash} job={job} editLocked={editLocked}/>
+    <VideoPlatformsSummary job={job}/><ExternalMediaPanel key={job.source_hash} job={job} editLocked={editLocked}/>
     <h2>새 편집 결과</h2>
     <p className="muted">원고·사진·영상의 미승인 검토본입니다. 현재 원고와 승인된 제작물은 그대로 보존합니다.</p>
     {drafts.map((d,index)=>{

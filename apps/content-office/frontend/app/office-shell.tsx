@@ -64,6 +64,7 @@ import { OwnedSourceIntake } from "./owned-source-intake";
 import { EditorialAssetsPanel } from "./editorial-assets-panel";
 import { VersionHistoryPanel } from "./version-history-panel";
 import { ImprovementPanel } from "./improvement-panel";
+import { VideoPlatformsPanel } from "./video-platforms-panel";
 import { JobClipProfile } from "./job-clip-profile";
 import { productionNext } from "../lib/production-next";
 import { NewsletterPanel } from "./newsletter-panel";
@@ -1195,6 +1196,7 @@ function Studio({
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
   const [approvalError, setApprovalError] = useState("");
+  const [platformsDirty, setPlatformsDirty] = useState(false);
   const packagingPanel = useRef<HTMLDivElement>(null);
   const stale = baseHash !== job.source_hash && dirty;
   useEffect(() => {
@@ -1222,7 +1224,7 @@ function Studio({
   const sourceReady = Boolean(job.source_packet?.body);
   const evidenceItems =
     job.source_packet?.evidence ?? job.article?.evidence ?? [];
-  const passed = canApproveSource(job, dirty || stale);
+  const passed = canApproveSource(job, dirty || stale || (selections.video && platformsDirty));
   const selectionCount = Object.values(selections).filter(Boolean).length;
 
   function edit(nextTitle: string, nextBody: string) {
@@ -1500,8 +1502,8 @@ function Studio({
                   {
                     id: "video",
                     icon: "play",
-                    title: "YouTube Shorts",
-                    description: "세로 영상 · 자막 · 썸네일",
+                    title: "세로 영상 · 멀티플랫폼",
+                    description: "Shorts · Reels · 자막 · 표지",
                   },
                   {
                     id: "pdf",
@@ -1550,6 +1552,7 @@ function Studio({
                 </label>
               ))}
             </div>
+            <VideoPlatformsPanel key={`video-platforms-${job.source_hash}`} job={job} enabled={selections.video} busy={locked || dirty || stale} action={action} onSaved={onSaved} onDirtyChange={setPlatformsDirty}/>
           </section>
           <div className="approval-panel">
             <div>
@@ -1563,7 +1566,9 @@ function Studio({
               <p>
                 {dirty
                   ? "변경 내용을 먼저 저장하고 재검수를 기다려 주세요."
-                  : quality?.status !== "passed" || quality.critical
+                  : selections.video && platformsDirty
+                    ? "선택한 영상 플랫폼을 먼저 저장해 주세요. 저장하지 않은 목적지로 승인·제작하지 않습니다."
+                    : quality?.status !== "passed" || quality.critical
                     ? "독립 검수 통과와 중대 오류 해소가 필요합니다."
                     : "근거·숫자·표현을 확인했다면 현재 버전을 승인하세요."}
               </p>
@@ -1574,7 +1579,7 @@ function Studio({
                   key={`produce-${job.source_hash}-${job.clip_profile_override?.selected_at??'global'}`}
                   jobId={job.id}
                   className={job.state === "source_approved" ? "button primary" : "button secondary"}
-                  disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
+                  disabled={locked || dirty || stale || (selections.video && platformsDirty) || Boolean(requestBlockedReason)}
                   onProduce={(confirmPaidClips) =>
                     void action(
                       "콘텐츠 제작",
@@ -1644,7 +1649,7 @@ function Studio({
                     ([key]) =>
                       ({
                         blog: "블로그·소셜 검토 초안",
-                        video: "YouTube Shorts",
+                        video: "세로 영상",
                         pdf: "PDF",
                         cards: "카드",
                       })[key],
@@ -1761,7 +1766,7 @@ function Studio({
       <section className="studio-section" aria-labelledby={`studio-history-${job.id}`}>
         <header className="studio-section-heading"><span className="studio-section-number">06</span><div><h2 id={`studio-history-${job.id}`} data-outline-title="버전·작업 기록">버전·작업 기록</h2><p>이전 원고와 새 편집본, 개선 요청 및 진행 상태를 확인하세요.</p></div></header>
       <VersionHistoryPanel key={`history-${job.id}`} job={job} />
-      <EditorialAssetsPanel job={job} editLocked={locked || dirty} onLoadDraft={(draft) => {
+      <EditorialAssetsPanel job={job} editLocked={locked || dirty || (selections.video && platformsDirty)} onLoadDraft={(draft) => {
         if (locked || dirty) return;
         edit(draft.title, draft.body);
         setEditorTab("write");

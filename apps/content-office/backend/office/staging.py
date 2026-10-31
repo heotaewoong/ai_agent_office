@@ -87,6 +87,8 @@ def staging_view(store, job_id):
         blockers.append(str(error))
     manifest = job.get("manifest") or {}
     current_release = not blockers
+    from .video_platforms import selected_platforms
+    video_targets = selected_platforms(source)
     items = []
     for row in rows:
         key, platform = row["key"], row["platform"]
@@ -96,6 +98,11 @@ def staging_view(store, job_id):
         if not row.get("public_url"):
             local_issues.append("대상 채널의 공개 주소를 확인하세요")
         required = ["short.mp4", "description.txt"] if platform == "youtube" else [BLOG_FILES.get(key) or SOCIAL_TARGETS[key][0]]
+        reels = platform == 'instagram' and 'instagram_reels' in video_targets
+        if platform == 'youtube' and 'youtube_shorts' not in video_targets:
+            local_issues.append('이번 영상 목적지에서 YouTube Shorts를 선택하지 않았습니다')
+        if reels:
+            required = ['instagram-reels-caption.txt', 'short.mp4']
         if key == "tistory_main":
             required.extend(name for name in verified if name in ("source-original.md", "source-photos.json") or SOURCE_PHOTO_NAME_PATTERN.fullmatch(name))
             if source.get("preserve_original") is True:
@@ -119,7 +126,7 @@ def staging_view(store, job_id):
                     except (OSError, UnicodeError, ValueError, TypeError):
                         local_issues.append("원문 사진의 의존 파일 목록을 확인하지 못했습니다. 출고 묶음을 재검수하세요")
             required = list(dict.fromkeys(required))
-        output = "video" if platform == "youtube" else "blog"
+        output = "video" if platform == "youtube" or reels else "blog"
         if output not in selected:
             local_issues.append(f"{output} 출력이 현재 출고 승인②에 포함되지 않았습니다")
         available = [name for name in required if name in verified and output in verified[name][0].get("outputs", [])]
@@ -136,10 +143,10 @@ def staging_view(store, job_id):
                         local_issues.append("앱의 보수적 글자 수 기준을 넘었습니다. 조건·근거를 유지해 검토하세요")
                 except (OSError, UnicodeError, ValueError):
                     local_issues.append("채널 텍스트를 정상적인 검토 범위로 읽지 못했습니다")
-            captured = next((r for r in (manifest.get("production_contract") or {}).get("channel_registry", []) if r.get("key") == key), None)
+            captured = next((r for r in source.get('video_platform_registry', []) if r.get('key') == key), None) if reels else next((r for r in (manifest.get("production_contract") or {}).get("channel_registry", []) if r.get("key") == key), None)
             if not captured or any(captured.get(field) != row.get(field) for field in ("platform", "locale", "public_url")):
                 local_issues.append("제작 후 대상 채널 설정이 바뀌었거나 미확인입니다. 현재 설정으로 제작·출고 검토하세요")
-        if platform == "instagram":
+        if platform == "instagram" and not reels:
             media = [name for name, (record, _) in verified.items()
                      if (name == "short.mp4" and "video" in selected)
                      or (name.startswith("scene-") and name.endswith(".png") and "cards" in selected and "cards" in record.get("outputs", []))]
@@ -198,6 +205,7 @@ def staging_view(store, job_id):
             issues = ["사용자 요청으로 X 채널은 보류했습니다"]
         items.append({"channel_key": key, "label": row["label"], "platform": platform, "locale": row["locale"],
                       "source_language": language, "public_url": row.get("public_url"), "status": status,
+                      "video_destination": "instagram_reels" if reels else ("youtube_shorts" if platform == "youtube" else None),
                       "local_ready": local_ready, "required_files": required,
                       "files": [_safe_file(verified[name][0]) for name in dict.fromkeys(available)] if current_release and key != "x_main" else [],
                       "blockers": issues, "external_state": external_state, "external_draft_created": external_created,

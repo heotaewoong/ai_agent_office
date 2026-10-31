@@ -54,6 +54,7 @@ export type Evidence = {
   [key: string]: unknown;
 };
 export type SourcePacket = {
+  video_platforms?: ("youtube_shorts" | "instagram_reels")[];
   title: string;
   body: string;
   preserve_original?: boolean;

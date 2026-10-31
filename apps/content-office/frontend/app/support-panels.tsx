@@ -571,7 +571,7 @@ export function KnowledgeDrawer() {
 
 export const outputNames: Record<OutputKind, string> = {
   blog: "블로그·소셜 검토 초안",
-  video: "YouTube Shorts",
+  video: "세로 영상",
   pdf: "PDF 자료",
   cards: "카드 콘텐츠",
 };

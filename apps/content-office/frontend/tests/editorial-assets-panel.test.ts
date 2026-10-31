@@ -8,7 +8,7 @@ const nativeRequire=createRequire(import.meta.url);
 const source=readFileSync(new URL("../app/editorial-assets-panel.tsx",import.meta.url),"utf8");
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const module={exports:{} as any};
-Function("require","exports",compiled)((name:string)=>name==="../lib/workflow"?{formatBytes}:name==="./external-media-panel"?{ExternalMediaPanel:()=>null}:nativeRequire(name),module.exports);
+Function("require","exports",compiled)((name:string)=>name==="../lib/workflow"?{formatBytes}:name==="./video-platforms-panel"?{VideoPlatformsSummary:()=>null}:name==="./external-media-panel"?{ExternalMediaPanel:()=>null}:nativeRequire(name),module.exports);
 const Panel=module.exports.EditorialAssetsPanel;
 function nodes(tree:any):any[]{return Array.isArray(tree)?tree.flatMap(nodes):tree?.props?[tree,...nodes(tree.props.children)]:[];}
 const job={id:"job-test",source_hash:"current",drafts:[{id:"draft-test",title:"검토본",body:"원고",source_hash_snapshot:"current",assets:[{name:"instagram-caption-review.txt",size:1200,media_type:"text/plain",sha256:"a"}]}]};
