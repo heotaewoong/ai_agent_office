@@ -27,10 +27,11 @@ export function CardVersionCompare({history}:{history:ContentHistory}) {
   return <section className="card-version-compare" aria-label="보관 카드 이미지 비교"><h3>카드 이미지로 달라진 점 확인하기</h3><p>실제로 보관된 제작물·검토본의 같은 장 번호를 비교합니다. 현재 원고·출고 판본·승인은 바뀌지 않습니다.</p>
     {versions.length<2?<p className="notice">비교할 카드 이미지 판본이 {versions.length}개입니다. 카드 파일이 있는 판본이 두 개 이상 필요합니다. 별도 재생성 때 보관되지 않은 과거 카드는 복구하지 않습니다.</p>:<>
       <button type="button" className="button secondary" aria-expanded={open} onClick={()=>setOpen(!open)}>{open?'카드 이미지 비교 접기':'카드 이미지 비교 열기'}</button>
-      {open&&a&&b&&<><div className="card-compare-controls"><label>기준 카드 판본<select value={a.id} onChange={e=>setLeft(e.target.value)}>{versions.map(v=><option key={v.id} value={v.id}>{v.label}</option>)}</select></label><label>비교할 카드 판본<select value={b.id} onChange={e=>setRight(e.target.value)}>{versions.map(v=><option key={v.id} value={v.id} disabled={v.id===a.id}>{v.label}</option>)}</select></label><label>비교할 장<select value={selected??''} onChange={e=>setNumber(Number(e.target.value))}>{numbers.map(n=><option key={n} value={n}>{n}장</option>)}</select></label></div>
+      {open&&a&&b&&<><div className="card-compare-controls"><label>기준 카드 판본<select aria-label="기준 카드 판본" value={a.id} onChange={e=>setLeft(e.target.value)}>{versions.map(v=><option key={v.id} value={v.id}>{v.label}</option>)}</select></label><label>비교할 카드 판본<select aria-label="비교할 카드 판본" value={b.id} onChange={e=>setRight(e.target.value)}>{versions.map(v=><option key={v.id} value={v.id} disabled={v.id===a.id}>{v.label}</option>)}</select></label><label>비교할 장<select aria-label="비교할 장" value={selected??''} onChange={e=>setNumber(Number(e.target.value))}>{numbers.map(n=><option key={n} value={n}>{n}장</option>)}</select></label></div>
         <p role="status" aria-live="polite">{selected?`${selected}장 비교 · 두 판본의 보관 장 번호 ${numbers.length}개`:'비교할 장 번호가 없습니다. 중복 파일 기록을 확인하세요.'}</p>
         {selected&&<div className="card-compare-columns"><VersionImage version={a} number={selected} side="기준"/><VersionImage version={b} number={selected} side="비교"/></div>}
       </>}
     </>}
   </section>;
 }
+

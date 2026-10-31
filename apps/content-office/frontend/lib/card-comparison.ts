@@ -1,5 +1,5 @@
 import type {ContentHistory} from './version-history';
-import {safeArtifactUrl} from './workflow.ts';
+
 
 export type ComparedCard = {number:number;name:string;url:string;sha256?:string};
 export type CardVersion = {id:string;label:string;createdAt?:string;sourceHash?:string;approval:string;cards:ComparedCard[];ambiguous:number[]};
@@ -16,7 +16,7 @@ export function cardVersionChoices(history:ContentHistory):CardVersion[] {
     ...[...history.productions].reverse().map((p,index)=>({
       id:`production:${p.manifest.hash}`,label:`제작 결과 ${history.productions.length-index}${p.current?' · 현재':''}`,createdAt:p.created_at,sourceHash:p.manifest.source_hash,
       approval:p.approved_before?'과거 출고 승인 기록 있음 · 현재 승인과 별개':'출고 승인 기록 없음',
-      ...uniqueCards(p.manifest.files.flatMap(f=>{const number=cardNumber(f.name),url=safeArtifactUrl(f.url);return number&&url?[{number,name:f.name,url,sha256:f.sha256}]:[];})),
+      ...uniqueCards(p.manifest.files.flatMap(f=>{const number=cardNumber(f.name),expected=`/api/jobs/${encodeURIComponent(history.job_id)}/history/${encodeURIComponent(p.manifest.hash)}/files/${encodeURIComponent(f.id)}`,url=f.url===expected?expected:null;return number&&url?[{number,name:f.name,url,sha256:f.sha256}]:[];})),
     })),
     ...history.drafts.map(d=>({id:`draft:${d.id}`,label:`개선 검토본 · ${d.title}`,createdAt:d.created_at,sourceHash:d.source_hash_snapshot,
       approval:'개선 검토본 · 출고 승인과 별개',
@@ -29,3 +29,4 @@ export function cardVersionChoices(history:ContentHistory):CardVersion[] {
 export function comparedCardNumbers(left?:CardVersion,right?:CardVersion) {
   return [...new Set([...(left?.cards??[]),...(right?.cards??[])].map(c=>c.number))].sort((a,b)=>a-b);
 }
+

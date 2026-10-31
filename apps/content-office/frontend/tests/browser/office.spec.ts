@@ -1116,9 +1116,9 @@ for (const width of [1440,390]) {
   test(`보관 카드 비교 ${width}px에서 선택한 장만 읽고 없는 파일·오류·원고 보존을 구분한다`,async({page})=>{
     const fixture=await harness(page,true),requests:string[]=[];
     await page.setViewportSize({width,height:1000});
-    await page.route('**/api/jobs/contract-test-job/history',route=>route.fulfill({json:{job_id:'contract-test-job',current_source_hash:fixture.getJob().source_hash,current_manifest_hash:null,sources:[],productions:[{created_at:'2026-10-30T00:00:00Z',current:false,approved_before:true,manifest:{hash:'old-manifest',source_hash:'old-source',files:[{id:'card_base1',name:'card-01.png',kind:'image',url:'/api/artifacts/card_base1'},{id:'card_base3',name:'card-03.png',kind:'image',url:'/api/artifacts/card_base3'}]}}],drafts:[{id:'draft_cards',job_id:'contract-test-job',title:'검수 카드',body:'보관 본문',status:'draft',source_hash_snapshot:'draft-source',assets:[{name:'card-01.png',media_type:'image/png',sha256:'one',size:1},{name:'card-02.png',media_type:'image/png',sha256:'two',size:2}]}]}}));
+    await page.route('**/api/jobs/contract-test-job/history',route=>route.fulfill({json:{job_id:'contract-test-job',current_source_hash:fixture.getJob().source_hash,current_manifest_hash:null,sources:[],productions:[{created_at:'2026-10-30T00:00:00Z',current:false,approved_before:true,manifest:{hash:'old-manifest',source_hash:'old-source',files:[{id:'card_base1',name:'card-01.png',kind:'image',url:'/api/jobs/contract-test-job/history/old-manifest/files/card_base1'},{id:'card_base3',name:'card-03.png',kind:'image',url:'/api/jobs/contract-test-job/history/old-manifest/files/card_base3'}]}}],drafts:[{id:'draft_cards',job_id:'contract-test-job',title:'검수 카드',body:'보관 본문',status:'draft',source_hash_snapshot:'draft-source',assets:[{name:'card-01.png',media_type:'image/png',sha256:'one',size:1},{name:'card-02.png',media_type:'image/png',sha256:'two',size:2}]}]}}));
     const image='<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200"><rect width="900" height="1200" fill="#dfe9d8"/></svg>';
-    await page.route('**/api/artifacts/card_*',route=>{requests.push(route.request().url());return route.fulfill({status:route.request().url().endsWith('base3')?404:200,contentType:'image/svg+xml',body:image});});
+    await page.route('**/api/jobs/contract-test-job/history/old-manifest/files/card_*',route=>{requests.push(route.request().url());return route.fulfill({status:route.request().url().endsWith('base3')?404:200,contentType:'image/svg+xml',body:image});});
     await page.route('**/api/jobs/contract-test-job/drafts/draft_cards/files/*.png',route=>{requests.push(route.request().url());return route.fulfill({contentType:'image/svg+xml',body:image});});
     await page.goto('/scripts/contract-test-job');
     const original=fixture.getJob().source_packet?.body;
@@ -1145,3 +1145,4 @@ for (const width of [1440,390]) {
     expect(audit.violations).toEqual([]);
   });
 }
+
