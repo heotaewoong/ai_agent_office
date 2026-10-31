@@ -220,6 +220,7 @@ export type JobMetadata = {
   updated_at?: string;
   source_hash?: string | null;
   has_source?: boolean;
+  output_kinds?: string[];
 };
 export type JobBudget = {
   job_id: string;

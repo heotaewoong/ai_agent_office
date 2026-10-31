@@ -45,6 +45,7 @@ import { PageOutline } from "./page-outline";
 import deliveryStyles from "./delivery-view.module.css";
 import { WorldView } from "./world-view";
 import { reuseUnchangedJob } from "../lib/job-snapshot";
+import { filterJobs } from "../lib/job-filters";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ArchitectureView } from "./architecture-view";
@@ -188,6 +189,9 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [jobQuery, setJobQuery] = useState("");
+  const [jobStateFilter, setJobStateFilter] = useState("all");
+  const [jobOutputFilter, setJobOutputFilter] = useState("all");
   const [now, setNow] = useState(Date.now());
   const [lastLoaded, setLastLoaded] = useState<string>();
   const [ideaRefresh, setIdeaRefresh] = useState(0);
@@ -370,6 +374,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
   }
 
   const jobs = dashboard?.jobs ?? [];
+  const visibleJobs = filterJobs(jobs, jobQuery, jobStateFilter, jobOutputFilter);
+  const clearJobFilters = () => { setJobQuery(""); setJobStateFilter("all"); setJobOutputFilter("all"); };
   const articles = dashboard?.articles ?? [];
   const visibleArticles = filterNews(articles, segment);
   const sources = dashboard?.source_registry ?? [];
@@ -762,6 +768,16 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       <h2>내 작업</h2>
                       <span className="count-pill">{jobs.length}</span>
                     </div>
+                    {jobs.length > 0 && <div className="job-filters">
+                      <label>작업 검색<input type="search" value={jobQuery} onChange={e => setJobQuery(e.target.value)} placeholder="제목 또는 작업 ID" /></label>
+                      <div className="job-filter-selects">
+                        <label>진행 상태<select value={jobStateFilter} onChange={e => setJobStateFilter(e.target.value)}><option value="all">모든 상태</option>{[...new Set(jobs.map(item => item.state))].sort().map(state => <option key={state} value={state}>{statusInfo(state).label}</option>)}</select></label>
+                        <label>제작 종류<select value={jobOutputFilter} onChange={e => setJobOutputFilter(e.target.value)}><option value="all">모든 종류</option><option value="blog">블로그</option><option value="video">영상</option><option value="cards">카드뉴스</option><option value="pdf">PDF</option><option value="unspecified">미지정</option></select></label>
+                      </div>
+                      <p className="muted">제작할 때 선택한 종류를 기준으로 찾습니다.</p>
+                      <div className="job-filter-summary"><span role="status" aria-live="polite">{jobs.length}개 중 {visibleJobs.length}개</span><button type="button" className="inline-button" disabled={!jobQuery && jobStateFilter === 'all' && jobOutputFilter === 'all'} onClick={clearJobFilters}>조건 지우기</button></div>
+                      {activeId && !visibleJobs.some(item => item.id === activeId) && <p className="job-filter-current">현재 편집 중인 작업은 계속 열려 있습니다.</p>}
+                    </div>}
                     {jobs.length === 0 ? (
                       <div className="small-empty">
                         <p>진행 중인 작업이 없어요.</p>
@@ -776,7 +792,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         </button>
                       </div>
                     ) : (
-                      jobs.map((item) => (
+                      visibleJobs.length === 0 ? <div className="small-empty"><p>조건에 맞는 작업이 없습니다.</p><button type="button" className="inline-button" onClick={clearJobFilters}>검색 조건 지우기</button></div> : visibleJobs.map((item) => (
                         <button
                           key={item.id}
                           className={`job-item ${item.id === activeId ? "active" : ""}`}

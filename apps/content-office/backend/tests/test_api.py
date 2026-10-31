@@ -100,7 +100,7 @@ def test_job_summaries_bound_metadata_and_preserve_detail_ids_with_smaller_paylo
     assert metadata[-1]["id"] == "job_000" and metadata[-1]["title"] == hostile_title
     assert sum(item["state"] == "source_review" for item in metadata) == 105
     assert all(item["has_source"] is True and item["source_hash"] == "a" * 64 for item in metadata)
-    assert all(set(item) == {"id", "title", "state", "source_hash", "updated_at", "has_source"} for item in metadata)
+    assert all(set(item) == {"id", "title", "state", "source_hash", "updated_at", "has_source", "output_kinds"} for item in metadata)
     assert private not in compact.text
     assert len(compact.content) < len(dashboard.content) / 5
     assert client.get("/api/dashboard?compact=false").json()["jobs"] == dashboard.json()["jobs"]
@@ -785,3 +785,14 @@ def test_clip_limits_route_validates_operator_input(context):
     ok = client.post("/api/settings/clip-limits", json={"max_clips_per_video": 2, "daily_paid_clips": 4}, headers=headers)
     assert ok.status_code == 200 and ok.json()["clip"]["clip_limits"]["daily_paid_clips"] == 4
     assert client.post("/api/settings/clip-limits", json={"max_clips_per_video": 13, "daily_paid_clips": 4}, headers=headers).status_code == 409
+
+def test_compact_dashboard_exposes_only_explicit_output_choices(context):
+    store, client, _ = context
+    job = store.create_job(store.article("one"))
+    store.update_job(job["id"], selections={"blog": True, "cards": True, "video": "PRIVATE_BAD_SELECTION", "pdf": {"secret": "PRIVATE_BAD_SELECTION"}, "private": True})
+    before = store.job(job["id"])
+    response = client.get("/api/dashboard?compact=true")
+    assert response.status_code == 200
+    assert response.json()["jobs"][0]["output_kinds"] == ["blog", "cards"]
+    assert "PRIVATE_BAD_SELECTION" not in response.text
+    assert store.job(job["id"]) == before

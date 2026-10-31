@@ -101,9 +101,11 @@ def _job_summary(job, *, compact=False):
     if compact:
         packet = job.get("source_packet") if isinstance(job.get("source_packet"), dict) else {}
         article = job.get("article") if isinstance(job.get("article"), dict) else {}
+        selections = job.get("selections") if isinstance(job.get("selections"), dict) else {}
         return {"id": job["id"], "title": text(job.get("title"), 200) or text(article.get("editorial_title"), 200) or text(article.get("title"), 200) or job["id"], "state": text(job.get("state"), 60) or "unknown",
                 "updated_at": text(job.get("updated_at"), 60), "source_hash": content_hash(job.get("source_hash")),
-                "has_source": isinstance(packet.get("body"), str) and bool(packet["body"])}
+                "has_source": isinstance(packet.get("body"), str) and bool(packet["body"]),
+                "output_kinds": [kind for kind in ("blog", "video", "cards", "pdf") if selections.get(kind) is True]}
     manifest = job.get("manifest") if isinstance(job.get("manifest"), dict) else {}
     files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
     return {"id": job["id"], "title": text(job.get("title"), 200) or job["id"], "state": text(job.get("state"), 60) or "unknown",
