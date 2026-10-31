@@ -1087,3 +1087,61 @@ test("모바일 제작물 목차 이동은 편집 내용을 보존하고 큰 구
 
   expect(fixture.writes).toEqual([]);
 });
+
+for (const width of [1440,390]) {
+  test(`작업 필터 ${width}px에서 빈 결과·조건 지우기에도 미저장 원고를 보존한다`,async({page})=>{
+    const fixture=await harness(page,true);
+    fixture.dashboard.jobs[0].output_kinds=['blog','cards'];
+    fixture.dashboard.jobs.push({id:'other-filter',title:'다른 영상 작업',state:'failed',output_kinds:['video']});
+    await page.setViewportSize({width,height:1000});
+    await page.goto('/scripts/contract-test-job');
+    const body=page.getByLabel('본문 · Markdown',{exact:true});
+    await body.fill('검색 중에도 보존해야 하는 미저장 원고');
+    const sidebar=page.getByRole('region',{name:'콘텐츠 작업 목록',exact:true});
+    await sidebar.getByLabel('제작 종류',{exact:true}).selectOption('video');
+    await expect(sidebar.getByRole('button',{name:/다른 영상 작업/})).toBeVisible();
+    await expect(sidebar.getByText('현재 편집 중인 작업은 계속 열려 있습니다.')).toBeVisible();
+    await sidebar.getByLabel('작업 검색',{exact:true}).fill('없는 제목');
+    await expect(sidebar.getByText('조건에 맞는 작업이 없습니다.')).toBeVisible();
+    await expect(body).toHaveValue('검색 중에도 보존해야 하는 미저장 원고');
+    await sidebar.getByRole('button',{name:'검색 조건 지우기',exact:true}).click();
+    await expect(sidebar.getByRole('status')).toHaveText('2개 중 2개');
+    await sidebar.getByLabel('진행 상태',{exact:true}).selectOption('failed');
+    await expect(sidebar.getByRole('button',{name:/다른 영상 작업/})).toHaveCount(1);
+    await expect(body).toHaveValue('검색 중에도 보존해야 하는 미저장 원고');
+    expect(new URL(page.url()).pathname).toBe('/scripts/contract-test-job');
+    expect(fixture.writes).toEqual([]);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  });
+  test(`보관 카드 비교 ${width}px에서 선택한 장만 읽고 없는 파일·오류·원고 보존을 구분한다`,async({page})=>{
+    const fixture=await harness(page,true),requests:string[]=[];
+    await page.setViewportSize({width,height:1000});
+    await page.route('**/api/jobs/contract-test-job/history',route=>route.fulfill({json:{job_id:'contract-test-job',current_source_hash:fixture.getJob().source_hash,current_manifest_hash:null,sources:[],productions:[{created_at:'2026-10-30T00:00:00Z',current:false,approved_before:true,manifest:{hash:'old-manifest',source_hash:'old-source',files:[{id:'card_base1',name:'card-01.png',kind:'image',url:'/api/artifacts/card_base1'},{id:'card_base3',name:'card-03.png',kind:'image',url:'/api/artifacts/card_base3'}]}}],drafts:[{id:'draft_cards',job_id:'contract-test-job',title:'검수 카드',body:'보관 본문',status:'draft',source_hash_snapshot:'draft-source',assets:[{name:'card-01.png',media_type:'image/png',sha256:'one',size:1},{name:'card-02.png',media_type:'image/png',sha256:'two',size:2}]}]}}));
+    const image='<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200"><rect width="900" height="1200" fill="#dfe9d8"/></svg>';
+    await page.route('**/api/artifacts/card_*',route=>{requests.push(route.request().url());return route.fulfill({status:route.request().url().endsWith('base3')?404:200,contentType:'image/svg+xml',body:image});});
+    await page.route('**/api/jobs/contract-test-job/drafts/draft_cards/files/*.png',route=>{requests.push(route.request().url());return route.fulfill({contentType:'image/svg+xml',body:image});});
+    await page.goto('/scripts/contract-test-job');
+    const original=fixture.getJob().source_packet?.body;
+    await page.getByRole('button',{name:'버전 보관함 열기',exact:true}).click();
+    const panel=page.getByRole('region',{name:'보관 카드 이미지 비교',exact:true});
+    await expect(panel.getByRole('button',{name:'카드 이미지 비교 열기',exact:true})).toBeVisible();
+    expect(requests).toEqual([]);
+    await panel.getByRole('button',{name:'카드 이미지 비교 열기',exact:true}).click();
+    await expect.poll(()=>requests.length).toBe(2);
+    await panel.getByLabel('비교할 장',{exact:true}).selectOption('2');
+    await expect(panel.getByText(/이 판본에는 2장 파일이 없습니다/)).toBeVisible();
+    const img=panel.getByRole('img',{name:'비교 · 2장',exact:true});
+    await expect.poll(()=>img.evaluate((el:HTMLImageElement)=>el.naturalHeight)).toBe(1200);
+    const dimensions=await img.evaluate(el=>({w:el.getBoundingClientRect().width,h:el.getBoundingClientRect().height}));
+    expect(Math.abs(dimensions.w/dimensions.h-.75)).toBeLessThan(.01);
+    await panel.getByLabel('비교할 장',{exact:true}).selectOption('3');
+    await expect(panel.getByText(/이미지를 불러오지 못했습니다/)).toBeVisible();
+    await panel.getByLabel('기준 카드 판본',{exact:true}).selectOption('draft:draft_cards');
+    await expect(panel.getByLabel('비교할 카드 판본',{exact:true})).toHaveValue('production:old-manifest');
+    expect(fixture.getJob().source_packet?.body).toBe(original);
+    expect(fixture.writes).toEqual([]);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    const audit=await new AxeBuilder({page}).include('.card-version-compare').analyze();
+    expect(audit.violations).toEqual([]);
+  });
+}

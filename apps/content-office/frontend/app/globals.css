@@ -4459,3 +4459,25 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .job-filter-summary button { min-height: 36px; }
 .job-filter-current { font-size: 12px; line-height: 1.6; color: #31513b; background: #eaf0e6; padding: 10px; border-radius: 8px; margin: 8px 0 0; }
 @media(max-width:720px) { .job-filters input, .job-filters select { font-size: 16px; } }
+
+.card-version-compare { margin: 22px 0; padding: 22px; border: 1px solid #c9d5c3; border-radius: 14px; background: #f6f8f2; }
+.card-version-compare > h3 { margin: 0 0 8px; }
+.card-version-compare > p { line-height: 1.7; }
+.card-compare-controls { display: grid; grid-template-columns: 1fr 1fr minmax(100px,.35fr); gap: 12px; margin-top: 18px; }
+.card-compare-controls label { display: grid; gap: 7px; min-width: 0; font-size: 13px; font-weight: 600; }
+.card-compare-controls select { width: 100%; min-width: 0; min-height: 44px; padding: 10px; border: 1px solid #abbda4; border-radius: 8px; background: white; font: inherit; }
+.card-compare-columns { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); align-items: start; gap: 18px; }
+.card-compare-version { min-width: 0; border: 1px solid var(--line); border-radius: 12px; background: white; overflow: hidden; }
+.card-compare-heading { padding: 16px; border-bottom: 1px solid var(--line); }
+.card-compare-heading > span { color: #335a3c; font-size: 12px; font-weight: 700; }
+.card-compare-heading h4 { font-size: 16px; line-height: 1.6; margin: 6px 0; overflow-wrap: anywhere; }
+.card-compare-heading p { font-size: 12px; line-height: 1.65; margin: 4px 0; }
+.card-compare-media { min-height: 160px; background: #e9ede5; }
+.card-compare-media img { display: block; width: 100%; height: auto; object-fit: contain; }
+.card-compare-media p, .card-compare-missing { padding: 20px; line-height: 1.7; }
+.card-compare-evidence { padding: 14px 16px; border-top: 1px solid var(--line); font-size: 12px; }
+.card-compare-evidence summary { cursor: pointer; min-height: 32px; }
+.card-compare-evidence dl { display: grid; gap: 6px; }
+.card-compare-evidence dt { font-weight: 700; }
+.card-compare-evidence dd { margin: 0 0 8px; overflow-wrap: anywhere; }
+@media(max-width:720px) { .card-version-compare { padding: 15px; } .card-compare-controls, .card-compare-columns { grid-template-columns: minmax(0,1fr); } .card-compare-controls select { font-size: 16px; } }
