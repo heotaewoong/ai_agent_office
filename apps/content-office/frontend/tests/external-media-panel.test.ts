@@ -36,3 +36,13 @@ test("이미 연결된 현재 판본은 다시 승인하는 대신 출고② 안
 test("필수 다섯 파일이 없는 일반 편집 초안에는 가져오기 승인을 노출하지 않는다",()=>{
  const h=harness();try{assert.deepEqual(h.render({job:{id:"job_fixture",source_hash:"current",drafts:[{id:"draft_other",assets:[{name:"note.md"}]}]}}),[]);}finally{h.cleanup();}
 });
+
+test("카드8장과 플랫폼 원고4개를 같은 승인 패널에 표시하되 자동 승인하지 않는다",()=>{
+ const h=harness();try{
+  const channel_pack={cards:Array.from({length:8},(_,i)=>`card-${String(i+1).padStart(2,'0')}.png`),platforms:[{name:'tistory-article.md',label:'티스토리'},{name:'naver-article.txt',label:'네이버 블로그'},{name:'threads-post.txt',label:'Threads'},{name:'linkedin-post.txt',label:'LinkedIn'}]};
+  const list=h.render({job:{...job,source_packet:{...job.source_packet,external_media:{...job.source_packet.external_media,channel_pack}}}});
+  assert.equal(list.filter(n=>n.type==='img').length,8);
+  assert.equal(list.filter(n=>n.type==='a'&&String(n.props.children).includes('원고 전체 읽기')).length,4);
+  assert.equal(h.calls.length,0);assert.equal(list.find(n=>n.type==='input').props.checked,false);
+ }finally{h.cleanup();}
+});

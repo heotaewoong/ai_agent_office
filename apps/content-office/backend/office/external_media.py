@@ -8,6 +8,9 @@ import subprocess
 from .store import WorkflowError, digest
 
 REQUIRED = ('short.mp4', 'source-original.md', 'captions.srt', 'thumbnail-01.png', 'description.txt')
+PACK_TEXTS = {'tistory-article.md': '티스토리', 'naver-article.txt': '네이버 블로그', 'threads-post.txt': 'Threads', 'linkedin-post.txt': 'LinkedIn'}
+PACK_CARDS = tuple(f'card-{i:02}.png' for i in range(1, 9))
+PACK_NAMES = (*PACK_TEXTS, *PACK_CARDS)
 BUSY = ('drafting', 'production_queued', 'producing', 'needs_reconciliation')
 
 
@@ -18,8 +21,11 @@ def files_for(store, job, draft_id):
     records = {a['name']: a for a in draft.get('assets', [])}
     if not set(REQUIRED).issubset(records):
         raise WorkflowError('영상·원문·자막·표지·설명 5개 파일이 필요합니다')
+    has_pack = any(name in records for name in PACK_NAMES)
+    if has_pack and not set(PACK_NAMES).issubset(records):
+        raise WorkflowError('채널별 글 4개와 카드뉴스 8장을 모두 준비해 주세요')
     paths, root = {}, store.artifacts.resolve()
-    for name in REQUIRED:
+    for name in (*REQUIRED, *(PACK_NAMES if has_pack else ())):
         a = records[name]
         path = (root / a['path']).resolve()
         if not path.is_relative_to(root) or not path.is_file() or not 0 < path.stat().st_size <= 100_000_000:
@@ -31,6 +37,21 @@ def files_for(store, job, draft_id):
         if path.stat().st_size != a['size'] or checksum.hexdigest() != a['sha256']:
             raise WorkflowError('편집 파일이 등록 당시와 다릅니다')
         paths[name] = path
+    if has_pack:
+        from PIL import Image
+        for name in PACK_TEXTS:
+            if not _text(paths[name]).strip():
+                raise WorkflowError('빈 채널 원고는 연결할 수 없습니다')
+        try:
+            for name in PACK_CARDS:
+                with Image.open(paths[name]) as image:
+                    if image.format != 'PNG' or image.size != (1080, 1350):
+                        raise ValueError('card dimensions')
+                    image.verify()
+        except (OSError, ValueError):
+            raise WorkflowError('카드뉴스 8장의 PNG 형식·1080×1350 크기를 확인해 주세요') from None
+        if len({records[n]['sha256'] for n in PACK_CARDS}) != 8:
+            raise WorkflowError('같은 카드 이미지가 중복되었습니다')
     return draft, records, paths
 
 
@@ -66,7 +87,7 @@ def validate_packet(store, job):
     if spec.get('version') != 'external-media-v1' or spec.get('scope') != 'private_review_only':
         raise WorkflowError('기존 편집본 연결 명세가 없습니다')
     _, records, paths = files_for(store, job, spec.get('draft_id'))
-    if {n: records[n]['sha256'] for n in REQUIRED} != spec.get('asset_hashes') or packet.get('body') != _text(paths['source-original.md']):
+    if {n: records[n]['sha256'] for n in paths} != spec.get('asset_hashes') or packet.get('body') != _text(paths['source-original.md']):
         raise WorkflowError('검토 원문 또는 연결 파일 판본이 변경되었습니다')
     if packet.get('source_input_hash') != digest(packet['body']):
         raise WorkflowError('원문 보존 해시가 다릅니다')
@@ -112,9 +133,14 @@ def prepare_review(store, job_id, draft_id, expected_hash):
         'quality': {'status': 'external_review_required', 'critical': False, 'reviews': [],
                     'note': '모델 검수 통과가 아닙니다. 원문·음성·자막·권리·혜택 표현을 사람이 직접 확인해야 합니다.'},
         'external_media': {'version': 'external-media-v1', 'draft_id': draft_id,
-                           'asset_hashes': {n: records[n]['sha256'] for n in REQUIRED},
+                           'asset_hashes': {n: records[n]['sha256'] for n in paths},
                            'technical': info, 'scope': 'private_review_only'},
     }
+    if set(PACK_NAMES).issubset(paths):
+        packet['external_media']['channel_pack'] = {
+            'cards': list(PACK_CARDS), 'platforms': [{'name': name, 'label': label} for name, label in PACK_TEXTS.items()],
+            'review': 'operator_required', 'public_distribution_cleared': False,
+        }
     return store.save_source(job_id, packet, expected_hash=expected_hash)
 
 
@@ -123,7 +149,8 @@ def adopt_reviewed(store, job_id, expected_hash, reviewed):
     if reviewed is not True or job.get('source_hash') != expected_hash or job['state'] in BUSY:
         raise WorkflowError('현재 판본을 직접 검토한 뒤 원고 승인①이 필요합니다')
     records, paths = validate_packet(store, job)
-    selections = {'video': True, 'blog': True, 'cards': False, 'pdf': False}
+    has_pack = set(PACK_NAMES).issubset(paths)
+    selections = {'video': True, 'blog': True, 'cards': has_pack, 'pdf': False}
     approval = job.get('source_approval') or {}
     if approval.get('version') != expected_hash or approval.get('decision') != 'approved' or approval.get('selections') != selections:
         job = store.review_source(job_id, expected_hash, 'approved', 'local-operator', selections, external_media_reviewed=True)
@@ -158,11 +185,20 @@ def adopt_reviewed(store, job_id, expected_hash, reviewed):
     for name in ['instagram-main-caption.txt', 'threads-main.txt', 'linkedin-personal.txt']:
         (folder / name).write_text(packet['title'] + '\n\n' + packet['body'] + '\n\n' + packet['video']['description'], 'utf8')
         blog_names.add(name)
-    names = sorted(blog_names | video_names | {'source-original.md', 'asset-rights.json'})
-    assets = [{**artifact_record(store.artifacts, folder / name), 'outputs': ['shared'] if name in ['source-original.md', 'asset-rights.json'] else (['blog'] if name in blog_names else ['video'])} for name in names]
+    card_names = set(PACK_CARDS) if has_pack else set()
+    if has_pack:
+        from .exports import safe_fragment
+        adapted = _text(paths['tistory-article.md'])
+        (folder / 'tistory.md').write_text(adapted, 'utf8')
+        (folder / 'tistory.html').write_text(safe_fragment(adapted), 'utf8')
+        for source, target in [('naver-article.txt', 'naver.txt'), ('threads-post.txt', 'threads-main.txt'), ('linkedin-post.txt', 'linkedin-personal.txt')]:
+            (folder / target).write_text(_text(paths[source]), 'utf8')
+        blog_names.update(PACK_TEXTS)
+    names = sorted(blog_names | video_names | card_names | {'source-original.md', 'asset-rights.json'})
+    assets = [{**artifact_record(store.artifacts, folder / name), 'outputs': ['shared'] if name in ['source-original.md', 'asset-rights.json'] else (['cards'] if name in card_names else (['blog'] if name in blog_names else ['video']))} for name in names]
     manifest = {
-        'source_hash': expected_hash, 'files': assets, 'completed_outputs': ['blog', 'video'],
-        'output_status': {'blog': {'state': 'completed'}, 'video': {'state': 'completed'}},
+        'source_hash': expected_hash, 'files': assets, 'completed_outputs': ['blog', 'video', *(['cards'] if has_pack else [])],
+        'output_status': {key: {'state': 'completed', 'review_method': 'operator_external_media'} for key, enabled in selections.items() if enabled},
         'thumbnail_candidates': [a for a in assets if a['name'] == 'thumbnail-01.png'], 'selected_thumbnail_id': None,
         'imported_external_media': packet['external_media'], 'production_method': 'imported_edited_media',
         'warnings': ['재렌더·새 모델 호출 없이 기존 편집본을 가져왔습니다', '비공개 검토용입니다. 공개 게시 전에 권리·혜택을 재검수하세요', '표지를 선택하고 영상·음성·자막 확인 후 출고 승인②을 해주세요'],

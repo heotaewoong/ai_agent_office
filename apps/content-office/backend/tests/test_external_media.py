@@ -152,3 +152,71 @@ def test_copy_race_does_not_record_completed_manifest(tmp_path, monkeypatch):
     with pytest.raises(WorkflowError):
         module.adopt_reviewed(store, job['id'], job['source_hash'], True)
     assert store.job(job['id'])['manifest'] is None
+
+
+def pack_context(tmp_path, monkeypatch):
+    from PIL import Image
+    store, job, draft = context(tmp_path, monkeypatch)
+    files = [(a['name'], store.artifacts / a['path']) for a in draft['assets']]
+    for name in module.PACK_TEXTS:
+        path = tmp_path / name
+        path.write_text(name + '\n플랫폼에 맞춘 새 원문입니다.\n', 'utf8')
+        files.append((name, path))
+    for i, name in enumerate(module.PACK_CARDS):
+        path = tmp_path / name
+        Image.new('RGB', (1080, 1350), (i*20, 50, 80)).save(path)
+        files.append((name, path))
+    draft = register_assets(store, job['id'], job['source_hash'], '카드와 채널별 글', '미승인', files)
+    return store, job, draft
+
+
+def test_channel_pack_is_reviewable_and_approval_still_required(tmp_path, monkeypatch):
+    store, job, draft = pack_context(tmp_path, monkeypatch)
+    current = module.prepare_review(store, job['id'], draft['id'], job['source_hash'])
+    assert current['source_approval'] is current['release_approval'] is current['manifest'] is None
+    assert len(current['source_packet']['external_media']['channel_pack']['cards']) == 8
+    result = module.adopt_reviewed(store, job['id'], current['source_hash'], True)
+    assert set(result['manifest']['completed_outputs']) == {'blog', 'video', 'cards'}
+    assert result['selections']['cards'] is True
+    assert result['release_approval'] is None
+    files = {a['name']: a for a in result['manifest']['files']}
+    assert len([a for a in files.values() if a['outputs'] == ['cards']]) == 8
+    assert (store.artifacts / files['tistory.md']['path']).read_text().startswith('tistory-article.md')
+    assert (store.artifacts / files['naver.txt']['path']).read_text().startswith('naver-article.txt')
+    assert (store.artifacts / files['threads-main.txt']['path']).read_text().startswith('threads-post.txt')
+    assert (store.artifacts / files['linkedin-personal.txt']['path']).read_text().startswith('linkedin-post.txt')
+    assert result['source_packet']['quality']['status'] == 'external_review_required'
+    again = module.adopt_reviewed(store, job['id'], current['source_hash'], True)
+    assert result['manifest'] == again['manifest']
+
+
+@pytest.mark.parametrize('name', ['card-01.png', 'threads-post.txt'])
+def test_pack_tamper_cannot_be_approved(tmp_path, monkeypatch, name):
+    store, job, draft = pack_context(tmp_path, monkeypatch)
+    current = module.prepare_review(store, job['id'], draft['id'], job['source_hash'])
+    record = next(a for a in draft['assets'] if a['name'] == name)
+    (store.artifacts / record['path']).write_bytes(b'tampered')
+    with pytest.raises(WorkflowError):
+        module.adopt_reviewed(store, job['id'], current['source_hash'], True)
+    assert store.job(job['id'])['source_approval'] is None
+
+
+@pytest.mark.parametrize('mode', ['partial', 'duplicate', 'dimensions', 'empty'])
+def test_invalid_channel_bundle_does_not_replace_original(tmp_path, monkeypatch, mode):
+    from PIL import Image
+    store, job, draft = pack_context(tmp_path, monkeypatch)
+    files = [(a['name'], store.artifacts / a['path']) for a in draft['assets']]
+    if mode == 'partial':
+        files = [(name,path) for name,path in files if name != 'threads-post.txt']
+    elif mode == 'duplicate':
+        first = next(path for name,path in files if name == 'card-01.png')
+        files = [(name,first if name == 'card-02.png' else path) for name,path in files]
+    elif mode == 'dimensions':
+        wrong = tmp_path / 'wrong.png'; Image.new('RGB',(30,30)).save(wrong)
+        files = [(name,wrong if name == 'card-01.png' else path) for name,path in files]
+    else:
+        empty = tmp_path / 'empty.txt';empty.write_text(' ', 'utf8')
+        files = [(name,empty if name == 'threads-post.txt' else path) for name,path in files]
+    other = register_assets(store, job['id'], job['source_hash'], '잘못된 묶음', '검토', files)
+    with pytest.raises(WorkflowError):module.prepare_review(store,job['id'],other['id'],job['source_hash'])
+    assert store.job(job['id']) == job
