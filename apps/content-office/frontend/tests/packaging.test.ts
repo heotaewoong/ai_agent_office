@@ -30,3 +30,6 @@ test("빈 제목·빈 썸네일 글자는 문제", () => {
 
 
 test('본문이 있으면 정해진 제목을 다시 후보로 고르도록 막지 않는다',()=>{assert.equal(packagingRequired({article:{origin:'idea'} as never,packaging:null,source_packet:{body:'작성한 원고'} as never}),false);});
+
+
+test('제목이 정해진 새 작업도 3개 제목 후보를 다시 요구하지 않는다',()=>{assert.equal(packagingRequired({article:{origin:'idea'} as never,packaging:null,title:'정한 제목'}),false);});

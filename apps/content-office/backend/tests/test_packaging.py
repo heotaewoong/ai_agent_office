@@ -31,8 +31,7 @@ def test_thumbnail_text_limit():
 def test_idea_job_requires_packaging_before_drafting(tmp_path):
     store = Store(tmp_path)
     job = store.create_job({"id": "idea-1", "title": "기획", "url": "https://example.com", "origin": "idea"})
-    with pytest.raises(WorkflowError, match="패키징"):
-        require_packaging(store.job(job["id"]))
+    require_packaging(store.job(job["id"]))  # Existing job title no longer needs three alternate headlines.
     attach_packaging(store, job["id"], brief(), "local-operator")
     require_packaging(store.job(job["id"]))
 

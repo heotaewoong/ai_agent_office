@@ -28,6 +28,6 @@ export function validatePackagingBrief(brief: PackagingBrief): string[] {
   return issues;
 }
 
-export function packagingRequired(job: Pick<Job, "article" | "packaging" | "source_packet">): boolean {
-  return job.article?.origin === "idea" && !job.packaging && !job.source_packet?.body;
+export function packagingRequired(job: Pick<Job, "article" | "packaging" | "source_packet"> & Partial<Pick<Job, "title">>): boolean {
+  return job.article?.origin === "idea" && !job.packaging && !job.source_packet?.body && !job.title?.trim();
 }

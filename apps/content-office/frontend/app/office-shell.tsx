@@ -55,7 +55,6 @@ import { updateBriefDrafts, type BriefDraft, type BriefDraftUpdate } from "../li
 import { updateOfferDrafts, type OfferDraft, type OfferDraftUpdate } from "../lib/offer";
 import type { IdeaSourcesDraft } from "../lib/ideas";
 import { PerformancePanel } from "./performance-panel";
-import { PackagingPanel } from "./packaging-panel";
 import { QuizPanel } from "./quiz-panel";
 import { CardsPanel } from "./cards-panel";
 import { OfferPanel } from "./offer-panel";
@@ -1304,17 +1303,9 @@ function Studio({
         action={action}
       />
         </details>
-      {job.article?.origin === "idea" && !job.source_packet?.body && (
-        <div ref={packagingPanel} className="outline-target" tabIndex={-1} aria-label="제목·썸네일·후크 기획">
-          <PackagingPanel
-            key={job.packaging?.packaging_hash ?? "new"}
-            job={job}
-            busy={locked}
-            action={action}
-          />
-        </div>
-      )}
-      {job.source_packet?.body && <p className="notice">확정 제목: <strong>{job.source_packet.title}</strong>. 썸네일은 이 원고를 기준으로 <Link href={`/publish?job=${encodeURIComponent(job.id)}`}>제작·출고함에서 실제 이미지 3종을 비교·개선하고 직접 확정</Link>하세요.</p>}
+      <div ref={packagingPanel} className="outline-target" tabIndex={-1}>
+        <p className="notice">원고 제목: <strong>{job.source_packet?.title || job.title}</strong>. 원고를 작성·검토한 뒤 <Link href={`/publish?job=${encodeURIComponent(job.id)}`}>제작·출고함에서 같은 제목의 실제 이미지 3종을 비교·개선하고 직접 확정</Link>하세요.</p>
+      </div>
       <EvidenceIntake
         job={job}
         model={model}

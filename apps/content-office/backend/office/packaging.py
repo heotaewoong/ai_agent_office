@@ -73,5 +73,5 @@ def attach_packaging(store, job_id, brief, actor):
 
 
 def require_packaging(job):
-    if job["article"].get("origin") == "idea" and not job.get("packaging") and not (job.get("source_packet") or {}).get("body"):
+    if job["article"].get("origin") == "idea" and not job.get("packaging") and not (job.get("source_packet") or {}).get("body") and not str(job.get("title") or "").strip():
         raise WorkflowError("기획에서 시작한 작업은 패키징(제목·썸네일·훅)을 먼저 정해야 합니다")
