@@ -107,3 +107,9 @@ test("연결 시작·해제는 CSRF 토큰과 채널 키만 보낸다", async (t
     { url: "/api/youtube/oauth/status", method: "GET", csrf: undefined, body: null },
   ]);
 });
+test("PC 인증 모드는 서버에 키를 넣도록 안내하거나 연결 완료를 꾸미지 않는다", async () => {
+  const {connectBlockedReason,connectionLabel}=await import("../lib/youtube-oauth.ts");
+  assert.match(connectBlockedReason({auth_location:"owner_pc"} as never)!,/본인 PC/);
+  assert.match(connectionLabel({source:"owner_pc",connected:true} as never),/본인 PC 인증 연결됨/);
+  assert.match(connectionLabel({source:"owner_pc",connected:false} as never),/연결 필요/);
+});

@@ -112,7 +112,7 @@ def record(store, value, articles, report):
     recommendations = {}
     for platform in value['platforms']:
         kinds = ROUTES[platform]
-        candidates = [r for r in articles if r.get('segment') == 'ai' and relevant(r['title'] + ' ' + r.get('summary', ''), value['topic'])]
+        candidates = [r for r in articles if r.get('segment') in ('ai', 'exam') and relevant(r['title'] + ' ' + r.get('summary', ''), value['topic'])]
         def weight(row):
             kind = row.get('source_kind', 'official')
             metric = {'youtube': 'youtube_views', 'community': 'hn_points'}.get(kind)

@@ -64,6 +64,9 @@ def _youtube_key(key):
 
 
 def client_configured():
+    from .owner_auth import enabled
+    if enabled():
+        return False
     return os.environ.get("YOUTUBE_OAUTH_CLIENT_TYPE", "").strip().lower() != "installed" and all(os.environ.get(name) for name in SHARED_ENV)
 
 
@@ -72,6 +75,8 @@ def redirect_uri(origin):
 
 
 def require_ready(store, origin):
+    from .owner_auth import require_server_auth_allowed
+    require_server_auth_allowed()
     if os.environ.get("YOUTUBE_OAUTH_CLIENT_TYPE", "").strip().lower() == "installed":
         raise WorkflowError("현재 인증 설정은 Desktop 앱(installed)입니다. 웹 화면의 YouTube 연결에는 웹 애플리케이션 클라이언트가 필요합니다. 저장된 Desktop 토큰은 업로드에 재사용할 수 있습니다")
     missing = [name for name in SHARED_ENV if not os.environ.get(name)]
@@ -167,6 +172,8 @@ def _mine(transport, access, key):
 
 
 def finish(store, *, origin, state, code, error, binding, transport=None):
+    from .owner_auth import require_server_auth_allowed
+    require_server_auth_allowed()
     """콜백 처리. 성공하면 채널 키를 돌려주고, 실패하면 아무것도 저장하지 않은 채 OAuthFailure를 던진다."""
     transport = transport or requests
     if not state or len(state) > 200:
@@ -206,6 +213,8 @@ def finish(store, *, origin, state, code, error, binding, transport=None):
 
 def disconnect(store, channel_key):
     """비밀 파일에 저장한 토큰만 지운다. 환경 파일의 토큰은 운영자가 직접 지운다."""
+    from .owner_auth import require_server_auth_allowed
+    require_server_auth_allowed()
     _youtube_key(channel_key)
     if not stored_refresh_token(channel_key):
         if env_refresh_token(channel_key):
@@ -217,6 +226,10 @@ def disconnect(store, channel_key):
 
 
 def channel_status(store, key):
+    from .owner_auth import enabled, available_keys
+    if enabled():
+        return {"key": key, "label": CHANNELS[key]["label"], "source": "owner_pc", "connected": key in available_keys(),
+                "file_stored": False, "channel_id": channel(store, key).get("external_account_id"), "connected_at": None}
     record = public_record(key)
     source = "env" if env_refresh_token(key) else "file" if record else None
     return {"key": key, "label": CHANNELS[key]["label"], "source": source, "connected": youtube_credentials(key) is not None,
@@ -226,6 +239,8 @@ def channel_status(store, key):
 
 def status(store, origin):
     """화면용 연결 상태. 값은 돌려주지 않고 설정 여부만 알린다."""
+    from .owner_auth import enabled
     return {"client_configured": client_configured(), "public_origin_configured": bool(origin), "redirect_uri": redirect_uri(origin),
+            "auth_location": "owner_pc" if enabled() else "server",
             "secrets_location_ok": unsafe_location(store.root) is None,
             "channels": [channel_status(store, key) for key, row in CHANNELS.items() if row["platform"] == "youtube"]}

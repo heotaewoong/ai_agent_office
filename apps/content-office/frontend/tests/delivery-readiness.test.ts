@@ -1,5 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { requirePrivateDeliveryResult } from "../lib/delivery-readiness.ts";
+
+test("PC 전달 대기는 업로드 완료와 구분하고 다른 채널·가짜 대기를 허용하지 않는다", () => {
+  const pending = {id:"delivery_0123456789abcdef",state:"pending_owner",auth_location:"owner_pc",channel_key:"youtube_main_ko",visibility:"private"};
+  assert.equal(requirePrivateDeliveryResult(pending as never,"youtube_main_ko"),"pending_owner");
+  assert.throws(()=>requirePrivateDeliveryResult(pending as never,"youtube_english"));
+  assert.throws(()=>requirePrivateDeliveryResult({...pending,auth_location:undefined} as never,"youtube_main_ko"));
+  assert.throws(()=>requirePrivateDeliveryResult({...pending,external_id:"unexpected"} as never,"youtube_main_ko"));
+});
 import { channelHandoffStatus, deliveryRecordLabel, packetLanguage, requirePrivateUploadResult, requireStagingSnapshot, sourceChannelMismatch, stagingExternalLabel, stagingLocalLabel, youtubePreflight } from "../lib/delivery-readiness.ts";
 
 const job = { id: "fixture", source_hash: "source1", source_packet: { title: "가상 원고", body: "가상 본문", audience: { language: "ko" } }, selections: { video: true }, brief: { language: "ko" }, manifest: { hash: "m1", source_hash: "source1", files: [{ name: "short.mp4", outputs: ["video"] }, { name: "tistory.html", outputs: ["blog"] }] }, release_approval: { decision: "approved", version: "m1", outputs: ["video", "blog"] } };

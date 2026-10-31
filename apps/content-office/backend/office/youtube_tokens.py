@@ -45,6 +45,9 @@ def unsafe_location(state_root):
 
 
 def _read():
+    from .owner_auth import enabled
+    if enabled():
+        return {}
     try:
         data = json.loads(secrets_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -53,6 +56,8 @@ def _read():
 
 
 def _write(data):
+    from .owner_auth import require_server_auth_allowed
+    require_server_auth_allowed()
     path = secrets_path()
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.{secrets.token_hex(6)}.tmp")

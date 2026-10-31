@@ -159,6 +159,7 @@ export function uploadReadiness(job: Pick<Job, "selections" | "manifest" | "rele
 }
 
 const DELIVERY_LABELS: Record<string, string> = {
+  pending_owner: "본인 PC 전달 대기 · 아직 업로드하지 않음",
   created: "준비",
   accepted: "전송 중",
   private: "비공개 업로드 완료",

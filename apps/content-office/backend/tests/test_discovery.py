@@ -143,6 +143,20 @@ def test_real_counters_rank_within_source_kind_without_combining_different_units
     assert report['recommendations']['linkedin'][0]['id']=='hn'
 
 
+def test_certification_topic_keeps_matching_exam_sources_without_mutating_jobs(tmp_path):
+    s = Store(tmp_path)
+    before = protected(s)
+    rows = [
+        {'id': 'exam', 'title': '정보처리기사 학습 안내', 'url': 'https://example.com/exam', 'segment': 'exam'},
+        {'id': 'ai', 'title': 'AI 자동화 새 소식', 'url': 'https://example.com/ai', 'segment': 'ai'},
+        {'id': 'other', 'title': '정보처리기사 광고', 'url': 'https://example.com/other', 'segment': 'unclassified'},
+    ]
+    report = discovery.record(s, {**discovery.DEFAULT, 'topic': '정보처리기사', 'platforms': ['naver_blog']},
+                              rows, {'checked_at': datetime.now(timezone.utc).isoformat(), 'feeds': []})
+    assert [r['id'] for r in report['recommendations']['naver_blog']] == ['exam']
+    assert protected(s) == before
+
+
 def test_news_first_page_is_diverse_and_duplicate_metrics_survive_without_mutating_inputs():
     from office.source_registry import visible_articles
     rows=[{'id':str(i),'segment':'ai','feed_id':'arxiv'} for i in range(90)]+[{'id':'yt','segment':'ai','feed_id':'youtube'},{'id':'hn','segment':'ai','feed_id':'hn'},{'id':'exam','segment':'exam','feed_id':'moe'}]

@@ -1,5 +1,6 @@
 """One detailed source, separately reviewed social copies. Never approves or publishes."""
 import re
+import unicodedata
 from urllib.parse import unquote, urlsplit, urlunsplit
 from .store import WorkflowError
 
@@ -80,6 +81,8 @@ def adaptation_issues(packet, footer=""):
     if not isinstance(copies, dict):
         return ["매체별 SNS 요약본 형식이 올바르지 않습니다"]
     issues = []
+    def comparison_text(value):
+        return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value))
     language = (packet.get('audience') or {}).get('language', 'ko')
     for key, (limit, _) in CHANNEL_COPY.items():
         if COPY_LOCALES[key] != language:
@@ -89,9 +92,9 @@ def adaptation_issues(packet, footer=""):
             issues.append(f"{key} 매체별 요약본이 필요합니다")
         elif len(social_text(packet, key, footer).rstrip()) > limit:
             issues.append(f"{key} 요약본과 원문 링크·캠페인 문구가 {limit}자를 넘습니다")
-        elif value.strip() == packet.get("body", "").strip():
+        elif comparison_text(value) == comparison_text(packet.get("body", "")):
             issues.append(f"{key}에는 상세 블로그 전체가 아닌 매체별 요약본이 필요합니다")
-    normalized = [re.sub(r"\s+", "", value) for value in copies.values() if isinstance(value, str)]
+    normalized = [comparison_text(value) for value in copies.values() if isinstance(value, str)]
     if len(normalized) != len(set(normalized)):
         issues.append("SNS 요약본은 동일 문구 복사 대신 매체별 구성이 필요합니다")
     return issues

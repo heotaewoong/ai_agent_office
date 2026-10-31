@@ -4,7 +4,7 @@ export type YoutubeOAuthChannel = {
   key: string;
   label: string;
   /** env: 실행 환경 파일 토큰 사용 · file: 'YouTube 연결'로 저장한 토큰 · null: 없음 */
-  source: "env" | "file" | null;
+  source: "env" | "file" | "owner_pc" | null;
   connected: boolean;
   file_stored: boolean;
   channel_id: string | null;
@@ -12,6 +12,7 @@ export type YoutubeOAuthChannel = {
 };
 
 export type YoutubeOAuthStatus = {
+  auth_location?: "owner_pc" | "server";
   client_configured: boolean;
   public_origin_configured: boolean;
   redirect_uri: string | null;
@@ -82,6 +83,7 @@ export function withoutOAuthParams(href: string): string {
 /** 연결 버튼을 막는 이유. 막을 이유가 없으면 null. 값은 받지 않고 설정 여부만 봅니다. */
 export function connectBlockedReason(status: YoutubeOAuthStatus | null): string | null {
   if (!status) return "연결 상태를 불러오지 못했습니다.";
+  if (status.auth_location === "owner_pc") return "소셜 로그인 정보는 본인 PC에만 저장합니다. PC 인증 실행기에서 연결하세요.";
   const missing: string[] = [];
   if (!status.client_configured) missing.push("YOUTUBE_CLIENT_ID·YOUTUBE_CLIENT_SECRET");
   if (!status.public_origin_configured) missing.push("OFFICE_PUBLIC_ORIGIN(https 공개 주소)");
@@ -98,6 +100,7 @@ export function shortChannelId(id: string | null | undefined): string {
 /** 채널 행에 붙일 연결 상태 문구. */
 export function connectionLabel(entry: YoutubeOAuthChannel | undefined): string {
   if (!entry || !entry.source) return "연결 안 됨";
+  if (entry.source === "owner_pc") return entry.connected ? "본인 PC 인증 연결됨" : "본인 PC 인증 실행기 연결 필요";
   const id = shortChannelId(entry.channel_id);
   const where = entry.source === "env" ? "환경 파일 토큰" : "로그인 연결";
   if (!entry.connected) return `${where} 있음 · 클라이언트 설정 필요`;
