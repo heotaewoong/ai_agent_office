@@ -4453,7 +4453,7 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .job-filters { padding: 0 14px 16px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
 .job-filters label { display: grid; gap: 6px; min-width: 0; font-size: 12px; font-weight: 600; }
 .job-filters input, .job-filters select { width: 100%; min-width: 0; min-height: 44px; padding: 9px 10px; font: inherit; font-size: 14px; border: 1px solid #bac5b4; border-radius: 8px; background: var(--white); }
-.job-filter-selects { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.job-filter-selects { display: grid; grid-template-columns: minmax(0,1fr); gap: 10px; margin-top: 12px; }
 .job-filters .muted { font-size: 11px; margin: 8px 0; }
 .job-filter-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
 .job-filter-summary button { min-height: 36px; }
@@ -4482,3 +4482,4 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .card-compare-evidence dd { margin: 0 0 8px; overflow-wrap: anywhere; }
 @media(max-width:720px) { .card-version-compare { padding: 15px; } .card-compare-controls, .card-compare-columns { grid-template-columns: minmax(0,1fr); } .card-compare-controls select { font-size: 16px; } }
 .card-compare-error { padding: 16px; } .card-compare-error p { padding: 0 0 8px; }
+
