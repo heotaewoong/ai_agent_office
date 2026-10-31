@@ -1789,7 +1789,7 @@ function VideoPlan({ packet }: { packet?: SourcePacket | null }) {
     );
   return (
     <div className="video-plan">
-      <p className="eyebrow">YOUTUBE SHORTS · 제작 계획</p>
+      <p className="eyebrow">세로 영상 · 제작 계획</p>
       <h3>{video.title || packet?.title}</h3>
       {video.description && (
         <p className="video-description">{video.description}</p>
