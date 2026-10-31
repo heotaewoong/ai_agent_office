@@ -1,0 +1,4 @@
+# Optional editorial runner. The default legacy runner does not import these.
+-r requirements.txt
+langgraph==1.2.12
+langgraph-checkpoint-sqlite==3.1.3

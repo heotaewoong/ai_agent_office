@@ -751,3 +751,28 @@ v6 편집 통제실은 화면에서 끝까지 이어집니다. 기획에서 시�
 EC2에 보관한 완성 영상은 재렌더 없이 원문·SRT·표지·설명과 함께 검증해 가져옵니다. prepare는 파일 해시·자막 전체 문장/시간·코덱을 검사하고 새 원고 검토 버전만 저장합니다. quality는 external_review_required이며 모델 검수 통과가 아닙니다. 사람은 원문·음성·자막·권리·미확정 혜택 표현을 확인한 뒤 별도 화면에서 원고①를 승인합니다. 승인 뒤 원본 바이트 복사/전체decode를 완료한 파일만 imported_edited_media 제작물로 기록합니다. 표지 선택·출고②·비공개 전송은 기존 별도 검사와 승인을 그대로 거칩니다. API/화면 오류 때 자동 재시도하지 않습니다.
 
 새 API는 /api/jobs/{job_id}/external-media/prepare 와 /adopt이며 현재 source_hash에 묶입니다. CSRF·원문/자산 변조·원고 변경 검사를 유지합니다. 일반 미검수 원고는 이 경로로 승인할 수 없습니다. 제거할 때는 external_media 모듈/API/검토 패널과 Store의 명시적 외부검토 분기를 함께 제거하고 이전 원고·승인·manifest·원본 파일은 보존합니다. 새 의존성/새 모델 호출·로컬영상 다운로드는 없습니다.
+
+
+## 원고 생성·검수의 선택적 LangGraph 실행기
+
+기본 `editorial_engine`은 `legacy`이며 기존 Python 흐름을 유지합니다. 별도 설치한 환경에서 `prepare_source(store, job_id, engine="langgraph")`로 해당 실행만 선택하거나, 운영자 설정의 `editorial_engine`을 명시적으로 `langgraph`로 선택할 수 있습니다. 설치/테스트만으로 운영 설정을 바꾸지 않습니다. 모듈이 없거나 호출 결과가 불명하면 기존 실행기로 자동 전환하지 않습니다.
+
+Functional API의 entrypoint/task로 **기존 생성·검수 함수와 동일한 모델·프롬프트·스키마·수정 한도**를 실행합니다. `runtime/editorial-checkpoints.sqlite3`에 단계별 결과를 저장합니다. 이 파일에는 원고 내용이 있으므로 업무 상태와 같은 비공개 권한으로 관리합니다. 소셜 토큰·영상 bytes는 넣지 않습니다. 원고 판본/모델/브리프/근거/브랜드/정책 변경은 별도 실행 식별자로 구분하고, 각 호출 전과 결과 저장 전 현재 원고를 재검사합니다.
+
+모델 호출 직전 intent를 남기고 정상 응답을 저장합니다. 프로세스가 사라져 결과가 불명이면 동일 호출을 자동 반복하지 않습니다. 기존 Provider의 비용 예약·정산·캐시와 Store의 원고①/출고②는 그대로 남습니다. 그래프 재개가 사람 승인이나 플랫폼 저장을 대신하지 않습니다. 외부 LangSmith 추적이 켜져 있으면 원고의 승인 없는 전송을 막기 위해 실행을 거절합니다.
+
+선택 이유: 함수 내부에 있던 검수 진행 지점을 재개하기 위해서입니다. 기존 반복문을 재사용할 수 있는 Functional API를 골랐고 별도 관리형 서버·GPU·LangSmith 계정은 필요하지 않습니다. Graph API처럼 정적 노드 도식을 제공하는 구현은 아닙니다. 원고 품질 개선이나 추가 API 비용 절감을 프레임워크 도입의 자동 효과로 주장하지 않습니다.
+
+의존성: `langgraph==1.2.12`, `langgraph-checkpoint-sqlite==3.1.3`, 모두 MIT, Python>=3.10. 별도 가상환경에서 `pip install -r backend/requirements-langgraph.txt`로 설치합니다. 이번 검증 런타임의 전체 버전은 결과 원장의 lock 기록을 봅니다. 공식 소스: https://github.com/langchain-ai/langgraph 및 https://github.com/langchain-ai/langgraph/tree/main/libs/checkpoint-sqlite . 외부 문서는 참고 자료이며 실행 권한이 아닙니다.
+
+검증 명령(backend에서):
+
+```sh
+python -m pytest tests/test_editorial_graph.py tests/test_editorial_compare.py tests/test_editorial.py tests/test_providers.py tests/test_budget.py tests/test_korean.py tests/test_channel_adaptation.py tests/test_owned_source.py -q
+```
+
+실모델 비교는 `python -m office.editorial_compare --snapshot INPUT.json --output NEW-RESULT.json --budget-krw CONFIRMED_TOTAL --acknowledge-paid-comparison`으로 **비용 확인 후** 실행합니다. 같은 소재/모델/프롬프트와 별도 캐시를 사용하며 각 엔진에 총한도의 절반을 할당합니다. 운영 DB 대신 임시 Store만 사용하고 글자 원고·평가 결과만 출력합니다. 결과 파일이 이미 있으면 새 과금 실험을 시작하지 않습니다. 기존 뉴스 예산의 잔여 확인 없이 총한도를 새로 만든 것으로 해석하지 않습니다. 실제 API 호출에는 해당 실행 환경의 OPENAI_API_KEY가 필요하며 인증값을 결과에 넣지 않습니다.
+
+1건에서 모델 자체가 준 점수 차이는 탐색 결과입니다. 같은 고정 응답의 동등성, 프로세스 종료/재시작, 모델 신규 호출/캐시 적중/체크포인트 재사용, 실제 사람 평가를 분리합니다. 생성물이 달라도 프레임워크 때문에 품질이 개선됐다는 인과관계를 단정하지 않습니다.
+
+제거/복귀: `editorial_engine`을 `legacy`로 선택하고 진행 중인 그래프 작업의 결과를 먼저 대사합니다. 원고/승인/제작물은 삭제하지 않습니다. 선택적 모듈은 legacy 경로에서 import되지 않으므로 기본 의존성 설치만으로 기존 동작을 유지합니다. 체크포인트와 unknown intent를 삭제해 중복 호출 방지를 우회하지 않습니다. 필요 없어진 실험 가상환경의 제거는 그 정확한 경로와 작업 종료를 확인한 뒤 별도로 처리합니다.
