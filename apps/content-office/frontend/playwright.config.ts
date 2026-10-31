@@ -13,6 +13,7 @@ export default defineConfig({
     baseURL: process.env.OFFICE_BROWSER_BASE_URL ?? "http://127.0.0.1:3110",
     viewport: { width: 1440, height: 1050 },
     launchOptions: {
+      executablePath: process.env.OFFICE_BROWSER_EXECUTABLE || undefined,
       env: {
         ...Object.fromEntries(
           Object.entries(process.env).filter(

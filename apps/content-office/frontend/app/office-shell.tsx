@@ -1281,7 +1281,6 @@ function Studio({
       </div>
       <WorkflowSteps state={job.state} />
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
-      <ThumbnailStudio key={job.id} job={job} blockedReason={requestBlockedReason} action={action}/>
       {job.error && (
         <div className="notice error" role="alert">
           <Icon name="alert" size={18} />
@@ -2111,6 +2110,7 @@ function Delivery({
           <span>{job.error}</span>
         </div>
       )}
+      <ThumbnailStudio key={job.id} job={job} blockedReason={requestBlockedReason} action={action}/>
       <section className={deliveryStyles.section} aria-labelledby={`delivery-preview-${job.id}`}>
       <header className={deliveryStyles.sectionHeading}><span>01</span><div><h2 id={`delivery-preview-${job.id}`} data-outline-title="현재 제작물">현재 제작물</h2><p>지금 제작된 글·영상·이미지를 읽고 내려받으세요.</p></div></header>
       {files.length === 0 ? (

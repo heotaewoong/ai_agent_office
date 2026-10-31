@@ -89,4 +89,4 @@ jobs:
             if curl --fail --silent http://127.0.0.1:3110/news > /dev/null; then break; fi
             sleep 0.5
           done
-          npx playwright test tests/browser/discovery.spec.ts --workers=1
+          npx playwright test tests/browser/discovery.spec.ts tests/browser/thumbnail-studio.spec.ts --workers=1
