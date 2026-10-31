@@ -2272,7 +2272,7 @@ td a {
     text-align: right;
   }
   .studio-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .job-sidebar {
     display: flex;
