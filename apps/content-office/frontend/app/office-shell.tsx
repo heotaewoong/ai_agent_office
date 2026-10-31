@@ -45,7 +45,7 @@ import { PageOutline } from "./page-outline";
 import deliveryStyles from "./delivery-view.module.css";
 import { WorldView } from "./world-view";
 import { reuseUnchangedJob } from "../lib/job-snapshot";
-import { filterJobs } from "../lib/job-filters";
+import { filterJobs, jobFilterStates } from "../lib/job-filters";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ArchitectureView } from "./architecture-view";
@@ -771,7 +771,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                     {jobs.length > 0 && <div className="job-filters">
                       <label>작업 검색<input type="search" value={jobQuery} onChange={e => setJobQuery(e.target.value)} placeholder="제목 또는 작업 ID" /></label>
                       <div className="job-filter-selects">
-                        <label>진행 상태<select aria-label="진행 상태" value={jobStateFilter} onChange={e => setJobStateFilter(e.target.value)}><option value="all">모든 상태</option>{[...new Set(jobs.map(item => item.state))].sort().map(state => <option key={state} value={state}>{statusInfo(state).label}</option>)}</select></label>
+                        <label>진행 상태<select aria-label="진행 상태" value={jobStateFilter} onChange={e => setJobStateFilter(e.target.value)}><option value="all">모든 상태</option>{jobFilterStates(jobs, jobStateFilter).map(state => <option key={state} value={state}>{statusInfo(state).label}</option>)}</select></label>
                         <label>제작 종류<select aria-label="제작 종류" value={jobOutputFilter} onChange={e => setJobOutputFilter(e.target.value)}><option value="all">모든 종류</option><option value="blog">블로그</option><option value="video">영상</option><option value="cards">카드뉴스</option><option value="pdf">PDF</option><option value="unspecified">미지정</option></select></label>
                       </div>
                       <p className="muted">제작할 때 선택한 종류를 기준으로 찾습니다.</p>
@@ -2813,4 +2813,5 @@ function Activity({
     </div>
   );
 }
+
 
