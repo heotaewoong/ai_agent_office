@@ -186,6 +186,7 @@ class ThumbnailArtworkRequest(BaseModel):
 
 
 class ThumbnailArtworkChoice(BaseModel):
+    format: Literal['landscape', 'shorts'] = 'landscape'
     candidate_id: str = Field(min_length=1, max_length=80)
     revision: str = Field(pattern=r'^[0-9a-f]{64}$')
     finalize: bool = Field(default=False, strict=True)
@@ -725,16 +726,18 @@ def create_app(store: Store | None = None):
     @app.post('/api/jobs/{job_id}/thumbnail-studio/choose')
     def thumbnail_studio_choose(job_id: str, body: ThumbnailArtworkChoice):
         from .thumbnail_studio import choose
-        return choose(store, job_id, body.candidate_id, body.revision, finalize=body.finalize)
+        return choose(store, job_id, body.candidate_id, body.revision, finalize=body.finalize, format=body.format)
 
     @app.get('/api/jobs/{job_id}/thumbnail-studio/files/{candidate_id}')
-    def thumbnail_studio_file(job_id: str, candidate_id: str):
-        from .thumbnail_studio import candidate_path
+    def thumbnail_studio_file(job_id: str, candidate_id: str, format: Literal['landscape', 'shorts'] = 'landscape'):
+        from .thumbnail_studio import candidate_path, image_kind
         state = store.job(job_id).get('thumbnail_studio') or {}
         candidate = next((c for c in state.get('candidates', []) if c['id'] == candidate_id), None)
         if not candidate:
             raise WorkflowError('현재 썸네일 후보를 찾지 못했습니다')
-        return FileResponse(candidate_path(store, state, candidate), media_type='image/png', headers={'Cache-Control': 'no-store'})
+        if not candidate.get(image_kind(format)):
+            raise WorkflowError('이 후보의 요청 규격이 아직 준비되지 않았습니다')
+        return FileResponse(candidate_path(store, state, candidate, image_kind(format)), media_type='image/png', headers={'Cache-Control': 'no-store'})
 
     @app.get('/api/jobs/{job_id}/review-package')
     def download_review_package(job_id: str):

@@ -2,17 +2,17 @@ import {test,expect,type Page} from '@playwright/test';
 
 async function harness(page:Page) {
   const hash='a'.repeat(64),id='thumbnail-contract';let revision=1;
-  let state:any={revision:'1'.repeat(64),current_source_hash:hash,source_hash:hash,stale:false,title:'합성 검증 원고',candidates:[1,2,3].map(n=>({id:String(n),title:'합성 검증 원고',angle:`방향 ${n}`,url:`/api/thumbnail-contract/image-${n}`,provenance:{provider:'synthetic-test'}}))};
+  let state:any={revision:'1'.repeat(64),current_source_hash:hash,source_hash:hash,stale:false,title:'합성 검증 원고',candidates:[1,2,3].map(n=>({id:String(n),title:'합성 검증 원고',angle:`방향 ${n}`,url:`/api/thumbnail-contract/image-${n}`,portrait_url:`/api/thumbnail-contract/image-${n}-shorts`,provenance:{provider:'synthetic-test'}}))};
   const job={id,title:'합성 검증 원고',state:'source_review',source_hash:hash,article:{id:'one',title:'합성 시험',url:'https://example.com'},selections:{blog:false,video:true,pdf:false,cards:false},source_packet:{title:'합성 검증 원고',body:'합성 화면 시험입니다. 실제 콘텐츠가 아닙니다.',video:{scenes:[]},quality:{status:'pending'}},tasks:[],events:[],drafts:[]};
   const dashboard={articles:[],jobs:[job],feeds:[],agents:[],tasks:[],events:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:'open',authorized_end:new Date(Date.now()+3600000).toISOString()},provider:{model:'synthetic',configured:false},knowledge:{}};
   const writes:{path:string;body:any;csrf?:string}[]=[];
   await page.route('**/api/**',async route=>{
     const request=route.request(),path=new URL(request.url()).pathname;
-    if(path.startsWith('/api/thumbnail-contract/image-'))return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><rect width="1280" height="720" fill="#2d4d39"/></svg>'});
+    if(path.startsWith('/api/thumbnail-contract/image-'))return route.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${path.endsWith('shorts')?1080:1280}" height="${path.endsWith('shorts')?1920:720}"><rect width="100%" height="100%" fill="#2d4d39"/></svg>`});
     if(request.method()!=='GET')writes.push({path,body:request.postDataJSON(),csrf:request.headers()['x-office-csrf']});
     let response:any;
-    if(path.endsWith('/thumbnail-studio/choose')){const body=request.postDataJSON();state={...state,selected_id:body.candidate_id,finalized_id:body.finalize?body.candidate_id:null,revision:(++revision).toString().repeat(64)};response=state;}
-    else if(path.endsWith('/thumbnail-studio/generate')){state={...state,candidates:[...state.candidates,{id:'edited',title:state.title,angle:'수정본',url:'/api/thumbnail-contract/image-4',parent_id:state.selected_id,instruction:request.postDataJSON().instruction}],revision:(++revision).toString().repeat(64)};response={id:'synthetic-task',state:'completed'};}
+    if(path.endsWith('/thumbnail-studio/choose')){const body=request.postDataJSON();state={...state,selected_id:body.candidate_id,selected_format:body.format,finalized_format:body.finalize?body.format:null,finalized_id:body.finalize?body.candidate_id:null,revision:(++revision).toString().repeat(64)};response=state;}
+    else if(path.endsWith('/thumbnail-studio/generate')){state={...state,candidates:[...state.candidates,{id:'edited',title:state.title,angle:'수정본',url:'/api/thumbnail-contract/image-4',portrait_url:'/api/thumbnail-contract/image-4-shorts',parent_id:state.selected_id,instruction:request.postDataJSON().instruction}],revision:(++revision).toString().repeat(64)};response={id:'synthetic-task',state:'completed'};}
     else if(path.endsWith('/thumbnail-studio'))response=state;
     else if(path.endsWith('/deliveries'))response={deliveries:[],youtube_configured:false};
     else if(path==='/api/newsletters')response={issues:[]};
@@ -34,6 +34,12 @@ for(const width of [1440,375])test(`썸네일 ${width}px 비교·확대·참조�
   await panel.getByRole('button',{name:'후보 1 크게 보기',exact:true}).click();
   await expect(page.getByRole('dialog',{name:'썸네일 크게 보기'})).toBeVisible();await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog',{name:'썸네일 크게 보기'})).toHaveCount(0);
+  const cover=panel.getByRole('img').first();
+  await expect(cover).toHaveJSProperty('naturalWidth',1280);
+  await panel.getByRole('radio',{name:/Shorts 세로 표지/}).check();
+  await expect(cover).toHaveJSProperty('naturalWidth',1080);
+  await expect(cover).toHaveJSProperty('naturalHeight',1920);
+  const box=await cover.boundingBox();expect(Math.abs(box!.width/box!.height-9/16)).toBeLessThan(.01);
   await panel.getByRole('button',{name:'이 이미지 선택',exact:true}).first().click();
   const edit=panel.getByLabel('선택 이미지에서 바꾸고 싶은 부분',{exact:true});await expect(edit).toBeVisible();
   expect(await edit.evaluate(e=>parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(16);
@@ -47,7 +53,7 @@ for(const width of [1440,375])test(`썸네일 ${width}px 비교·확대·참조�
   await panel.getByRole('checkbox',{name:'선택한 이미지의 제목·내용·권리를 확인했습니다.',exact:true}).check();await final.click();
   await expect(panel.getByText('최종 확정',{exact:true})).toBeVisible();
   expect(writes.find(w=>w.path.endsWith('/generate'))?.body).toMatchObject({source_hash:'a'.repeat(64),edit_id:'1',instruction:'인물과 구도는 유지하고 빛만 부드럽게',confirm_paid:true});
-  expect(writes.at(-1)?.body).toMatchObject({candidate_id:'edited',finalize:true});
+  expect(writes.at(-1)?.body).toMatchObject({candidate_id:'edited',finalize:true,format:'shorts'});
   expect(writes.every(w=>w.path.includes('/thumbnail-studio/')&&w.csrf==='synthetic-token')).toBe(true);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

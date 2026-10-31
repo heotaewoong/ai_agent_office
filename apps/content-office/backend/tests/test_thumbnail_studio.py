@@ -180,3 +180,38 @@ def test_studio_candidates_attach_without_fabricating_final_selection(fixture):
     assert len(result['thumbnail_candidates']) == 3
     assert result['selected_thumbnail_id'] is None
     assert len({r['name'] for r in result['files']}) == 3
+
+
+def test_portrait_format_is_bound_to_final_choice(fixture):
+    from office.thumbnail_studio import attach_to_manifest
+    store, job = fixture
+    state = make(fixture)
+    c = state['candidates'][0]
+    with Image.open(candidate_path(store, state, c, 'portrait')) as image:
+        assert image.size == (1080, 1920)
+    state = choose(store, job['id'], c['id'], state['revision'])
+    with pytest.raises(WorkflowError, match='먼저'):
+        choose(store, job['id'], c['id'], state['revision'], finalize=True, format='shorts')
+    state = choose(store, job['id'], c['id'], state['revision'], format='shorts')
+    state = choose(store, job['id'], c['id'], state['revision'], finalize=True, format='shorts')
+    manifest = attach_to_manifest(store, job['id'], {'source_hash':job['source_hash'], 'files':[], 'completed_outputs':['video']})
+    assert state['finalized_format'] == 'shorts'
+    assert manifest['selected_thumbnail_id'] == c['portrait']['id']
+    assert all('-shorts.png' in r['name'] for r in manifest['thumbnail_candidates'])
+    assert store.job(job['id'])['source_approval'] is None
+
+
+def test_both_sizes_served_and_invalid_format_rejected(fixture):
+    import io
+    from fastapi.testclient import TestClient
+    from office.api import create_app
+    store, job = fixture
+    state = make(fixture)
+    c = state['candidates'][0]
+    client = TestClient(create_app(store), base_url='http://localhost:8510')
+    for url, size in [(c['url'], (1280,720)),(c['portrait_url'], (1080,1920))]:
+        response=client.get(url)
+        assert response.status_code == 200
+        with Image.open(io.BytesIO(response.content)) as image:
+            assert image.size == size
+    assert client.get(c['url']+'?format=invalid').status_code == 422

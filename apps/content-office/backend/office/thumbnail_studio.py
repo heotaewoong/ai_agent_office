@@ -36,7 +36,8 @@ def context(store, job_id, expected=None):
 def snapshot(store, job_id):
     job = store.job(job_id)
     state = job.get('thumbnail_studio') or {}
-    candidates = [{**c, 'url': f"/api/jobs/{job_id}/thumbnail-studio/files/{c['id']}"} for c in state.get('candidates', [])]
+    candidates = [{**c, 'url': f"/api/jobs/{job_id}/thumbnail-studio/files/{c['id']}",
+                   'portrait_url': f"/api/jobs/{job_id}/thumbnail-studio/files/{c['id']}?format=shorts" if c.get('portrait') else None} for c in state.get('candidates', [])]
     active = next((t for t in store.tasks(job_id) if t['kind'] == 'thumbnail_artwork' and t['payload'].get('source_hash') == job.get('source_hash')), None)
     return {**state, 'candidates': candidates, 'task': {k: active[k] for k in ('id', 'state', 'result')} if active else None,
             'revision': digest(state), 'stale': bool(state and state.get('source_hash') != job.get('source_hash')),
@@ -70,20 +71,22 @@ def validate_picture(path):
         raise WorkflowError('PNG 이미지의 크기·형식을 확인하지 못했습니다') from None
 
 
-def compose(artwork, output, title):
+def compose(artwork, output, title, *, portrait=False):
     from .media import text_box, korean_font
     validate_picture(artwork)
     with Image.open(artwork) as source:
-        image = ImageOps.fit(source.convert('RGB'), (1280, 720), method=Image.Resampling.LANCZOS)
+        image = ImageOps.fit(source.convert('RGB'), ((1080, 1920) if portrait else (1280, 720)), method=Image.Resampling.LANCZOS)
     shade = Image.new('RGBA', image.size)
     draw = ImageDraw.Draw(shade)
-    for x in range(1280):
+    for x in range(image.width):
         alpha = round(225 * max(0, 1 - x / 1080))
-        draw.line((x, 0, x, 720), fill=(8, 17, 28, alpha))
+        draw.line((x, 0, x, image.height), fill=(8, 17, 28, alpha))
     image = Image.alpha_composite(image.convert('RGBA'), shade).convert('RGB')
     draw = ImageDraw.Draw(image)
     text_box(draw, 'HeoBrain', (64, 54, 850, 52), 34, '#a4f1cf')
-    metrics = text_box(draw, title, (62, 202, 940, 380), 82, minimum_size=36,
+    # Reflow text after cropping only the raw artwork; never crop a completed title.
+    box, size = ((96, 390, 888, 740), 106) if portrait else ((62, 202, 940, 380), 82)
+    metrics = text_box(draw, title, box, size, minimum_size=36,
                        font_path=korean_font('bold'), stroke_width=2, stroke_fill='#101827')
     if metrics.get('truncated') or metrics.get('overflow'):
         raise WorkflowError('제목이 이미지 영역을 넘습니다. 더 짧은 제목으로 원고를 검토하세요')
@@ -103,6 +106,12 @@ def candidate_path(store, state, candidate, kind='image'):
     return path
 
 
+def image_kind(format):
+    if format not in ('landscape', 'shorts'):
+        raise WorkflowError('썸네일 규격을 확인하세요')
+    return 'portrait' if format == 'shorts' else 'image'
+
+
 def add_candidate(store, job_id, source_hash, artwork, *, angle, provenance, parent_id=None, instruction=''):
     from .media import artifact_record
     context(store, job_id, source_hash)
@@ -118,9 +127,12 @@ def add_candidate(store, job_id, source_hash, artwork, *, angle, provenance, par
     _, _, title = context(store, job_id, source_hash)
     image = directory / f'thumbnail-{key[:8]}.png'
     compose(target, image, title)
+    portrait = directory / f'thumbnail-{key[:8]}-shorts.png'
+    compose(target, portrait, title, portrait=True)
     candidate = {'id': key, 'title': title, 'angle': angle, 'parent_id': parent_id, 'instruction': instruction,
                  'created_at': now(), 'provenance': provenance,
-                 'artwork': artifact_record(store.artifacts, target), 'image': artifact_record(store.artifacts, image)}
+                 'artwork': artifact_record(store.artifacts, target), 'image': artifact_record(store.artifacts, image),
+                 'portrait': artifact_record(store.artifacts, portrait)}
     with store.connection(transaction=True) as db:
         job = store._job(db, job_id)
         if job.get('source_hash') != source_hash:
@@ -129,7 +141,10 @@ def add_candidate(store, job_id, source_hash, artwork, *, angle, provenance, par
         if state.get('source_hash') != source_hash:
             archives = [*state.get('archives', []), *([{k: v for k, v in state.items() if k != 'archives'}] if state else [])]
             state = {'source_hash': source_hash, 'title': title, 'candidates': [], 'archives': archives}
-        if not any(c['id'] == key for c in state['candidates']):
+        existing = next((c for c in state['candidates'] if c['id'] == key), None)
+        if existing:
+            existing['portrait'] = candidate['portrait']
+        else:
             state['candidates'].append(candidate)
         state.update(updated_at=now())
         job['thumbnail_studio'] = state
@@ -213,25 +228,29 @@ def generate(store, job_id, expected_hash, *, edit_id=None, instruction='', prov
         return snapshot(store, job_id)
 
 
-def choose(store, job_id, candidate_id, revision, *, finalize=False, actor='local-operator'):
+def choose(store, job_id, candidate_id, revision, *, finalize=False, actor='local-operator', format='landscape'):
     with store.connection(transaction=True) as db:
         job = store._job(db, job_id)
         state = checked_state(job, revision)
         candidate = next((c for c in state.get('candidates', []) if c['id'] == candidate_id), None)
         if not candidate:
             raise WorkflowError('현재 원고의 이미지 후보가 아닙니다')
-        candidate_path(store, state, candidate)
-        if finalize and state.get('selected_id') != candidate_id:
+        kind = image_kind(format)
+        if not candidate.get(kind):
+            raise WorkflowError('이전 후보에는 세로 규격이 없습니다. 먼저 규격을 준비하세요')
+        candidate_path(store, state, candidate, kind)
+        if finalize and (state.get('selected_id') != candidate_id or state.get('selected_format', 'landscape') != format):
             raise WorkflowError('비교에서 선택한 이미지를 먼저 확인하세요')
-        state.update(selected_id=candidate_id, finalized_id=candidate_id if finalize else None,
+        state.update(selected_id=candidate_id, selected_format=format, finalized_id=candidate_id if finalize else None,
+                     finalized_format=format if finalize else None,
                      updated_at=now(), decided_by=actor)
         manifest = job.get('manifest') or {}
         if manifest and manifest.get('source_hash') == job.get('source_hash') and 'video' in manifest.get('completed_outputs', []):
             if finalize:
-                records = [{**c['image'], 'outputs': ['video']} for c in state['candidates']]
+                records = [{**c[kind], 'outputs': ['video']} for c in state['candidates'] if c.get(kind)]
                 ids = {r['id'] for r in records}
                 manifest['files'] = [r for r in manifest.get('files', []) if r['id'] not in ids] + records
-                manifest.update(thumbnail_candidates=records, selected_thumbnail_id=candidate['image']['id'],
+                manifest.update(thumbnail_candidates=records, selected_thumbnail_id=candidate[kind]['id'],
                                 thumbnail_selection_status='selected_by_operator', thumbnail_selection={'actor': actor, 'at': now()})
             else:
                 manifest.pop('selected_thumbnail_id', None)
@@ -269,9 +288,12 @@ def attach_to_manifest(store, job_id, manifest):
     if state.get('source_hash') != manifest.get('source_hash') or len(state.get('candidates', [])) < 3:
         return manifest
     records = []
+    kind = image_kind(state.get('finalized_format') or state.get('selected_format') or 'landscape')
     for candidate in state['candidates']:
-        candidate_path(store, state, candidate)
-        records.append({**candidate['image'], 'outputs': ['video'], 'studio_id': candidate['id'],
+        if not candidate.get(kind):
+            raise WorkflowError('선택한 규격의 썸네일 파일을 먼저 준비하세요')
+        candidate_path(store, state, candidate, kind)
+        records.append({**candidate[kind], 'outputs': ['video'], 'studio_id': candidate['id'],
                         'title': candidate['title'], 'angle': candidate['angle'],
                         'scores': {'source_alignment': 0, 'title_fit': 0}, 'human_selection': 'pending'})
     ids = {r['id'] for r in records}
