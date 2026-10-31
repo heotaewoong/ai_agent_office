@@ -210,7 +210,7 @@ class Store:
             self._event(db, "source_saved", {"version": version, "role": "편집"}, job_id)
             return self._write_job(db, job)
 
-    def review_source(self, job_id, version, decision, actor, selections=None, *, production_contract=None):
+    def review_source(self, job_id, version, decision, actor, selections=None, *, production_contract=None, external_media_reviewed=False):
         from .offers import require_campaign_packet, require_offer_ready
         if decision not in ("approved", "rejected") or not actor.strip():
             raise WorkflowError("유효한 검토 판정과 검토자가 필요합니다")
@@ -222,7 +222,13 @@ class Store:
                 require_offer_ready(job.get("offer"))
                 require_campaign_packet(job.get("source_packet"), job.get("offer"))
             quality = (job["source_packet"] or {}).get("quality", {})
-            if decision == "approved" and (quality.get("critical") or quality.get("status") != "passed"):
+            manual_external = quality.get("status") == "external_review_required"
+            if decision == "approved" and manual_external:
+                if external_media_reviewed is not True or quality.get("critical"):
+                    raise WorkflowError("기존 편집본의 원문·음성·자막을 직접 확인해 주세요")
+                from .external_media import validate_packet
+                validate_packet(self, job)
+            elif decision == "approved" and (quality.get("critical") or quality.get("status") != "passed"):
                 raise WorkflowError("중대 오류 또는 미완료 검수가 있어 승인할 수 없습니다")
             if selections is not None:
                 updated_selections = {key: bool(selections.get(key, False)) for key in ("blog", "video", "pdf", "cards")}
@@ -236,6 +242,9 @@ class Store:
             if decision == "approved" and not any(job["selections"].values()):
                 raise WorkflowError("제작물을 하나 이상 선택해야 합니다")
             record = {"id": identifier("approval"), "version": version, "decision": decision, "actor": actor, "selections": job["selections"], "created_at": now()}
+            if manual_external:
+                record["external_media_reviewed"] = external_media_reviewed is True
+                record["review_method"] = "operator_external_media"
             db.execute("INSERT INTO approvals VALUES(?,?,?,?,?,?,?,?)", (record["id"], job_id, "source", version, decision, actor, canonical(record), now()))
             job.update(source_approval=record, state="source_approved" if decision == "approved" else "source_rejected")
             if production_contract is not None:

@@ -133,6 +133,15 @@ class Review(BaseModel):
     outputs: list[Literal['blog', 'video', 'cards', 'pdf']] | None = None
 
 
+class ExternalMediaPrepare(BaseModel):
+    version: str
+    draft_id: str
+
+class ExternalMediaAdopt(BaseModel):
+    version: str
+    reviewed: bool = Field(default=False, strict=True)
+
+
 class ProfileChoice(BaseModel):
     kind: Literal["voice", "image", "clip", "text"]
     profile: str
@@ -547,6 +556,16 @@ def create_app(store: Store | None = None):
             selections={key:bool((review.selections if review.selections is not None else job['selections']).get(key,False)) for key in ('blog','video','pdf','cards')}
             contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None)['hash']
         return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract)
+
+    @app.post("/api/jobs/{job_id}/external-media/prepare")
+    def prepare_external_media(job_id: str, body: ExternalMediaPrepare):
+        from .external_media import prepare_review
+        return prepare_review(store, job_id, body.draft_id, body.version)
+
+    @app.post("/api/jobs/{job_id}/external-media/adopt")
+    def adopt_external_media(job_id: str, body: ExternalMediaAdopt):
+        from .external_media import adopt_reviewed
+        return adopt_reviewed(store, job_id, body.version, body.reviewed)
 
     @app.get("/api/jobs/{job_id}/production-estimate")
     def production_estimate(job_id: str):
