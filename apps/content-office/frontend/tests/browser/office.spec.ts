@@ -1118,7 +1118,8 @@ for (const width of [1440,390]) {
     await page.setViewportSize({width,height:1000});
     await page.route('**/api/jobs/contract-test-job/history',route=>route.fulfill({json:{job_id:'contract-test-job',current_source_hash:fixture.getJob().source_hash,current_manifest_hash:null,sources:[],productions:[{created_at:'2026-10-30T00:00:00Z',current:false,approved_before:true,manifest:{hash:'old-manifest',source_hash:'old-source',files:[{id:'card_base1',name:'card-01.png',kind:'image',url:'/api/jobs/contract-test-job/history/old-manifest/files/card_base1'},{id:'card_base3',name:'card-03.png',kind:'image',url:'/api/jobs/contract-test-job/history/old-manifest/files/card_base3'}]}}],drafts:[{id:'draft_cards',job_id:'contract-test-job',title:'검수 카드',body:'보관 본문',status:'draft',source_hash_snapshot:'draft-source',assets:[{name:'card-01.png',media_type:'image/png',sha256:'one',size:1},{name:'card-02.png',media_type:'image/png',sha256:'two',size:2}]}]}}));
     const image='<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1200"><rect width="900" height="1200" fill="#dfe9d8"/></svg>';
-    await page.route('**/api/jobs/contract-test-job/history/old-manifest/files/card_*',route=>{requests.push(route.request().url());return route.fulfill({status:route.request().url().endsWith('base3')?404:200,contentType:'image/svg+xml',body:image});});
+    let imageUnavailable=true;
+    await page.route('**/api/jobs/contract-test-job/history/old-manifest/files/card_*',route=>{requests.push(route.request().url());const failed=imageUnavailable&&route.request().url().endsWith('base3');return route.fulfill({status:failed?404:200,contentType:failed?'text/plain':'image/svg+xml',body:failed?'missing image':image});});
     await page.route('**/api/jobs/contract-test-job/drafts/draft_cards/files/*.png',route=>{requests.push(route.request().url());return route.fulfill({contentType:'image/svg+xml',body:image});});
     await page.goto('/scripts/contract-test-job');
     const original=fixture.getJob().source_packet?.body;
@@ -1136,6 +1137,9 @@ for (const width of [1440,390]) {
     expect(Math.abs(dimensions.w/dimensions.h-.75)).toBeLessThan(.01);
     await panel.getByLabel('비교할 장',{exact:true}).selectOption('3');
     await expect(panel.getByText(/이미지를 불러오지 못했습니다/)).toBeVisible();
+    imageUnavailable=false;
+    await panel.getByRole('button',{name:'이미지 다시 불러오기',exact:true}).click();
+    await expect.poll(()=>panel.getByRole('img',{name:'기준 · 3장',exact:true}).evaluate((el:HTMLImageElement)=>el.naturalHeight)).toBe(1200);
     await panel.getByLabel('기준 카드 판본',{exact:true}).selectOption('draft:draft_cards');
     await expect(panel.getByLabel('비교할 카드 판본',{exact:true})).toHaveValue('production:old-manifest');
     expect(fixture.getJob().source_packet?.body).toBe(original);

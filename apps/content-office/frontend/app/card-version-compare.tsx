@@ -6,7 +6,7 @@ import {formatDate} from '../lib/workflow';
 
 function CardImage({card,label}:{card:ComparedCard;label:string}) {
   const [failed,setFailed]=useState(false);
-  return <div className="card-compare-media">{failed?<p role="status">이미지를 불러오지 못했습니다. 파일이 남아 있는지 확인하거나 기록을 새로 불러오세요.</p>:<img src={card.url} alt={`${label} · ${card.number}장`} loading="lazy" onError={()=>setFailed(true)}/>}</div>;
+  return <div className="card-compare-media">{failed?<div className="card-compare-error"><p role="status">이미지를 불러오지 못했습니다. 파일이 남아 있는지 확인해 주세요.</p><button type="button" className="button secondary" onClick={()=>setFailed(false)}>이미지 다시 불러오기</button></div>:<img src={card.url} alt={`${label} · ${card.number}장`} loading="lazy" onError={()=>setFailed(true)}/>}</div>;
 }
 
 function VersionImage({version,number,side}:{version:CardVersion;number:number;side:string}) {
