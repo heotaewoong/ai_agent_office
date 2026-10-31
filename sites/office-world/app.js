@@ -682,7 +682,7 @@
     },
 
 
-    // 지상과 공중 팀 대지는 별개의 높이/충돌층이다. 1,600m 지상은 블록 인스턴스로 구성한다.
+    // 지상과 공중 팀 대지는 별개의 높이/충돌층이다. 지형의 가려진 내부 면만 제외한다.
 
     groundRoadHeight(x, z, margin = 0) {
       const dz=z+46,r=Math.hypot(x,dz);let height=null;
@@ -704,20 +704,72 @@
       return -83 + Math.floor((2 * Math.sin(cx * 0.008) * Math.cos(cz * 0.009) + Math.sin(cz * 0.014) * 0.8) * blend);
     },
 
+    buildMeadowSurface(mesh, cell, extent = 800, reduceInternalFaces = true) {
+      const count = extent * 2 / cell;
+      if (!Number.isFinite(count) || !Number.isInteger(count) || count < 1 || cell <= 0 || extent <= 0) throw Error('Invalid terrain grid');
+      if (!reduceInternalFaces || (this.engine && !this.engine.getCaps().uintIndices)) {
+        const matrix = new Float32Array(count * count * 16);
+        for (let x = 0; x < count; x++) for (let z = 0; z < count; z++) {
+          const px = -extent + (x + .5) * cell, pz = -extent + (z + .5) * cell;
+          B.Matrix.Compose(new B.Vector3(cell, 8, cell), B.Quaternion.Identity(), new B.Vector3(px, this.meadowHeight(px,pz)-4, pz)).copyToArray(matrix,(x*count+z)*16);
+        }
+        mesh.thinInstanceSetBuffer('matrix',matrix,16,true); mesh.freezeWorldMatrix(); mesh.isPickable = false;
+        return { cells:count*count, faces:count*count*6 };
+      }
+      const vertices = mesh.getVerticesData(B.VertexBuffer.PositionKind);
+      const normal = mesh.getVerticesData(B.VertexBuffer.NormalKind);
+      const uv = mesh.getVerticesData(B.VertexBuffer.UVKind), triangles = mesh.getIndices();
+      const heights = new Float32Array(count * count);
+      for (let x = 0; x < count; x++) for (let z = 0; z < count; z++) {
+        heights[x * count + z] = this.meadowHeight(-extent + (x + .5) * cell, -extent + (z + .5) * cell);
+      }
+      const masks = new Uint8Array(count * count);
+      let faceCount = 0;
+      for (let x = 0; x < count; x++) for (let z = 0; z < count; z++) {
+        const height = heights[x * count + z];
+        for (let face = 0; face < 6; face++) {
+          const first = face * 4, nx = normal[first * 3], nz = normal[first * 3 + 2];
+          const neighborX = x + nx, neighborZ = z + nz;
+          // Equal-height neighbours completely cover this side. Keep every other
+          // face, including bottoms and step walls, with the original box UVs.
+          if ((nx || nz) && neighborX >= 0 && neighborX < count && neighborZ >= 0 && neighborZ < count && heights[neighborX * count + neighborZ] === height) continue;
+          masks[x * count + z] |= 1 << face; faceCount++;
+        }
+      }
+      // Allocate once: no growing JS arrays or a second full-size buffer copy.
+      const positions = new Float32Array(faceCount * 12), normals = new Float32Array(faceCount * 12);
+      const uvs = new Float32Array(faceCount * 8), indices = new Uint32Array(faceCount * 6);
+      let written = 0;
+      for (let x = 0; x < count; x++) for (let z = 0; z < count; z++) {
+        const height = heights[x * count + z];
+        for (let face = 0; face < 6; face++) {
+          if (!(masks[x * count + z] & (1 << face))) continue;
+          const first = face * 4, offset = written++ * 4;
+          for (let v = first; v < first + 4; v++) {
+            const at = offset + v - first;
+            positions[at*3] = -extent + (x + .5 + vertices[v*3]) * cell;
+            positions[at*3+1] = height - 4 + vertices[v*3+1] * 8;
+            positions[at*3+2] = -extent + (z + .5 + vertices[v*3+2]) * cell;
+            normals[at*3] = normal[v*3]; normals[at*3+1] = normal[v*3+1]; normals[at*3+2] = normal[v*3+2];
+            uvs[at*2] = uv[v*2]; uvs[at*2+1] = uv[v*2+1];
+          }
+          for (let i = 0; i < 6; i++) indices[(written-1)*6+i] = offset + triangles[face*6+i] - first;
+        }
+      }
+      const data = new B.VertexData();
+      data.positions = positions; data.normals = normals; data.uvs = uvs; data.indices = indices;
+      data.applyToMesh(mesh);
+      mesh.freezeWorldMatrix(); mesh.isPickable = false;
+      return { cells: count * count, faces: faceCount };
+    },
+
     buildMeadow() {
       const scene = this.scene;
       const T = this.blockTextures();
       const blocks = this.blockMesh('mainland-grass', T.grass, 3, [1, 1, 1, 1, 0, 2]);
-      const matrices = [];
       const cell = QUALITY === 'low' ? 16 : 8;
       this.meadowCell = cell;
-      for (let x = -800; x < 800; x += cell) for (let z = -800; z < 800; z += cell) {
-        const y = this.meadowHeight(x + cell / 2, z + cell / 2);
-        matrices.push(B.Matrix.Compose(new B.Vector3(cell, 8, cell), B.Quaternion.Identity(), new B.Vector3(x + cell / 2, y - 4, z + cell / 2)));
-      }
-      const buffer = new Float32Array(matrices.length * 16);
-      matrices.forEach((m, i) => m.copyToArray(buffer, i * 16));
-      blocks.thinInstanceSetBuffer('matrix', buffer, 16, true); blocks.freezeWorldMatrix(); blocks.isPickable = false;
+      this.buildMeadowSurface(blocks, cell, 800, QUALITY !== 'low');
       // 지상 끝을 공중섬으로 보이게 하지 않도록 연무 속 지평선까지 육지를 연결한다.
       const horizon = B.MeshBuilder.CreateGround('mainland-horizon', { width: 9000, height: 9000 }, scene);
       horizon.position.y = -91; horizon.material = this.mat('horizon-meadow', '#4b8859'); horizon.isPickable = false;
