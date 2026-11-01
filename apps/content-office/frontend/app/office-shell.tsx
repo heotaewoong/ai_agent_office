@@ -1622,7 +1622,11 @@ function Studio({
                     ? "선택한 영상 플랫폼을 먼저 저장해 주세요. 저장하지 않은 목적지로 승인·제작하지 않습니다."
                     : quality?.status !== "passed" || quality.critical
                     ? "독립 검수 통과와 중대 오류 해소가 필요합니다."
-                    : "근거·숫자·표현을 확인했다면 현재 버전을 승인하세요."}
+                    : job.state === "source_approved"
+                      ? "원고 승인이 끝났습니다. 선택 항목과 비용을 확인한 뒤 제작을 시작하세요."
+                      : ["release_review", "partial_release_review"].includes(job.state)
+                        ? "완성본은 제작·출고함에서 확인하세요. 다시 제작하려면 현재 설정과 비용을 확인하세요."
+                        : "근거·숫자·표현을 확인했다면 현재 버전을 승인하세요."}
               </p>
             </div>
             <div className="approval-actions">
