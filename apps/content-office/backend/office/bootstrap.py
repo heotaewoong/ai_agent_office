@@ -105,6 +105,9 @@ def refresh(store, provider=None, *, metadata_only=False):
             if old and old.get('source_hash') == card_source_hash(article):
                 article['card_ko'] = old
     store.save_articles(articles)
+    # One read per site: mark sources that can never be drafted (wrappers, 403, no article text).
+    from .source_access import probe
+    report["source_access"] = probe(articles, (store.setting("feed_report", {}) or {}).get("source_access"))
     store.set_setting("feed_report", report)
     discovery.record(store, discovery_config, articles, report)
     store.event("rss_refreshed", {"role": "RSS 연구", "total_items": report["total_items"], "eligible_items": report["eligible_items"], "failed_feeds": [f["name"] for f in report["feeds"] if f["state"] != "ok"]})

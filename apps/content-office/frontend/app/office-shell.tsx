@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { officeHref, officeRoute, type View } from "../lib/navigation";
-import { filterNews, newsSegment, newsSegments, newsEmptyState, newsSort, newsSorts, sortNews, newsHref } from "../lib/news";
+import { draftableNews, filterNews, newsSegment, newsSegments, newsEmptyState, newsSort, newsSorts, sortNews, newsHref } from "../lib/news";
 import { DecisionHome } from "./decision-home";
 import { DiscoveryPanel } from './discovery-panel';
 import { api, OfficeApiError } from "../lib/api";
@@ -239,7 +239,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
       if (!jobRefresh.current.activeId) selectJob(data.jobs?.[0]?.id || "");
       setSelected((current) =>
         current.filter((id) =>
-          data.articles.some((article) => article.id === id),
+          data.articles.some((article) => article.id === id && article.source_readable !== false),
         ),
       );
     } catch (cause) {
@@ -393,7 +393,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const jobs = dashboard?.jobs ?? [];
   const visibleJobs = prioritizeActiveJob(filterJobs(jobs, jobQuery, jobStateFilter, jobOutputFilter), activeId);
   const clearJobFilters = () => { setJobQuery(""); setJobStateFilter("all"); setJobOutputFilter("all"); };
-  const articles = dashboard?.articles ?? [];
+  const draftable = draftableNews(dashboard?.articles ?? []);
+  const articles = draftable.rows;
   const visibleArticles = sortNews(filterNews(articles, segment), articleSort);
   const sources = dashboard?.source_registry ?? [];
   const relevantSources = sources.filter(source => segment === "all" || source.segment === segment);
@@ -704,7 +705,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       </span>
                     </div>
                     <div className="news-toolbar"><nav className="news-segments" aria-label="뉴스 분류">{newsSegments.map(item => <Link key={item.id} href={newsHref(item.id, articleSort)} scroll={false} prefetch={false} aria-current={segment === item.id ? "page" : undefined} onClick={() => setShowAll(false)}>{item.label} <span>{filterNews(articles, item.id).length}</span></Link>)}</nav><label className="news-order">정렬<select aria-label="뉴스 정렬" value={articleSort} onChange={event => { setShowAll(false); router.push(newsHref(segment, newsSort(event.target.value)), { scroll: false }); }}>{newsSorts.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label></div>
-                    <p className="news-scope">최근 7일의 선정 후보 · 분류별 전체 후보 수이며 오늘 새 기사 수가 아닙니다. 분류를 바꿔도 선택한 기사 {selected.length}건은 유지됩니다.</p>
+                    <p className="news-scope">최근 7일의 선정 후보 · 분류별 전체 후보 수이며 오늘 새 기사 수가 아닙니다. 분류를 바꿔도 선택한 기사 {selected.length}건은 유지됩니다.{draftable.hidden > 0 ? ` 원문을 자동으로 열 수 없는 기사 ${draftable.hidden}건(구글 뉴스 중계·영상·접근 차단)은 원고를 만들 수 없어 목록에서 뺐어요.` : ""}</p>
                     {dashboard.feed_report?.partial_failure && <p className="notice" role="status">일부 출처 수집에 실패했어요. 보이는 기사는 보존했습니다. 운영 기록에서 출처별 결과를 확인하세요.</p>}
                     {visibleArticles.length === 0 ? (
                       <Empty title={emptyNews.title}>{emptyNews.text} <Link href={emptyNews.kind === "failure" ? "/runs" : "/plans"}>{emptyNews.kind === "failure" ? "운영 기록 확인" : "기획·독자 질문 열기"}</Link></Empty>
@@ -2120,6 +2121,8 @@ function Delivery({
   }, [job.manifest?.hash, job.manifest?.completed_outputs?.join("|")]);
   const requiresMediaReview = confirmedOutputs.includes("video");
   const requiresThumbnail = releaseOutputs.includes("video");
+  // 2026-11-02: an unclicked thumbnail no longer blocks approval②; the server confirms the recommended one.
+  const thumbnailReady = !requiresThumbnail || Boolean(job.manifest?.selected_thumbnail_id) || Boolean(job.manifest?.thumbnail_candidates?.length);
   const files = job.manifest?.files ?? [];
   const nextProduction = productionNext(job);
   const blogFormats = [
@@ -2320,8 +2323,8 @@ function Delivery({
       <header className={deliveryStyles.sectionHeading}><span>02</span><div><h2 id={`delivery-release-${job.id}`} data-outline-title="출고 승인">출고 승인</h2><p>전달할 완료 항목을 고른 뒤 현재 파일 버전을 확인하세요.</p></div></header>
       {files.length === 0 ? <p className={deliveryStyles.empty}>제작물이 준비되면 이곳에서 출고 항목을 선택할 수 있어요.</p> : <>
           {requiresThumbnail && !job.manifest?.selected_thumbnail_id && <div className={deliveryStyles.attention} role="status">
-            <strong>영상 썸네일을 먼저 선택해 주세요.</strong>
-            <p>썸네일을 선택하면 출고 승인 단계로 이어갈 수 있어요.</p>
+            <strong>{thumbnailReady ? "추천 썸네일로 출고돼요." : "썸네일 후보가 아직 없어요."}</strong>
+            <p>{thumbnailReady ? "★ 추천 표시된 썸네일이 출고 승인 때 함께 확정돼요. 다른 썸네일을 쓰려면 먼저 골라 주세요." : "영상을 다시 제작하면 썸네일 후보가 만들어져요."}</p>
             <a className="button secondary small" href={`#delivery-preview-${job.id}`}
               onClick={() => setPreview(videoFile?.id ?? (firstThumbnail ? thumbnailArtifact(firstThumbnail).id : undefined))}>
               영상·썸네일 확인
@@ -2386,10 +2389,7 @@ function Delivery({
                     disabled={
                       busy ||
                       !validReleaseOutputs(job, releaseOutputs) ||
-                      Boolean(
-                        requiresThumbnail &&
-                          !job.manifest?.selected_thumbnail_id,
-                      )
+                      !thumbnailReady
                     }
                     onClick={() => {
                       setMediaReviewed(false);
@@ -2476,8 +2476,7 @@ function Delivery({
                     ) ||
                     !validReleaseOutputs(job, confirmedOutputs) ||
                     (requiresMediaReview && !mediaReviewed) ||
-                    (requiresThumbnail &&
-                      !job.manifest?.selected_thumbnail_id) ||
+                    !thumbnailReady ||
                     !approvalIsCurrent(releaseVersion, job.manifest?.hash)
                   }
                   onClick={() =>
@@ -2648,7 +2647,7 @@ function ThumbnailChoices({
       </div>
       {!job.manifest?.selected_thumbnail_id && (
         <p className="thumbnail-pending">
-          출고 승인 전에 최종 썸네일을 선택해 주세요.
+          고르지 않으면 ★ 추천 썸네일이 출고 승인 때 확정돼요.
         </p>
       )}
     </section>

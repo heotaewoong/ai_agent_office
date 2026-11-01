@@ -37,10 +37,10 @@ def test_formal_endings_outnumbering_haeyo_is_flagged_but_mixed_is_allowed():
     assert not any("해요체" in issue for issue in style_issues(packet(mixed)))
 
 
-def test_style_issues_block_deterministic_checks_and_are_listed():
+def test_style_issues_are_listed_as_advisories():
     checks = deterministic_checks(packet(GOOD_BODY + " — 그리고"))
-    assert checks["passed"] is False
-    assert any("줄표" in issue for issue in checks["issues"])
+    assert checks["passed"] is True
+    assert any("줄표" in issue for issue in checks["warnings"])
     assert "문체 규칙" in checks["checks"]
 
 

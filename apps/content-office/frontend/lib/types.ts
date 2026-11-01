@@ -1,4 +1,6 @@
 export type Article = {
+  source_readable?: boolean;
+  source_unreadable_reason?: string;
   segment?: "exam" | "ai" | "unclassified";
   topics?: string[];
   language?: string;

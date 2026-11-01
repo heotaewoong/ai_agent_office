@@ -446,7 +446,11 @@ def create_app(store: Store | None = None):
             tasks = [{**task, "result": None, "result_omitted": True}
                      if task.get("state") == "completed" and task.get("result") is not None
                      else task for task in tasks]
-        return {"articles": visible_articles([classify_article(article) for article in articles]), "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": tasks, "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'availability': profile_availability(), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
+        from .source_access import annotate
+        marked = annotate([classify_article(article) for article in articles], feed_report.get("source_access", {}))
+        # Draftable candidates first; unreadable ones are still listed (hidden by default on screen) with the reason.
+        shown = visible_articles([row for row in marked if row["source_readable"]]) + visible_articles([row for row in marked if not row["source_readable"]], 40)
+        return {"articles": shown, "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": tasks, "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'availability': profile_availability(), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
 
     @app.get("/api/space")
     def space():
@@ -479,6 +483,12 @@ def create_app(store: Store | None = None):
         active_ids = set(store.setting("feed_report", {}).get("active_article_ids", eligible_ids))
         if any(article["id"] not in eligible_ids & active_ids for article in articles):
             raise WorkflowError("현재 최근 기사 후보가 아닙니다. RSS를 새로 확인하고 선택하세요")
+        from .source_access import status as source_status
+        access = store.setting("feed_report", {}).get("source_access", {})
+        for article in articles:
+            readable, reason = source_status(article, access)
+            if not readable:
+                raise WorkflowError(f"'{article['title'][:40]}' 기사는 원문을 자동으로 열 수 없어요({reason}). 다른 기사를 골라 주세요. 작업은 만들지 않았고 비용도 들지 않았어요")
         jobs = [store.create_job(article) for article in articles]
         requests = []
         if selection.start_draft:

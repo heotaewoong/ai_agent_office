@@ -37,15 +37,16 @@ def test_critique_and_eval_never_receive_each_others_answers():
     assert "주어" in provider.calls[2][1][0]["content"] and "조사" in provider.calls[2][1][0]["content"]
 
 
-def test_refine_is_limited_to_two_and_critical_errors_block():
+def test_refine_is_limited_to_two_and_model_objections_become_advisories():
     provider = ReviewingProvider(always_block=True)
     result = review_until_ready({"title": "원고", "body": "본문", "evidence": []}, provider)
     roles = [role for role, _ in provider.calls]
     assert roles.count("refine") == 2
     assert roles.count("critique") == 3
     assert roles.count("eval") == 3
-    assert result["quality"]["critical"] is True
-    assert result["quality"]["status"] == "blocked"
+    assert result["quality"]["critical"] is False and result["quality"]["status"] == "passed"
+    assert result["quality"]["advisories"]["model_reviews_passed"] is False
+    assert "근거 오류" in result["quality"]["advisories"]["review_issues"]
     assert result["body"] == "수정된 본문"
 
 
@@ -264,17 +265,18 @@ def test_original_mode_restores_body_before_reevaluation_without_generation(tmp_
     assert result["source_packet"]["body"] == original and provider.calls == ["critique", "eval", "korean"]
 
 
-def test_original_mode_keeps_real_review_failure_blocked(tmp_path, monkeypatch):
+def test_original_mode_review_failure_is_an_advisory_and_human_can_approve(tmp_path, monkeypatch):
     from office.editorial import prepare_source
-    from office.store import WorkflowError
     original = original_markdown()
     store, saved = preservation_job(tmp_path, monkeypatch, original)
     provider = OriginalPreservingProvider(original, always_block=True)
     result = prepare_source(store, saved["id"], provider=provider)
     assert result["source_packet"]["body"] == original
-    assert result["source_packet"]["quality"]["status"] == "blocked" and provider.calls.count("refine") == 2
-    with pytest.raises(WorkflowError):
-        store.review_source(saved["id"], result["source_hash"], "approved", "human")
+    quality = result["source_packet"]["quality"]
+    assert quality["status"] == "passed" and provider.calls.count("refine") == 2
+    assert quality["advisories"]["model_reviews_passed"] is False
+    approved = store.review_source(saved["id"], result["source_hash"], "approved", "human")
+    assert approved["source_approval"]["decision"] == "approved"
 
 
 def test_original_body_style_is_preserved_and_derived_brand_rules_still_apply():
@@ -286,12 +288,12 @@ def test_original_body_style_is_preserved_and_derived_brand_rules_still_apply():
     assert style_issues(packet) == []
     packet["video"]["description"] = "파생 설명입니다. 이 문장은 수정합니다. 해요체로 바꿉니다. — 끝입니다."
     checks = deterministic_checks(packet)
-    assert not checks["passed"] and any("해요체" in issue or "줄표" in issue for issue in checks["issues"])
+    assert checks["passed"] and any("해요체" in issue or "줄표" in issue for issue in checks["warnings"])
     assert packet["body"] == body
 
 
-@pytest.mark.parametrize("change,expected", [("body", "원문 해시"), ("unknown_citation", "존재하지"), ("unknown_reference", "존재하지"), ("missing_reference", "근거 ID"), ("bad_reference_type", "형식"), ("http_evidence", "HTTPS")])
-def test_original_mode_does_not_bypass_evidence_and_integrity_checks(change, expected):
+@pytest.mark.parametrize("change,expected,blocks", [("body", "원문 해시", True), ("unknown_citation", "존재하지", False), ("unknown_reference", "존재하지", False), ("missing_reference", "근거 ID", False), ("bad_reference_type", "형식", False), ("http_evidence", "HTTPS", True)])
+def test_original_mode_does_not_bypass_evidence_and_integrity_checks(change, expected, blocks):
     from office.store import digest
     packet = preservation_packet("직접 제공한 저자 원문입니다.")
     if change == "body":
@@ -308,7 +310,9 @@ def test_original_mode_does_not_bypass_evidence_and_integrity_checks(change, exp
     else:
         packet["evidence"][0]["url"] = "http://example.com/original"
     checks = deterministic_checks(packet)
-    assert not checks["passed"] and any(expected in issue for issue in checks["issues"])
+    # Integrity (changed original, no HTTPS source) blocks; citation bookkeeping is a visible advisory.
+    assert checks["passed"] is (not blocks) and any(expected in issue for issue in checks["issues"])
+    assert any(expected in issue for issue in (checks["blocking"] if blocks else checks["warnings"]))
 
 
 def test_missing_original_blocks_before_state_research_or_provider_work(tmp_path, monkeypatch):

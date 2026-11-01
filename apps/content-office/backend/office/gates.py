@@ -38,8 +38,8 @@ def metadata_fact_check(packet):
     items = []
     for name, text in fields.items():
         for number in sorted(_numbers(text) - evidence):
-            level = "warn" if number in body else "block"
-            items.append({"level": level, "rule": "metadata_numbers", "message": f"{name}의 숫자 {number}: {'본문에만 있음' if level == 'warn' else '근거·본문에 없음'}"})
+            # 2026-11-02: advisory only ("3가지", "5분" are not evidence claims); the human checks it before approval.
+            items.append({"level": "warn", "rule": "metadata_numbers", "message": f"{name}의 숫자 {number}: {'본문에만 있음' if number in body else '근거·본문에 없음 · 확인하세요'}"})
     return items
 
 
@@ -57,7 +57,7 @@ def inauthentic_risk(packet, previous_packets, threshold=0.5):
     current = narration(packet)
     worst = max((similarity(current, narration(p)) for p in previous_packets), default=0.0)
     if worst >= threshold:
-        return [{"level": "block", "rule": "inauthentic_template", "message": f"이전 영상과 대본 유사도 {worst:.2f}: 템플릿 반복은 수익화 제외 유형"}]
+        return [{"level": "warn", "rule": "inauthentic_template", "message": f"이전 영상과 대본 유사도 {worst:.2f}: 템플릿 반복은 수익화 제외 유형일 수 있어요. 장면을 바꿔 보세요"}]
     return []
 
 
@@ -94,6 +94,6 @@ def run_gates(packet, previous_packets=(), assets=(), brand=None):
         parts = [packet.get("title"), packet.get("body"), narration(packet), video.get("title"), video.get("description"), " ".join(video.get("tags") or [])]
         parts += [t.get(key) for t in thumbs for key in ("title", "subtitle")]
         text = " ".join(part or "" for part in parts)
-        items += [{"level": "block", "rule": "banned_claim", "message": f"금지 주장: {hit}"} for hit in banned_claim_hits(text, brand)]
+        items += [{"level": "warn", "rule": "banned_claim", "message": f"금지 표현 확인: {hit} · 승인 전에 고쳐 주세요"} for hit in banned_claim_hits(text, brand)]
     status = "block" if any(i["level"] == "block" for i in items) else "warn" if items else "pass"
     return {"status": status, "items": items, "disclosure": disclosure_decision(assets)}

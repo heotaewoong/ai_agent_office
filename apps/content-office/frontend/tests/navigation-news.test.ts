@@ -32,3 +32,10 @@ test('score ordering is explicit, stable, non-mutating and leaves unknown scores
  assert.equal(newsSort(null),'score-desc');assert.equal(newsSort('bad'),'score-desc');
  assert.equal(newsHref('exam',newsSort('score-asc')),'/news?seg=exam&sort=score-asc');
 });
+test('only draftable news can be listed and selected; unreadable sources are counted, not offered',async()=>{
+ const {draftableNews}=await import('../lib/news.ts');
+ const rows=[{id:'ok',source_readable:true},{id:'old'},{id:'google',source_readable:false,source_unreadable_reason:'구글 뉴스 중계'}];
+ const result=draftableNews(rows);
+ assert.deepEqual(result.rows.map(x=>x.id),['ok','old']);
+ assert.equal(result.hidden,1);
+});

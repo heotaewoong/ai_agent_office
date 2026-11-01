@@ -1,6 +1,12 @@
 export type NewsSegment = "all" | "exam" | "ai";
 export const newsSegments = [{ id: "all", label: "전체" }, { id: "exam", label: "자격증·수험생" }, { id: "ai", label: "AI·자동화" }] as const;
 export function newsSegment(value: string | null): NewsSegment { return value === "exam" || value === "ai" ? value : "all"; }
+// Sources the server marked as never draftable (Google News wrappers, video pages, sites refusing automated
+// reads) are not offered: selecting them always ended in an error. Older rows without the mark stay listed.
+export function draftableNews<T extends { source_readable?: boolean }>(articles: T[]) {
+  const rows = articles.filter(article => article.source_readable !== false);
+  return { rows, hidden: articles.length - rows.length };
+}
 export function filterNews<T extends { segment?: string }>(articles: T[], segment: NewsSegment) { return segment === "all" ? articles : articles.filter(article => article.segment === segment); }
 export function newsEmptyState(segment: NewsSegment, total: number, sources: number, checked: boolean, failed: boolean) {
   if (segment !== "all" && !sources) return { kind: "sources", title: "이 분류에 등록된 뉴스 소스가 없어요", text: "공식 출처 연결이 필요해요. 기획 화면에서는 독자 질문이나 출처가 있는 직접 기획으로 시작할 수 있어요." };
