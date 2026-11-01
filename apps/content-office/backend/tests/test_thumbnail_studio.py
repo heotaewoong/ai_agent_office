@@ -252,3 +252,39 @@ def test_overflowing_title_blocks_output_instead_of_cropping(fixture,tmp_path,mo
     with pytest.raises(WorkflowError,match='제목'):
         compose(source,output,'overflow-fixture',portrait=True)
     assert not output.exists()
+
+
+def test_thumbnail_uses_approved_video_copy_not_markdown_body(fixture):
+    store, job = fixture
+    packet = {**job['source_packet'], 'body': '## 본문 첫 번째 소제목',
+              'video': {'title': '영상 제목', 'thumbnails': [{'title': '**승인된 썸네일**'}]}}
+    job = store.save_source(job['id'], packet)
+    assert context(store, job['id'])[2] == '승인된 썸네일'
+    assert store.job(job['id'])['source_packet'] == packet
+
+
+@pytest.mark.parametrize('raw,expected', [
+    ('## **AI 에이전트**는 `시뮬레이션`을 도울까요 ##', 'AI 에이전트는 시뮬레이션을 도울까요'),
+    ('> ### [NVIDIA 사례](https://example.com)', 'NVIDIA 사례'),
+    ('C# 개발과 #AI 활용', 'C# 개발과 #AI 활용'),
+])
+def test_compose_removes_markdown_before_drawing(tmp_path, monkeypatch, raw, expected):
+    from office.thumbnail_studio import compose
+    from office import media
+    seen = []
+    original = media.text_box
+    def capture(draw, text, *args, **kwargs):
+        seen.append(text)
+        return original(draw, text, *args, **kwargs)
+    monkeypatch.setattr(media, 'text_box', capture)
+    source = tmp_path / 'art.png'
+    Image.new('RGB', (1536, 1024)).save(source)
+    compose(source, tmp_path / 'cover.png', raw, portrait=True)
+    assert seen == ['HeoBrain', expected]
+
+
+def test_legacy_packet_title_fallback_is_plain_text(fixture):
+    store, job = fixture
+    packet = {**job['source_packet'], 'title': '## 원고 제목', 'body': '## 본문 제목\n설명', 'video': {}}
+    store.save_source(job['id'], packet)
+    assert context(store, job['id'])[2] == '원고 제목'

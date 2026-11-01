@@ -288,10 +288,21 @@ def scene_kind(scene, index):
     return scene_content(scene, index)['kind']
 
 
+def thumbnail_text(value):
+    """Presentation text only; never rewrite the approved Markdown source."""
+    text = str(value or '').strip()
+    text = re.sub(r'(?m)^\s*(?:>\s*)+', '', text)
+    text = re.sub(r'(?m)^\s*#{1,6}\s+(.+?)(?:\s+#+\s*)?$', r'\1', text)
+    text = re.sub(r'\[([^\]\n]+)\]\(https?://[^\s)]+\)', r'\1', text)
+    text = re.sub(r'(\*\*|__|~~)(.*?)\1', r'\2', text)
+    text = re.sub(r'`([^`]+)`', r'\1', text)
+    return ' '.join(text.split())
+
+
 def approved_display_title(plan):
     candidates = plan.get('thumbnails')
-    titles = [str(c.get('title', '')).strip() for c in candidates if isinstance(c, dict)] if isinstance(candidates, list) else []
-    original = str(plan.get('thumbnail_title') or plan.get('title', '')).strip()
+    titles = [thumbnail_text(c.get('title')) for c in candidates if isinstance(c, dict)] if isinstance(candidates, list) else []
+    original = thumbnail_text(plan.get('thumbnail_title') or plan.get('title'))
     if len(original) <= 38:
         return original
     short = [title for title in titles if 4 <= len(title) <= 38]
@@ -486,8 +497,8 @@ def thumbnail_concepts(plan):
     result = []
     for index in range(5):
         item = supplied[index] if isinstance(supplied, list) and index < len(supplied) and isinstance(supplied[index], dict) else {}
-        result.append({'title': str(item.get('title') or approved_display_title(plan)),
-                       'subtitle': str(item.get('subtitle') or (captions[index % len(captions)] if captions else plan.get('description', ''))),
+        result.append({'title': thumbnail_text(item.get('title') or approved_display_title(plan)),
+                       'subtitle': thumbnail_text(item.get('subtitle') or (captions[index % len(captions)] if captions else plan.get('description', ''))),
                        'angle': str(item.get('angle') or ['핵심 설명','비교 관점','근거 확인','흐름 이해','검토 포인트'][index]),
                        'layout': ['editorial_headline','split_context','fact_spotlight','process_strip','question_focus'][index],
                        'from_approved_concept': bool(item)})

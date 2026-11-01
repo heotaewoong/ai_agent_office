@@ -27,6 +27,7 @@ def default_format(job):
 
 
 def context(store, job_id, expected=None):
+    from .media import thumbnail_text
     job = store.job(job_id)
     if expected is not None and job.get('source_hash') != expected:
         raise WorkflowError('원고 판본이 바뀌었습니다. 현재 원고를 다시 확인하세요')
@@ -34,7 +35,13 @@ def context(store, job_id, expected=None):
     body = str(packet.get('body') or '').strip()
     if not body or not job.get('source_hash'):
         raise WorkflowError('썸네일을 만들 원고를 먼저 준비하세요')
-    title = str((packet.get('video') or {}).get('thumbnail_title') or body.splitlines()[0]).strip()[:120]
+    plan = packet.get('video') or {}
+    concepts = plan.get('thumbnails') or []
+    titles = [c.get('title') for c in concepts if isinstance(c, dict)]
+    options = [plan.get('thumbnail_title'), *titles, plan.get('title'), packet.get('title'), body.splitlines()[0]]
+    title = next((text for value in options if (text := thumbnail_text(value))), '')[:120]
+    if not title:
+        raise WorkflowError('썸네일에 표시할 제목이 없습니다')
     return job, body, title
 
 
@@ -77,7 +84,10 @@ def validate_picture(path):
 
 
 def compose(artwork, output, title, *, portrait=False):
-    from .media import text_box, korean_font
+    from .media import text_box, korean_font, thumbnail_text
+    title = thumbnail_text(title)
+    if not title:
+        raise WorkflowError('썸네일에 표시할 제목이 없습니다')
     validate_picture(artwork)
     with Image.open(artwork) as source:
         image = ImageOps.fit(source.convert('RGB'), ((1080, 1920) if portrait else (1280, 720)), method=Image.Resampling.LANCZOS,
@@ -126,17 +136,16 @@ def image_kind(format):
 
 def add_candidate(store, job_id, source_hash, artwork, *, angle, provenance, parent_id=None, instruction=''):
     from .media import artifact_record
-    context(store, job_id, source_hash)
     root = folder_for(store, job_id, source_hash)
     validate_picture(artwork)
-    key = digest({'artwork': hashlib.sha256(artwork.read_bytes()).hexdigest(), 'source': source_hash,
+    _, _, title = context(store, job_id, source_hash)
+    key = digest({'artwork': hashlib.sha256(artwork.read_bytes()).hexdigest(), 'source': source_hash, 'title': title,
                   'parent': parent_id, 'instruction': instruction, 'version': VERSION})[:24]
     directory = root / key
     directory.mkdir(exist_ok=True)
     target = directory / 'artwork.png'
     if artwork.resolve() != target.resolve():
         shutil.copyfile(artwork, target)
-    _, _, title = context(store, job_id, source_hash)
     image = directory / f'thumbnail-{key[:8]}.png'
     landscape_check = compose(target, image, title)
     portrait = directory / f'thumbnail-{key[:8]}-shorts.png'
