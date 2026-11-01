@@ -81,6 +81,19 @@ def cache_key(provider, model, messages, schema, options):
     return digest({"provider": provider, "model": model, "actual_messages": messages, "schema": schema, "actual_options": options, "contract": "heobrain-model-v1"})
 
 
+def closed_required_schema(schema):
+    """Only opt compatible, fully required schemas into strict output; never rewrite the contract."""
+    if not isinstance(schema, dict) or set(schema) - {'type','properties','required','additionalProperties','items','description','enum','minItems','maxItems','minLength','maxLength'}:
+        return False
+    kind=schema.get('type')
+    if kind=='object':
+        props=schema.get('properties',{})
+        return schema.get('additionalProperties') is False and set(schema.get('required',[]))==set(props) and all(closed_required_schema(value) for value in props.values())
+    if kind=='array':
+        return closed_required_schema(schema.get('items'))
+    return kind in ('string','number','integer','boolean','null')
+
+
 class Provider:
     def __init__(self, store: Store, model=None, transport=None, *, job_id=None, cost_scope=None):
         self.store = store
@@ -221,7 +234,7 @@ class Provider:
             chat.insert(first_user, {"role": "system", "content": "출력 JSON 형식 제약(반드시 지킬 것):" + chr(10) + "- " + (chr(10) + "- ").join(constraints)})
         payload = {"model": self.model,
                    "messages": chat,
-                   "response_format": {"type": "json_schema", "json_schema": {"name": "office_result", "schema": schema}},
+                   "response_format": {"type": "json_schema", "json_schema": {"name": "office_result", "schema": schema, "strict": closed_required_schema(schema)}},
                    "max_completion_tokens": options["max_tokens"],
                    "reasoning_effort": options.get("reasoning_effort", "low")}
         return ("https://api.openai.com/v1/chat/completions",

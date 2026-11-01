@@ -16,6 +16,16 @@ class Response:
 
 SCHEMA = {"type": "object", "properties": {"passed": {"type": "boolean"}}, "required": ["passed"], "additionalProperties": False}
 
+def test_review_requests_enforce_strict_values_without_rewriting_optional_drafts(tmp_path):
+    from office.editorial import REVIEW_SCHEMA,KOREAN_REVIEW_SCHEMA,DRAFT_SCHEMA
+    provider=Provider(Store(tmp_path),model='gpt-5.4-mini')
+    for schema in (REVIEW_SCHEMA,KOREAN_REVIEW_SCHEMA):
+        _,_,payload=provider._openai_request('test-placeholder',[{'role':'user','content':'검수'}],schema,{'max_tokens':4096})
+        assert payload['response_format']['json_schema']['strict'] is True
+        assert payload['response_format']['json_schema']['schema']==schema
+    _,_,payload=provider._openai_request('test-placeholder',[{'role':'user','content':'초안'}],DRAFT_SCHEMA,{'max_tokens':8192})
+    assert payload['response_format']['json_schema'].get('strict') is not True
+
 
 def test_job_budget_blocks_model_before_transport_and_preserves_other_job_costs(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
