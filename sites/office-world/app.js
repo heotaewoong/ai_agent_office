@@ -1099,11 +1099,11 @@
     pathDistance(v) {
       let best = Infinity;
       for (const st of space.stages) {
-        const b = st.bridge;
-        const ab = b.end.subtract(b.start); const ap = v.subtract(b.start);
-        const t = Math.max(0, Math.min(1, B.Vector3.Dot(ap, ab) / ab.lengthSquared()));
-        const c = b.start.add(ab.scale(t));
-        best = Math.min(best, Math.hypot(v.x - c.x, v.z - c.z));
+        const b = st.bridge, sx = b.start.x, sy = b.start.y, sz = b.start.z;
+        const dx = b.end.x - sx, dy = b.end.y - sy, dz = b.end.z - sz;
+        // Preserve the 3D projection while avoiding four temporary vectors per bridge.
+        const t = Math.max(0, Math.min(1, ((v.x - sx) * dx + (v.y - sy) * dy + (v.z - sz) * dz) / (dx * dx + dy * dy + dz * dz)));
+        best = Math.min(best, Math.hypot(v.x - (sx + dx * t), v.z - (sz + dz * t)));
       }
       return best;
     },
