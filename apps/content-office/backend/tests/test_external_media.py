@@ -239,3 +239,31 @@ def test_same_verified_bundle_can_refresh_review_without_approval(tmp_path, monk
     refreshed = module.prepare_review(store, job['id'], draft['id'], current['source_hash'])
     assert refreshed['source_packet'] == current['source_packet']
     assert refreshed['source_approval'] is refreshed['manifest'] is None
+
+
+@pytest.mark.parametrize("seconds, accepted", [(120, True), (148.083008, True), (180, True), (180.001, False), (0, False)])
+def test_edited_vertical_duration_boundary(monkeypatch, seconds, accepted):
+    import json
+    probe = {"streams": [{"codec_type": "video", "codec_name": "h264", "width": 1080, "height": 1920},
+                         {"codec_type": "audio", "codec_name": "aac"}], "format": {"duration": str(seconds)}}
+    monkeypatch.setattr(module.subprocess, "check_output", lambda *args, **kwargs: json.dumps(probe).encode())
+    if accepted:
+        assert module._probe(Path("selected.mp4"))["seconds"] == seconds
+    else:
+        with pytest.raises(WorkflowError):
+            module._probe(Path("selected.mp4"))
+
+
+def test_explicit_english_import_preserves_spoken_text_and_manual_review(tmp_path, monkeypatch):
+    store, job, draft = context(tmp_path, monkeypatch)
+    current = module.prepare_review(store, job['id'], draft['id'], job['source_hash'], language='en')
+    assert current['source_packet']['audience']['language'] == 'en'
+    assert current['source_packet']['body'] == '새 원문입니다.\n'
+    assert current['source_approval'] is current['manifest'] is None
+
+
+def test_unknown_import_language_cannot_change_source(tmp_path, monkeypatch):
+    store, job, draft = context(tmp_path, monkeypatch)
+    with pytest.raises(WorkflowError):
+        module.prepare_review(store, job['id'], draft['id'], job['source_hash'], language='unknown')
+    assert store.job(job['id'])['source_hash'] == job['source_hash']
