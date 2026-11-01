@@ -1219,6 +1219,13 @@ function Studio({
   const [draftWindowMinutes, setDraftWindowMinutes] = useState("30");
   const [platformsDirty, setPlatformsDirty] = useState(false);
   const packagingPanel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const target = document.getElementById(`studio-blog-${job.id}`);
+    if (!target || window.location.hash !== `#${target.id}`) return;
+    // Job data can arrive after Next has processed the route fragment.
+    target.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "start" });
+  }, [job.id]);
   const stale = baseHash !== job.source_hash && dirty;
   useEffect(() => {
     if (!dirty) {
@@ -1351,7 +1358,7 @@ function Studio({
       />
       </section>
       <section className="studio-section" aria-labelledby={`studio-blog-${job.id}`}>
-        <header className="studio-section-heading"><span className="studio-section-number">02</span><div><h2 id={`studio-blog-${job.id}`} data-outline-title="블로그 글·제목">블로그 글·제목</h2><p>제목과 본문을 읽고 수정하세요. 저장·검수 후 승인①을 하면 선택한 제작물을 만들어요.</p></div></header>
+        <header className="studio-section-heading"><span className="studio-section-number">02</span><div><h2 id={`studio-blog-${job.id}`} tabIndex={-1} data-outline-title="블로그 글·제목">블로그 글·제목</h2><p>제목과 본문을 읽고 수정하세요. 저장·검수 후 승인①을 하면 선택한 제작물을 만들어요.</p></div></header>
       <div className="editor-panel">
         {job.article?.operator_source_text && <p className="muted" role="status">
           현재 등록 방식: {job.article.preserve_original === true ? "원문 보존 · 영상 파생" : "요약·재작성"} · 등록 원문 {job.article.operator_source_text.length.toLocaleString("ko-KR")}자 · 현재 본문 {body.length.toLocaleString("ko-KR")}자.
