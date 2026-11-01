@@ -52,12 +52,13 @@
     reply({verified:true,external_id:location.origin+'/draft/'+item.id});return;
    }
    if(field.innerText.trim())throw Error('기존 초안을 보존하기 위해 중단했습니다');
+   const modal=field.closest('dialog,[role="dialog"]');
+   const closeLabels=isLinked?['닫기','취소','Close','Dismiss','Cancel']:['취소','Cancel','Close'];
+   if(!modal || exact(modal,closeLabels).length!==1)throw Error('작성 창의 안전한 닫기 범위 확인 필요');
    put(field,item.text);
    if(field.innerText.replace(/\r/g,'').trim()!==item.text.replace(/\r/g,'').trim())throw Error('본문 입력 확인 실패');
-   const modal=field.closest('[role="dialog"]');
-   if(!modal)throw Error('작성 창 범위 확인 필요');
-   click(modal,isLinked?['닫기','취소','Close','Cancel']:['취소','Cancel','Close']);
-   const dialogs=[...document.querySelectorAll('[role="dialog"]')].filter(visible);
+   click(modal,closeLabels);
+   const dialogs=[...document.querySelectorAll('dialog,[role="dialog"]')].filter(visible);
    if(dialogs.length!==1)throw Error('초안 저장 확인창 필요');
    click(dialogs[0],['초안으로 저장','임시저장','저장','Save draft','Save as draft','Save']);
    reply({state:'saved_candidate'});

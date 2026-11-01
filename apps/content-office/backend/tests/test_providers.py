@@ -16,15 +16,42 @@ class Response:
 
 SCHEMA = {"type": "object", "properties": {"passed": {"type": "boolean"}}, "required": ["passed"], "additionalProperties": False}
 
-def test_review_requests_enforce_strict_values_without_rewriting_optional_drafts(tmp_path):
+def test_review_and_optional_drafts_use_strict_wire_without_changing_saved_contract(tmp_path):
+    import copy
     from office.editorial import REVIEW_SCHEMA,KOREAN_REVIEW_SCHEMA,DRAFT_SCHEMA
     provider=Provider(Store(tmp_path),model='gpt-5.4-mini')
     for schema in (REVIEW_SCHEMA,KOREAN_REVIEW_SCHEMA):
         _,_,payload=provider._openai_request('test-placeholder',[{'role':'user','content':'검수'}],schema,{'max_tokens':4096})
         assert payload['response_format']['json_schema']['strict'] is True
         assert payload['response_format']['json_schema']['schema']==schema
+    before=copy.deepcopy(DRAFT_SCHEMA)
     _,_,payload=provider._openai_request('test-placeholder',[{'role':'user','content':'초안'}],DRAFT_SCHEMA,{'max_tokens':8192})
-    assert payload['response_format']['json_schema'].get('strict') is not True
+    wire=payload['response_format']['json_schema']
+    assert wire['strict'] is True
+    scene=wire['schema']['properties']['video']['properties']['scenes']['items']
+    assert 'footage' in scene['required']
+    assert {'type':'null'} in scene['properties']['footage']['anyOf']
+    assert DRAFT_SCHEMA==before
+
+
+def test_optional_wire_null_restores_absence_and_schema_failure_logs_no_response(tmp_path,monkeypatch):
+    monkeypatch.setenv('OPENAI_API_KEY','test-only-placeholder')
+    schema={'type':'object','properties':{'caption':{'type':'string'},'footage':{'type':'string'}},'required':['caption'],'additionalProperties':False}
+    class OpenAIResponse:
+        status_code=200
+        def __init__(self,value):self.value=value
+        def json(self):return {'usage':{'prompt_tokens':5,'completion_tokens':5},'choices':[{'finish_reason':'stop','message':{'content':json.dumps(self.value)}}]}
+    store=Store(tmp_path)
+    provider=Provider(store,model='gpt-5.4-mini',transport=lambda *a,**k:OpenAIResponse({'caption':'확인','footage':None}))
+    assert provider.generate('gen',[{'role':'user','content':'synthetic'}],schema)=={'caption':'확인'}
+    provider.transport=lambda *a,**k:OpenAIResponse({'caption':'PRIVATE_SENTINEL','footage':123})
+    with pytest.raises(WorkflowError,match='schema'):
+        provider.generate('gen',[{'role':'user','content':'different'}],schema)
+    events=store.events()
+    bad=next(e for e in events if e['kind']=='model_schema_rejected')
+    assert bad['data']['validator']=='anyOf'
+    assert bad['data']['schema_path']==['properties','footage','anyOf']
+    assert 'PRIVATE_SENTINEL' not in json.dumps(events)
 
 
 def test_job_budget_blocks_model_before_transport_and_preserves_other_job_costs(tmp_path, monkeypatch):

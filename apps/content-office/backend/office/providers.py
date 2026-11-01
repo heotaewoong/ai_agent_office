@@ -83,8 +83,10 @@ def cache_key(provider, model, messages, schema, options):
 
 def closed_required_schema(schema):
     """Only opt compatible, fully required schemas into strict output; never rewrite the contract."""
-    if not isinstance(schema, dict) or set(schema) - {'type','properties','required','additionalProperties','items','description','enum','minItems','maxItems','minLength','maxLength'}:
+    if not isinstance(schema, dict) or set(schema) - {'type','properties','required','additionalProperties','items','description','enum','minItems','maxItems','minLength','maxLength','anyOf'}:
         return False
+    if 'anyOf' in schema:
+        return bool(schema['anyOf']) and all(closed_required_schema(value) for value in schema['anyOf'])
     kind=schema.get('type')
     if kind=='object':
         props=schema.get('properties',{})
@@ -92,6 +94,12 @@ def closed_required_schema(schema):
     if kind=='array':
         return closed_required_schema(schema.get('items'))
     return kind in ('string','number','integer','boolean','null')
+
+
+def openai_wire_schema(schema):
+    from .codex_text_provider import codex_schema
+    candidate = codex_schema(schema)
+    return candidate if closed_required_schema(candidate) else schema
 
 
 class Provider:
@@ -121,7 +129,8 @@ class Provider:
         provider = provider_for(self.model)
         if provider is None:
             raise WorkflowError("모델의 검증된 단가가 없어 호출을 보류합니다")
-        key = cache_key(provider, self.model, messages, schema, options)
+        wire_schema = openai_wire_schema(schema) if provider == 'openai' else schema
+        key = cache_key(provider, self.model, messages, wire_schema, options)
         cached = self.store.cache_get(key)
         if cached is not None:
             try:
@@ -188,10 +197,17 @@ class Provider:
             result = json.loads(text)
             if not isinstance(result, dict):
                 raise ValueError("Object required")
+            if provider == 'openai' and wire_schema != schema:
+                from .codex_text_provider import restore_optional_fields
+                Draft202012Validator(wire_schema).validate(result)
+                result = restore_optional_fields(result, schema)
             Draft202012Validator(schema).validate(result)
         except OutputTruncated:
             raise WorkflowError("모델 출력이 길이 제한에서 잘렸습니다(비용은 정산됨). 출력 한도를 늘리거나 요청을 줄여야 합니다") from None
-        except ValidationError:
+        except ValidationError as error:
+            # Keep only contract locations; validation messages/instances can contain private copy.
+            self.store.event('model_schema_rejected', {'role': role, 'model': self.model,
+                'validator': error.validator, 'schema_path': list(error.absolute_schema_path)}, self.job_id)
             raise WorkflowError("모델 결과 형식이 요청한 schema와 다릅니다. 성공으로 저장하지 않습니다") from None
         except (ValueError, KeyError, TypeError, IndexError):
             raise WorkflowError("모델 결과 형식이 올바르지 않습니다. 성공으로 처리하지 않습니다") from None
@@ -232,9 +248,10 @@ class Provider:
             # Keep the operator's own system prompt first; insert the schema facts before the first non-system message.
             first_user = next((i for i, m in enumerate(chat) if m["role"] != "system"), len(chat))
             chat.insert(first_user, {"role": "system", "content": "출력 JSON 형식 제약(반드시 지킬 것):" + chr(10) + "- " + (chr(10) + "- ").join(constraints)})
+        wire_schema = openai_wire_schema(schema)
         payload = {"model": self.model,
                    "messages": chat,
-                   "response_format": {"type": "json_schema", "json_schema": {"name": "office_result", "schema": schema, "strict": closed_required_schema(schema)}},
+                   "response_format": {"type": "json_schema", "json_schema": {"name": "office_result", "schema": wire_schema, "strict": closed_required_schema(wire_schema)}},
                    "max_completion_tokens": options["max_tokens"],
                    "reasoning_effort": options.get("reasoning_effort", "low")}
         return ("https://api.openai.com/v1/chat/completions",
