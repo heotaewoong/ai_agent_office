@@ -21,6 +21,10 @@ class DefiniteFailure(WorkflowError):
     The worker records a plain, retryable failure instead of an 'unknown result needs reconciliation'."""
 
 
+class SourceUnavailable(DefiniteFailure):
+    """An article fetch failed before any model request."""
+
+
 class UnknownTaskPending(WorkflowError):
     """A guarded output still has an unresolved task for the same source."""
 

@@ -6,7 +6,7 @@ import signal
 import time
 from .bootstrap import default_store, refresh
 from .editorial import prepare_source
-from .store import WorkflowError, canonical, identifier, now
+from .store import SourceUnavailable, WorkflowError, canonical, identifier, now
 from .runtime import WorkerRuntime, WorkerInterrupted, WindowDeadline, run_before_deadline, window_open, worker_heartbeat
 
 
