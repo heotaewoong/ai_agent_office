@@ -181,10 +181,10 @@ def test_channel_pack_is_reviewable_and_approval_still_required(tmp_path, monkey
     assert result['release_approval'] is None
     files = {a['name']: a for a in result['manifest']['files']}
     assert len([a for a in files.values() if a['outputs'] == ['cards']]) == 8
-    assert (store.artifacts / files['tistory.md']['path']).read_text().startswith('tistory-article.md')
-    assert (store.artifacts / files['naver.txt']['path']).read_text().startswith('naver-article.txt')
-    assert (store.artifacts / files['threads-main.txt']['path']).read_text().startswith('threads-post.txt')
-    assert (store.artifacts / files['linkedin-personal.txt']['path']).read_text().startswith('linkedin-post.txt')
+    assert (store.artifacts / files['tistory.md']['path']).read_text(encoding='utf-8').startswith('tistory-article.md')
+    assert (store.artifacts / files['naver.txt']['path']).read_text(encoding='utf-8').startswith('naver-article.txt')
+    assert (store.artifacts / files['threads-main.txt']['path']).read_text(encoding='utf-8').startswith('threads-post.txt')
+    assert (store.artifacts / files['linkedin-personal.txt']['path']).read_text(encoding='utf-8').startswith('linkedin-post.txt')
     assert result['source_packet']['quality']['status'] == 'external_review_required'
     again = module.adopt_reviewed(store, job['id'], current['source_hash'], True)
     assert result['manifest'] == again['manifest']
