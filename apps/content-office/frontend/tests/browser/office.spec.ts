@@ -81,6 +81,27 @@ for (const width of [1440, 390]) {
   });
 }
 
+test("가져온 원문만 있는 작업도 원문을 보존하며 첫 파생 원고 생성을 시작할 수 있다", async ({page}) => {
+  const fixture = await harness(page);
+  const original = "사용자가 직접 제공한 원문과 할인 조건을 그대로 보존합니다. ".repeat(5);
+  fixture.replaceJob({...fixture.getJob(), source_hash:"owned-initial", state:"research_ready",
+    article:{...fixture.getJob().article, preserve_original:true, operator_source_text:original},
+    source_packet:{title:"사용자 원문", body:original, preserve_original:true,
+      quality:{status:"unverified", critical:true}}});
+  let drafts = 0;
+  await page.route("**/api/jobs/contract-test-job/draft", async route => {
+    expect(route.request().method()).toBe("POST"); drafts++;
+    await route.fulfill({status:202, contentType:"application/json", body:JSON.stringify({id:"first-derived",state:"queued"})});
+  });
+  await page.goto("/scripts/contract-test-job");
+  await expect(page.getByLabel("본문 · Markdown", {exact:true})).toHaveValue(original);
+  await page.getByRole("button", {name:"원고 생성 시작", exact:true}).click();
+  await page.getByRole("button", {name:"원고 생성 요청", exact:true}).click();
+  await expect.poll(()=>drafts).toBe(1);
+  expect(fixture.getJob().source_packet?.body).toBe(original);
+  expect(fixture.writes.filter(row=>row.path.includes("/reviews/"))).toEqual([]);
+});
+
 test("원고 시작 폼의 가져오기 실패는 입력을 보존하고 다시 시도할 수 있다", async ({ page }) => {
   const fixture = await harness(page, true);
   await page.route("**/api/owned-source/preview", route => route.fulfill({ status: 400, json: { detail: "공개 글을 확인할 수 없습니다. 직접 붙여넣어 주세요." } }));

@@ -42,6 +42,44 @@ class ExtractingProvider:
 TEXT = '첫번째 문단은 독립 질문과 조건을 설명하는 합성 시험 자료입니다. ' * 6 + '\n\n' + '두번째 문단은 후속 요청이 필요하다는 점을 설명하는 합성 시험 자료입니다. ' * 6
 
 
+def test_owned_text_without_public_url_has_hash_bound_private_provenance(tmp_path, monkeypatch):
+    from office.store import digest
+    monkeypatch.setattr('office.evidence.fetch_public', lambda *a, **k: pytest.fail('private original must never be fetched'))
+    report = collect_article_evidence({'id':'owned_test', 'title':'내 원문', 'url':'',
+        'source_kind':'owner_supplied', 'preserve_original':True, 'operator_source_text':TEXT}, ExtractingProvider(), tmp_path)
+    assert report['url'] == ''
+    assert all(e['source_kind'] == 'owner_supplied' and e['operator_source_hash'] == digest(TEXT)
+               and e['url'] == '' and not e['independent_source_checked'] for e in report['evidence'])
+
+
+def test_missing_url_without_owned_original_provenance_remains_blocked(tmp_path):
+    with pytest.raises(WorkflowError):
+        collect_article_evidence({'title':'없는 출처', 'url':'', 'operator_source_text':TEXT}, ExtractingProvider(), tmp_path)
+
+
+def test_owned_text_respects_the_intake_100_character_minimum(tmp_path):
+    class SameParagraph(ExtractingProvider):
+        def generate(self, *args, **kwargs):
+            result=super().generate(*args, **kwargs)
+            result['claims'][1]['paragraph']=1
+            return result
+    article={'title':'내 짧은 원문','url':'','source_kind':'owner_supplied',
+             'preserve_original':True,'operator_source_text':'가'*100}
+    assert collect_article_evidence(article, SameParagraph(), tmp_path)['evidence']
+    with pytest.raises(WorkflowError):
+        collect_article_evidence({**article,'operator_source_text':'가'*99}, SameParagraph(), tmp_path)
+
+
+def test_private_original_evidence_requires_matching_original_hash():
+    from office.editorial import deterministic_checks, INTEGRITY_ISSUES
+    from office.store import digest
+    packet={'title':'내 원문','body':TEXT,'preserve_original':True,'source_input_hash':digest(TEXT),
+        'evidence':[{'id':'E1','url':'','source_kind':'owner_supplied','operator_source_hash':digest(TEXT)}]}
+    assert deterministic_checks(packet)['passed']
+    packet['evidence'][0]['operator_source_hash']=digest('different original')
+    assert INTEGRITY_ISSUES[1] in deterministic_checks(packet)['blocking']
+
+
 def test_community_registration_date_is_not_sent_as_article_publication_date(tmp_path):
     class Capturing(ExtractingProvider):
         def generate(self, role, messages, schema, options=None):
