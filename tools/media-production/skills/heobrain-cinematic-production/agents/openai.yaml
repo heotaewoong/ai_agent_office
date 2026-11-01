@@ -1,0 +1,3 @@
+interface:
+  display_name: "HeoBrain 3D·모션 제작"
+  short_description: "Blender 장면과 Remotion 모션을 EC2 검토 파이프라인으로 제작·검증"
