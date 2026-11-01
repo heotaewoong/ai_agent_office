@@ -52,10 +52,10 @@ export function ArchitectureView() {
         <p>{data.doc.summary}</p>
         <div className="arch-intro-facts"><span>{stages.length}개 공정</span><span>{gates.length}개 사람 승인</span><span>선택 제작 · 완료 출력별 출고</span><span>실행과 안내를 구분</span></div>
         <nav className="arch-jump" aria-label="파이프라인 내용 바로가기">
-          <a href="#pipeline-flow">공정별 자세히 <span aria-hidden="true">↓</span></a>
-          <a href="#pipeline-branches">병렬·별도 흐름 <span aria-hidden="true">↓</span></a>
-          <a href="#pipeline-runtime">서버·연결 경계 <span aria-hidden="true">↓</span></a>
-          <a href="#pipeline-cost">비용·운영 기록 <span aria-hidden="true">↓</span></a>
+          <a href="#pipeline-flow-title">공정별 자세히 <span aria-hidden="true">↓</span></a>
+          <a href="#pipeline-branches-title">병렬·별도 흐름 <span aria-hidden="true">↓</span></a>
+          <a href="#pipeline-runtime-title">서버·연결 경계 <span aria-hidden="true">↓</span></a>
+          <a href="#pipeline-cost-title">비용·운영 기록 <span aria-hidden="true">↓</span></a>
         </nav>
         <p className="arch-freshness">정의 {data.doc.definition_version ?? "저장소 문서"} · 운영 기록 마지막 조회 {formatDate(loadedAt, true)} · 읽기 전용 안내</p>
       </section>
@@ -71,7 +71,7 @@ export function ArchitectureView() {
       </section>
 
       <section id="pipeline-flow" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-flow-title">
-        <div className="arch-section-heading"><span className="arch-index">02</span><div><h2 id="pipeline-flow-title">각 공정에서 무엇을 받고, 무엇을 남기나</h2><p>입력 → 처리 → 산출물 → 사람 확인을 같은 순서로 읽습니다.</p></div></div>
+        <div className="arch-section-heading"><span className="arch-index">02</span><div><h2 id="pipeline-flow-title" tabIndex={-1}>각 공정에서 무엇을 받고, 무엇을 남기나</h2><p>입력 → 처리 → 산출물 → 사람 확인을 같은 순서로 읽습니다.</p></div></div>
         <div className="arch-stage-grid">
           {stages.map(({ stage, gates: after }, i) => <article className="arch-process" id={`pipeline-stage-${i + 1}`} key={stage.id ?? i} tabIndex={-1} aria-labelledby={`pipeline-stage-title-${i + 1}`}>
             <header><span className="arch-step-index">{String(i + 1).padStart(2, "0")}</span><div><span className="arch-kicker">{stage.num}</span><h3 id={`pipeline-stage-title-${i + 1}`}>{stage.title}</h3></div></header>
@@ -87,7 +87,7 @@ export function ArchitectureView() {
       </section>
 
       {!!data.doc.lanes?.length && <section id="pipeline-branches" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-branches-title">
-        <div className="arch-section-heading"><span className="arch-index">03</span><div><h2 id="pipeline-branches-title">한 줄로 묶으면 안 되는 병렬·별도 흐름</h2><p>제작 분기, 상품 혜택, 동의·발송을 구분해야 선행조건과 실제 실행을 혼동하지 않습니다.</p></div></div>
+        <div className="arch-section-heading"><span className="arch-index">03</span><div><h2 id="pipeline-branches-title" tabIndex={-1}>한 줄로 묶으면 안 되는 병렬·별도 흐름</h2><p>제작 분기, 상품 혜택, 동의·발송을 구분해야 선행조건과 실제 실행을 혼동하지 않습니다.</p></div></div>
         <div className="arch-lanes">{data.doc.lanes.map((lane) => <article className="arch-lane" key={lane.id}>
           <div className="arch-lane-heading"><span className={`arch-pill ${lane.state}`}>{lane.label}</span><h3>{lane.title}</h3><p>{lane.phase}</p></div>
           <ol>{lane.steps.map((step, i) => <li key={step}><span>{String(i + 1).padStart(2, "0")}</span><p>{step}</p></li>)}</ol>
@@ -96,7 +96,7 @@ export function ArchitectureView() {
       </section>}
 
       <section id="pipeline-runtime" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-runtime-title">
-        <div className="arch-section-heading"><span className="arch-index">04</span><div><h2 id="pipeline-runtime-title">같은 서버 안에서도 실행 책임은 나뉩니다</h2><p>화면·API·작업자·저장소와, 외부 서비스의 실제 호출 경로를 분리해 봅니다.</p></div></div>
+        <div className="arch-section-heading"><span className="arch-index">04</span><div><h2 id="pipeline-runtime-title" tabIndex={-1}>같은 서버 안에서도 실행 책임은 나뉩니다</h2><p>화면·API·작업자·저장소와, 외부 서비스의 실제 호출 경로를 분리해 봅니다.</p></div></div>
         <RuntimeMap data={data} />
         <div className="arch-runtime-separate"><strong>같은 EC2의 다른 도구</strong><p>Hermes · n8n · magma 사이트가 같은 서버에 있어도 이 콘텐츠 앱의 작업 큐와 자동 연결된 것은 아닙니다. Hermes 비서팀의 업무 전달·결과 회수는 보류된 별도 작업입니다.</p></div>
       </section>
@@ -107,7 +107,7 @@ export function ArchitectureView() {
       </section>
 
       <section id="pipeline-cost" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-cost-title">
-        <div className="arch-section-heading"><span className="arch-index">06</span><div><h2 id="pipeline-cost-title">선택한 경로와 집계된 비용</h2><p>설정·호출 기록·키 존재는 서로 다른 정보입니다. 키가 있다고 실제 호출 성공으로 표시하지 않습니다.</p></div></div>
+        <div className="arch-section-heading"><span className="arch-index">06</span><div><h2 id="pipeline-cost-title" tabIndex={-1}>선택한 경로와 집계된 비용</h2><p>설정·호출 기록·키 존재는 서로 다른 정보입니다. 키가 있다고 실제 호출 성공으로 표시하지 않습니다.</p></div></div>
         <div className="arch-selected"><div><span>현재 글 모델</span><strong className="mono">{data.profiles.text}</strong></div><div><span>현재 이미지 프로필</span><strong>{imageRoute(data.profiles.image)}</strong><small className="mono">{data.profiles.image}</small></div><p>구독 경로와 API 경로의 비용은 다릅니다. 선택된 프로필과 호출 영수증을 확인하세요. 키·토큰 값은 표시하지 않습니다.</p></div>
         <div className="arch-table" role="region" aria-label="모델별 집계 비용 표 · 좁은 화면에서는 가로로 이동" tabIndex={0}><table>
           <caption>원고 모델 이벤트와 완료 이미지 영수증의 집계입니다. 음성·클립·청구서 전체의 완전한 합계가 아니며, 기록 없음은 무료라는 뜻이 아닙니다.</caption>
