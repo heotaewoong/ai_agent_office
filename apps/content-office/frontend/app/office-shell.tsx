@@ -379,10 +379,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
         openedNotice = `${reused ? "같은 뉴스의 기존 작업을 다시 열었습니다." : "뉴스 작업을 만들었습니다."} ${next?.reason ?? (states.some(item => item.state === "queued" || item.state === "running") ? "원고 생성·비평·평가를 자동 요청했습니다. 아래 진행 상태를 확인하세요." : "원고와 검수 결과는 현재 작업에서 확인하세요.")}`;
         const opened = result.jobs[0];
         if (!opened) throw new Error("열 작업을 확인하지 못했습니다. 선택한 뉴스는 유지했습니다.");
-        setDashboard(current => current ? {...current, jobs:includeOpenedJobs(current.jobs, result.jobs)} : current);
-        clearJobFilters();
-        selectJob(opened.id);
-        router.push(officeHref("studio", opened.id));
+        openCreatedJobs(result.jobs);
         setSelected([]);
       },
       "선택한 뉴스의 작업을 맨 위로 열었습니다. 같은 뉴스는 기존 작업을 이어갑니다. 원고 생성은 작업 시간을 연 뒤 시작하세요.",
@@ -393,6 +390,13 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const jobs = dashboard?.jobs ?? [];
   const visibleJobs = prioritizeActiveJob(filterJobs(jobs, jobQuery, jobStateFilter, jobOutputFilter), activeId);
   const clearJobFilters = () => { setJobQuery(""); setJobStateFilter("all"); setJobOutputFilter("all"); };
+  function openCreatedJobs(opened: Job[]) {
+    if (!opened.length) return;
+    setDashboard(current => current ? {...current, jobs:includeOpenedJobs(current.jobs, opened)} : current);
+    clearJobFilters();
+    selectJob(opened[0].id);
+    router.push(officeHref("studio", opened[0].id));
+  }
   const articles = dashboard?.articles ?? [];
   const visibleArticles = sortNews(filterNews(articles, segment), articleSort);
   const sources = dashboard?.source_registry ?? [];
@@ -630,7 +634,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               {view === "home" && <DecisionHome dashboard={dashboard} />}
-              <div hidden={view!=="plans"}><OwnedSourceIntake onCreated={(j)=>{selectJob(j.id);setView("studio");void loadDashboard(true);}} /></div>
+              <div hidden={view!=="plans"}><OwnedSourceIntake onCreated={(j)=>{openCreatedJobs([j]);void loadDashboard(true);}} /></div>
               {view === "plans" && <>
                   <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
@@ -638,8 +642,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                     onDraftChange={updateIdeaSourcesDraft}
                     refreshKey={ideaRefresh}
                     onSelected={(j) => {
-                      selectJob(j.id);
-                      setView("studio");
+                      openCreatedJobs([j]);
                       void loadDashboard(true);
                     }}
                   />
@@ -1674,7 +1677,7 @@ function Studio({
                   </button>
                   <button
                     className="button primary"
-                    disabled={locked || !passed || selectionCount === 0}
+                    disabled={locked || !passed || selectionCount === 0 || Boolean(requestBlockedReason)}
                     onClick={() => { setApprovalError(""); setApprovalVersion(job.source_hash); }}
                   >
                     <Icon name="check" size={17} />
@@ -1730,6 +1733,7 @@ function Studio({
                   disabled={
                     locked ||
                     !passed ||
+                    Boolean(requestBlockedReason) ||
                     !approvalIsCurrent(approvalVersion, job.source_hash)
                   }
                   onProduce={async (confirmPaid) => {
@@ -1792,7 +1796,7 @@ function Studio({
           )}
         </>
       )}
-      {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 원고 읽기·기획 편집·승인은 계속할 수 있습니다.</p>}
+      {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 원고 읽기·기획 편집·저장은 계속할 수 있습니다. 원고 승인과 자동 제작은 작업 시간을 연 뒤 함께 요청하세요. <Link href="/settings">작업 시간 열고 승인·자동 제작 계속하기</Link></p>}
       {sourceApproved(job.state) && (
         <p className="derived-note" role="status">
           <Icon name="check" size={14} />
