@@ -20,4 +20,6 @@ test('본인 메뉴의 프로필 링크만 계정 ID 증거로 인정',()=>{
  assert.equal(match('https://evil.example/in/taewoong-heo-323b34366/','in/taewoong-heo-323b34366','View profile'),false);
  assert.equal(match('/in/other/','in/taewoong-heo-323b34366','View other profile'),false);
  assert.equal(match('/in/taewoong-heo-323b34366/','in/taewoong-heo-323b34366','기사 본문에 등장한 프로필'),false);
+ assert.equal(match('/in/taewoong-heo-323b34366/','in/taewoong-heo-323b34366','허태웅님의 프로필 보기'),true);
+ assert.equal(safeButton('글 올리기'),true);
 });

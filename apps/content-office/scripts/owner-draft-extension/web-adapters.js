@@ -45,7 +45,7 @@
    }
    if(!['linkedin_personal','threads_main'].includes(item.channel_key))throw Error('Meta Business Suite의 실제 계정·초안 지원 확인이 필요합니다');
    const isLinked=item.channel_key==='linkedin_personal';
-   click(document,isLinked?['게시물 작성','Start a post']:['만들기','Create']);
+   click(document,isLinked?['게시물 작성','글 올리기','Start a post']:['만들기','Create']);
    const field=await wait(()=>{try{return editor();}catch{return null;}});
    if(message.kind==='verify-nonpublic'){
     if(field.innerText.replace(/\r/g,'').trim()!==item.text.replace(/\r/g,'').trim())throw Error('재열기 본문 불일치');
