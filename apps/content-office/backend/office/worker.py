@@ -64,6 +64,12 @@ def process_task(store, task):
         from .quiz import enqueue_missing_outputs
         queued_outputs = enqueue_missing_outputs(store, current)
         manifest = produce(store, job_id, voice_renderer=renderer, background_renderer=background, clip_renderer=clips)
+        if current.get('owner_draft_policy'):
+            from .owner_drafts import prepare
+            try:
+                prepare(store, job_id)
+            except WorkflowError as error:
+                store.event('owner_drafts_blocked', {'reason': str(error), 'public_sent': False}, job_id)
         return {"job_id": job_id, "manifest_hash": manifest["hash"], 'partial': any(status.get('state') != 'completed' for status in manifest.get('output_status', {}).values()), 'completed_outputs': manifest.get('completed_outputs'), 'queued_outputs': queued_outputs}
     if task["kind"] in ("quiz", "cards"):
         from .quiz import generate_quiz

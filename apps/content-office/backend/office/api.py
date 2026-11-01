@@ -133,6 +133,7 @@ class Review(BaseModel):
     confirm_paid_clips: bool = Field(default=False, strict=True)
     confirm_paid_thumbnails: bool = Field(default=False, strict=True)
     private_delivery_channel: Literal['youtube_main_ko','youtube_english'] | None = None
+    draft_targets: list[Literal['youtube_main_ko','youtube_english','instagram_main','instagram_english','threads_main','linkedin_personal','tistory_main','naver_blog_main']] | None = Field(default=None, max_length=8)
     outputs: list[Literal['blog', 'video', 'cards', 'pdf']] | None = None
 
 
@@ -619,7 +620,12 @@ def create_app(store: Store | None = None):
                     raise WorkflowError(estimate['label'] + '. 유료 영상 클립 비용을 화면에서 확인하세요')
                 production_options.update(paid_clips_confirmed=True, paid_clip_estimate={k: estimate[k] for k in ('clips','credits','reservation_krw','model')})
             contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None, thumbnail_artwork=thumbnails)['hash']
-        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract, production_options=production_options)
+        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract, production_options=production_options, draft_targets=review.draft_targets)
+
+    @app.get('/api/jobs/{job_id}/owner-drafts')
+    def owner_draft_status(job_id: str):
+        from .owner_drafts import view
+        return view(store, job_id)
 
     @app.put('/api/jobs/{job_id}/video-platforms')
     def choose_video_platforms(job_id: str, body: VideoPlatformsInput):

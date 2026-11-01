@@ -82,7 +82,7 @@ export function ChannelsPanel({ busy, action }: { busy: boolean; action: Action 
       {loadError && <p className="field-error">{loadError}</p>}
       <p className="settings-help">
         {oauth?.auth_location === "owner_pc" ? "현재는 본인 PC 전용 인증입니다. 로그인 정보는 Windows 계정으로 암호화해 PC에 보관하고, 서버에는 최근 연결 여부만 보냅니다. 연결 확인이 만료되면 PC 실행기를 다시 확인하세요. 서버 관리자가 로그인 정보를 등록하는 방식이 아닙니다." : "YouTube 연결은 채널 소유 계정으로 로그인해 서버의 분리된 비밀 파일에 토큰을 저장하는 방식입니다."}
-        {" "}YouTube 전송은 출고 승인② 뒤 비공개로만 진행합니다. 다른 플랫폼은 현재 채널별 파일 준비까지이며, 실제 웹 임시저장 실행기는 아직 연결되지 않았습니다.
+        {" "}기존 출고 전송은 승인② 뒤 YouTube 비공개로만 진행합니다. 원고 승인①에서 별도로 고른 초안은 Windows 확장 실행기로 전달하며, 웹 채널은 실제 계정의 저장·재열기 검증 후에만 자동 처리합니다. 로그인이나 파일 준비만으로 플랫폼 저장 완료가 되지 않습니다.
         {oauth?.redirect_uri && (
           <>
             {" "}Google Cloud OAuth 클라이언트의 승인된 리디렉션 URI: <code>{oauth.redirect_uri}</code>
