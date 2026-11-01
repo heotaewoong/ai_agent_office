@@ -865,3 +865,38 @@ def test_production_contract_only_keeps_public_fields_of_social_targets():
     assert production_contract(None, {"blog": True}, channel_registry=changed)["hash"] == contract["hash"]
     changed[0]["public_url"] = "https://www.threads.com/@other"
     assert production_contract(None, {"blog": True}, channel_registry=changed)["hash"] != contract["hash"]
+
+
+@requires_ffmpeg
+def test_failed_background_or_paid_clip_keeps_the_video_and_never_repeats_the_call(tmp_path):
+    """2026-11-02 staging run: one background failure (daily image limit) failed the whole video. A failed
+    background or generated clip now degrades that and later scenes to stills; the failing provider is not
+    called again in this production (no repeated paid attempts). Issues are recorded and shown."""
+    import shutil as sh
+    from PIL import Image
+    from office.media import command, produce
+    store, job_id = approved_job(tmp_path, blog=False)
+    background_calls, clip_calls = [], []
+
+    def flaky_background(scene_index, out_path):
+        background_calls.append(scene_index)
+        if scene_index == 1:
+            raise WorkflowError("Codex 구독 이미지는 하루 20장까지입니다")
+        Image.new("RGB", (64, 96), "#335577").save(out_path, "PNG")
+        return {"provider": "test-background", "model": "fake-image", "disclosure": "테스트 배경"}
+    flaky_background.cache_key = flaky_background.asset_cache_key = "flaky-background"
+
+    def failing_clip(scene_index, image_path, out_path, seconds=None):
+        clip_calls.append(scene_index)
+        raise WorkflowError("Runway 크레딧이 부족합니다(잔액 10, 필요 25). 유료 영상 호출을 하지 않았습니다")
+    failing_clip.cache_key = failing_clip.asset_cache_key = "failing-clip"
+    failing_clip.generated_scenes = [0, 1]
+    failing_clip.accepts_seconds = True
+    manifest = produce(store, job_id, voice_renderer=tone_renderer(), background_renderer=flaky_background, clip_renderer=failing_clip)
+    assert manifest["output_status"]["video"]["state"] == "completed"
+    assert background_calls == [0, 1]            # not called again after the failure
+    assert clip_calls == [0]                     # the paid clip provider is never retried in this production
+    media = manifest["media"]
+    assert media["background_issues"][0]["scene"] == 2 and "20장" in media["background_issues"][0]["reason"]
+    assert media["clip_issues"][0]["scene"] == 1 and "크레딧" in media["clip_issues"][0]["reason"]
+    assert any("정지 화면" in warning for warning in manifest["warnings"])
