@@ -49,7 +49,7 @@ export function PageOutline({ scope, curated = false }: { scope: string; curated
           panel.classList.add("outline-panel");
           panels.add(panel);
         }
-        return { id: node.id, title: node.dataset.outlineTitle || node.textContent!.trim().replace(/\s+/g, " ") };
+        return { id: node.id, title: node.dataset.outlineTitle || node.innerText.trim().replace(/\s+/g, " ") };
       });
       setEntries((previous) => JSON.stringify(previous) === JSON.stringify(next) ? previous : next);
       schedulePosition();
