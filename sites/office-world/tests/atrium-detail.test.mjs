@@ -66,3 +66,21 @@ test('invalid geometry fails closed and retains the existing building',async()=>
     f.pending[0](c);await flush();assert.equal(f.controller.status().phase,'failed');assert(f.stage.atriumArchitecture.meshes[0].isEnabled());assert(c.meshes.every(m=>m.isDisposed()));
   }finally{f.dispose();}
 });
+
+
+test('container joins the scene before parenting to external live rig nodes',async()=>{
+  const f=fixture();try{
+    f.controller.sync();await flush();
+    const c=await load(f.scene);let outsideParents=null,added=0;
+    const add=c.addAllToScene.bind(c);
+    c.addAllToScene=()=>{
+      const nodes=new Set([...c.meshes,...c.transformNodes]);
+      outsideParents=[...nodes].filter(n=>n.parent&&!nodes.has(n.parent)).map(n=>n.name);
+      added++;add();
+    };
+    f.pending[0](c);
+    await flush();assert.equal(f.controller.status().phase,'ready');
+    assert.equal(added,1);assert.deepEqual(outsideParents,[], 'Babylon validates the container hierarchy at attachment');
+    assert(c.meshes.every(m=>f.scene.meshes.includes(m)));
+  }finally{f.dispose();}
+});

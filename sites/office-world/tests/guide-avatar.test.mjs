@@ -64,3 +64,21 @@ test('a failed request preserves the default player instead of retrying forever'
 test('late loading after player disposal releases all imported meshes',async()=>{
   const f=fixture();try{f.space.view='walk';f.controller.sync();await flush();f.avatar.root.dispose();const c=await f.finish();assert(c.meshes.every(m=>m.isDisposed()));}finally{f.dispose();}
 });
+
+
+test('container joins the scene before parenting to external live rig nodes',async()=>{
+  const f=fixture();try{
+    f.space.view='walk';f.controller.sync();await flush();
+    const c=await B.SceneLoader.LoadAssetContainerAsync('','data:'+text,f.scene,null,'.babylon');let outsideParents=null,added=0;
+    const add=c.addAllToScene.bind(c);
+    c.addAllToScene=()=>{
+      const nodes=new Set([...c.meshes,...c.transformNodes]);
+      outsideParents=[...nodes].filter(n=>n.parent&&!nodes.has(n.parent)).map(n=>n.name);
+      added++;add();
+    };
+    f.pending[0].resolve(c);
+    await flush();assert.equal(f.controller.status().phase,'ready');
+    assert.equal(added,1);assert.deepEqual(outsideParents,[], 'Babylon validates the container hierarchy at attachment');
+    assert(c.meshes.every(m=>f.scene.meshes.includes(m)));
+  }finally{f.dispose();}
+});

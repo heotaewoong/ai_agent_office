@@ -17,12 +17,13 @@ export function createGuideAvatar({world,controls,space,quality,loadAsset}){
         parts.add(part);
       }
       if(meshes.length!==14||parts.size!==5||meshes.reduce((n,mesh)=>n+mesh.getTotalIndices()/3,0)!==3672)throw Error('Unexpected guide geometry');
+      // Validate the asset hierarchy before attaching it to the live rig.
+      value.addAllToScene();
       for(const mesh of avatar.root.getChildMeshes())if(mesh!==avatar.marker)originals.set(mesh,mesh.isVisible);
       for(const mesh of meshes){
         mesh.parent=avatar[mesh.metadata.rigPart];mesh.setEnabled(true);mesh.isPickable=false;mesh.checkCollisions=false;
         world.castShadow(mesh);world.receiveShadow(mesh);
       }
-      value.addAllToScene();
       for(const mesh of originals.keys())mesh.isVisible=false;
       phase='ready';
     }).catch(()=>{if(!disposed){container?.dispose();container=null;restore();phase='failed';}});

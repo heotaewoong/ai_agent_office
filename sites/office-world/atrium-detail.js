@@ -24,11 +24,12 @@ export function createAtriumDetail({ world, space, quality, loadAsset }) {
       container=value;
       const visible=value.meshes.filter(mesh=>mesh.getTotalVertices()>0);
       if(visible.length!==4||visible.reduce((n,mesh)=>n+mesh.getTotalIndices()/3,0)!==6204)throw Error('Unexpected atrium geometry');
+      // Add the self-contained asset before assigning its live stage parent.
+      value.addAllToScene();
       for(const mesh of value.meshes){
         mesh.setEnabled(false);mesh.isPickable=false;mesh.checkCollisions=false;
         if(!mesh.parent)mesh.parent=owner.node;
       }
-      value.addAllToScene();
       for(const mesh of value.meshes){
         mesh.computeWorldMatrix(true);mesh.freezeWorldMatrix();
         if(mesh.getTotalVertices()){world.castShadow(mesh);world.receiveShadow(mesh);}
