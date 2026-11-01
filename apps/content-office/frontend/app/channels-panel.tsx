@@ -77,11 +77,12 @@ export function ChannelsPanel({ busy, action }: { busy: boolean; action: Action 
     <section className="settings-card" aria-label="채널">
       <h2>채널</h2>
       <p className="settings-help">
-        오너가 준 공개 주소와 계정 ID만 적습니다. 주소 존재·소유권·발행 권한·실제 게시 성공은 각각 별개이며, 토큰은 서버 환경 파일이나 상태 폴더 밖 비밀 파일에만 있고 화면에 표시하거나 입력받지 않습니다. 발행 허용은 기본으로 꺼져 있습니다.
+        오너가 준 공개 주소와 계정 ID만 적습니다. 주소 등록·로그인 연결·파일 준비·플랫폼에 실제 저장된 상태는 각각 따로 확인합니다. 비밀번호와 토큰은 이 화면에서 입력받거나 표시하지 않습니다.
       </p>
       {loadError && <p className="field-error">{loadError}</p>}
       <p className="settings-help">
-        YouTube 채널은 &lsquo;YouTube 연결&rsquo;로 채널 소유 계정에 로그인하면 서버가 토큰을 상태 폴더 밖 비밀 파일에 저장합니다. 연결은 발행이 아니며 업로드는 출고 승인② 뒤 비공개로만 올라갑니다.
+        {oauth?.auth_location === "owner_pc" ? "현재는 본인 PC 전용 인증입니다. 로그인 정보는 Windows 계정으로 암호화해 PC에 보관하고, 서버에는 최근 연결 여부만 보냅니다. 연결 확인이 만료되면 PC 실행기를 다시 확인하세요. 서버 관리자가 로그인 정보를 등록하는 방식이 아닙니다." : "YouTube 연결은 채널 소유 계정으로 로그인해 서버의 분리된 비밀 파일에 토큰을 저장하는 방식입니다."}
+        {" "}YouTube 전송은 출고 승인② 뒤 비공개로만 진행합니다. 다른 플랫폼은 현재 채널별 파일 준비까지이며, 실제 웹 임시저장 실행기는 아직 연결되지 않았습니다.
         {oauth?.redirect_uri && (
           <>
             {" "}Google Cloud OAuth 클라이언트의 승인된 리디렉션 URI: <code>{oauth.redirect_uri}</code>

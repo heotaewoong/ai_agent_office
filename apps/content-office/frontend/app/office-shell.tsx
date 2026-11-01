@@ -45,7 +45,8 @@ import { PageOutline } from "./page-outline";
 import deliveryStyles from "./delivery-view.module.css";
 import { WorldView } from "./world-view";
 import { reuseUnchangedJob } from "../lib/job-snapshot";
-import { filterJobs, jobFilterStates } from "../lib/job-filters";
+import { filterJobs, jobFilterStates, includeOpenedJobs, prioritizeActiveJob } from "../lib/job-filters";
+import { validWindowMinutes } from "../lib/settings";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ThumbnailStudio } from "./thumbnail-studio";
@@ -132,7 +133,7 @@ function Empty({
         <Icon name={icon} size={28} />
       </span>
       <h3>{title}</h3>
-      <p>{children}</p>
+      <div className="empty-state-body">{children}</div>
     </div>
   );
 }
@@ -183,6 +184,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   }, [hasUnsavedDrafts]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [autoDraftNews, setAutoDraftNews] = useState(true);
   const [activeId, setActiveId] = useState("");
   const [job, setJob] = useState<Job | null>(null);
   const [busy, setBusy] = useState("");
@@ -364,20 +366,30 @@ export default function Office({ children }: { children: React.ReactNode }) {
   }
 
   async function createJobs() {
-    await action(
+    let openedNotice = "선택한 뉴스의 작업을 열었습니다.";
+    const ok = await action(
       "작업 만들기",
       async () => {
-        const result = await api.createJobs(selected);
-        selectJob(result.jobs[0]?.id || jobRefresh.current.activeId);
-        setView("studio");
+        const result = await api.createJobs(selected, autoDraftNews);
+        const reused = result.jobs.some(item => dashboard?.jobs.some(old => old.id === item.id));
+        const states = result.draft_requests ?? [];
+        const next = states.find(item => item.reason);
+        openedNotice = `${reused ? "같은 뉴스의 기존 작업을 다시 열었습니다." : "뉴스 작업을 만들었습니다."} ${next?.reason ?? (states.some(item => item.state === "queued" || item.state === "running") ? "원고 생성·비평·평가를 자동 요청했습니다. 아래 진행 상태를 확인하세요." : "원고와 검수 결과는 현재 작업에서 확인하세요.")}`;
+        const opened = result.jobs[0];
+        if (!opened) throw new Error("열 작업을 확인하지 못했습니다. 선택한 뉴스는 유지했습니다.");
+        setDashboard(current => current ? {...current, jobs:includeOpenedJobs(current.jobs, result.jobs)} : current);
+        clearJobFilters();
+        selectJob(opened.id);
+        router.push(officeHref("studio", opened.id));
         setSelected([]);
       },
-      "작업을 만들었습니다. 기사별 근거를 확인하고 원고 생성을 시작하세요.",
+      "선택한 뉴스의 작업을 맨 위로 열었습니다. 같은 뉴스는 기존 작업을 이어갑니다. 원고 생성은 작업 시간을 연 뒤 시작하세요.",
     );
+    if (ok === true) setNotice(openedNotice);
   }
 
   const jobs = dashboard?.jobs ?? [];
-  const visibleJobs = filterJobs(jobs, jobQuery, jobStateFilter, jobOutputFilter);
+  const visibleJobs = prioritizeActiveJob(filterJobs(jobs, jobQuery, jobStateFilter, jobOutputFilter), activeId);
   const clearJobFilters = () => { setJobQuery(""); setJobStateFilter("all"); setJobOutputFilter("all"); };
   const articles = dashboard?.articles ?? [];
   const visibleArticles = sortNews(filterNews(articles, segment), articleSort);
@@ -748,6 +760,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         </p>
                       </div>
                     </div>
+                    <label className="news-auto-draft"><input aria-label="뉴스 원고 자동 생성" type="checkbox" checked={autoDraftNews} disabled={Boolean(busy) || !connected} onChange={event => setAutoDraftNews(event.target.checked)} />원고 자동 생성·검수<span>작업 시간이 열려 있을 때 실행 · 기존 원고는 보존</span></label>
                     <button
                       className="button primary"
                       disabled={selected.length === 0 || !!busy || !connected}
@@ -799,6 +812,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         <button
                           key={item.id}
                           className={`job-item ${item.id === activeId ? "active" : ""}`}
+                          aria-current={item.id === activeId ? "page" : undefined}
                           onClick={() => { selectJob(item.id); router.push(officeHref(view === "delivery" ? "delivery" : "studio", item.id)); }}
                         >
                           <Badge state={item.state} />
@@ -835,6 +849,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         key={job.id}
                         job={job}
                         globalCap={dashboard.budget.cap_krw}
+                        remainingBudget={dashboard.budget.remaining_krw}
                         model={dashboard.provider?.model}
                         requestBlockedReason={requestBlockedReason}
                         intake={intakeDrafts[job.id]}
@@ -1150,6 +1165,7 @@ function DraftTaskStatus({ job }: { job: Job }) {
 function Studio({
   job,
   globalCap,
+  remainingBudget,
   model,
   requestBlockedReason,
   intake,
@@ -1167,6 +1183,7 @@ function Studio({
 }: {
   job: Job;
   globalCap: number;
+  remainingBudget?: number;
   model?: string;
   requestBlockedReason?: string;
   intake?: IntakeDraft;
@@ -1198,6 +1215,8 @@ function Studio({
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
   const [approvalError, setApprovalError] = useState("");
+  const [draftStartOpen, setDraftStartOpen] = useState(false);
+  const [draftWindowMinutes, setDraftWindowMinutes] = useState("30");
   const [platformsDirty, setPlatformsDirty] = useState(false);
   const packagingPanel = useRef<HTMLDivElement>(null);
   const stale = baseHash !== job.source_hash && dirty;
@@ -1366,22 +1385,30 @@ function Studio({
         {editorTab === "write" ? (
           !sourceReady ? (
             <Empty title="근거에서 첫 원고를 시작하세요" icon="pen">
-              원고 생성 후 Critique와 Eval이 독립적으로 검수합니다. 검수 결과가
-              오기 전에는 승인할 수 없어요.
+              뉴스 원문을 다시 붙여 넣지 않아도 근거에서 원고를 자동 생성하고 비평·평가·수정을 진행합니다.
+              검수가 끝나면 직접 원고 승인①을 하세요. 이후 선택한 글·영상 제작이 자동으로 이어집니다.
               <button
                 className="button primary"
-                disabled={locked || Boolean(requestBlockedReason) || packagingRequired(job)}
-                onClick={() =>
-                  void action(
-                    "원고 생성",
-                    () => api.draft(job.id),
-                    "원고 생성 작업을 요청했습니다. 저장된 진행 기록이 곧 갱신됩니다.",
-                  )
-                }
+                disabled={locked || packagingRequired(job)}
+                onClick={() => setDraftStartOpen(true)}
               >
                 원고 생성 시작
                 <Icon name="arrow" size={17} />
               </button>
+              {draftStartOpen && <section className="confirm-panel draft-start-confirm" aria-label="원고 자동 생성 실행 확인">
+                <h3>원고 생성·검수를 자동으로 시작할까요?</h3>
+                <p>현재 글 모델: {model || "제작 설정에서 선택한 모델"}. 새 원고만 만들며 기존 원고 승인·출고 승인·공개 발행을 대신하지 않습니다.</p>
+                <p>전체 잔여 예산 {formatMoney(remainingBudget ?? globalCap)}원 안에서 실행합니다. 기존 전체·작업별 비용 상한과 선택한 모델을 유지합니다.</p>
+                {requestBlockedReason && <label>허용할 작업 시간(분)<input type="number" min="1" max="360" value={draftWindowMinutes} disabled={locked} onChange={event => setDraftWindowMinutes(event.target.value)} /></label>}
+                <div className="action-row"><button type="button" className="button primary" disabled={locked || (Boolean(requestBlockedReason) && validWindowMinutes(draftWindowMinutes) == null)} onClick={async () => {
+                  const ok = await action("원고 자동 생성", async () => {
+                    if (requestBlockedReason) await api.startWindow(validWindowMinutes(draftWindowMinutes)!);
+                    await api.draft(job.id);
+                  }, "원고 자동 생성·비평·평가를 요청했습니다. 진행이 끝나면 현재 원고를 직접 승인①해 주세요.");
+                  if (ok === true) setDraftStartOpen(false);
+                }}>{requestBlockedReason ? "작업 시간 열고 원고 생성" : "원고 생성 요청"}</button><button type="button" className="button secondary" disabled={locked} onClick={() => setDraftStartOpen(false)}>취소</button></div>
+              </section>}
+              {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} <Link href="/settings">작업 시간 열고 계속하기 →</Link></p>}
               <DraftTaskStatus job={job} />
               {packagingRequired(job) && (
                 <p className="muted">패키지(제목·썸네일·훅)를 먼저 확정하세요.</p>

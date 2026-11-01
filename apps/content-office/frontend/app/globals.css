@@ -1126,7 +1126,7 @@ h1 {
   margin-bottom: 10px;
   letter-spacing: -0.6px;
 }
-.empty-state p {
+.empty-state p, .empty-state-body {
   max-width: 510px;
   font-size: 12px;
   color: #5e6853;
@@ -2758,7 +2758,7 @@ td a {
   .empty-state h3 {
     font-size: 15px;
   }
-  .empty-state p {
+  .empty-state p, .empty-state-body {
     font-size: 11px;
   }
   .feed-panel,
@@ -4497,3 +4497,11 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .news-order { display:flex; align-items:center; gap:10px; color:#294c3b; font-size:14px; font-weight:650; }
 .news-order select { min-height:44px; padding:10px 36px 10px 14px; border:1px solid #aebfac; border-radius:9px; background:#fffefa; color:#294c3b; font:inherit; }
 .news-order select:focus-visible { outline:3px solid #497056; outline-offset:3px; }
+
+.news-auto-draft { display:grid; grid-template-columns:20px minmax(0,1fr); gap:4px 8px; max-width:330px; font-size:14px; color:#294c3b; line-height:1.6; }
+.news-auto-draft input { margin-top:4px; }
+.news-auto-draft span { grid-column:2; color:#5b6b5a; font-size:12px; }
+.draft-start-confirm label { display:grid; gap:8px; margin-block:14px; }
+.draft-start-confirm input { min-height:44px; max-width:160px; padding:10px; font:inherit; }
+
+.draft-start-confirm { text-align:left; margin-block:16px; }

@@ -17,3 +17,14 @@ test('실시간 갱신으로 마지막 해당 작업의 상태가 바뀌어도 �
   assert.deepEqual(jobFilterStates([{id:'a',title:'작업',state:'source_review'}],'failed'),['failed','source_review']);
   assert.deepEqual(jobFilterStates([], 'failed'),['failed']);
 });
+
+import { includeOpenedJobs, prioritizeActiveJob } from '../lib/job-filters.ts';
+test('뉴스에서 다시 연 오래된 작업은 현재 작업으로 맨 위에 표시하고 원본 목록을 보존한다',()=>{
+ const rows=[...jobs],pinned=prioritizeActiveJob(rows,'old');
+ assert.deepEqual(pinned.map(x=>x.id),['old','one','two']);assert.deepEqual(rows,jobs);
+});
+test('생성 응답의 작업은 즉시 목록에 반영하고 같은 ID를 중복 표시하지 않는다',()=>{
+ const opened:any={id:'old',title:'같은 뉴스의 기존 작업',state:'research_ready',selections:{blog:true,video:true,cards:false},source_packet:null};
+ const merged=includeOpenedJobs(jobs,[opened]);assert.deepEqual(merged.map(x=>x.id),['old','one','two']);assert.deepEqual(merged[0].output_kinds,['blog','video']);
+ assert(!('source_packet' in merged[0]));assert.equal(jobs[2].title,'이전 작업');
+});

@@ -116,6 +116,7 @@ def _job_summary(job, *, compact=False):
 
 class JobSelection(BaseModel):
     article_ids: list[str] = Field(min_length=1, max_length=3)
+    start_draft: bool = Field(default=False, strict=True)
 
 
 class SourceEdit(BaseModel):
@@ -461,7 +462,25 @@ def create_app(store: Store | None = None):
         active_ids = set(store.setting("feed_report", {}).get("active_article_ids", eligible_ids))
         if any(article["id"] not in eligible_ids & active_ids for article in articles):
             raise WorkflowError("현재 최근 기사 후보가 아닙니다. RSS를 새로 확인하고 선택하세요")
-        return {"jobs": [store.create_job(article) for article in articles]}
+        jobs = [store.create_job(article) for article in articles]
+        requests = []
+        if selection.start_draft:
+            window = store.setting("work_window", {})
+            allowed = window.get("status") == "open" and bool(window.get("authorized_end")) and window_open(store) and window.get("authorization_source") != "scheduled_daily_collect"
+            for job in jobs:
+                if job.get("source_hash") or job.get("source_packet"):
+                    requests.append({"job_id": job["id"], "state": "existing_source", "reason": "기존 원고를 보존했습니다. 현재 원고를 검토하거나 작업실에서 재생성을 요청하세요"})
+                elif not allowed:
+                    requests.append({"job_id": job["id"], "state": "needs_window", "reason": "원고 제작용 작업 시간을 열어 주세요. 수집 전용 예약은 원고를 생성하지 않습니다"})
+                else:
+                    try:
+                        require_packaging(job)
+                    except WorkflowError as error:
+                        requests.append({"job_id": job["id"], "state": "needs_packaging", "reason": str(error)})
+                        continue
+                    task = store.enqueue("draft", {"job_id": job["id"], "source_hash": None}, key=f"draft:{job['id']}:initial")
+                    requests.append({"job_id": job["id"], "state": task["state"], "task_id": task["id"]})
+        return {"jobs": jobs, "draft_requests": requests}
 
     @app.get("/api/jobs/summaries")
     def job_summaries(limit: int = Query(80, ge=1, le=80)):

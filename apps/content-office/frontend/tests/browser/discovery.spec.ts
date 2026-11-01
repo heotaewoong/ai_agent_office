@@ -63,3 +63,44 @@ test('뉴스 점수 정렬은 분류와 기사 선택을 보존하고 API를 쓰
  await expect(page.getByRole('checkbox',{name:'후보 low 선택',exact:true})).toBeChecked();
  expect(writes).toEqual([]);
 });
+
+async function newsJobHarness(page:Page) {
+ const article={id:'news-one',title:'선택한 뉴스',url:'https://example.com/news',feed_name:'검사 출처',score:85,segment:'ai',published_at:'2026-11-01T00:00:00Z'};
+ const old={id:'job-existing-news',title:'같은 뉴스의 오래된 작업',state:'research_ready',article,selections:{blog:true,video:true,pdf:false,cards:false},source_packet:null,source_hash:null,tasks:[],events:[],drafts:[]};
+ const recent={...old,id:'job-recent',title:'더 최근 작업',article:{...article,id:'other'}};
+ let opened=false;const writes:{path:string;body:any}[]=[];
+ await page.route('**/api/**',async route=>{
+  const req=route.request(),path=new URL(req.url()).pathname;let body:any={};
+  if(req.method()!=='GET')writes.push({path,body:req.postDataJSON()});
+  if(path==='/api/session')body={csrf:'synthetic-token'};
+  else if(path==='/api/dashboard')body={articles:[article],jobs:[recent,old],feeds:[],agents:[],tasks:[],events:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:opened?'open':'closed',authorized_end:opened?new Date(Date.now()+3600000).toISOString():'2026-10-01T00:00:00Z'},provider:{model:'synthetic',configured:false},knowledge:{}};
+  else if(path==='/api/jobs' && req.method()==='POST')body={jobs:[old],draft_requests:[{job_id:old.id,state:'needs_window',reason:'원고 제작용 작업 시간을 열어 주세요'}]};
+  else if(path===`/api/jobs/${old.id}`)body=old;
+  else if(path==='/api/session/window'){opened=true;body={work_window:{status:'open'},services:{started:[],running:[],note:'synthetic'}};}
+  else if(path===`/api/jobs/${old.id}/draft`)body={id:'task-synthetic',kind:'draft',state:'queued'};
+  else if(path==='/api/jobs/summaries')body={jobs:[recent,old]};
+  await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+ });
+ return {writes,old};
+}
+
+test('뉴스 작업 재열기는 해당 ID로 이동하고 오래된 작업도 목록 맨 위에 표시한다',async({page})=>{
+ const {writes,old}=await newsJobHarness(page);await page.goto('/news?seg=all');
+ await page.getByRole('checkbox',{name:'선택한 뉴스 선택',exact:true}).check();
+ await page.getByRole('button',{name:'콘텐츠 작업 만들기',exact:true}).click();
+ await expect(page).toHaveURL(`/scripts/${old.id}`);
+ await expect(page.locator('.job-list .job-item').first()).toHaveAttribute('aria-current','page');
+ await expect(page.locator('.job-list .job-item').first()).toContainText(old.title);
+ await expect(page.getByRole('button',{name:'원고 생성 시작',exact:true})).toBeEnabled();
+ expect(writes).toEqual([{path:'/api/jobs',body:{article_ids:['news-one'],start_draft:true}}]);
+});
+
+test('닫힌 작업 시간은 실행 확인 후에만 열고 원고를 요청하며 승인·제작을 자동 실행하지 않는다',async({page})=>{
+ const {writes,old}=await newsJobHarness(page);await page.goto(`/scripts/${old.id}`);
+ await page.getByRole('button',{name:'원고 생성 시작',exact:true}).click();
+ const confirm=page.getByRole('region',{name:'원고 자동 생성 실행 확인'});await expect(confirm).toBeVisible();
+ expect(writes).toEqual([]);
+ await confirm.getByRole('button',{name:'작업 시간 열고 원고 생성',exact:true}).click();
+ await expect.poll(()=>writes.map(row=>row.path)).toEqual(['/api/session/window',`/api/jobs/${old.id}/draft`]);
+ expect(writes[0].body).toEqual({minutes:30});
+});

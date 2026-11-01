@@ -185,8 +185,8 @@ export const api = {
   setJobBudget: (id: string, capKrw: number, expectedHash: string) =>
     request<JobBudget>(`/jobs/${encodeURIComponent(id)}/budget`, "PUT", { cap_krw: capKrw, expected_hash: expectedHash }),
   refresh: () => request("/refresh", "POST", {}),
-  createJobs: (ids: string[]) =>
-    request<{ jobs: Job[] }>("/jobs", "POST", { article_ids: ids }),
+  createJobs: (ids: string[], startDraft = false) =>
+    request<{ jobs: Job[]; draft_requests?: { job_id:string; state:string; reason?:string }[] }>("/jobs", "POST", { article_ids: ids, ...(startDraft ? {start_draft:true} : {}) }),
   draft: (id: string) =>
     request(`/jobs/${encodeURIComponent(id)}/draft`, "POST", {}),
   evaluate: (id: string) =>

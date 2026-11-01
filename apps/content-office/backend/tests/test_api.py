@@ -796,3 +796,51 @@ def test_compact_dashboard_exposes_only_explicit_output_choices(context):
     assert response.json()["jobs"][0]["output_kinds"] == ["blog", "cards"]
     assert "PRIVATE_BAD_SELECTION" not in response.text
     assert store.job(job["id"]) == before
+
+def test_news_creation_can_queue_initial_draft_once_without_manufacturing_approval(context):
+    store, client, headers = context
+    store.set_setting('work_window', {'status':'open','authorized_end':(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat()})
+    first=client.post('/api/jobs',json={'article_ids':['one'],'start_draft':True},headers=headers)
+    assert first.status_code==200
+    job=first.json()['jobs'][0]
+    assert first.json()['draft_requests'][0]['state']=='queued'
+    second=client.post('/api/jobs',json={'article_ids':['one'],'start_draft':True},headers=headers)
+    assert second.json()['jobs'][0]['id']==job['id']
+    assert len([t for t in store.tasks(job['id']) if t['kind']=='draft'])==1
+    assert store.job(job['id'])['source_approval'] is None
+    assert store.job(job['id'])['source_packet'] is None
+
+
+def test_news_creation_keeps_job_visible_when_window_is_closed(context):
+    store, client, headers = context
+    store.set_setting('work_window', {'status':'closed'})
+    response=client.post('/api/jobs',json={'article_ids':['one'],'start_draft':True},headers=headers)
+    assert response.status_code==200
+    data=response.json();assert data['draft_requests'][0]['state']=='needs_window'
+    assert data['jobs'][0]['id'] in {j['id'] for j in store.jobs()}
+    assert not store.tasks(data['jobs'][0]['id'])
+
+@pytest.mark.parametrize('window', [{}, {'status':'open','authorized_end':(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat(),'authorization_source':'scheduled_daily_collect'}])
+def test_news_auto_draft_needs_explicit_production_window(context,window):
+    store,client,headers=context
+    store.set_setting('work_window',window)
+    data=client.post('/api/jobs',json={'article_ids':['one'],'start_draft':True},headers=headers).json()
+    assert data['draft_requests'][0]['state']=='needs_window'
+    assert not store.tasks(data['jobs'][0]['id'])
+
+
+def test_news_auto_draft_preserves_existing_manuscript(context):
+    store,client,headers=context
+    job=store.create_job(store.article('one'))
+    before=store.update_job(job['id'],source_hash='a'*64,source_packet={'body':'원고 보존'},state='source_review')
+    data=client.post('/api/jobs',json={'article_ids':['one'],'start_draft':True},headers=headers).json()
+    assert data['draft_requests'][0]['state']=='existing_source'
+    assert store.job(job['id'])==before
+    assert not store.tasks(job['id'])
+
+
+def test_news_auto_draft_flag_rejects_strings(context):
+    store,client,headers=context
+    response=client.post('/api/jobs',json={'article_ids':['one'],'start_draft':'true'},headers=headers)
+    assert response.status_code==422
+    assert not store.jobs()
