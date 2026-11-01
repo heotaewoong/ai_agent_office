@@ -25,6 +25,13 @@ def row_for(message):
     return remote('v=' + spec + '\nprint(json.dumps(d.claimed(store,v["id"],v["claim_id"])))\n')
 
 
+def youtube_metadata_matches(actual, expected):
+    # YouTube drops terminal line breaks; inner paragraphs and spaces must still match.
+    return (actual.get('title') == expected.get('title')
+            and isinstance(actual.get('description'), str)
+            and actual['description'].rstrip('\r\n') == expected['description'].rstrip('\r\n'))
+
+
 def handle(message):
     if not isinstance(message, dict) or set(message) - {'command','id','claim_id','proof','file_name','offset'}:
         raise agent.OwnerError('지원하지 않는 PC 요청입니다')
@@ -83,7 +90,7 @@ def handle(message):
     _, _, checked = agent.request(agent.VIDEO_URL + '?part=snippet,status&id=' + result['external_id'], headers={'Authorization':'Bearer ' + token})
     actual = checked.get('items', [])
     expected = agent.metadata(packet)
-    if len(actual) != 1 or actual[0].get('status', {}).get('privacyStatus') != 'private' or any(actual[0].get('snippet', {}).get(k) != v for k,v in expected['snippet'].items()):
+    if len(actual) != 1 or actual[0].get('status', {}).get('privacyStatus') != 'private' or not youtube_metadata_matches(actual[0].get('snippet', {}), expected['snippet']):
         raise agent.OwnerError('플랫폼 제목·본문·비공개 상태를 재확인하지 못했습니다')
     proof = {'state':'platform_private','claim_id':row['claim_id'],'content_hash':row['content_hash'],
              'account_id':row['account_id'],'external_id':result['external_id']}
