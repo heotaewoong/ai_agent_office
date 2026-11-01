@@ -18,3 +18,5 @@ test('explicit request binds current version and displayed account; repeat is bl
 test('switching to unregistered TikTok resets transfer to local mode',()=>{const h=setup();try{h.render().filter(x=>x.type==='select')[0].props.onChange({target:{value:'tiktok'}});const s=h.render().filter(x=>x.type==='select');assert.equal(s[2].props.value,'office');assert.equal(s[1].props.disabled,true);assert.equal(h.calls.length,0);}finally{h.cleanup();}});
 
 test('each destination control has a distinct explicit label',()=>{const h=setup();try{const n=h.render();const selects=n.filter(x=>x.type==='select');for(const select of selects){assert.ok(select.props.id);assert.equal(n.filter(x=>x.type==='label'&&x.props.htmlFor===select.props.id).length,1);}}finally{h.cleanup();}});
+
+test('destination controls preserve readable mobile touch targets',()=>{const h=setup();try{for(const control of h.render().filter(x=>x.type==='select')){assert.ok(control.props.style?.minHeight>=44);assert.ok(control.props.style?.fontSize>=16);assert.equal(control.props.style?.width,'100%');}}finally{h.cleanup();}});
