@@ -77,6 +77,23 @@ def _save(db, rows):
     db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', (SETTING, canonical(rows)))
 
 
+def _instagram_release(job, row):
+    if row['target']['platform'] != 'instagram':
+        return
+    release = job.get('release_approval') or {}
+    media = 'video' if any(f['name'] == 'short.mp4' for f in row['files']) else 'cards'
+    if (release.get('decision') != 'approved' or release.get('version') != row['manifest_hash']
+            or not {'blog', media}.issubset(release.get('outputs', []))):
+        raise WorkflowError('Instagram은 현재 블로그·미디어의 출고 승인② 후에만 전달합니다')
+
+
+def _delivery_key(row):
+    # A different package/thumbnail must not resend unchanged platform content.
+    content = {k: row[k] for k in ('job_id', 'source_hash', 'channel_key', 'account_id', 'target', 'visibility', 'title', 'text')}
+    content['files'] = sorted((f['name'], f['sha256'], f.get('size', f.get('bytes'))) for f in row['files'])
+    return digest(content)
+
+
 def prepare(store, jid, *, channel_keys=None):
     if not (store.job(jid).get('owner_draft_policy') or {}).get('channels'):
         return []
@@ -119,7 +136,8 @@ def prepare(store, jid, *, channel_keys=None):
                    'target': target, 'visibility': 'private' if video else 'draft'}
         checksum = digest(content)
         result.append({**content, 'id': 'od_' + checksum[:24], 'job_id': jid, 'content_hash': checksum,
-                       'state': 'blocked' if missing else 'pending',
+                       **({'office_hold_policy': True} if target['platform'] == 'instagram' else {}),
+                       'state': 'blocked' if missing else 'office_held' if target['platform'] == 'instagram' else 'pending',
                        'reason': '필요한 제작 파일이 없습니다' if missing else None, 'created_at': now()})
     with store.connection(transaction=True) as db:
         current = store._job(db, jid)
@@ -127,7 +145,24 @@ def prepare(store, jid, *, channel_keys=None):
             raise WorkflowError('초안 준비 중 원고·제작물·선택이 변경됐습니다')
         rows = _ledger(db)
         for item in result:
+            if item['id'] not in rows and item['state'] in ('pending', 'office_held'):
+                previous = next((r for r in rows.values()
+                                 if r['state'] in ('platform_private', 'platform_draft')
+                                 and r.get('external_id') and r.get('verified_at')
+                                 and _delivery_key(r) == _delivery_key(item)), None)
+                if previous:
+                    item.update(state=previous['state'], external_id=previous['external_id'],
+                                verified_at=previous['verified_at'], reused_from=previous['id'],
+                                reason='동일 계정·문구·파일의 기존 저장 영수증 재사용 · 재전송 없음')
             rows.setdefault(item['id'], item)
+            old = rows[item['id']]
+            if item['state'] == 'office_held' and old['state'] in ('pending', 'blocked') and not old.get('office_hold_policy'):
+                # Keep the previous attempt auditable, and invalidate its old PC claim.
+                old['previous_attempt'] = {k: old[k] for k in ('state', 'reason', 'claim_id', 'claimed_at', 'claimed_by', 'verified_at') if k in old}
+                for field in ('claim_id', 'claimed_at', 'claimed_by', 'verified_at'):
+                    old.pop(field, None)
+                old.update(state='office_held', reason=None, held_at=now(), office_hold_policy=True)
+                store._event(db, 'instagram_held_in_office', {'id': item['id'], 'public_sent': False}, jid)
         _save(db, rows)
         store._event(db, 'owner_drafts_prepared', {'ids': [r['id'] for r in result], 'public_sent': False}, jid)
         return [rows[r['id']] for r in result]
@@ -145,7 +180,19 @@ def _current(store, row):
 def view(store, jid):
     rows = store.setting(SETTING, {})
     job = store.job(jid)
-    return {'policy': job.get('owner_draft_policy'), 'items': [r for r in rows.values() if r['job_id'] == jid and r.get('source_hash') == job.get('source_hash') and r.get('manifest_hash') == (job.get('manifest') or {}).get('hash')],
+    items = []
+    for row in rows.values():
+        if row['job_id'] != jid or row.get('source_hash') != job.get('source_hash') or row.get('manifest_hash') != (job.get('manifest') or {}).get('hash'):
+            continue
+        item = dict(row)
+        if row['target']['platform'] == 'instagram' and row['state'] in ('pending', 'office_held'):
+            try:
+                _instagram_release(job, row)
+                item.update(state='pending', reason='출고 승인② 확인 · 비공개 전달만 허용, 플랫폼 초안 미지원 시 차단')
+            except WorkflowError as error:
+                item.update(state='office_held', reason=str(error))
+        items.append(item)
+    return {'policy': job.get('owner_draft_policy'), 'items': items,
             'note': '플랫폼 비공개·임시저장만 허용합니다. 공개·예약 발행과 출고 승인②를 실행하지 않습니다'}
 
 
@@ -155,11 +202,12 @@ def pending(store):
         return []
     result = []
     for row in store.setting(SETTING, {}).values():
-        if row['state'] != 'pending':
+        if row['state'] not in ('pending', 'office_held'):
             continue
         try:
-            _current(store, row)
-            result.append({**row, 'authorized_end': window['authorized_end']})
+            job = _current(store, row)
+            _instagram_release(job, row)
+            result.append({**row, 'state': 'pending', 'authorized_end': window['authorized_end']})
         except WorkflowError:
             continue
     return result
@@ -172,11 +220,12 @@ def claim(store, rid, actor):
     if not row:
         raise WorkflowError('초안 전달을 찾을 수 없습니다')
     checked_job = _current(store, row)
+    _instagram_release(checked_job, row)
     with store.connection(transaction=True) as db:
         rows = _ledger(db)
         current = rows.get(rid)
         job = store._job(db, row['job_id'])
-        if current != row or current['state'] != 'pending' or any(job.get(k) != checked_job.get(k) for k in ('source_hash', 'manifest', 'source_approval', 'owner_draft_policy')):
+        if current != row or current['state'] not in ('pending', 'office_held') or any(job.get(k) != checked_job.get(k) for k in ('source_hash', 'manifest', 'source_approval', 'owner_draft_policy', 'release_approval')):
             raise WorkflowError('이미 처리 중이거나 초안 판본이 변경됐습니다')
         current.update(state='claimed', claim_id=identifier('claim'), claimed_at=now(), claimed_by=actor)
         _save(db, rows)
@@ -190,7 +239,7 @@ def receipt(store, rid, proof):
     row = store.setting(SETTING, {}).get(rid)
     if not row:
         raise WorkflowError('초안 전달을 찾을 수 없습니다')
-    _current(store, row)
+    _instagram_release(_current(store, row), row)
     if any(proof.get(k) != row.get(k) for k in ('claim_id', 'content_hash', 'account_id')):
         raise WorkflowError('초안 결과의 본문·계정·처리 키가 다릅니다')
     expected = 'platform_private' if row['visibility'] == 'private' else 'platform_draft'
@@ -200,6 +249,7 @@ def receipt(store, rid, proof):
         rows = _ledger(db)
         if rows.get(rid) != row or row['state'] != 'claimed':
             raise WorkflowError('현재 처리 중인 초안 결과가 아닙니다')
+        _instagram_release(store._job(db, row['job_id']), row)
         row.update(state=proof['state'], external_id=proof.get('external_id'), reason=str(proof.get('reason', ''))[:200], verified_at=now())
         rows[rid] = row
         _save(db, rows)
@@ -213,7 +263,7 @@ def claimed(store, rid, claim_id):
     row = store.setting(SETTING, {}).get(rid)
     if not row or row['state'] != 'claimed' or row.get('claim_id') != claim_id:
         raise WorkflowError('현재 PC가 처리 중인 초안이 아닙니다')
-    _current(store, row)
+    _instagram_release(_current(store, row), row)
     return {**row, 'authorized_end': store.setting('work_window', {})['authorized_end']}
 
 

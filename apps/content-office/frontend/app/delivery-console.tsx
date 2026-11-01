@@ -8,7 +8,7 @@ import {ChannelHandoffPanel,YoutubePanel} from './youtube-panel';
 
 type ConsoleAction=Parameters<typeof YoutubePanel>[0]["action"];
 type DraftItem={id:string;channel_key:string;state:string;reason?:string};
-const draftLabels:Record<string,string>={pending:'PC 처리 대기',claimed:'처리 중 · 저장 확인 전',platform_draft:'실제 플랫폼 임시저장 확인',platform_private:'실제 비공개 저장 확인',blocked:'차단',unknown:'결과 불명 · 자동 재전송 금지'};
+const draftLabels:Record<string,string>={office_held:'오피스 게시 대기 · 플랫폼 저장 전',pending:'PC 처리 대기',claimed:'처리 중 · 저장 확인 전',platform_draft:'실제 플랫폼 임시저장 확인',platform_private:'실제 비공개 저장 확인',blocked:'차단',unknown:'결과 불명 · 자동 재전송 금지'};
 export function DeliveryConsole({job,busy,action,youtubeConfigured,requestBlockedReason}:{job:Job;busy:boolean;action:ConsoleAction;youtubeConfigured:boolean;requestBlockedReason?:string}){
  const uid=useId();
  const [channels,setChannels]=useState<Channel[]>([]),[platform,setPlatform]=useState('youtube'),[account,setAccount]=useState(''),[mode,setMode]=useState<DeliveryMode>('office');
@@ -20,7 +20,7 @@ export function DeliveryConsole({job,busy,action,youtubeConfigured,requestBlocke
  const channel=accounts.find(c=>c.key===account)??accounts.find(c=>c.locale===job.source_packet?.audience?.language)??accounts[0];
  const row=snapshot?.channels.find(c=>c.channel_key===channel?.key);
  const rows=items.filter(i=>i.channel_key===channel?.key);
- const active=rows.some(i=>['pending','claimed','unknown','platform_draft','platform_private'].includes(i.state));
+ const active=rows.some(i=>['pending','office_held','claimed','unknown','platform_draft','platform_private'].includes(i.state));
  const readiness=choiceReadiness(job,channel,mode,requestBlockedReason);
  async function requestDraft(){if(!channel||!job.manifest?.hash||!readiness.ok||busy||loading||error||active)return;
  if(!window.confirm(`${channel.label} 계정에 승인된 원고를 임시저장하도록 PC 실행기에 요청합니다. 공개 게시하지 않습니다. 계속할까요?`))return;
