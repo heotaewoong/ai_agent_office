@@ -69,6 +69,8 @@ for (const width of [1440, 390]) {
     await expect(body).toHaveValue("직접 작성한 원고를 입력 방식 전환 뒤에도 유지합니다. ".repeat(5));
     await expect(submit).toBeDisabled();
     await panel.getByRole("checkbox").check();
+    await expect(submit).toBeDisabled();
+    await panel.getByLabel("누구를 위한 주제인가요? · 필수").selectOption('source-faithful');
     await expect(submit).toBeEnabled();
     const size = await body.evaluate(el => ({ width: el.getBoundingClientRect().width, parentWidth: el.closest("fieldset")!.getBoundingClientRect().width, font: parseFloat(getComputedStyle(el).fontSize), height: el.getBoundingClientRect().height }));
     expect(size.width / size.parentWidth).toBeGreaterThan(.75);
@@ -326,7 +328,8 @@ async function harness(page: Page, review = false, release = false) {
         body: request.postDataJSON(),
       });
     let body: unknown = {};
-    if (path === '/api/discovery') {
+    if (path === '/api/briefs') body = {presets:[{id:'source-faithful', label:'내 원문 중심', reader:'내 글을 읽는 독자'}]};
+    else if (path === '/api/discovery') {
       if (request.method() === 'PUT') {
         const { expected_hash: ignored, ...config } = request.postDataJSON();
         discoveryState = { ...discoveryState, config, config_hash: 'b'.repeat(64), stale: true };
@@ -530,6 +533,26 @@ test("승인확인중서버버전변경은읽지않은새원고승인을차단�
     page.getByRole("button", { name: "이 원고 승인·자동 제작", exact: true }),
   ).toBeDisabled({ timeout: 8000 });
   expect(context.writes).toEqual([]);
+});
+
+test('작업 시간이 닫히면 자동 제작 승인 대신 작업 시간 열기를 안내하고 요청하지 않는다', async ({page}) => {
+  const fixture = await harness(page, true);
+  fixture.dashboard.window = {status:'closed', authorized_end:new Date(Date.now()-60_000).toISOString()};
+  await page.goto('/scripts/contract-test-job');
+  await expect(page.getByRole('button', {name:'원고 승인', exact:true})).toBeDisabled();
+  await expect(page.getByRole('link', {name:'작업 시간 열고 승인·자동 제작 계속하기'})).toHaveAttribute('href','/settings');
+  await expect(page.getByText('원고 읽기·기획 편집·승인은 계속할 수 있습니다.', {exact:false})).toHaveCount(0);
+  expect(fixture.writes).toEqual([]);
+});
+
+test('승인 최종 확인 중 작업 시간이 닫히면 승인·제작 요청을 차단한다', async ({page}) => {
+  const fixture = await harness(page, true);
+  await page.goto('/scripts/contract-test-job');
+  await page.getByRole('button', {name:'원고 승인', exact:true}).click();
+  fixture.dashboard.window = {status:'closed', authorized_end:new Date(Date.now()-60_000).toISOString()};
+  await expect(page.getByRole('button', {name:'이 원고 승인·자동 제작', exact:true})).toBeDisabled({timeout:10_000});
+  await expect(page.getByRole('link', {name:'작업 시간 열고 승인·자동 제작 계속하기'})).toBeVisible();
+  expect(fixture.writes).toEqual([]);
 });
 
 test("모바일에서도뉴스선택이가능하고가로스크롤이없다", async ({ page }) => {

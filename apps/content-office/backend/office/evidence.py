@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .feeds import fetch_public
-from .store import DefiniteFailure, WorkflowError, canonical, now
+from .store import DefiniteFailure, SourceUnavailable, WorkflowError, canonical, now
 
 
 class ArticleTextParser(HTMLParser):
@@ -76,7 +76,7 @@ def collect_article_evidence(article, provider, output_dir: Path):
             raw, resolved, _ = fetch_public(url, maximum=2_000_000)
             text = extract_article_text(raw.decode("utf-8", errors="replace"))
         except Exception:
-            raise DefiniteFailure("이 기사의 원문 페이지를 열 수 없었어요(사이트가 자동 수집을 막았을 수 있어요). 비용은 들지 않았어요. 다른 기사를 고르거나 원문을 직접 붙여 넣어 주세요") from None
+            raise SourceUnavailable("이 기사의 원문 페이지를 열 수 없었어요(사이트가 자동 수집을 막았을 수 있어요). 비용은 들지 않았어요. 다른 기사를 고르거나 원문을 직접 붙여 넣어 주세요") from None
         source_kind = "http_article_body"
     if len(text) < 200:
         raise DefiniteFailure("열어 본 원문이 너무 짧아요. 비용은 들지 않았어요. 다른 기사를 고르거나 원문을 직접 붙여 넣어 주세요")
