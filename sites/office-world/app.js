@@ -1869,7 +1869,8 @@
     },
 
     prepareSsaoDepthGuard() {
-      if (B.Engine?.Version !== '7.54.0') return false;
+      // Mobile trials were mixed, so retain the original mobile shader.
+      if (isPhone() || B.Engine?.Version !== '7.54.0') return false;
       const shaders = B.Effect?.ShadersStore, source = shaders?.ssao2PixelShader;
       const anchor = 'depth=depth*depthSign;';
       const fade = 'occlusion=occlusion*(1.0-smoothstep(maxZ*0.75,maxZ,depth));';

@@ -6,9 +6,9 @@ const B=createRequire(import.meta.url)('../vendor/babylon.min.js');
 const source=await readFile(new URL('../app.js',import.meta.url),'utf8');
 const start=source.indexOf('    prepareSsaoDepthGuard('),end=source.indexOf('\n    },',start);
 assert(start>=0&&end>start,'SSAO guard installer must be available');
-const make=(shader,version=B.Engine.Version)=>{
+const make=(shader,version=B.Engine.Version,phone=false)=>{
   const store={ssao2PixelShader:shader};
-  return {store,install:Function('B',`return ({${source.slice(start,end+6)}}).prepareSsaoDepthGuard`)({Engine:{Version:version},Effect:{ShadersStore:store}})};
+  return {store,install:Function('B','isPhone',`return ({${source.slice(start,end+6)}}).prepareSsaoDepthGuard`)({Engine:{Version:version},Effect:{ShadersStore:store}},()=>phone)};
 };
 
 test('the bundled shader retains the near-depth path and its original far-depth expression',()=>{
@@ -20,6 +20,11 @@ test('the bundled shader retains the near-depth path and its original far-depth 
   assert(patched.indexOf(guard)>patched.indexOf('depth=depth*depthSign;'));
   assert(patched.indexOf(guard)<patched.indexOf('vec3 normal='));
   assert.equal(f.install(),true);assert.equal(f.store.ssao2PixelShader,patched,'idempotent installation');
+});
+
+test('mobile keeps the original shader because its performance gain was not consistent',()=>{
+  const original=B.Effect.ShadersStore.ssao2PixelShader,f=make(original,B.Engine.Version,true);
+  assert.equal(f.install(),false);assert.equal(f.store.ssao2PixelShader,original);
 });
 
 test('unsupported shader text falls back without modifying it',()=>{

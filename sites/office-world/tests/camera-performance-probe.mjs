@@ -7,7 +7,7 @@ export function summarizeTimings(samples) {
 }
 
 export function assertComparableRuns(a,b) {
-  for(const key of ['layer','quality','css','canvas','dpr','renderer','meshes','vertices','cameraPath','warmupFrames','sampleFrames']) {
+  for(const key of ['layer','quality','qualityFeatures','css','canvas','dpr','renderer','meshes','vertices','cameraPath','warmupFrames','sampleFrames']) {
     if(a[key]===undefined||b[key]===undefined||JSON.stringify(a[key])!==JSON.stringify(b[key])) {
       throw Error(`A/B conditions differ: ${key}`);
     }
@@ -55,7 +55,17 @@ export async function measureCameraScenario(office,{layer='office',warmupFrames=
     }
     // Transient work-flow dots are counted separately from the unchanged world geometry.
     const structural=scene.meshes.filter(m=>m.name!=='flow');
-    return {at:new Date().toISOString(),layer,quality:office.quality,
+    const ao=controls.ssao,post=controls.pipeline,shadow=world.shadows,shadowSize=shadow?.getShadowMap()?.getSize();
+    const qualityFeatures={shadows:scene.shadowsEnabled!==false,postProcesses:scene.postProcessesEnabled!==false,
+      shadowMap:shadowSize?{width:shadowSize.width,height:shadowSize.height,filter:shadow.filter,quality:shadow.filteringQuality,bias:shadow.bias,normalBias:shadow.normalBias}:null,
+      passes:scene.activeCamera?._postProcesses?.filter(Boolean).map(p=>p.name)??[],
+      ssao:ao?{samples:ao.samples,radius:ao.radius,strength:ao.totalStrength,base:ao.base,maxZ:ao.maxZ,expensiveBlur:ao.expensiveBlur}:null,
+      post:post?{samples:post.samples,fxaa:post.fxaaEnabled,bloom:post.bloomEnabled,
+        bloomKernel:post.bloomKernel,bloomScale:post.bloomScale,bloomWeight:post.bloomWeight,bloomThreshold:post.bloomThreshold,
+        imageProcessing:post.imageProcessingEnabled,exposure:post.imageProcessing?.exposure??null,contrast:post.imageProcessing?.contrast??null,
+        toneMapping:post.imageProcessing?.toneMappingEnabled??null,toneMappingType:post.imageProcessing?.toneMappingType??null,
+        vignette:post.imageProcessing?.vignetteEnabled??null,vignetteWeight:post.imageProcessing?.vignetteWeight??null}:null};
+    return {at:new Date().toISOString(),layer,quality:office.quality,qualityFeatures,
       css:[env.innerWidth,env.innerHeight],canvas:[world.engine.getRenderWidth(),world.engine.getRenderHeight()],
       dpr:env.devicePixelRatio,renderer:world.engine.getGlInfo().renderer,
       meshes:structural.length,vertices:structural.reduce((n,m)=>n+m.getTotalVertices(),0),

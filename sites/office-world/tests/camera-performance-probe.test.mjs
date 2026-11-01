@@ -10,7 +10,7 @@ test('timing summaries preserve samples and missing GPU data stays unknown',()=>
   assert.throws(()=>summarizeTimings([1,NaN]),/finite/);
 });
 
-const run=()=>({layer:'office',quality:'high',css:[1280,720],canvas:[1280,720],dpr:1,
+const run=()=>({layer:'office',quality:'high',qualityFeatures:{shadows:true,postProcesses:true,ssaoSamples:16},css:[1280,720],canvas:[1280,720],dpr:1,
   renderer:'same GPU',meshes:885,vertices:680000,
   cameraPath:{alpha:-Math.PI/2,beta:1.15,radius:210,target:[0,-18,0],amplitude:.32,period:45},
   warmupFrames:100,sampleFrames:180});
@@ -19,6 +19,13 @@ test('different render resolution, quality, geometry or camera paths cannot be c
   assert.equal(assertComparableRuns(run(),run()),true);
   for(const changed of [{canvas:[1920,1080]},{quality:'low'},{meshes:100},{cameraPath:{radius:430}},{sampleFrames:60}]) {
     assert.throws(()=>assertComparableRuns(run(),{...run(),...changed}),/conditions differ/);
+  }
+});
+
+test('unchanged high labels cannot hide disabled effects or fewer AO samples',()=>{
+  for(const changed of [{shadows:false,postProcesses:true,ssaoSamples:16},
+    {shadows:true,postProcesses:false,ssaoSamples:16},{shadows:true,postProcesses:true,ssaoSamples:8}]) {
+    assert.throws(()=>assertComparableRuns(run(),{...run(),qualityFeatures:changed}),/conditions differ/);
   }
 });
 
