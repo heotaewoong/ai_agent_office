@@ -134,3 +134,23 @@ def test_all_price_validity_windows_cover_the_interview_period():
                   speech_provider.PRICE_VALID_UNTIL, video_provider.PRICE_VALID_UNTIL):
         assert datetime.fromisoformat(value) >= deadline, value
     assert OPENAI_PRICE_CHECKED == "2026-11-02"
+
+
+def test_card_length_and_style_rules_warn_but_unrenderable_cards_still_block():
+    """2026-11-02 staging run: one 71-character card body (fits at the drawn size) dropped all card news from
+    production. Character limits/duplicates/style are advisories; empty, wrong count or overflowing cards block."""
+    from office.cards import card_checks
+    slides = [{"title": f"{n}번째 핵심", "body": "카드 본문은 짧게 씁니다."} for n in range(1, 8)]
+    slides[5]["body"] = "회사 발표와 현장 성과를 구분해서 읽으면 우리 팀에 맞는 적용점을 훨씬 빠르게 찾을 수 있어요. 오늘 하나만 골라 보세요."
+    # An unbreakable run that cannot be drawn at the minimum size is a real overflow and still blocks.
+    unbreakable = [dict(s) for s in slides]
+    unbreakable[5]["body"] = "가" * 71
+    assert card_checks({"slides": unbreakable}, {"terms": {}, "banned": [], "voice": "", "pronunciation": {}})["passed"] is False
+    checks = card_checks({"slides": slides}, {"terms": {}, "banned": [], "voice": "", "pronunciation": {}})
+    assert checks["passed"] is True and checks["blocking"] == []
+    assert any("60자" in issue for issue in checks["warnings"])
+    empty = [dict(s) for s in slides]
+    empty[0]["body"] = ""
+    blocked = card_checks({"slides": empty}, {"terms": {}, "banned": [], "voice": "", "pronunciation": {}})
+    assert blocked["passed"] is False and any("필요해요" in issue for issue in blocked["blocking"])
+    assert card_checks({"slides": slides[:3]}, {"terms": {}, "banned": [], "voice": "", "pronunciation": {}})["passed"] is False

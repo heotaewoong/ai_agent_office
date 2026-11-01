@@ -139,6 +139,9 @@ function Empty({
   );
 }
 
+// Draft (~3 min) + review + production (~10-15 min) fit comfortably; same default as the settings page.
+const NEWS_WINDOW_MINUTES = 120;
+
 export default function Office({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -372,6 +375,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
     const ok = await action(
       "작업 만들기",
       async () => {
+        // One click: when auto drafting is on and the work window is closed, the button says it opens 120 minutes.
+        if (autoDraftNews && requestBlockedReason) await api.startWindow(NEWS_WINDOW_MINUTES);
         const result = await api.createJobs(selected, autoDraftNews);
         const reused = result.jobs.some(item => dashboard?.jobs.some(old => old.id === item.id));
         const states = result.draft_requests ?? [];
@@ -763,13 +768,13 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         </p>
                       </div>
                     </div>
-                    <label className="news-auto-draft"><input aria-label="뉴스 원고 자동 생성" type="checkbox" checked={autoDraftNews} disabled={Boolean(busy) || !connected} onChange={event => setAutoDraftNews(event.target.checked)} />원고 자동 생성·검수<span>작업 시간이 열려 있을 때 실행 · 기존 원고는 보존</span></label>
+                    <label className="news-auto-draft"><input aria-label="뉴스 원고 자동 생성" type="checkbox" checked={autoDraftNews} disabled={Boolean(busy) || !connected} onChange={event => setAutoDraftNews(event.target.checked)} />원고 자동 생성·검수<span>{requestBlockedReason ? `작업 시간이 닫혀 있으면 ${NEWS_WINDOW_MINUTES}분 열고 바로 시작` : "작업 시간 안에서 바로 실행"} · 기존 원고는 보존</span></label>
                     <button
                       className="button primary"
                       disabled={selected.length === 0 || !!busy || !connected}
                       onClick={() => void createJobs()}
                     >
-                      콘텐츠 작업 만들기
+                      {autoDraftNews && requestBlockedReason ? `작업 시간 ${NEWS_WINDOW_MINUTES}분 열고 작업 만들기` : "콘텐츠 작업 만들기"}
                       <Icon name="arrow" size={18} />
                     </button>
                   </div>
@@ -1228,7 +1233,8 @@ function Studio({
   const [draftTargets, setDraftTargets] = useState<string[]>([]);
   useEffect(() => { setDraftTargets([]); }, [job.id, job.source_hash]);
   const [draftStartOpen, setDraftStartOpen] = useState(false);
-  const [draftWindowMinutes, setDraftWindowMinutes] = useState("30");
+  // Same default as the settings page: draft + review + production can take longer than 30 minutes.
+  const [draftWindowMinutes, setDraftWindowMinutes] = useState("120");
   const [platformsDirty, setPlatformsDirty] = useState(false);
   const packagingPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {

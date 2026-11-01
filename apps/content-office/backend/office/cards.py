@@ -86,26 +86,27 @@ def card_checks(plan, brand=None):
     brand = brand if brand is not None else load_brand()
     slides = [s for s in (plan.get("slides") or []) if isinstance(s, dict)]
     issues = []
+    blocking = []  # 2026-11-02: only cards that cannot be produced block; length/style rules are advisories.
     if not MIN_SLIDES <= len(slides) <= MAX_SLIDES:
-        issues.append(f"카드는 {MIN_SLIDES}~{MAX_SLIDES}장이어야 해요 (현재 {len(slides)}장)")
+        blocking.append(f"카드는 {MIN_SLIDES}~{MAX_SLIDES}장이어야 해요 (현재 {len(slides)}장)")
     seen = {}
     for number, slide in enumerate(slides, 1):
         title, body = str(slide.get("title", "")).strip(), str(slide.get("body", "")).strip()
         if not title or not body:
-            issues.append(f"{number}번 카드: 제목과 본문이 모두 필요해요")
+            blocking.append(f"{number}번 카드: 제목과 본문이 모두 필요해요")
         if len(title) > TITLE_LIMIT:
             issues.append(f"{number}번 카드: 제목이 {TITLE_LIMIT}자를 넘어요 ({len(title)}자)")
         if len(body) > BODY_LIMIT:
             issues.append(f"{number}번 카드: 본문이 {BODY_LIMIT}자를 넘어요 ({len(body)}자)")
         for name in measure_overflow(slide):
-            issues.append(f"{number}번 카드: {name} 넘침. 큰 글씨로 그리면 칸에 들어가지 않아요. 더 짧게 써요")
+            blocking.append(f"{number}번 카드: {name} 넘침. 큰 글씨로 그리면 칸에 들어가지 않아요. 더 짧게 써요")
         key = " ".join(title.split())
         if key and key in seen:
             issues.append(f"{number}번 카드: 제목이 {seen[key]}번 카드와 중복돼요")
         seen.setdefault(key, number)
         issues.extend(f"{number}번 카드: {issue}" for issue in glossary_issues(title + "\n" + body, brand))
     issues.extend(text_issues([f"{s.get('title', '')}\n{s.get('body', '')}" for s in slides], brand))
-    return {"passed": not issues, "issues": issues}
+    return {"passed": not blocking, "issues": blocking + issues, "blocking": blocking, "warnings": issues}
 
 
 def review_issues(review):
