@@ -1759,7 +1759,7 @@ function Studio({
               </div>
             </div>
           )}
-          <OwnerDraftStatus key={job.id} jobId={job.id} revision={job.manifest?.hash}/>
+          <OwnerDraftStatus key={job.id} jobId={job.id} revision={job.updated_at}/>
           {["blocked", "source_rejected", "failed"].includes(job.state) && (
             <div className="recovery-actions">
               <button
@@ -2162,6 +2162,7 @@ function Delivery({
         <dl className={deliveryStyles.metrics}><div><dt>현재 제작 파일</dt><dd>{files.length}<small>개</small></dd></div><div><dt>제작 완료 항목</dt><dd>{completedOutputs(job).length}<small>종</small></dd></div><div><dt>출고 승인②</dt><dd className={deliveryStyles.state}>{job.state === "release_approved" ? "승인 완료" : "확인 필요"}</dd></div></dl>
         <div className={deliveryStyles.quickActions}><a href={`#delivery-preview-${job.id}`} className="button primary">제작물 확인 <Icon name="arrow" size={16}/></a><a href={`#delivery-release-${job.id}`} className="button secondary">출고 단계로 이동</a><Link href={`/scripts/${encodeURIComponent(job.id)}`} className="button text">원고 수정</Link></div>
       </section>
+      <OwnerDraftStatus key={job.id} jobId={job.id} revision={job.updated_at}/>
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
       {job.error && (
         <div className="notice error" role="alert">
