@@ -303,3 +303,58 @@ def test_manifest_only_change_does_not_resend_identical_saved_channel(tmp_path):
     store.update_job(jid, manifest={**job['manifest'], 'files': files, 'hash': 'o' * 64})
     changed = next(r for r in owner_drafts.prepare(store, jid) if r['channel_key'] == 'youtube_main_ko')
     assert changed['state'] == 'pending'
+
+
+def test_release_api_prepares_current_instagram_after_thumbnail_change_without_resending_saved_youtube(tmp_path):
+    from fastapi.testclient import TestClient
+    from office.api import create_app
+    from office.store import digest
+    store, jid = instagram_ready(tmp_path)
+    yt = next(r for r in owner_drafts.prepare(store, jid) if r['channel_key'] == 'youtube_main_ko')
+    claimed = owner_drafts.claim(store, yt['id'], 'fixture')
+    saved = owner_drafts.receipt(store, yt['id'], {
+        **{k: claimed[k] for k in ('claim_id', 'content_hash', 'account_id')},
+        'state': 'platform_private', 'external_id': 'already_saved_video'})
+    job = store.job(jid)
+    manifest = {**job['manifest'], 'thumbnail_candidates': [*job['manifest']['thumbnail_candidates'], {'id':'thumb-2'}]}
+    store.update_job(jid, manifest=manifest)
+    selected = store.select_thumbnail(jid, 'thumb-2', manifest['hash'], 'fixture-human')
+    assert selected['manifest']['hash'] != manifest['hash']
+    with TestClient(create_app(store), base_url='http://localhost:8510') as client:
+        csrf = client.get('/api/session').json()['csrf']
+        response = client.post(f'/api/jobs/{jid}/reviews/release',
+            json={'version':selected['manifest']['hash'], 'decision':'approved',
+                  'media_reviewed':True, 'outputs':['blog','video']},
+            headers={'Origin':'http://localhost:3110','X-Office-CSRF':csrf})
+        assert response.status_code == 200, response.text
+        current = client.get(f'/api/jobs/{jid}/owner-drafts').json()['items']
+    ig = next(r for r in current if r['channel_key'] == 'instagram_main')
+    assert ig['manifest_hash'] == selected['manifest']['hash']
+    assert ig['state'] == 'pending'
+    reused = next(r for r in current if r['channel_key'] == 'youtube_main_ko')
+    assert reused['state'] == 'platform_private' and reused['reused_from'] == saved['id']
+    assert [r['id'] for r in owner_drafts.pending(store)] == [ig['id']]
+    assert digest(store.setting(owner_drafts.SETTING)[saved['id']]) == digest(saved)
+    assert store.job(jid)['source_approval'] == job['source_approval']
+
+
+def test_queue_preparation_failure_does_not_turn_committed_release_into_retry_prompt(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from office.api import create_app
+    store, jid = instagram_ready(tmp_path)
+    owner_drafts.prepare(store, jid)
+    previous = store.setting(owner_drafts.SETTING)
+    def fail(*args):
+        raise OSError('synthetic queue I/O failure')
+    monkeypatch.setattr(owner_drafts, 'prepare', fail)
+    with TestClient(create_app(store), base_url='http://localhost:8510') as client:
+        csrf = client.get('/api/session').json()['csrf']
+        response = client.post(f'/api/jobs/{jid}/reviews/release',
+            json={'version':store.job(jid)['manifest']['hash'], 'decision':'approved',
+                  'media_reviewed':True, 'outputs':['blog','video']},
+            headers={'Origin':'http://localhost:3110','X-Office-CSRF':csrf})
+    assert response.status_code == 200
+    assert store.job(jid)['release_approval']['decision'] == 'approved'
+    assert store.setting(owner_drafts.SETTING) == previous
+    with store.connection() as db:
+        assert db.execute("SELECT count(*) FROM approvals WHERE job_id=? AND kind='release'", (jid,)).fetchone()[0] == 1

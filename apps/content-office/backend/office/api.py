@@ -748,6 +748,16 @@ def create_app(store: Store | None = None):
             private_channel=target(store,review.private_delivery_channel,job)
         saved = store.review_release(job_id, review.version, review.decision, "local-operator", review.media_reviewed, review.outputs,private_channel=private_channel)
         if review.decision == "approved":
+            from .owner_drafts import prepare as prepare_owner_drafts
+            try:
+                prepare_owner_drafts(store, job_id)
+            except Exception as error:
+                # Approval is already committed; a delivery issue must not ask for another approval.
+                reason = str(error) if isinstance(error, WorkflowError) else '승인은 저장됐지만 전달 준비를 마치지 못했습니다. 운영 기록을 확인하세요'
+                try:
+                    store.event('owner_drafts_blocked', {'reason': reason, 'public_sent': False}, job_id)
+                except Exception:
+                    pass
             from .staging import auto_prepare_staging
             auto_prepare_staging(store, job_id, "local-operator")
         return saved
