@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { gunzipSync } from "node:zlib";
+import { readFile, mkdtemp, mkdir, writeFile, unlink, rmdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { gunzipSync, gzipSync, brotliDecompressSync } from "node:zlib";
 import { acceptsWorldGzip, readWorldFile, resolveWorldFile, WORLD_ROOT } from "../lib/world-files.ts";
 const root = "/srv/world";
 test("빈 경로는 index.html", () => assert.deepEqual(resolveWorldFile(root, undefined), { path: "/srv/world/index.html", type: "text/html; charset=utf-8" }));
@@ -74,3 +76,28 @@ for(const name of ['app.js','styles.css']) {
     assert(encoded.body.length<plain.body.length*.35);
   });
 }
+
+
+test('Brotli engine transport decodes to the exact SRI source and respects quality preferences',async()=>{
+ const file=resolveWorldFile(WORLD_ROOT,['vendor','babylon.min.js'])!;
+ const original=await readFile(file.path),gz=await readWorldFile(file,'gzip');
+ for(const header of ['br, gzip','BR;q=1, gzip;q=0.5','gzip;q=0, *;q=1']) {
+  const r=await readWorldFile(file,header);assert.equal(r.encoding,'br',header);
+  assert.deepEqual(brotliDecompressSync(r.body),original);assert(r.body.length<gz.body.length*.8);
+ }
+ for(const header of ['br;q=0, gzip','br;q=0, *;q=1','br;q=0.2,gzip;q=1'])assert.equal((await readWorldFile(file,header)).encoding,'gzip',header);
+ assert.equal((await readWorldFile(file,'br;q=0,gzip;q=0')).encoding,null);
+ assert.equal(resolveWorldFile(WORLD_ROOT,['vendor','babylon.min.js.br']),null);
+});
+
+
+test('missing optional Brotli sidecar retains gzip or original fallback',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'world-br-test-')),vendor=join(dir,'vendor');
+ await mkdir(vendor);const path=join(vendor,'babylon.min.js').replaceAll('\\','/'),body=Buffer.from('const x=1;\n'.repeat(200));
+ try {
+  await writeFile(path,body);await writeFile(path+'.gz',gzipSync(body));
+  const file={path,type:'text/javascript'};
+  const gz=await readWorldFile(file,'br, gzip');assert.equal(gz.encoding,'gzip');assert.deepEqual(gunzipSync(gz.body),body);
+  const plain=await readWorldFile(file,'br');assert.equal(plain.encoding,null);assert.deepEqual(plain.body,body);
+ }finally{await unlink(path);await unlink(path+'.gz');await rmdir(vendor);await rmdir(dir);}
+});

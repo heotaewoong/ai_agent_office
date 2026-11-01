@@ -37,3 +37,8 @@ Generated from the three original runtime JSON files using Node standard-library
 | guide-avatar-v1.json.gz | 88,700 | ccede067fb2a77d6d5969ff60889075f7b2594859cec7599ec8e3bb89361bd8b |
 
 The existing Apache-2.0 `vendor/babylon.min.js` also has a lossless sidecar, `vendor/babylon.min.js.gz`: 1,471,995 bytes; SHA-256 `744fa8241706d5238acb5391ada9f511ca9b69088657842b7a0ff69127fb28a9`. The original engine, SRI and `vendor/LICENSE-babylon.txt` remain unchanged. No new engine version, library, permission or license is introduced. A byte-equivalence test covers the sidecar.
+
+
+## Lossless Brotli engine sidecar candidate · 2026-11-02
+
+`vendor/babylon.min.js.br` is a lossless representation of the existing Apache-2.0 engine, generated locally with Node standard `brotliCompressSync` (quality11, MODE_TEXT). No engine code, SRI, version or license file changes; no external asset download. Decode equivalence with the original is required by tests. Size1,023,544bytes; SHA-256 `7c1ec83b9c6abfb97aaff5b1c4748d6d54f7993ad3fb33325d3a2997ddb1da89`. Generation took about12.4seconds on this workstation; the server only reads the precompressed file. Preserve the original/gzip/license and regenerate/retest this sidecar if the engine changes.
