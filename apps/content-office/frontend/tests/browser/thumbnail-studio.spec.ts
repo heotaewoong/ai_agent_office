@@ -1,10 +1,10 @@
 import {test,expect,type Page} from '@playwright/test';
 
-async function harness(page:Page, defaultFormat?:"shorts") {
+async function harness(page:Page, defaultFormat?:"shorts", stale=false) {
   const hash='a'.repeat(64),id='thumbnail-contract';let revision=1;
-  let state:any={default_format:defaultFormat,revision:'1'.repeat(64),current_source_hash:hash,source_hash:hash,stale:false,title:'합성 검증 원고',candidates:[1,2,3].map(n=>({id:String(n),title:'합성 검증 원고',angle:`방향 ${n}`,url:`/api/thumbnail-contract/image-${n}`,portrait_url:`/api/thumbnail-contract/image-${n}-shorts`,provenance:{provider:'synthetic-test'}}))};
+  let state:any={default_format:defaultFormat,revision:'1'.repeat(64),current_source_hash:hash,source_hash:hash,stale,title:'합성 검증 원고',candidates:[1,2,3].map(n=>({id:String(n),title:'합성 검증 원고',angle:`방향 ${n}`,url:`/api/thumbnail-contract/image-${n}`,portrait_url:`/api/thumbnail-contract/image-${n}-shorts`,provenance:{provider:'synthetic-test'}}))};
   const job={id,title:'합성 검증 원고',state:'source_review',source_hash:hash,article:{id:'one',title:'합성 시험',url:'https://example.com'},selections:{blog:false,video:true,pdf:false,cards:false},source_packet:{title:'합성 검증 원고',body:'합성 화면 시험입니다. 실제 콘텐츠가 아닙니다.',video:{scenes:[]},quality:{status:'pending'}},tasks:[],events:[],drafts:[]};
-  const dashboard={articles:[],jobs:[job],feeds:[],agents:[],tasks:[],events:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:'open',authorized_end:new Date(Date.now()+3600000).toISOString()},provider:{model:'synthetic',configured:false},knowledge:{}};
+  const dashboard={articles:[],jobs:[job],feeds:[],agents:[],tasks:[],events:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:stale?'closed':'open',authorized_end:stale?'2026-01-01T00:00:00Z':new Date(Date.now()+3600000).toISOString()},provider:{model:'synthetic',configured:false},knowledge:{}};
   const writes:{path:string;body:any;csrf?:string}[]=[];
   await page.route('**/api/**',async route=>{
     const request=route.request(),path=new URL(request.url()).pathname;
@@ -69,4 +69,24 @@ test('새 쇼츠는 세로 원본이 기본이며 조회가 선택을 대신하�
   await expect(panel.getByRole('radio',{name:/Shorts 세로 표지/})).toBeChecked();
   await expect(panel.getByRole('img').first()).toHaveJSProperty('naturalHeight',1920);
   expect(writes).toEqual([]);
+});
+
+for(const width of [1440,375])test(`썸네일 ${width}px 확대 종료는 연 후보로 초점을 돌리고 선택을 쓰지 않는다`,async({page})=>{
+ const writes=await harness(page,'shorts');await page.setViewportSize({width,height:900});await page.goto('/publish?job=thumbnail-contract',{waitUntil:'domcontentloaded'});
+ const open=page.getByRole('button',{name:'후보 2 크게 보기',exact:true});
+ for(const close of ['escape','button']){
+  await open.click();await expect(page.getByRole('dialog')).toBeVisible();
+  if(close==='escape')await page.keyboard.press('Escape');else await page.getByRole('button',{name:'확대 닫기',exact:true}).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);await expect(open).toBeFocused();
+ }
+ expect(writes).toEqual([]);
+});
+
+test('이전 원고 후보는 선택 불가 이유를 알리고 선택 가능 안내와 모순되지 않는다',async({page})=>{
+ const writes=await harness(page,'shorts',true);await page.goto('/publish?job=thumbnail-contract',{waitUntil:'domcontentloaded'});
+ const panel=page.getByRole('region',{name:'썸네일 3장을 비교하고 다듬으세요'});
+ await expect(panel.getByRole('button',{name:'이 이미지 선택',exact:true}).first()).toBeDisabled();
+ await expect(panel.getByText('비교·선택·최종 확정은 계속할 수 있습니다.',{exact:false})).toHaveCount(0);
+ await expect(panel.getByText('이전 후보는 확대해서 비교할 수 있지만, 선택·수정·최종 확정은 새 원고의 후보를 만든 뒤 가능합니다.',{exact:false})).toBeVisible();
+ expect(writes).toEqual([]);
 });
