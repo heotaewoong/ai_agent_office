@@ -33,6 +33,7 @@ function fixture(preserveOriginal: boolean | undefined, requestBlockedReason?: s
   const useEffect = (effect: () => void, deps: any[]) => { const index = cursor++, previous = hooks[index]; if (!previous || deps.some((value, i) => !Object.is(value, previous[i]))) { hooks[index] = deps; effects.push(effect); } };
   // Child panels are outside this editor test; Studio and its event handlers execute unchanged.
   const scope = { require, exports: {}, useState, useRef, useEffect, ...workflow, packagingRequired, requestAnimationFrame: () => 0,
+    document: { getElementById: () => null }, // Fragment scrolling is covered by the real browser contracts.
     ...Object.fromEntries([...components].map(name => [name, () => null])) };
   const Studio = Function(...Object.keys(scope), `${compiled}\nreturn Studio;`)(...Object.values(scope));
   const props = { job, busy: false, requestBlockedReason, onDraftChange: (id: string, draft: Record<string, unknown>) => changes.push({ id, draft }),
