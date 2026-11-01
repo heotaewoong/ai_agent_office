@@ -2339,6 +2339,7 @@
       const nameTop = $('department-nav').getBoundingClientRect().bottom + 12;
       const walk = space.view === 'walk';
       const ppos = controls.player.pos;
+      const visibleCards = [];
       space.stages.forEach((st) => {
         const el = this.cards.get(st.id);
         if (!el) return;
@@ -2347,8 +2348,12 @@
         const pr = this.project(st.pos.add(new B.Vector3(0, 5.6, 0)));
         if (!pr.visible || pr.x < -200 || pr.x > w + 200 || pr.y < -100 || pr.y > h + 100) { el.hidden = true; return; }
         el.hidden = false;
-        const half = el.offsetWidth / 2 + 8;
-        el.style.left = `${Math.max(half, Math.min(w - half, pr.x))}px`; el.style.top = `${Math.max(nameTop + el.offsetHeight, pr.y)}px`;
+        visibleCards.push({ el, pr });
+      });
+      // Read all dimensions together so position writes do not force layout per card.
+      const cardLayouts = visibleCards.map(({ el, pr }) => ({ el, pr, half: el.offsetWidth / 2 + 8, height: el.offsetHeight }));
+      cardLayouts.forEach(({ el, pr, half, height }) => {
+        el.style.left = `${Math.max(half, Math.min(w - half, pr.x))}px`; el.style.top = `${Math.max(nameTop + height, pr.y)}px`;
       });
       const bp = this.project(new B.Vector3(0, 7.4, 0));
       this.brainCard.hidden = !bp.visible || (space.layer === 'meadow' && walk) || (walk && Math.hypot(ppos.x, ppos.z) > 26);
