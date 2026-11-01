@@ -50,3 +50,31 @@ original media. Remove this opt-in package to disable it; never delete media or
 approvals as part of removal.
 
 Local checks: `python -m pytest tools/media-production/tests -q`.
+
+## Full-length bilingual caption production
+
+The 148-second vertical composition can render its lower caption panel separately
+with `CaptionPanel.tsx` and `render_caption_full.cjs`. This preserves the selected
+picture layout and avoids decoding the entire video inside every Chromium frame.
+Private runtime `cues.json` must come from recorded character alignment and
+independently matched source audio; do not shift another edit's SRT globally.
+`caption_timing.py` rejects missing text, unreliable audio anchors, orphan
+punctuation, large overlaps and out-of-range cues.
+
+Copy the component, `caption_layout.cjs`, renderer and validated private cue data
+into a fresh EC2 artifact directory. Reuse installed Node modules and CHROME_PATH.
+The renderer checks every phrase's actual browser layout after fonts and the
+1080px composition size are ready. Global client rectangles may refer to an
+offscreen or zero-width staging layout, so the check waits and uses local offsets.
+`--layout-only` repeats the still/layout proof without re-rendering the full panel.
+
+The panel is 1080x660, 3552 frames at 24fps. Overlay it at y=1220 on the existing
+1080x1920 picture with FFmpeg, and copy the original audio stream. These dimensions
+are specific to the reviewed vertical layout, not a generic platform-safe preset.
+Require full decode, exact frame count, AAC packet and timestamp identity,
+phrase-to-panel frame checks and native full playback before delivery. The
+standard review bridge pins input/source/SKILL hashes and registers only a new
+unapproved draft.
+
+Local checks additionally include:
+`node --test tools/media-production/tests/caption_layout.test.cjs`.
