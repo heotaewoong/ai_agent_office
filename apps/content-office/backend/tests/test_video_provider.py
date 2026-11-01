@@ -83,8 +83,12 @@ def test_unapproved_and_missing_secret_are_rejected_before_cost(tmp_path, monkey
     from office.video_provider import make_runway_clip_renderer
     monkeypatch.setenv('RUNWAYML_API_SECRET', 'test-secret')
     store, job_id = approved_fixture(tmp_path, approve=False)
+    session = FakeSession()
+    preview = make_runway_clip_renderer(store, job_id=job_id, allow_paid=True, session=session)
+    assert preview.cache_key and session.posts == [] and session.gets == []
     with pytest.raises(WorkflowError, match='승인'):
-        make_runway_clip_renderer(store, job_id=job_id, allow_paid=True, session=FakeSession())
+        preview(1, store.root / 'missing.png', store.root / 'clip.mp4')
+    assert session.posts == [] and session.gets == [] and store.budget()['reserved_krw'] == 0
     monkeypatch.delenv('RUNWAYML_API_SECRET')
     store, job_id = approved_fixture(tmp_path / 'b')
     session = FakeSession()

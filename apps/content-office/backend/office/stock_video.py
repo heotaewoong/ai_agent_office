@@ -133,7 +133,10 @@ class StockFootage:
         self.store, self.job_id = store, job_id
         self.session = session or requests
         self._probe = probe
-        source = store.require_source_approval(job_id)
+        # Reading contract metadata must not require the approval being created by the caller.
+        source = store.job(job_id)
+        if not source.get('source_hash') or not isinstance(source.get('source_packet'), dict):
+            raise WorkflowError('실사 영상 설정을 확인하려면 현재 원고가 필요합니다')
         self.source_hash = source["source_hash"]
         scenes = source["source_packet"].get("video", {}).get("scenes", [])
         queries = [footage_query(scene) if isinstance(scene, dict) else GENERIC_QUERY for scene in scenes]

@@ -80,3 +80,26 @@ def test_paid_approval_requires_confirmation_then_saves_one_atomic_production(tm
     if clips:assert task['payload']['paid_clip_estimate']['reservation_krw']==400
     assert client.post(url,json={**data,'confirm_paid_clips':True,'confirm_paid_thumbnails':True},headers=headers).status_code==409
     assert len(store.tasks(job['id']))==1 and store.budget()['spent_krw']==0
+
+
+@pytest.mark.parametrize('profile',['runway-grok-lite','pexels-stock'])
+def test_real_clip_profile_can_be_bound_in_approval_without_provider_calls(tmp_path,monkeypatch,profile):
+    from office.video_selection import clip_renderer_for_job
+    from office.media import production_contract
+    store=Store(tmp_path)
+    store.set_setting('clip_profile',{'id':profile})
+    job=store.create_job({'id':'real-clip-preview','title':'합성 프로필 검증'})
+    job=store.save_source(job['id'],{'title':'합성 검증','body':'합성 원고','quality':{'status':'passed','critical':False},'video':{'scenes':[{'narration':'검증용 설명','caption':'검증','visual':'합성 도형','footage':'hands typing'}]}})
+    monkeypatch.setattr('office.api.window_open',lambda _:True)
+    monkeypatch.setattr('requests.post',lambda *a,**k:pytest.fail('Approval cannot create paid media'))
+    monkeypatch.setattr('requests.get',lambda *a,**k:pytest.fail('Approval cannot fetch stock media'))
+    client=TestClient(create_app(store),base_url='http://localhost:8510')
+    headers={'Origin':'http://localhost:3110','X-Office-CSRF':client.get('/api/session').json()['csrf']}
+    data={'version':job['source_hash'],'decision':'approved','selections':{'video':True},'auto_produce':True,'confirm_paid_clips':True,'confirm_paid_thumbnails':True}
+    response=client.post(f'/api/jobs/{job["id"]}/reviews/source',json=data,headers=headers)
+    assert response.status_code==200,response.text
+    approved=store.require_source_approval(job['id'])
+    renderer=clip_renderer_for_job(store,approved)
+    expected=production_contract(None,approved['selections'],clip_renderer=renderer)['hash']
+    assert store.tasks(job['id'])[0]['payload']['production_contract']==expected
+    assert store.budget()['spent_krw']==0 and store.budget()['reserved_krw']==0

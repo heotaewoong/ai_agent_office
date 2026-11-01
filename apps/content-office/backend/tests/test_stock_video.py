@@ -192,9 +192,11 @@ def test_missing_key_unapproved_source_or_cards_only_never_touch_the_network(tmp
     cards = make_pexels_clip_renderer(cards_store, job_id=cards_job, session=session, probe=good_probe)
     with pytest.raises(WorkflowError, match='영상 제작'):
         cards(0, None, cards_store.root / 'job' / 'generated-01.mp4')
+    unapproved_store, unapproved_job = approved_fixture(tmp_path / 'draft', approve=False)
+    preview = make_pexels_clip_renderer(unapproved_store, job_id=unapproved_job, session=session, probe=good_probe)
+    assert preview.cache_key
     with pytest.raises(WorkflowError, match='승인'):
-        unapproved_store, unapproved_job = approved_fixture(tmp_path / 'draft', approve=False)
-        make_pexels_clip_renderer(unapproved_store, job_id=unapproved_job, session=session, probe=good_probe)
+        preview(0, None, unapproved_store.root / 'job' / 'generated-01.mp4')
     assert session.calls == []
 
 

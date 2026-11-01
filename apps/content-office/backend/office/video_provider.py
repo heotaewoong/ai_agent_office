@@ -190,7 +190,10 @@ class ClipProvider:
         self.store, self.job_id, self.allow_paid = store, job_id, allow_paid
         self.session, self.sleep, self.max_polls = session or requests, sleep or time.sleep, max_polls
         self._credit_checked = False
-        source = store.require_source_approval(job_id)
+        # Approval + enqueue needs read-only metadata first. clip() rechecks approval before any I/O.
+        source = store.job(job_id)
+        if not source.get('source_hash') or not isinstance(source.get('source_packet'), dict):
+            raise WorkflowError('영상 제작 설정을 확인하려면 현재 원고가 필요합니다')
         self.source_hash = source["source_hash"]
         scenes = source["source_packet"].get("video", {}).get("scenes", [])
         limit = clip_limits(store)["max_clips_per_video"] if limit is None else limit
