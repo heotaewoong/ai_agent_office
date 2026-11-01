@@ -120,7 +120,7 @@ test('승인① 화면에서 썸네일 비용을 확인한 뒤에만 승인·자
  expect(writes).toEqual([]);
  await confirm.getByRole('button',{name:'유료 포함 제작 확인',exact:true}).click();
  await expect.poll(()=>writes.length).toBe(1);
- expect(writes[0]).toEqual({path:`/api/jobs/${old.id}/reviews/source`,body:{version:old.source_hash,decision:'approved',selections:old.selections,auto_produce:true,confirm_paid_clips:true,confirm_paid_thumbnails:true}});
+ expect(writes[0]).toEqual({path:`/api/jobs/${old.id}/reviews/source`,body:{version:old.source_hash,decision:'approved',selections:old.selections,auto_produce:true,confirm_paid_clips:true,confirm_paid_thumbnails:true,draft_targets:[]}});
 });
 
 test('내 원고 등록은 주제 선택 전에는 저장하지 않고 선택한 기획을 함께 전송한다',async({page})=>{

@@ -217,7 +217,7 @@ class Store:
             self._event(db, "source_saved", {"version": version, "role": "편집"}, job_id)
             return self._write_job(db, job)
 
-    def review_source(self, job_id, version, decision, actor, selections=None, *, production_contract=None, external_media_reviewed=False, production_options=None):
+    def review_source(self, job_id, version, decision, actor, selections=None, *, production_contract=None, external_media_reviewed=False, production_options=None, draft_targets=None):
         from .offers import require_campaign_packet, require_offer_ready
         if decision not in ("approved", "rejected") or not actor.strip():
             raise WorkflowError("유효한 검토 판정과 검토자가 필요합니다")
@@ -248,6 +248,11 @@ class Store:
                 job["release_approval"] = None
             if decision == "approved" and not any(job["selections"].values()):
                 raise WorkflowError("제작물을 하나 이상 선택해야 합니다")
+            if draft_targets is not None:
+                if decision != 'approved' or (draft_targets and production_contract is None):
+                    raise WorkflowError('자동 초안은 원고 승인·자동 제작과 함께 선택하세요')
+                from .owner_drafts import policy
+                job['owner_draft_policy'] = policy(self, job, draft_targets, actor)
             record = {"id": identifier("approval"), "version": version, "decision": decision, "actor": actor, "selections": job["selections"], "created_at": now()}
             if manual_external:
                 record["external_media_reviewed"] = external_media_reviewed is True

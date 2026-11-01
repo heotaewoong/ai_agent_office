@@ -50,6 +50,7 @@ import { validWindowMinutes } from "../lib/settings";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ThumbnailStudio } from "./thumbnail-studio";
+import { OwnerDraftOptions, OwnerDraftStatus } from './owner-draft-options';
 import { ArchitectureView } from "./architecture-view";
 import { YoutubePanel, ChannelHandoffPanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
@@ -1215,6 +1216,8 @@ function Studio({
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
   const [approvalError, setApprovalError] = useState("");
+  const [draftTargets, setDraftTargets] = useState<string[]>([]);
+  useEffect(() => { setDraftTargets([]); }, [job.id, job.source_hash]);
   const [draftStartOpen, setDraftStartOpen] = useState(false);
   const [draftWindowMinutes, setDraftWindowMinutes] = useState("30");
   const [platformsDirty, setPlatformsDirty] = useState(false);
@@ -1669,7 +1672,8 @@ function Studio({
             >
               <h3>현재 원고를 승인하고 선택한 항목을 제작할까요?</h3>
               {approvalError && <p className="critical-issue" role="alert">{approvalError}</p>}
-              <p>승인하면 현재 제작 프로필과 기존 작업별·전체 비용 상한으로 자동 제작합니다. 실행 시간이 열려 있어야 하며, 플랫폼 전달은 출고 승인②에서 별도로 정합니다.</p>
+              <p>승인하면 현재 제작 프로필과 기존 작업별·전체 비용 상한으로 자동 제작합니다. 실행 시간이 열려 있어야 합니다. 아래에서 선택한 채널만 비공개·임시저장으로 전달하며, 공개 발행은 하지 않습니다.</p>
+              <OwnerDraftOptions language={job.source_packet?.audience?.language} selected={draftTargets} onChange={setDraftTargets}/>
               <p>
                 원고 {approvalVersion.slice(0, 12)} ·{" "}
                 {Object.entries(selections)
@@ -1720,6 +1724,7 @@ function Studio({
                           selections,
                           true,
                           confirmPaid,
+                          draftTargets,
                         );
                         setApprovalVersion(undefined);
                         onDelivery();
@@ -1734,6 +1739,7 @@ function Studio({
               </div>
             </div>
           )}
+          <OwnerDraftStatus key={job.id} jobId={job.id}/>
           {["blocked", "source_rejected", "failed"].includes(job.state) && (
             <div className="recovery-actions">
               <button

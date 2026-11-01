@@ -203,6 +203,7 @@ export const api = {
     selections: Selections,
     autoProduce = false,
     confirmPaid = false,
+    draftTargets?: string[],
   ) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/reviews/source`, "POST", {
       version,
@@ -210,7 +211,9 @@ export const api = {
       selections,
       ...(autoProduce ? {auto_produce:true} : {}),
       ...(autoProduce && confirmPaid ? {confirm_paid_clips:true,confirm_paid_thumbnails:true} : {}),
+      ...(draftTargets !== undefined ? {draft_targets:draftTargets} : {}),
     }),
+  ownerDrafts: (id:string) => request<{items:{id:string;channel_key:string;state:string;reason?:string}[]}>(`/jobs/${encodeURIComponent(id)}/owner-drafts`),
   produce: (id: string, confirmPaidClips = false) =>
     request(`/jobs/${encodeURIComponent(id)}/produce`, "POST", confirmPaidClips ? { confirm_paid_clips: true, confirm_paid_thumbnails:true } : {}),
   productionEstimate: (id: string, video?: boolean) =>

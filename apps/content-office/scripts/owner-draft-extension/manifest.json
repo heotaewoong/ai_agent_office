@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "HeoBrain 비공개 초안 실행기",
+  "description": "원고 승인①에서 선택한 초안만 비공개 보관합니다. 공개·예약 발행 없음.",
+  "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA29mhiQ5yCpafE2DlHeWwe58ww97+3MTCt8k+cpQ2zcXUl5tZjad7F4fnvvJYfUFbpoHWqFvxV3YCHG8WWcQbGAO4WREAZ8y+fMvSh6cTJn4XBSsYWMFTXwHIOtS+BPqNh0fAT4zFW/q6CRqS+CEjepD6rnAtbkxNL3+XsukIlsLusSMsC3zcuUP+LUb7aCqvu948VNsVtMMlCym46ZoVZWZLanAv0Rf5Cr5oCiS1PoHEAdSfNWvCW3OJZBvXKfXXts5l4rwdfPXHcrhZTYKx7RaIK/JseKQ2KaK3d15Om9qmqZRYXjPOqAT8g88koDP3LoHgUfoclMQOGajWzjvPrQIDAQAB",
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "alarms",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://www.threads.com/*",
+    "https://onethingflow.tistory.com/*",
+    "https://blog.naver.com/*",
+    "https://business.facebook.com/*"
+  ],
+  "background": {
+    "service_worker": "background.mjs",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
