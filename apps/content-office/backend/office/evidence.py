@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .feeds import fetch_public
-from .store import DefiniteFailure, SourceUnavailable, WorkflowError, canonical, now
+from .store import DefiniteFailure, SourceUnavailable, WorkflowError, canonical, digest, now
 
 
 class ArticleTextParser(HTMLParser):
@@ -66,8 +66,12 @@ RESEARCH_SCHEMA = {"type": "object", "properties": {"claims": {"type": "array", 
 
 
 def collect_article_evidence(article, provider, output_dir: Path):
-    url = reference_url(article["url"])
     operator_text = article.get("operator_source_text")
+    owned_text = (article.get("source_kind") == "owner_supplied" and
+                  article.get("preserve_original") is True and
+                  isinstance(operator_text, str) and bool(operator_text.strip()))
+    private_owned = owned_text and not article.get("url")
+    url = "" if private_owned else reference_url(article["url"])
     if operator_text:
         text = str(operator_text).strip()[:20000]
         source_kind, resolved = "operator_supplied_text", url
@@ -78,7 +82,7 @@ def collect_article_evidence(article, provider, output_dir: Path):
         except Exception:
             raise SourceUnavailable("이 기사의 원문 페이지를 열 수 없었어요(사이트가 자동 수집을 막았을 수 있어요). 비용은 들지 않았어요. 다른 기사를 고르거나 원문을 직접 붙여 넣어 주세요") from None
         source_kind = "http_article_body"
-    if len(text) < 200:
+    if len(text) < (100 if owned_text else 200):
         raise DefiniteFailure("열어 본 원문이 너무 짧아요. 비용은 들지 않았어요. 다른 기사를 고르거나 원문을 직접 붙여 넣어 주세요")
     paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if len(part.strip()) > 15]
     numbered, length = [], 0
@@ -99,6 +103,9 @@ def collect_article_evidence(article, provider, output_dir: Path):
         # Reading a publisher's citation to a leaderboard is not an independent check of it.
         # The model's proposed scope is retained only in this private collection report.
         evidence.append({"id": f"E{index}", "url": resolved, "claim": claim["claim"], "scope": "발행자의 원문 본문에서 추출한 주장; 독립 검증 미실시", "independent_source_checked": False, "numbers": claim["numbers"], "source_paragraph": number, "source_quote": numbered[number - 1], "evidence_type": "본문에서 모델이 추출한 후보; 후속 비평·평가와 사람 검토 필요"})
+        if private_owned:
+            evidence[-1].update(source_kind="owner_supplied", operator_source_hash=digest(operator_text),
+                                scope="작성자가 직접 제공한 원문에서 추출한 주장; 독립 검증 미실시")
     if len(evidence) < 2:
         raise WorkflowError("확인 가능한 근거가 부족합니다")
     output = {"url": resolved, "source_kind": source_kind, "retrieved_at": now(), "source_sha256": hashlib.sha256(text.encode()).hexdigest(), "paragraphs": numbered, "evidence": evidence, "model_proposed_scopes": [claim['scope'] for claim in result.get('claims', [])], "limitations": result.get("limitations", []), "hook": result.get("hook", "")}

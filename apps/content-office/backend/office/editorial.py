@@ -216,7 +216,7 @@ INTEGRITY_ISSUES = ("원문 보존 본문이 등록한 원문 해시와 다릅�
 
 
 def deterministic_checks(packet):
-    """2026-11-02: only integrity failures block (no reviewable HTTPS source, a changed operator original).
+    """Only integrity failures block: missing HTTPS/hash-bound owned provenance, or a changed original.
     Length, headings, citation linking, scene count, style and Korean rules are advisories shown to the
     human approver; they no longer dead-end the flow."""
     issues = list(output_issues(packet))
@@ -237,7 +237,12 @@ def deterministic_checks(packet):
     if any(re.search(r"[\u0400-\u04ff]", text) for text in packet_texts(packet)):
         issues.append("한국어 원고에 무관한 외국 언어 문자가 섞여 있습니다")
     evidence = packet.get("evidence", [])
-    if not evidence or any(not e.get("url", "").startswith("https://") for e in evidence):
+    original_hash = packet.get("original_source_hash") or packet.get("source_input_hash")
+    def traceable(e):
+        return e.get("url", "").startswith("https://") or (
+            preserve_original and bool(original_hash) and e.get("source_kind") == "owner_supplied"
+            and e.get("operator_source_hash") == original_hash)
+    if not evidence or any(not traceable(e) for e in evidence):
         issues.append(INTEGRITY_ISSUES[1])
     known = {e["id"] for e in evidence if e.get("id")}
     cited = cited_evidence_ids(packet.get("body", ""))
