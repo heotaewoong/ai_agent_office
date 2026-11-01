@@ -1,5 +1,6 @@
 "use client";
 import { ActionFeedback } from "./action-feedback";
+import { JobTrash } from './job-trash';
 import {DeliveryConsole} from "./delivery-console";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -849,6 +850,17 @@ export default function Office({ children }: { children: React.ReactNode }) {
                     )}</div>
                   </section>
                   <section className="job-content">
+                    <JobTrash job={job??undefined} busy={!!busy||!connected}
+                      unsaved={Boolean(job&&(localDrafts[job.id]||intakeDrafts[job.id]||briefDrafts[job.id]||offerDrafts[job.id]||ideaSourcesDrafts[job.id]))}
+                      onChanged={async deletedId=>{
+                        if(deletedId){
+                          const next=dashboard.jobs.find(item=>item.id!==deletedId)?.id||'';
+                          selectJob(next);
+                          setDashboard(previous=>previous?{...previous,jobs:previous.jobs.filter(item=>item.id!==deletedId)}:previous);
+                          router.replace(officeHref(view==='delivery'?'delivery':'studio',next||undefined));
+                        }
+                        await loadDashboard(true);
+                      }}/>
                     {!activeId ? (
                       <Empty title="첫 콘텐츠를 만들어 보세요" icon="pen">
                         뉴스 기사, 독자 질문, 직접 등록한 기획에서 시작할 수 있어요.

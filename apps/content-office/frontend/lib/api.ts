@@ -116,6 +116,9 @@ async function request<T>(
 }
 
 export const api = {
+  trashJobs: () => request<{jobs: Pick<Job,'id'|'title'|'updated_at'>[]}>('/trash/jobs'),
+  trashJob: (id:string,updatedAt:string) => request<Job>(`/jobs/${encodeURIComponent(id)}/trash`,'POST',{expected_updated_at:updatedAt}),
+  restoreJob: (id:string,updatedAt:string) => request<Job>(`/jobs/${encodeURIComponent(id)}/restore`,'POST',{expected_updated_at:updatedAt}),
   assistantReports: () => request<unknown>("/assistant/reports"),
   thumbnailStudio:(id:string)=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio`),
   generateThumbnails:(id:string,body:{source_hash:string;revision:string;confirm_paid:boolean;edit_id?:string;instruction?:string})=>request(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/generate`,"POST",body),
