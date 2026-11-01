@@ -1,5 +1,6 @@
 const status=document.querySelector('#status');
-async function refresh(){const s=await chrome.storage.local.get(['enabled','connections','lastRun','results','error']);document.querySelector('#enabled').checked=s.enabled===true;status.textContent=JSON.stringify({로그인연결:s.connections||{},마지막처리:s.lastRun||'아직 없음',채널결과:s.results||[],오류:s.error||''},null,2);}
+const states={no_approved_pending_draft:'승인①·채널 선택·작업 시간을 충족한 대기 초안이 없습니다',adapter_not_implemented:'Instagram 초안 저장은 아직 미구현입니다. 전송하지 않았습니다',adapter_verification_required:'실제 계정의 저장·재열기 검증이 필요합니다',platform_private:'플랫폼 비공개 저장 확인',platform_draft:'플랫폼 초안 재열기 확인',unknown:'저장 결과 불명 · 중복 방지를 위해 자동 재전송하지 않습니다',blocked:'계정·저장 화면 확인이 필요합니다'};
+async function refresh(){const s=await chrome.storage.local.get(['enabled','connections','lastRun','results','error']);document.querySelector('#enabled').checked=s.enabled===true;status.textContent=JSON.stringify({로그인연결:s.connections||{},마지막처리:s.lastRun||'아직 없음',채널결과:(s.results||[]).map(r=>({...r,state:states[r.state]||r.state})),오류:s.error||''},null,2);}
 document.querySelector('#enabled').addEventListener('change',async e=>{await chrome.storage.local.set({enabled:e.target.checked});await refresh();});
 for(const command of ['connect','run'])document.getElementById(command).addEventListener('click',async()=>{status.textContent='확인 중…';try{const r=await chrome.runtime.sendMessage({command});if(!r?.ok)throw Error();await refresh();}catch{status.textContent='Windows 실행기가 연결되지 않았습니다. 설치 안내서를 확인하세요.';}});
 await refresh();
