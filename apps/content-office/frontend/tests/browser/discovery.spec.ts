@@ -225,7 +225,10 @@ for(const width of [1440,375])test(`카드·출고함에서 ${width}px 원고 �
  const original=await body.inputValue();
  await body.fill(original+' 저장하지 않은 검토 메모');
  const requestCount:string[]=[];page.on('request',r=>{if(r.isNavigationRequest())requestCount.push(r.url());});
- await page.getByRole('link',{name:'현재 원고 검토·승인①으로 이동',exact:true}).press('Enter');
+ const reviewLink=page.getByRole('link',{name:'현재 원고 검토·승인①으로 이동',exact:true});
+ await reviewLink.scrollIntoViewIfNeeded();
+ expect(await reviewLink.evaluate(el=>{const r=el.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('a')===el;})).toBe(true);
+ if(width===375)await reviewLink.click();else await reviewLink.press('Enter');
  await expect(page).toHaveURL(new RegExp(`#studio-blog-${old.id}$`));
  await expect(target).toBeFocused();
  await expect(body).toHaveValue(original+' 저장하지 않은 검토 메모');
