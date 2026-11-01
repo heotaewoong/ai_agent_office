@@ -55,7 +55,7 @@ test('뉴스 점수 정렬은 분류와 기사 선택을 보존하고 API를 쓰
  const writes=await researchHarness(page,articles);await page.goto('/news?seg=all');
  const titles=page.locator('.article-grid h3');await expect(titles).toHaveText(['후보 high','후보 middle','후보 low']);
  await page.getByRole('checkbox',{name:'후보 low 선택',exact:true}).check();
- await page.getByLabel('정렬',{exact:true}).selectOption('score-asc');
+ await page.getByLabel('뉴스 정렬',{exact:true}).selectOption('score-asc');
  await expect(titles).toHaveText(['후보 low','후보 middle','후보 high']);
  await expect(page.getByRole('checkbox',{name:'후보 low 선택',exact:true})).toBeChecked();
  await page.getByRole('navigation',{name:'뉴스 분류'}).getByRole('link',{name:/AI·자동화/}).click();
