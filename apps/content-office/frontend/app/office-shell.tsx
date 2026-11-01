@@ -204,6 +204,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const alive = useRef(true);
   const dashboardRefresh = useRef(createDashboardRefreshGuard());
   const jobRefresh = useRef(createJobRefreshGuard());
+  const sourceReviewTarget = useRef<string | null>(null);
   const selectJob = useCallback((id: string) => {
     if (id !== jobRefresh.current.activeId) {
       jobRefresh.current.select(id);
@@ -865,6 +866,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         cached={localDrafts[job.id]}
                         cachedBrief={briefDrafts[job.id]}
                         cachedOffer={offerDrafts[job.id]}
+                        sourceReviewTarget={sourceReviewTarget}
                         onBriefDraftChange={updateBriefDraft}
                         onOfferDraftChange={updateOfferDraft}
                         onDraftChange={(id, value) =>
@@ -910,6 +912,10 @@ export default function Office({ children }: { children: React.ReactNode }) {
                             !!busy || !connected || Boolean(localDrafts[job.id])
                           }
                           action={action}
+                          onSourceReview={() => {
+                            sourceReviewTarget.current = job.id;
+                            router.push(officeHref("studio", job.id), { scroll: false });
+                          }}
                         />
                       </>
                     )}
@@ -1181,6 +1187,7 @@ function Studio({
   action,
   onSaved,
   onDelivery,
+  sourceReviewTarget,
 }: {
   job: Job;
   globalCap: number;
@@ -1199,6 +1206,7 @@ function Studio({
   action: Action;
   onSaved: (job: Job) => void;
   onDelivery: () => void;
+  sourceReviewTarget?: { current: string | null };
 }) {
   const [title, setTitle] = useState(
     cached?.title ?? job.source_packet?.title ?? job.title,
@@ -1224,11 +1232,16 @@ function Studio({
   const packagingPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const target = document.getElementById(`studio-blog-${job.id}`);
-    if (!target || window.location.hash !== `#${target.id}`) return;
-    // Job data can arrive after Next has processed the route fragment.
+    const requested = sourceReviewTarget?.current === job.id;
+    if (!target || (!requested && window.location.hash !== `#${target.id}`)) return;
+    if (requested) {
+      sourceReviewTarget.current = null;
+      window.history.replaceState(null, "", `#${target.id}`);
+    }
+    // Set the fragment only after the page mounts: Next 16.4.3 can cache an initial hash and append it twice.
     target.focus({ preventScroll: true });
     target.scrollIntoView({ block: "start" });
-  }, [job.id]);
+  }, [job.id, sourceReviewTarget]);
   const stale = baseHash !== job.source_hash && dirty;
   useEffect(() => {
     if (!dirty) {
@@ -2075,6 +2088,7 @@ function Delivery({
   job,
   busy,
   action,
+  onSourceReview,
 }: {
   youtubeConfigured: boolean;
   requestBlockedReason?: string;
@@ -2082,6 +2096,7 @@ function Delivery({
   job: Job;
   busy: boolean;
   action: (label: string, execute: () => Promise<unknown>, success: string) => Promise<true | string>;
+  onSourceReview: () => void;
 }) {
   const [preview, setPreview] = useState<string>();
   const [releaseVersion, setReleaseVersion] = useState<string>();
@@ -2168,7 +2183,11 @@ function Delivery({
         >
           <strong>{nextProduction?.title}</strong>
           <span>{nextProduction?.detail}</span>
-          {nextProduction?.href && <Link className="button primary" href={nextProduction.href}>
+          {nextProduction?.href && <Link className="button primary" href={nextProduction.href} onNavigate={(event) => {
+            if (nextProduction.href === "/settings") return;
+            event.preventDefault();
+            onSourceReview();
+          }}>
             {nextProduction.href === "/settings" ? "작업 시간 열기" : "현재 원고 검토·승인①으로 이동"}
           </Link>}
           {job.state === "source_approved" && (
