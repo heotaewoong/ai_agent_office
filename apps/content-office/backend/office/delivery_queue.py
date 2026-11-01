@@ -6,6 +6,8 @@ def target(store,key,job):
     row=channel(store,key)
     if row.get('platform')!='youtube':raise WorkflowError('자동 비공개 업로드는 연결된 YouTube 채널만 지원합니다')
     if not row.get('credentials_configured'):
+        from .owner_auth import enabled
+        if enabled():raise WorkflowError('본인 PC 인증 실행기의 연결 확인이 만료됐거나 아직 연결되지 않았습니다. PC 실행기를 연결한 뒤 다시 확인하세요. 출고 승인은 저장하지 않았습니다')
         from .youtube_oauth import client_configured
         if not client_configured():raise WorkflowError('Google OAuth 연결 구성이 아직 준비되지 않았습니다. 계정 로그인 전에 운영 설정을 확인해 주세요. 출고 승인은 저장하지 않았습니다')
         raise WorkflowError('설정에서 YouTube 계정을 먼저 연결해 주세요. 출고 승인은 저장하지 않았습니다')
