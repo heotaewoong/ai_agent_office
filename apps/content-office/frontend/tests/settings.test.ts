@@ -160,7 +160,8 @@ test("비용 안내는 승인 전 글 호출과 승인 후 선택 제작을 구�
   assert.ok(before.includes("작업 시간") && before.includes("예산"));
   const after = PROFILE_COST_GUIDANCE.find((note) => note.includes("승인① 후에는")) ?? "";
   for (const medium of ["음성", "배경 이미지", "생성 영상"]) assert.ok(after.includes(medium), medium);
-  assert.ok(after.includes("승인 자체는") && after.includes("시작하지 않습니다"));
+  for (const boundary of ["이 원고 승인·자동 제작", "제작 요청", "비용 확인", "출고 승인②", "외부 게시"]) assert.ok(after.includes(boundary), boundary);
+  assert.ok(!after.includes("승인 자체는 제작이나 유료 호출을 시작하지 않습니다"));
   assert.ok(!PROFILE_COST_GUIDANCE.join(" ").includes("승인① 뒤 실제 제작에서만"));
 });
 

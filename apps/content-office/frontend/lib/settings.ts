@@ -36,7 +36,7 @@ export const PROFILE_OPTIONS: Record<ProfileKind, ProfileOption[]> = {
 export const PROFILE_COST_GUIDANCE = [
   "프로필 선택만으로는 유료 API를 호출하지 않습니다. 실패해도 다른 제공자로 자동 전환하지 않습니다.",
   "원고 승인① 전에도 근거 요약·원고 생성·비평·평가·국어 검수의 글 모델 API 또는 구독 호출이 실행될 수 있습니다. 구독은 사용 한도를 소모하고 API는 비용이 발생합니다. 작업 시간과 예산 조건을 확인하세요.",
-  "원고 승인① 후에는 선택 제작에서 사용하는 유료 음성·배경 이미지·생성 영상에 별도 비용이 발생할 수 있습니다. 승인 자체는 제작이나 유료 호출을 시작하지 않습니다.",
+  "원고 승인① 후에는 선택 제작에서 사용하는 유료 음성·배경 이미지·생성 영상에 별도 비용이 발생할 수 있습니다. 작업실의 ‘이 원고 승인·자동 제작’은 승인과 선택한 제작 요청을 함께 진행합니다. 유료 제작은 비용 확인 후 요청하며, 출고 승인②와 외부 게시는 별도입니다.",
 ];
 
 export function textProfileConnection(provider: ProviderStatus | undefined) {
