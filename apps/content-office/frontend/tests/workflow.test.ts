@@ -309,3 +309,9 @@ test("영상 보기는 장면 클립보다 완성 영상(short.mp4)을 먼저 �
   assert.equal(mainVideoFile([{ name: "generated-01.mp4", kind: "video" }])?.name, "generated-01.mp4");
   assert.equal(mainVideoFile([{ name: "a.txt" }]), undefined);
 });
+test('a collect-only scheduled window is not a production window, so one click opens an operator window',async()=>{
+ const {workWindowBlockedReason}=await import('../lib/workflow.ts');
+ const end=new Date(Date.now()+10*60_000).toISOString();
+ assert.match(workWindowBlockedReason({authorized_end:end,status:'active',authorization_source:'scheduled_daily_collect'} as never) ?? '',/자동 뉴스 수집/);
+ assert.equal(workWindowBlockedReason({authorized_end:end,status:'active',authorization_source:'local_operator_ui'} as never),undefined);
+});

@@ -51,7 +51,9 @@ def test_review_only_preserves_derivative_prices_when_review_rejects():
             return {'role':role,'passed':False,'score':50,'critical_issues':['조건 확인 필요'],'minor_issues':[],'summary':'확인 필요'}
     result=review_until_ready(packet,Reviewer(),refine_limit=0)
     assert result['video']==packet['video'] and result['channel_posts']==packet['channel_posts']
-    assert result['quality']['status']=='blocked'
+    # The rejection stays visible as an advisory; it does not dead-end the human approval.
+    assert result['quality']['status']=='passed' and result['quality']['advisories']['model_reviews_passed'] is False
+    assert '조건 확인 필요' in result['quality']['advisories']['review_issues']
 
 
 def test_presets_cover_both_axes_and_legacy_default():

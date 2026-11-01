@@ -1631,10 +1631,16 @@ h1 {
 }
 .approval-panel {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 15px;
   padding: 20px 0;
+}
+.approval-panel > div:first-child {
+  flex: 1 1 auto;
+  min-width: min(100%, 260px);
+  max-width: 100%;
 }
 .approval-panel h3 {
   font-size: 13px;
@@ -1651,8 +1657,11 @@ h1 {
 .approval-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
-  flex-shrink: 0;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
 }
 .confirm-panel {
   padding: 20px;
@@ -3876,7 +3885,7 @@ td a {
 .profile-option small{display:block;font-size:11px;line-height:1.7;color:var(--muted);margin-top:2px}
 .paid-tag,.free-tag{font-style:normal;font-size:10px;padding:1px 6px;border-radius:4px}
 .paid-tag{background:#fbe6d8;color:#a24f1d}.free-tag{background:#e8efe0;color:#4f6a3a}
-.produce-confirm{display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center}.produce-confirm .paid-notice{flex-basis:100%;font-size:12px;color:#a24f1d;background:#fbe6d8;border-radius:6px;padding:4px 8px}
+.produce-confirm{min-width:0;max-width:100%;display:inline-flex;flex-wrap:wrap;gap:8px;align-items:center}.produce-confirm .paid-notice{flex-basis:100%;font-size:12px;color:#a24f1d;background:#fbe6d8;border-radius:6px;padding:4px 8px}
 .window-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
 .window-row label{display:grid;gap:4px;font-size:12px;color:var(--muted)}
 .window-row input{width:110px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit}

@@ -80,7 +80,7 @@ def test_plan_cards_renders_portrait_pngs_and_registers_artifacts(tmp_path):
     assert provider.calls[0]["schema"] is CARDS_SCHEMA
     stored = store.job(job["id"])["cards"]
     assert stored["version"] == 1 and stored["source_hash"] == job["source_hash"]
-    assert stored["checks"] == {"passed": True, "issues": []}
+    assert stored["checks"] == {"passed": True, "issues": [], "blocking": [], "warnings": []}
     assert [slide["index"] for slide in stored["slides"]] == list(range(1, 8))
     for slide in stored["slides"]:
         assert slide["artifact_id"].startswith("asset_")
@@ -97,7 +97,7 @@ def test_plan_cards_renders_portrait_pngs_and_registers_artifacts(tmp_path):
 
 def test_card_checks_catch_count_length_overflow_terms_claims_and_duplicates():
     brand = load_brand()
-    assert card_checks(good_slides(), brand) == {"passed": True, "issues": []}
+    assert card_checks(good_slides(), brand) == {"passed": True, "issues": [], "blocking": [], "warnings": []}
     assert any("6" in issue and "8" in issue for issue in card_checks(good_slides(5), brand)["issues"])
     assert any("6" in issue and "8" in issue for issue in card_checks(good_slides(9), brand)["issues"])
     bad = good_slides()
@@ -108,7 +108,8 @@ def test_card_checks_catch_count_length_overflow_terms_claims_and_duplicates():
     bad["slides"][5]["title"] = bad["slides"][0]["title"]
     result = card_checks(bad, brand)
     joined = "\n".join(result["issues"])
-    assert result["passed"] is False
+    # 2026-11-02: length, glossary, wording and duplicate rules are advisories; they no longer drop card news.
+    assert result["passed"] is True and result["blocking"] == []
     assert "2번" in joined and "18자" in joined
     assert "3번" in joined and "60자" in joined
     assert "클로드 코드" in joined and "Claude Code" in joined
@@ -116,7 +117,8 @@ def test_card_checks_catch_count_length_overflow_terms_claims_and_duplicates():
     assert "6번" in joined and "중복" in joined
     overflow = good_slides()
     overflow["slides"][1]["title"] = "긴제목" * 40
-    assert any("2번" in issue and "넘침" in issue for issue in card_checks(overflow, brand)["issues"])
+    overflowing = card_checks(overflow, brand)
+    assert overflowing["passed"] is False and any("2번" in issue and "넘침" in issue for issue in overflowing["blocking"])
 
 
 def test_render_failure_keeps_other_slides_and_reports_issue(tmp_path, monkeypatch):

@@ -491,6 +491,11 @@ class WindowWatcher:
                 raise
 
 
+# Highest total API cap the operator has authorised (raised from 10,000 to 30,000 KRW on 2026-11-02 for the
+# interview demo). Every paid production still needs the on-page two-step cost confirmation.
+BUDGET_CEILING_KRW = 30000
+
+
 def inspect_state(store, seen_manifests):
     """Inspect current approval bindings and each newly observed manifest's actual files."""
     import hashlib
@@ -504,7 +509,7 @@ def inspect_state(store, seen_manifests):
     checked = 0
     jobs = store.jobs()
     budget = store.budget()
-    if budget["remaining_krw"] < 0 or budget["cap_krw"] > 10000:
+    if budget["remaining_krw"] < 0 or budget["cap_krw"] > BUDGET_CEILING_KRW:
         issues.append({"code": "budget_exceeded"})
     for job in jobs:
         job_id = job["id"]

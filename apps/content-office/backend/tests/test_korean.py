@@ -50,12 +50,13 @@ class ReviewProvider:
         return {"role": role, "score": 90, "passed": True, "critical_issues": [], "minor_issues": [], "summary": "검토"}
 
 
-def test_korean_review_failure_sends_corrections_to_refine_and_blocks():
+def test_korean_review_failure_sends_corrections_to_refine_and_stays_visible():
     provider = ReviewProvider(korean_passes=False)
     result = review_until_ready({"title": "원고", "body": "본문", "evidence": []}, provider)
     assert provider.calls.count("korean") == 3 and provider.calls.count("refine") == 2
     korean = result["quality"]["korean"]
-    assert result["quality"]["status"] == "blocked" and korean["passed"] is False
+    assert result["quality"]["status"] == "passed" and korean["passed"] is False
+    assert result["quality"]["advisories"]["model_reviews_passed"] is False
     assert korean["corrections"][0]["revised"].endswith("줄이는 것이다")
 
 

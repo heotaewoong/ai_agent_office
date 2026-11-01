@@ -67,11 +67,15 @@ def test_import_preserves_video_bytes_and_requires_separate_release_approval(tmp
     video = next(a for a in manifest['files'] if a['name'] == 'short.mp4')
     assert video['sha256'] == hashlib.sha256(b'synthetic-video').hexdigest()
     assert manifest['selected_thumbnail_id'] is None
+    # Media review is still a human confirmation.
     with pytest.raises(WorkflowError):
-        store.review_release(job['id'], manifest['hash'], 'approved', 'fixture', True, ['video'])
+        store.review_release(job['id'], manifest['hash'], 'approved', 'fixture', False, ['video'])
+    # 2026-11-02: an unclicked thumbnail no longer blocks approval②; the candidate is confirmed in it.
     candidate = manifest['thumbnail_candidates'][0]
-    result = store.select_thumbnail(job['id'], candidate['id'], manifest['hash'], 'fixture')
-    result = store.review_release(job['id'], result['manifest']['hash'], 'approved', 'fixture', True, ['video', 'blog'])
+    result = store.review_release(job['id'], manifest['hash'], 'approved', 'fixture', True, ['video', 'blog'])
+    assert result['manifest']['selected_thumbnail_id'] == candidate['id']
+    assert result['manifest']['thumbnail_selection_status'] == 'recommended_default_confirmed_at_release'
+    assert result['release_approval']['version'] == result['manifest']['hash']
     assert result['release_approval']['decision'] == 'approved'
     assert result['release_approval']['external_published'] is False
 

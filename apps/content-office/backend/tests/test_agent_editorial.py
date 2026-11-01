@@ -46,8 +46,11 @@ def test_gate_report_is_saved_and_blocks_unsupported_title_number(tmp_path):
     job = idea_job(store, origin="rss")
     prepare_source(store, job["id"], provider=FakeProvider("AI 도구 7가지"))
     packet = store.job(job["id"])["source_packet"]
-    assert packet["quality"]["gates"]["status"] == "block"
-    assert packet["quality"]["status"] == "blocked"
+    # Saved and visible to the approver, but an unsupported title number no longer blocks the draft.
+    assert packet["quality"]["gates"]["status"] == "warn"
+    assert any(i["rule"] == "metadata_numbers" for i in packet["quality"]["gates"]["items"])
+    # This RSS fixture has no reviewable HTTPS source: that integrity rule (not the number gate) blocks it.
+    assert packet["quality"]["deterministic_checks"]["blocking"] == ["검토 가능한 HTTPS 원출처가 필요합니다"]
 
 
 def test_packaging_reaches_drafting_context_and_packet(tmp_path):
@@ -98,8 +101,8 @@ def test_gate_block_alone_makes_quality_blocked(tmp_path):
     prepare_source(store, job["id"], provider=provider)
     quality = store.job(job["id"])["source_packet"]["quality"]
     assert quality["deterministic_checks"]["passed"] is True
-    assert quality["gates"]["status"] == "block"
-    assert quality["status"] == "blocked" and quality["critical"] is True
+    assert quality["gates"]["status"] == "warn"
+    assert quality["status"] == "passed" and quality["critical"] is False
     assert "[브랜드 목소리" in provider.systems[0]
 
     store2 = Store(tmp_path / "ok")

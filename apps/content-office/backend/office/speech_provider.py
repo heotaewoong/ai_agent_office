@@ -21,7 +21,7 @@ import requests
 from .store import Store, WorkflowError, digest
 
 PRICE_SOURCE = "https://ai.google.dev/gemini-api/docs/pricing"
-PRICE_VALID_UNTIL = "2026-11-02T00:00:00+00:00"
+PRICE_VALID_UNTIL = "2026-12-01T00:00:00+00:00"  # rates re-checked 2026-11-02
 FX_KRW = 2000
 EXPERIMENT_LIMIT_KRW = 1000
 TTS_MODEL = "gemini-3.8-flash-tts"

@@ -93,12 +93,14 @@ async function newsJobHarness(page:Page, ready=false) {
 test('뉴스 작업 재열기는 해당 ID로 이동하고 오래된 작업도 목록 맨 위에 표시한다',async({page})=>{
  const {writes,old}=await newsJobHarness(page);await page.goto('/news?seg=all');
  await page.getByRole('checkbox',{name:'선택한 뉴스 선택',exact:true}).check();
- await page.getByRole('button',{name:'콘텐츠 작업 만들기',exact:true}).click();
+ // 2026-11-02 operator instruction (one click from news to draft): with auto drafting on and the window closed,
+ // the button itself states that it opens a 120-minute window, so the click is the explicit confirmation.
+ await page.getByRole('button',{name:'작업 시간 120분 열고 작업 만들기',exact:true}).click();
  await expect(page).toHaveURL(`/scripts/${old.id}`);
  await expect(page.locator('.job-list .job-item').first()).toHaveAttribute('aria-current','page');
  await expect(page.locator('.job-list .job-item').first()).toContainText(old.title);
  await expect(page.getByRole('button',{name:'원고 생성 시작',exact:true})).toBeEnabled();
- expect(writes).toEqual([{path:'/api/jobs',body:{article_ids:['news-one'],start_draft:true}}]);
+ expect(writes).toEqual([{path:'/api/session/window',body:{minutes:120}},{path:'/api/jobs',body:{article_ids:['news-one'],start_draft:true}}]);
 });
 
 test('닫힌 작업 시간은 실행 확인 후에만 열고 원고를 요청하며 승인·제작을 자동 실행하지 않는다',async({page})=>{
@@ -108,7 +110,8 @@ test('닫힌 작업 시간은 실행 확인 후에만 열고 원고를 요청하
  expect(writes).toEqual([]);
  await confirm.getByRole('button',{name:'작업 시간 열고 원고 생성',exact:true}).click();
  await expect.poll(()=>writes.map(row=>row.path)).toEqual(['/api/session/window',`/api/jobs/${old.id}/draft`]);
- expect(writes[0].body).toEqual({minutes:30});
+ // Same 120-minute default as the settings page (draft + review + production exceed 30 minutes).
+ expect(writes[0].body).toEqual({minutes:120});
 });
 
 test('승인① 화면에서 썸네일 비용을 확인한 뒤에만 승인·자동 제작을 함께 요청한다',async({page})=>{
@@ -265,4 +268,41 @@ for(const width of [1440,375])test(`fragment 새로고침 뒤 ${width}px 왕복�
  await page.goForward();await expect(page).toHaveURL(source);
  await expect(body).toHaveValue(expected);
  expect(docs).toEqual([]);expect(writes).toEqual([]);
+});
+
+for(const width of [375,768,1280,1440,1920])test(`긴 제작비 안내 ${width}px에서도 승인 설명이 눌리거나 버튼이 넘치지 않는다`,async({page})=>{
+ const {old,writes}=await newsJobHarness(page,true);
+ Object.assign(old,{state:'release_review',manifest:{hash:'layout-only',files:[{id:'layout-text',name:'tistory.md',kind:'markdown',url:'/api/layout-text',outputs:['blog']}],completed_outputs:['blog','video']}});
+ await page.route(`**/api/jobs/${old.id}/production-estimate*`,route=>route.fulfill({contentType:'application/json',body:JSON.stringify({clips:{paid:true,clips:5,credits:200,reservation_krw:4000,daily_cap:15,used_today:5,label:'유료: 영상 클립 5개(장면 길이에 맞춤) · 최대 200크레딧($2.00, 예약 최대 4,000원)'},thumbnail_artwork:true})}));
+ await page.setViewportSize({width,height:1000});await page.goto(`/scripts/${old.id}`,{waitUntil:'domcontentloaded'});
+ const panel=page.locator('.approval-panel');await expect(panel.getByText(/오늘 5\/15개 사용/)).toBeVisible();
+ const check=async()=>{
+  const box=await panel.boundingBox();const copy=await panel.locator(':scope > div').first().boundingBox();
+  expect(copy!.width).toBeGreaterThanOrEqual(Math.min(240,box!.width));expect(copy!.height).toBeLessThan(250);
+  for(const e of await panel.locator('.approval-actions, .produce-confirm, .paid-notice, button').all()){
+   const b=await e.boundingBox();if(b){expect(b.x).toBeGreaterThanOrEqual(box!.x-1);expect(b.x+b.width).toBeLessThanOrEqual(box!.x+box!.width+1);}
+  }
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ };
+ await check();await panel.getByRole('button',{name:'현재 설정으로 다시 제작',exact:true}).click();
+ await expect(panel.getByRole('button',{name:'유료 포함 제작 확인',exact:true})).toBeVisible();await check();
+ await panel.getByRole('button',{name:'취소',exact:true}).click();expect(writes).toEqual([]);
+ // The same shared approval layout also appears on the delivery page.
+ await page.goto(`/publish?job=${old.id}`,{waitUntil:'domcontentloaded'});await expect(page.locator('.approval-panel')).toContainText('마지막 확인, 출고 승인');
+ const release=page.locator('.approval-panel');const rb=await release.boundingBox();
+ for(const e of await release.locator(':scope > div').all()){const b=await e.boundingBox();expect(b!.x+b!.width).toBeLessThanOrEqual(rb!.x+rb!.width+1);}
+ expect(writes).toEqual([]);
+});
+
+for(const width of [375,1440])test(`승인 최종확인 ${width}px에서도 긴 비용안내와 취소가 영역 안에 남는다`,async({page})=>{
+ const {old,writes}=await newsJobHarness(page,true);
+ await page.route(`**/api/jobs/${old.id}/production-estimate*`,route=>route.fulfill({contentType:'application/json',body:JSON.stringify({clips:{paid:true,clips:5,credits:200,reservation_krw:4000,daily_cap:15,used_today:5,label:'유료: 영상 클립 5개(장면 길이에 맞춤) · 최대 200크레딧($2.00, 예약 최대 4,000원)'},thumbnail_artwork:true})}));
+ await page.setViewportSize({width,height:1000});await page.goto(`/scripts/${old.id}`,{waitUntil:'domcontentloaded'});
+ await page.getByRole('button',{name:'원고 승인',exact:true}).click();
+ const confirm=page.getByRole('region',{name:'원고 승인 최종 확인'});await expect(confirm.getByText(/오늘 5\/15개 사용/)).toBeVisible();
+ await confirm.getByRole('button',{name:'이 원고 승인·자동 제작',exact:true}).click();
+ await expect(confirm.getByRole('button',{name:'유료 포함 제작 확인',exact:true})).toBeVisible();
+ const box=await confirm.boundingBox();for(const el of await confirm.locator('.produce-confirm, .paid-notice, button').all()){const b=await el.boundingBox();expect(b!.x).toBeGreaterThanOrEqual(box!.x-1);expect(b!.x+b!.width).toBeLessThanOrEqual(box!.x+box!.width+1);}
+ await confirm.getByRole('button',{name:'취소',exact:true}).click();await confirm.getByRole('button',{name:'돌아가기',exact:true}).click();
+ expect(writes).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });

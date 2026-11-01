@@ -16,8 +16,13 @@ class WorkflowError(ValueError):
     pass
 
 
-class SourceUnavailable(WorkflowError):
-    """The source failed before any model request; no result needs reconciliation."""
+class DefiniteFailure(WorkflowError):
+    """Nothing billable is in doubt (e.g. the article page could not be read before any model call).
+    The worker records a plain, retryable failure instead of an 'unknown result needs reconciliation'."""
+
+
+class SourceUnavailable(DefiniteFailure):
+    """An article fetch failed before any model request."""
 
 
 class UnknownTaskPending(WorkflowError):
@@ -407,11 +412,23 @@ class Store:
             if not selected or not selected.issubset(requested) or not selected.issubset(completed):
                 raise WorkflowError('완료된 제작물만 출고할 수 있습니다. 미완료 항목을 제외하고 선택하세요')
             if decision == "approved" and 'video' in selected:
-                candidates = {candidate["id"] for candidate in manifest.get("thumbnail_candidates", [])}
-                if manifest.get("selected_thumbnail_id") not in candidates:
-                    raise WorkflowError("썸네일 후보를 비교하고 최종안을 먼저 선택하세요")
+                candidates = [candidate["id"] for candidate in manifest.get("thumbnail_candidates", [])]
                 if not media_reviewed:
                     raise WorkflowError("영상·음성·자막을 실제로 검토했다는 확인이 필요합니다")
+                if not candidates:
+                    raise WorkflowError("썸네일 후보가 없습니다. 영상을 다시 제작해 주세요")
+                if manifest.get("selected_thumbnail_id") not in candidates:
+                    # 2026-11-02: no extra dead-end click. The approver sees the recommended thumbnail on the same
+                    # screen; approving② confirms it (recorded as such). They can still pick another one first.
+                    chosen = manifest.get("best_candidate_id") if manifest.get("best_candidate_id") in candidates else candidates[0]
+                    manifest = dict(manifest)
+                    manifest.setdefault("render_hash", manifest["hash"])
+                    manifest.update(selected_thumbnail_id=chosen, thumbnail_selection_status="recommended_default_confirmed_at_release",
+                                    thumbnail_selection={"actor": actor, "at": now(), "basis": "recommended_default"})
+                    manifest["hash"] = digest({key: value for key, value in manifest.items() if key != "hash"})
+                    manifest_hash = manifest["hash"]
+                    job["manifest"] = manifest
+                    self._event(db, "thumbnail_selected", {"artifact_id": chosen, "actor": actor, "manifest_hash": manifest_hash, "basis": "recommended_default_at_release"}, job_id)
             record = {"version": manifest_hash, "decision": decision, "actor": actor, "created_at": now(), "outputs": sorted(selected), "target": "manual-handoff", "media_reviewed": bool(media_reviewed), "external_published": False}
             if private_channel is not None:
                 if decision!='approved' or 'video' not in selected or private_channel.get('key') not in ('youtube_main_ko','youtube_english'):

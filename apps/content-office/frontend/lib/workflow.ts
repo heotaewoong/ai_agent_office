@@ -326,8 +326,11 @@ export function draftStatus(tasks: Task[] | undefined, job: Pick<Job, "id">): Dr
 }
 
 /** 생성 요청만 제한한다. 읽기·메타데이터 편집·사람 승인을 막지 않는다. */
-export function workWindowBlockedReason(window: { authorized_end?: string; end?: string; ends_at?: string; end_at?: string; status?: unknown } | undefined, now = Date.now()): string | undefined {
+export function workWindowBlockedReason(window: { authorized_end?: string; end?: string; ends_at?: string; end_at?: string; status?: unknown; authorization_source?: unknown } | undefined, now = Date.now()): string | undefined {
   const end = window?.authorized_end ?? window?.end ?? window?.ends_at ?? window?.end_at;
+  // The 07:00 collect-only window never drafts or produces; the operator opens a production window instead.
+  if (window?.authorization_source === "scheduled_daily_collect")
+    return "자동 뉴스 수집 시간이에요. 원고·제작에는 작업 시간을 새로 열어야 해요.";
   if (["closed", "stopped"].includes(String(window?.status)) || (end && Number.isFinite(Date.parse(end)) && Date.parse(end) <= now))
     return "작업 시간이 종료됐습니다. 제작 설정에서 새 작업 시간을 지정해야 생성·재시도·업로드를 요청할 수 있습니다.";
   if (!end || !Number.isFinite(Date.parse(end)))

@@ -108,7 +108,7 @@ def test_url_encoding_numbers_are_not_claims_but_social_claim_numbers_still_chec
               'channel_posts': {'threads_main': 'https://example.com/2026/1'}}
     assert metadata_fact_check(packet) == []
     packet['channel_posts']['threads_main'] = '효과가 99배예요.'
-    assert any(r['level'] == 'block' and '99' in r['message'] for r in metadata_fact_check(packet))
+    assert any(r['level'] == 'warn' and '99' in r['message'] for r in metadata_fact_check(packet))
 
 
 def test_english_source_has_only_its_matching_channel_schema_and_export(tmp_path):
