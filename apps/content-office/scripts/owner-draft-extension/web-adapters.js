@@ -6,10 +6,16 @@
  const exact=(root,labels)=>[...root.querySelectorAll('button,[role="button"]')].filter(visible).filter(e=>labels.includes((e.getAttribute('aria-label')||e.textContent).trim()));
  const click=(root,labels)=>{if(!labels.every(globalThis.HeoBrainDraftGuards.safeButton))throw Error('공개·예약 버튼은 실행하지 않습니다');const found=exact(root,labels);if(found.length!==1)throw Error('초안 전용 버튼을 확인하지 못했습니다');found[0].click();};
  const editor=()=>{const a=[...document.querySelectorAll('[contenteditable="true"][role="textbox"],.ql-editor[contenteditable="true"]')].filter(visible);if(a.length!==1)throw Error('편집 영역 확인 필요');return a[0];};
- const expectedAccount=(item)=>{
+ const expectedAccount=async(item)=>{
   if(item.channel_key==='tistory_main')return location.hostname==='onethingflow.tistory.com' && location.pathname.startsWith('/manage/') && !!document.querySelector('#post-title-inp');
   if(item.channel_key==='naver_blog_main')return location.hostname==='blog.naver.com' && location.pathname==='/oneflowwhy/postwrite' && !!document.querySelector('.se-documentTitle,.se-section-documentTitle');
-  if(item.channel_key==='linkedin_personal')return [...document.querySelectorAll('nav a[href*="/in/"]')].filter(visible).some(a=>new URL(a.href).pathname.replace(/\/$/,'')==='/'+item.account_id.replace(/\/$/,''));
+  if(item.channel_key==='linkedin_personal'){
+   const me=exact(document,['Me','나']);if(me.length!==1)return false;
+   const wasOpen=me[0].getAttribute('aria-expanded')==='true';
+   try{if(!wasOpen)click(document,['Me','나']);return !!(await wait(()=>[...document.querySelectorAll('a[href*="/in/"]')].filter(visible).find(a=>globalThis.HeoBrainDraftGuards.linkedInProfile(a.href,item.account_id,a.getAttribute('aria-label')||a.textContent||''))));}
+   catch{return false;}
+   finally{if(!wasOpen && me[0].isConnected && me[0].getAttribute('aria-expanded')==='true')me[0].click();}
+  }
   if(item.channel_key==='threads_main')return [...document.querySelectorAll('a[aria-label="프로필"],a[aria-label="Profile"]')].filter(visible).some(a=>new URL(a.href).pathname==='/'+item.account_id);
   return false;
  };
@@ -24,7 +30,7 @@
   if(sender.id!==chrome.runtime.id || !['save-nonpublic','verify-nonpublic'].includes(message.kind))return false;
   (async()=>{
    const item=message.item;
-   if(Date.parse(item.authorized_end)<=Date.now() || item.visibility!=='draft' || !expectedAccount(item))throw Error('로그인 계정 확인 필요');
+   if(Date.parse(item.authorized_end)<=Date.now() || item.visibility!=='draft' || !(await expectedAccount(item)))throw Error('로그인 계정 확인 필요');
    if(['tistory_main','naver_blog_main'].includes(item.channel_key)){
     const fields=await wait(()=>{const f=blogFields(item);return f.every(Boolean)?f:null;});
     if(message.kind==='verify-nonpublic'){

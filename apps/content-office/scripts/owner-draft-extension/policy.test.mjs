@@ -14,3 +14,10 @@ test('증빙은 같은 초안·계정·본문·처리 키에만 연결',()=>{
  assert.throws(()=>proof(row,'published','public-id'));
  assert.deepEqual(proof(row,'platform_draft','draft-local'),{state:'platform_draft',claim_id:row.claim_id,content_hash:row.content_hash,account_id:row.account_id,external_id:'draft-local',reason:''});
 });
+test('본인 메뉴의 프로필 링크만 계정 ID 증거로 인정',()=>{
+ const match=globalThis.HeoBrainDraftGuards.linkedInProfile;
+ assert.equal(match('https://www.linkedin.com/in/taewoong-heo-323b34366/','in/taewoong-heo-323b34366','View Taewoong Heo’s profile'),true);
+ assert.equal(match('https://evil.example/in/taewoong-heo-323b34366/','in/taewoong-heo-323b34366','View profile'),false);
+ assert.equal(match('/in/other/','in/taewoong-heo-323b34366','View other profile'),false);
+ assert.equal(match('/in/taewoong-heo-323b34366/','in/taewoong-heo-323b34366','기사 본문에 등장한 프로필'),false);
+});
