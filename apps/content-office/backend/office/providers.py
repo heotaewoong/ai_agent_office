@@ -86,7 +86,7 @@ def closed_required_schema(schema):
     if not isinstance(schema, dict) or set(schema) - {'type','properties','required','additionalProperties','items','description','enum','minItems','maxItems','minLength','maxLength','anyOf'}:
         return False
     if 'anyOf' in schema:
-        return bool(schema['anyOf']) and all(closed_required_schema(value) for value in schema['anyOf'])
+        return set(schema) <= {'anyOf','description'} and isinstance(schema['anyOf'], list) and bool(schema['anyOf']) and all(closed_required_schema(value) for value in schema['anyOf'])
     kind=schema.get('type')
     if kind=='object':
         props=schema.get('properties',{})
