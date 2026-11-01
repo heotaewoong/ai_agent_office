@@ -468,7 +468,7 @@ def create_app(store: Store | None = None):
         requests = []
         if selection.start_draft:
             window = store.setting("work_window", {})
-            allowed = window.get("status") == "open" and bool(window.get("authorized_end")) and window_open(store) and window.get("authorization_source") != "scheduled_daily_collect"
+            allowed = window.get("status") in ("active", "open") and bool(window.get("authorized_end")) and window_open(store) and window.get("authorization_source") != "scheduled_daily_collect"
             for job in jobs:
                 if job.get("source_hash") or job.get("source_packet"):
                     requests.append({"job_id": job["id"], "state": "existing_source", "reason": "기존 원고를 보존했습니다. 현재 원고를 검토하거나 작업실에서 재생성을 요청하세요"})

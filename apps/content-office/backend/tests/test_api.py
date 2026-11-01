@@ -797,9 +797,10 @@ def test_compact_dashboard_exposes_only_explicit_output_choices(context):
     assert "PRIVATE_BAD_SELECTION" not in response.text
     assert store.job(job["id"]) == before
 
-def test_news_creation_can_queue_initial_draft_once_without_manufacturing_approval(context):
+@pytest.mark.parametrize('status', ['active', 'open'])
+def test_news_creation_can_queue_initial_draft_once_without_manufacturing_approval(context, status):
     store, client, headers = context
-    store.set_setting('work_window', {'status':'open','authorized_end':(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat()})
+    store.set_setting('work_window', {'status':status,'authorized_end':(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat()})
     first=client.post('/api/jobs',json={'article_ids':['one'],'start_draft':True},headers=headers)
     assert first.status_code==200
     job=first.json()['jobs'][0]
