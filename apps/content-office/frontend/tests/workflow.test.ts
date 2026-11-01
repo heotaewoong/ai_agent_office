@@ -244,9 +244,12 @@ test("산출물 미리보기는 로컬 API 경로만 허용한다", () => {
 
 test("남은 시간은 실제 마감으로 계산하고 마감 후에는 종료 표시한다", () => {
   const now = Date.parse("2026-10-25T17:20:00Z");
-  assert.equal(remainingWindow("2026-10-25T23:20:00Z", now), "6시간 0분");
+  assert.equal(remainingWindow("2026-10-25T23:20:00Z", now), "6시간 0분 남음");
   assert.equal(remainingWindow("2026-10-25T17:19:59Z", now), "작업 시간 종료");
   assert.equal(remainingWindow(undefined, now), "마감 미설정");
+  assert.equal(remainingWindow("invalid", now), "마감 미설정");
+  assert.equal(remainingWindow("2026-10-25T17:20:00Z", now), "작업 시간 종료");
+  assert.equal(remainingWindow("2026-10-25T17:20:01Z", now), "0시간 1분 남음");
 });
 
 test("승인 확인을 연 뒤 버전이 바뀌면 새 원고나 파일을 묵시 승인하지 않는다", () => {

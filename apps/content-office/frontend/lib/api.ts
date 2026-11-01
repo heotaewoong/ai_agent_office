@@ -179,7 +179,7 @@ export const api = {
     }),
   retryTask: (id: string) =>
     request(`/tasks/${encodeURIComponent(id)}/retry`, "POST", {}),
-  dashboard: () => request<Dashboard>("/dashboard?compact=true"),
+  dashboard: () => request<Dashboard>("/dashboard?compact=true&task_results=false"),
   job: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}`),
   jobBudget: (id: string) => request<JobBudget>(`/jobs/${encodeURIComponent(id)}/budget`),
   setJobBudget: (id: string, capKrw: number, expectedHash: string) =>

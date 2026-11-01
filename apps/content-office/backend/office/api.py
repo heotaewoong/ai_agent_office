@@ -415,7 +415,7 @@ def create_app(store: Store | None = None):
         return response
 
     @app.get("/api/dashboard")
-    def dashboard(compact: bool = False):
+    def dashboard(compact: bool = False, task_results: bool = True):
         from .voice_selection import profile_summary
         from .image_selection import profile_summary as image_profile_summary
         from .video_selection import profile_summary as clip_profile_summary
@@ -425,13 +425,20 @@ def create_app(store: Store | None = None):
         from .api_leads_newsletter import dashboard_counts
         from .source_registry import classify_article, load_sources, visible_articles
         feed_report = store.setting("feed_report", {})
-        current_ids = {article["id"] for article in rank_articles(store.articles_list())}
+        article_rows = store.articles_list()
+        current_ids = {article["id"] for article in rank_articles(article_rows)}
         active_ids = set(feed_report.get("active_article_ids", current_ids))
-        articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
+        eligible_ids = current_ids & active_ids
+        articles = sorted([article for article in article_rows if article["id"] in eligible_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
         jobs = store.jobs()
         if compact:
             jobs = [_job_summary(job, compact=True) for job in jobs]
-        return {"articles": visible_articles([classify_article(article) for article in articles]), "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'availability': profile_availability(), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
+        tasks = store.tasks()
+        if not task_results:
+            tasks = [{**task, "result": None, "result_omitted": True}
+                     if task.get("state") == "completed" and task.get("result") is not None
+                     else task for task in tasks]
+        return {"articles": visible_articles([classify_article(article) for article in articles]), "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": tasks, "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'availability': profile_availability(), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
 
     @app.get("/api/space")
     def space():

@@ -465,11 +465,11 @@ export default function Office({ children }: { children: React.ReactNode }) {
             type="button"
             className="sidebar-window"
             onClick={() => setView("settings")}
-            title="제작 설정에서 작업 시간을 엽니다"
+            title="작업 시간과 제작 설정 확인"
           >
             <Icon name="clock" size={16} />
             <span>{remainingWindow(end, now)}</span>
-            <small>남음 · 설정</small>
+            <small>설정</small>
           </button>
           <div className="operator">
             <span className="avatar">H</span>
@@ -943,7 +943,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
               {view === "settings" && (
                 <SettingsPanel
                   dashboard={dashboard}
-                  windowLabel={`${remainingWindow(end, now)} 남음`}
+                  windowLabel={remainingWindow(end, now)}
                   busy={!!busy || !connected}
                   action={action}
                 />
