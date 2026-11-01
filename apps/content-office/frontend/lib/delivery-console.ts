@@ -1,14 +1,14 @@
 import type {Channel, Job} from './types.ts';
 import {sourceChannelMismatch, youtubePreflight} from './delivery-readiness.ts';
 export type DeliveryMode='office'|'private'|'draft';
-export const platformChoices=['youtube','instagram','tiktok','linkedin','threads','tistory','naver'] as const;
-export const platformNames:Record<string,string>={youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',linkedin:'LinkedIn',threads:'Threads',tistory:'티스토리',naver:'네이버 블로그'};
+export const platformChoices=['youtube','instagram','tiktok','linkedin','threads','tistory','naver_blog'] as const;
+export const platformNames:Record<string,string>={youtube:'YouTube',instagram:'Instagram',tiktok:'TikTok',linkedin:'LinkedIn',threads:'Threads',tistory:'티스토리',naver_blog:'네이버 블로그'};
 const textFiles:Record<string,string>={linkedin_personal:'linkedin-personal.txt',threads_main:'threads-main.txt',tistory_main:'tistory.md',naver_blog_main:'naver.txt'};
 export function choiceReadiness(job:Job, channel:Channel|undefined, mode:DeliveryMode, blockedReason?:string):{ok:boolean;reason:string}{
  if(mode==='office')return {ok:true,reason:'EC2 오피스 보관 · 외부 플랫폼에는 전송하지 않습니다.'};
  if(!channel)return {ok:false,reason:'등록된 대상 계정이 없습니다. 제작 설정에서 본인 계정을 확인하세요.'};
  if(mode==='private')return channel.platform==='youtube'?youtubePreflight(job,channel,blockedReason):{ok:false,reason:'이 플랫폼의 비공개 영상 업로드는 지원하지 않습니다.'};
- if(!['linkedin','threads','tistory','naver'].includes(channel.platform))return {ok:false,reason:channel.platform==='instagram'?'Instagram 영상 임시저장은 현재 연결 경로에서 검증되지 않았습니다. 오피스 보관을 사용하세요.':'이 플랫폼의 임시저장 실행기는 연결되지 않았습니다.'};
+ if(!['linkedin','threads','tistory','naver_blog'].includes(channel.platform))return {ok:false,reason:channel.platform==='instagram'?'Instagram 영상 임시저장은 현재 연결 경로에서 검증되지 않았습니다. 오피스 보관을 사용하세요.':'이 플랫폼의 임시저장 실행기는 연결되지 않았습니다.'};
  if(!job.source_hash||job.source_approval?.decision!=='approved'||job.source_approval.version!==job.source_hash)return {ok:false,reason:'현재 원고 승인①이 필요합니다.'};
  if(job.manifest?.source_hash!==job.source_hash||!job.manifest?.hash)return {ok:false,reason:'현재 원고에 연결된 정식 제작물이 필요합니다.'};
  if(job.release_approval?.decision!=='approved'||job.release_approval.version!==job.manifest.hash)return {ok:false,reason:'현재 파일의 출고 승인②가 필요합니다.'};
