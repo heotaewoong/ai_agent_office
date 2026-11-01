@@ -276,6 +276,8 @@ for(const width of [375,768,1280,1440,1920])test(`긴 제작비 안내 ${width}p
  await page.route(`**/api/jobs/${old.id}/production-estimate*`,route=>route.fulfill({contentType:'application/json',body:JSON.stringify({clips:{paid:true,clips:5,credits:200,reservation_krw:4000,daily_cap:15,used_today:5,label:'유료: 영상 클립 5개(장면 길이에 맞춤) · 최대 200크레딧($2.00, 예약 최대 4,000원)'},thumbnail_artwork:true})}));
  await page.setViewportSize({width,height:1000});await page.goto(`/scripts/${old.id}`,{waitUntil:'domcontentloaded'});
  const panel=page.locator('.approval-panel');await expect(panel.getByText(/오늘 5\/15개 사용/)).toBeVisible();
+ await expect(panel).not.toContainText('현재 버전을 승인하세요');
+ await expect(panel).toContainText('완성본은 제작·출고함에서 확인하세요.');
  const check=async()=>{
   const box=await panel.boundingBox();const copy=await panel.locator(':scope > div').first().boundingBox();
   expect(copy!.width).toBeGreaterThanOrEqual(Math.min(240,box!.width));expect(copy!.height).toBeLessThan(250);
@@ -287,6 +289,9 @@ for(const width of [375,768,1280,1440,1920])test(`긴 제작비 안내 ${width}p
  await check();await panel.getByRole('button',{name:'현재 설정으로 다시 제작',exact:true}).click();
  await expect(panel.getByRole('button',{name:'유료 포함 제작 확인',exact:true})).toBeVisible();await check();
  await panel.getByRole('button',{name:'취소',exact:true}).click();expect(writes).toEqual([]);
+ Object.assign(old,{state:'source_approved'});await page.reload({waitUntil:'domcontentloaded'});
+ await expect(panel).toContainText('원고 승인이 끝났습니다.');await expect(panel).not.toContainText('현재 버전을 승인하세요');
+ Object.assign(old,{state:'release_review'});
  // The same shared approval layout also appears on the delivery page.
  await page.goto(`/publish?job=${old.id}`,{waitUntil:'domcontentloaded'});await expect(page.locator('.approval-panel')).toContainText('마지막 확인, 출고 승인');
  const release=page.locator('.approval-panel');const rb=await release.boundingBox();
