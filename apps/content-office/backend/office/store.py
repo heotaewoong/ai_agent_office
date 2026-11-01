@@ -16,6 +16,10 @@ class WorkflowError(ValueError):
     pass
 
 
+class SourceUnavailable(WorkflowError):
+    """The source failed before any model request; no result needs reconciliation."""
+
+
 class UnknownTaskPending(WorkflowError):
     """A guarded output still has an unresolved task for the same source."""
 

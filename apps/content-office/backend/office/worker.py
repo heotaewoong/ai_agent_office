@@ -6,7 +6,7 @@ import signal
 import time
 from .bootstrap import default_store, refresh
 from .editorial import prepare_source
-from .store import WorkflowError, canonical, identifier, now
+from .store import SourceUnavailable, WorkflowError, canonical, identifier, now
 from .runtime import WorkerRuntime, WorkerInterrupted, WindowDeadline, run_before_deadline, window_open, worker_heartbeat
 
 
@@ -103,7 +103,7 @@ def run_once(store, owner):
     except Exception as error:
         # Provider helpers already turn secret-bearing transport errors into safe messages.
         message = str(error) if isinstance(error, WorkflowError) else f"{type(error).__name__}: 작업 처리 오류. 운영 기록을 확인하세요"
-        uncertain = "예약을 유지" in message or "확인하지 못" in message
+        uncertain = not isinstance(error, SourceUnavailable) and ("예약을 유지" in message or "확인하지 못" in message)
         store.finish_task(task["id"], owner, {"error": message, "automatic_retry": False}, state="unknown" if uncertain else "failed")
         job_id = task["payload"].get("job_id")
         # 퀴즈·카드뉴스는 부가 산출물이라 실패해도 작업 상태(출고 흐름)를 막지 않는다. 실패 기록은 작업·이벤트에 남는다.
