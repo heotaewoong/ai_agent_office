@@ -4350,7 +4350,7 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 /* Shared wayfinding: panels remain mounted, so moving never resets an editor. */
 .detail-lab-link { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 16px; }
 .detail-lab-link small { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
-.page-outline { position: sticky; top: 12px; z-index: 15; margin: 0 0 28px; padding: 14px 18px; border: 1px solid #c7d1c2; border-radius: 12px; background: #fffefaf7; box-shadow: 0 6px 22px #2426210d; backdrop-filter: blur(12px); }
+.page-outline { grid-template-columns: minmax(0, 1fr); position: sticky; top: 12px; z-index: 15; margin: 0 0 28px; padding: 14px 18px; border: 1px solid #c7d1c2; border-radius: 12px; background: #fffefaf7; box-shadow: 0 6px 22px #2426210d; backdrop-filter: blur(12px); }
 .page-outline[hidden] { display: none; }
 .outline-topline { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .outline-topline strong { font-size: 14px; }

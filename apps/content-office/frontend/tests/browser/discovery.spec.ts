@@ -140,3 +140,19 @@ test('내 원고 등록은 주제 선택 전에는 저장하지 않고 선택한
  await expect.poll(()=>writes.length).toBe(1);
  expect(writes[0].body).toEqual({title:'합성 편입 후기',body,source_url:'',owner_confirmed:true,brief_preset:'transfer-admission'});
 });
+
+
+test('모바일 긴 목차에서도 선택 상자와 이동 버튼이 카드 안에 남는다',async({page})=>{
+ const writes=await researchHarness(page,[{id:'long',title:'긴 제목이 있는 뉴스에서 모바일 목차와 이동 버튼을 확인하는 합성 기사 제목 '.repeat(3),score:90,segment:'ai',url:'https://example.com/long',feed_name:'합성 출처',published_at:'2026-11-01T00:00:00Z'}]);
+ await page.setViewportSize({width:375,height:812});await page.goto('/news?seg=all');
+ const outline=page.getByRole('navigation',{name:'이 페이지 목차'});
+ await expect(outline.getByRole('combobox',{name:'목차 바로 이동'})).toBeVisible();
+ const bounds=await outline.evaluate(el=>{
+  const box=el.getBoundingClientRect();const row=el.querySelector('.outline-select')!.getBoundingClientRect();const button=el.querySelector('button')!.getBoundingClientRect();
+  return {boxRight:box.right,rowRight:row.right,buttonRight:button.right,buttonWidth:button.width};
+ });
+ expect(bounds.rowRight).toBeLessThanOrEqual(bounds.boxRight);
+ expect(bounds.buttonRight).toBeLessThanOrEqual(bounds.boxRight);
+ expect(bounds.buttonWidth).toBeGreaterThanOrEqual(44);
+ expect(writes).toEqual([]);
+});
