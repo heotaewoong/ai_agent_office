@@ -156,3 +156,28 @@ test('모바일 긴 목차에서도 선택 상자와 이동 버튼이 카드 안
  expect(bounds.buttonWidth).toBeGreaterThanOrEqual(44);
  expect(writes).toEqual([]);
 });
+
+
+test('뉴스 목차는 제목의 줄바꿈을 공백으로 읽고 PC·모바일에서 유지한다',async({page})=>{
+ const writes=await researchHarness(page);await page.goto('/news?seg=all');
+ const outline=page.getByRole('navigation',{name:'이 페이지 목차'});
+ await expect(outline.getByRole('link',{name:/흩어진 질문과 소식이 나만의 콘텐츠가 되는 곳\./})).toBeVisible();
+ await page.setViewportSize({width:375,height:812});
+ await expect(outline.getByRole('combobox',{name:'목차 바로 이동'}).locator('option')).toContainText(['2. 흩어진 질문과 소식이 나만의 콘텐츠가 되는 곳.']);
+ expect(writes).toEqual([]);
+});
+
+test('기획 다음 안내는 한 번만 표시하고 버튼 설명도 같은 문구에 연결한다',async({page})=>{
+ const {writes}=await newsJobHarness(page);await page.goto('/plans');
+ const panel=page.getByRole('region',{name:'내 원고로 콘텐츠 만들기'});
+ const save=panel.getByRole('button',{name:'내 원고로 작업실 열기'});
+ await expect(panel.getByText('제목을 입력해 주세요.',{exact:true})).toHaveCount(1);
+ await expect(save).toHaveAccessibleDescription('제목을 입력해 주세요.');
+ await expect(save).toBeDisabled();
+ await page.setViewportSize({width:375,height:812});
+ await panel.getByLabel('콘텐츠 제목 필수').fill('합성 UI 검사');
+ const next='본문을 100자 더 적으면 다음으로 이동할 수 있어요.';
+ await expect(panel.getByText(next,{exact:true})).toHaveCount(1);
+ await expect(save).toHaveAccessibleDescription(next);
+ await expect(save).toBeDisabled();expect(writes).toEqual([]);
+});

@@ -62,8 +62,7 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
       <div className={styles.field}><label htmlFor={id+"-preset"}>누구를 위한 주제인가요? · 필수</label><select className={styles.input} id={id+"-preset"} value={preset} onChange={e=>setPreset(e.target.value)}><option value="">주제·독자를 직접 선택해 주세요</option>{presets.map(row=><option key={row.id} value={row.id}>{row.label}</option>)}</select><p className={styles.hint}>{presets.find(row=>row.id===preset)?.reader??"알맞은 항목이 없으면 ‘내 원문 중심’을 선택하세요. AI 실무 주제를 자동으로 연결하지 않습니다."}</p></div>
       <label className={styles.consent}><input type="checkbox" checked={owned} onChange={e=>setOwned(e.target.checked)} /><span>내가 작성했거나 제작에 사용할 권한이 있는 자료입니다.</span></label>
       {error&&<p className={styles.error} role="alert">{error}</p>}
-      <footer className={styles.footer}><div><strong>{nextStep}</strong><p>저장 후에도 수정할 수 있어요. 원고 승인·유료 제작·공개 게시에는 별도 확인이 필요해요.</p></div><button className={styles.submit} type="button" aria-describedby={id+"-next"} disabled={busy||!ready} onClick={()=>void create()}>{busy?"처리 중…":"내 원고로 작업실 열기"}<span aria-hidden="true">→</span></button></footer>
-      <p id={id+"-next"} className={styles.srOnly}>{nextStep}</p>
+      <footer className={styles.footer}><div><strong id={id+"-next"}>{nextStep}</strong><p>저장 후에도 수정할 수 있어요. 원고 승인·유료 제작·공개 게시에는 별도 확인이 필요해요.</p></div><button className={styles.submit} type="button" aria-describedby={id+"-next"} disabled={busy||!ready} onClick={()=>void create()}>{busy?"처리 중…":"내 원고로 작업실 열기"}<span aria-hidden="true">→</span></button></footer>
     </fieldset>
     <p className={styles.bottomNote}>아직 원고가 없나요? 아래 독자 질문·기획 등록에서 주제 하나부터 시작해도 좋아요.</p>
   </section>;
