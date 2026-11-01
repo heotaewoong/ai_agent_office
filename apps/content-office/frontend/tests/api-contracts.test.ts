@@ -83,7 +83,7 @@ test("기획 선택⓪도 화면에서 확인한 기획 판본을 보낸다", as
   assert.equal((await api.selectIdea("idea read", expected)).job.id, "job-one");
 });
 
-test("UI 목록 조회만 compact dashboard를 요청하고 상세 작업은 기존 경로를 쓴다", async (t) => {
+test("UI 목록은 완료 결과를 생략하고 상세 작업은 전체 결과 경로를 쓴다", async (t) => {
   const originalFetch = globalThis.fetch;
   const paths: string[] = [];
   t.after(() => { globalThis.fetch = originalFetch; });
@@ -94,7 +94,7 @@ test("UI 목록 조회만 compact dashboard를 요청하고 상세 작업은 기
   };
   await api.dashboard();
   await api.job("job-one");
-  assert.deepEqual(paths, ["/api/dashboard?compact=true", "/api/jobs/job-one"]);
+  assert.deepEqual(paths, ["/api/dashboard?compact=true&task_results=false", "/api/jobs/job-one"]);
 });
 
 test("배포대기는 GET으로 확인하고 읽은 판본만 앱 장부에 기록하며 외부 전송을 호출하지 않는다", async (t) => {

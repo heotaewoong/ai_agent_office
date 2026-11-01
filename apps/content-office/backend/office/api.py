@@ -412,7 +412,7 @@ def create_app(store: Store | None = None):
         return response
 
     @app.get("/api/dashboard")
-    def dashboard(compact: bool = False):
+    def dashboard(compact: bool = False, task_results: bool = True):
         from .voice_selection import profile_summary
         from .image_selection import profile_summary as image_profile_summary
         from .video_selection import profile_summary as clip_profile_summary
@@ -430,7 +430,12 @@ def create_app(store: Store | None = None):
         jobs = store.jobs()
         if compact:
             jobs = [_job_summary(job, compact=True) for job in jobs]
-        return {"articles": visible_articles([classify_article(article) for article in articles]), "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": store.tasks(), "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'availability': profile_availability(), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
+        tasks = store.tasks()
+        if not task_results:
+            tasks = [{**task, "result": None, "result_omitted": True}
+                     if task.get("state") == "completed" and task.get("result") is not None
+                     else task for task in tasks]
+        return {"articles": visible_articles([classify_article(article) for article in articles]), "source_registry": load_sources(), "jobs": jobs, "feeds": feed_report.get("feeds", []), "feed_report": feed_report, "budget": store.budget(), "agents": AGENTS, "events": store.events(limit=60), "tasks": tasks, "window": store.setting("work_window", {}), "worker": store.setting("worker_status", {}), "watcher": store.setting("watcher_status", {}), "provider": {"model": store.setting("model") or os.environ.get("OFFICE_MODEL", "gemini-3.8-flash"), "configured": bool(os.environ.get("GEMINI_API_KEY")), "paid_fallback": False, 'voice': profile_summary(store), 'image': image_profile_summary(store), 'clip': clip_profile_summary(store), 'availability': profile_availability(), 'text': text_profile_summary(store), 'youtube': {'configured': youtube_configured(), 'channels': configured_youtube_channels(), 'visibility': 'private', 'automatic_retry': False}}, "knowledge": store.setting("knowledge_summary", {}), "external_publication": "manual-handoff", **dashboard_counts(store)}
 
     @app.get("/api/space")
     def space():
