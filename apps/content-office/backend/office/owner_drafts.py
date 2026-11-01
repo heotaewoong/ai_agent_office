@@ -23,7 +23,7 @@ def snapshot(store, key):
 
 
 def policy(store, job, targets, actor):
-    if not isinstance(targets, list) or len(targets) > len(TARGETS) or len(set(targets)) != len(targets):
+    if not isinstance(targets, list) or len(targets) > len(TARGETS) or any(not isinstance(k,str) for k in targets) or len(set(targets)) != len(targets):
         raise WorkflowError('초안 채널 선택이 올바르지 않습니다')
     rows = []
     language = ((job.get('source_packet') or {}).get('audience') or {}).get('language')
@@ -35,6 +35,13 @@ def policy(store, job, targets, actor):
             raise WorkflowError('초안 채널의 언어·전송 허용·주소를 확인하세요')
         if row['platform'] == 'youtube' and not row['external_account_id']:
             raise WorkflowError('대상 YouTube 채널 ID를 먼저 확인하세요')
+        outputs = job.get('selections') or {}
+        if row['platform'] == 'youtube' and not outputs.get('video'):
+            raise WorkflowError('YouTube 비공개 초안에는 영상 제작을 선택하세요')
+        if row['platform'] != 'youtube' and not outputs.get('blog'):
+            raise WorkflowError('웹 초안에는 블로그·소셜 원고 제작을 선택하세요')
+        if row['platform'] == 'instagram' and not (outputs.get('video') or outputs.get('cards')):
+            raise WorkflowError('Instagram에는 카드 또는 영상 제작도 선택하세요')
         rows.append(row)
     return {'source_hash': job['source_hash'], 'channels': rows, 'actor': actor,
             'created_at': now(), 'visibility': 'private_or_draft', 'public_publish': False}
@@ -136,7 +143,7 @@ def _current(store, row):
 def view(store, jid):
     rows = store.setting(SETTING, {})
     job = store.job(jid)
-    return {'policy': job.get('owner_draft_policy'), 'items': [r for r in rows.values() if r['job_id'] == jid],
+    return {'policy': job.get('owner_draft_policy'), 'items': [r for r in rows.values() if r['job_id'] == jid and r.get('source_hash') == job.get('source_hash') and r.get('manifest_hash') == (job.get('manifest') or {}).get('hash')],
             'note': '플랫폼 비공개·임시저장만 허용합니다. 공개·예약 발행과 출고 승인②를 실행하지 않습니다'}
 
 

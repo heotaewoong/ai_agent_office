@@ -1739,7 +1739,7 @@ function Studio({
               </div>
             </div>
           )}
-          <OwnerDraftStatus key={job.id} jobId={job.id}/>
+          <OwnerDraftStatus key={job.id} jobId={job.id} revision={job.manifest?.hash}/>
           {["blocked", "source_rejected", "failed"].includes(job.state) && (
             <div className="recovery-actions">
               <button

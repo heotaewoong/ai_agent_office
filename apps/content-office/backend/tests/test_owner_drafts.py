@@ -103,3 +103,11 @@ def test_account_change_and_unknown_result_are_never_silently_retried(tmp_path):
     update_channel(store, 'youtube_main_ko', {'publication_enabled':False}, actor='fixture')
     with pytest.raises(WorkflowError, match='채널'):
         owner_drafts.prepare(store, jid)
+
+
+def test_old_platform_result_is_preserved_but_not_shown_as_current_version(tmp_path):
+    store, jid = ready(tmp_path)
+    row, = owner_drafts.prepare(store, jid)
+    store.update_job(jid, manifest=None)
+    assert owner_drafts.view(store, jid)['items'] == []
+    assert row['id'] in store.setting(owner_drafts.SETTING)

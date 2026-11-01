@@ -21,10 +21,10 @@ export function OwnerDraftOptions({language, selected, onChange}: {language?: st
 
 type DraftView = {items: {id:string; channel_key:string; state:string; reason?:string}[]};
 const labels:Record<string,string>={pending:'PC 연결·처리 대기',claimed:'처리 중 · 완료 확인 전',platform_private:'플랫폼 비공개 확인',platform_draft:'플랫폼 임시저장 확인',blocked:'확인 필요',unknown:'결과 불명 · 자동 재전송 안 함'};
-export function OwnerDraftStatus({jobId}: {jobId:string}) {
+export function OwnerDraftStatus({jobId, revision}: {jobId:string; revision?:string}) {
   const [view,setView]=useState<DraftView>();
   const [error,setError]=useState('');
   const load=()=>{api.ownerDrafts(jobId).then(setView).catch(()=>setError('초안 전달 상태를 확인하지 못했습니다.'));};
-  useEffect(()=>{let live=true; api.ownerDrafts(jobId).then(v=>{if(live)setView(v);}).catch(()=>{if(live)setError('초안 전달 상태를 확인하지 못했습니다.');});return()=>{live=false;};},[jobId]);
+  useEffect(()=>{let live=true; api.ownerDrafts(jobId).then(v=>{if(live)setView(v);}).catch(()=>{if(live)setError('초안 전달 상태를 확인하지 못했습니다.');});return()=>{live=false;};},[jobId,revision]);
   return <section className="confirm-panel" aria-label="비공개·임시저장 진행"><h3>플랫폼 초안 전달</h3><p>플랫폼 저장 확인과 앱의 파일 준비를 구분합니다. 공개 발행은 하지 않습니다.</p>{error&&<p role="alert">{error}</p>}{view?.items.length ? <ul>{view.items.map(r=><li key={r.id}>{r.channel_key} · {labels[r.state]||'상태 확인 필요'}{r.reason ? ` · ${r.reason}`:''}</li>)}</ul>:<p>전달 요청이 없습니다. 원고 승인①에서 채널을 고르면 제작 후 자동으로 준비합니다.</p>}<button type="button" className="button secondary small" onClick={load}>전달 상태 새로고침</button></section>;
 }

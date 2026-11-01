@@ -123,6 +123,27 @@ test('승인① 화면에서 썸네일 비용을 확인한 뒤에만 승인·자
  expect(writes[0]).toEqual({path:`/api/jobs/${old.id}/reviews/source`,body:{version:old.source_hash,decision:'approved',selections:old.selections,auto_produce:true,confirm_paid_clips:true,confirm_paid_thumbnails:true,draft_targets:[]}});
 });
 
+test('초안 채널은 같은 언어·허용 채널만 고르고 승인① 요청에만 연결한다',async({page})=>{
+ const {writes,old}=await newsJobHarness(page,true);
+ await page.route(`**/api/jobs/${old.id}`,route=>route.fulfill({contentType:'application/json',body:JSON.stringify({...old,source_packet:{...old.source_packet,audience:{language:'ko'}}})}));
+ await page.route('**/api/channels',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({channels:[
+  {key:'threads_main',platform:'threads',label:'Threads 검사',locale:'ko',publication_enabled:true},
+  {key:'youtube_english',platform:'youtube',label:'영어 검사',locale:'en',publication_enabled:true},
+  {key:'slack_internal',platform:'slack',label:'내부 알림 검사',locale:'ko',publication_enabled:true},
+ ]})}));
+ await page.goto(`/scripts/${old.id}`);await page.getByRole('button',{name:'원고 승인',exact:true}).click();
+ const panel=page.getByRole('region',{name:'원고 승인 최종 확인'});
+ await panel.getByRole('checkbox',{name:/Threads 검사/}).check();
+ await expect(panel.getByRole('checkbox',{name:/영어 검사|내부 알림 검사/})).toHaveCount(0);
+ expect(writes).toEqual([]);
+ await panel.getByRole('button',{name:'이 원고 승인·자동 제작',exact:true}).click();
+ await panel.getByRole('button',{name:'유료 포함 제작 확인',exact:true}).click();
+ await expect.poll(()=>writes.length).toBe(1);
+ expect(writes[0].body.draft_targets).toEqual(['threads_main']);
+ expect(writes[0].path).toBe(`/api/jobs/${old.id}/reviews/source`);
+ expect('publish_at' in writes[0].body).toBe(false);
+});
+
 test('내 원고 등록은 주제 선택 전에는 저장하지 않고 선택한 기획을 함께 전송한다',async({page})=>{
  const {writes,old}=await newsJobHarness(page);
  await page.route('**/api/briefs',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({default:'ai-agent',presets:[{id:'transfer-admission',axis:'A',label:'대학 편입 준비',reader:'편입 영어 학습자',language:'ko'}]})}));
