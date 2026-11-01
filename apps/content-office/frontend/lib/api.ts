@@ -202,17 +202,19 @@ export const api = {
     decision: "approved" | "rejected",
     selections: Selections,
     autoProduce = false,
+    confirmPaid = false,
   ) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/reviews/source`, "POST", {
       version,
       decision,
       selections,
       ...(autoProduce ? {auto_produce:true} : {}),
+      ...(autoProduce && confirmPaid ? {confirm_paid_clips:true,confirm_paid_thumbnails:true} : {}),
     }),
   produce: (id: string, confirmPaidClips = false) =>
     request(`/jobs/${encodeURIComponent(id)}/produce`, "POST", confirmPaidClips ? { confirm_paid_clips: true, confirm_paid_thumbnails:true } : {}),
-  productionEstimate: (id: string) =>
-    request<{ clips: ClipEstimate; thumbnail_artwork?:boolean }>(`/jobs/${encodeURIComponent(id)}/production-estimate`),
+  productionEstimate: (id: string, video?: boolean) =>
+    request<{ clips: ClipEstimate; thumbnail_artwork?:boolean }>(`/jobs/${encodeURIComponent(id)}/production-estimate${video == null ? '' : `?video=${video}`}`),
   reviewRelease: (
     id: string,
     version: string,

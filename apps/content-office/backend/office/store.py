@@ -215,7 +215,7 @@ class Store:
             self._event(db, "source_saved", {"version": version, "role": "편집"}, job_id)
             return self._write_job(db, job)
 
-    def review_source(self, job_id, version, decision, actor, selections=None, *, production_contract=None, external_media_reviewed=False):
+    def review_source(self, job_id, version, decision, actor, selections=None, *, production_contract=None, external_media_reviewed=False, production_options=None):
         from .offers import require_campaign_packet, require_offer_ready
         if decision not in ("approved", "rejected") or not actor.strip():
             raise WorkflowError("유효한 검토 판정과 검토자가 필요합니다")
@@ -261,6 +261,7 @@ class Store:
                 if db.execute('SELECT 1 FROM tasks WHERE dedup_key=?',(key,)).fetchone():
                     raise WorkflowError('같은 판본의 제작 요청이 이미 있습니다. 현재 제작 상태를 확인하세요')
                 payload={'job_id':job_id,'source_hash':version,'production_contract':production_contract}
+                payload.update({key:value for key,value in (production_options or {}).items() if key in ('thumbnail_artwork_confirmed','paid_clips_confirmed','paid_clip_estimate')})
                 task_id=identifier('task')
                 db.execute("INSERT INTO tasks VALUES(?,?,?,'queued',?,NULL,NULL,?,?)",(task_id,'produce',canonical(payload),key,now(),now()))
                 job['state']='production_queued'

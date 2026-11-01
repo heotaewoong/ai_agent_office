@@ -130,6 +130,8 @@ class Review(BaseModel):
     selections: dict[str, bool] | None = None
     media_reviewed: bool = False
     auto_produce: bool = Field(default=False, strict=True)
+    confirm_paid_clips: bool = Field(default=False, strict=True)
+    confirm_paid_thumbnails: bool = Field(default=False, strict=True)
     private_delivery_channel: Literal['youtube_main_ko','youtube_english'] | None = None
     outputs: list[Literal['blog', 'video', 'cards', 'pdf']] | None = None
 
@@ -584,6 +586,7 @@ def create_app(store: Store | None = None):
     @app.post("/api/jobs/{job_id}/reviews/source")
     def review_source(job_id: str, review: Review):
         contract = None
+        production_options = {}
         if review.auto_produce:
             require_open_window()
             if review.decision != 'approved':
@@ -595,11 +598,21 @@ def create_app(store: Store | None = None):
             from .channels import registry
             job=store.job(job_id)
             selections={key:bool((review.selections if review.selections is not None else job['selections']).get(key,False)) for key in ('blog','video','pdf','cards')}
+            job = {**job, 'selections': selections}
             from .thumbnail_studio import enabled
-            if enabled(store, {**job, 'selections': selections}):
-                raise WorkflowError('원고 승인 후 제작 버튼에서 썸네일 이미지 비용을 확인해 주세요. 지금은 일반 원고 승인을 선택하세요')
-            contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None)['hash']
-        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract)
+            thumbnails = enabled(store, job)
+            if thumbnails:
+                if not review.confirm_paid_thumbnails:
+                    raise WorkflowError('원고 기반 썸네일 3장 포함 제작 비용을 화면에서 확인하세요. 기존 후보는 재사용합니다')
+                production_options['thumbnail_artwork_confirmed'] = True
+            from .video_selection import paid_clip_estimate
+            estimate = paid_clip_estimate(store, job)
+            if estimate['paid']:
+                if not review.confirm_paid_clips:
+                    raise WorkflowError(estimate['label'] + '. 유료 영상 클립 비용을 화면에서 확인하세요')
+                production_options.update(paid_clips_confirmed=True, paid_clip_estimate={k: estimate[k] for k in ('clips','credits','reservation_krw','model')})
+            contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None, thumbnail_artwork=thumbnails)['hash']
+        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract, production_options=production_options)
 
     @app.put('/api/jobs/{job_id}/video-platforms')
     def choose_video_platforms(job_id: str, body: VideoPlatformsInput):
@@ -617,10 +630,12 @@ def create_app(store: Store | None = None):
         return adopt_reviewed(store, job_id, body.version, body.reviewed)
 
     @app.get("/api/jobs/{job_id}/production-estimate")
-    def production_estimate(job_id: str):
+    def production_estimate(job_id: str, video: bool | None = None):
         # Read-only: what the next production may pay for generated clips. Never calls a provider.
         from .video_selection import paid_clip_estimate
         job = store.job(job_id)
+        if video is not None:
+            job = {**job, 'selections': {**job['selections'], 'video': video}}
         from .thumbnail_studio import enabled
         return {"clips": paid_clip_estimate(store, job), 'thumbnail_artwork': enabled(store, job)}
 

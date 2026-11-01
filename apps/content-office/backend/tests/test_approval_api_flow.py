@@ -53,3 +53,30 @@ def test_image_profile_can_build_contract_before_atomic_approval_but_cannot_gene
     assert len(store.tasks())==1
     assert client.post(f'/api/jobs/{job["id"]}/reviews/source',json=data,headers=headers).status_code==409
     with store.connection() as db:assert db.execute('SELECT COUNT(*) FROM approvals').fetchone()[0]==1
+
+
+@pytest.mark.parametrize('thumbnails,clips',[(True,False),(False,True),(True,True)])
+def test_paid_approval_requires_confirmation_then_saves_one_atomic_production(tmp_path, monkeypatch, thumbnails, clips):
+    store=Store(tmp_path)
+    store.set_setting('thumbnail_studio_default',thumbnails)
+    job=store.create_job({'id':'paid-approval','title':'비용 확인 원고'})
+    job=store.save_source(job['id'],{'title':'비용 확인','body':'검토 원고','quality':{'status':'passed','critical':False},'video':{'scenes':[]}})
+    monkeypatch.setattr('office.api.window_open',lambda _:True)
+    monkeypatch.setattr('requests.post',lambda *a,**k:pytest.fail('Approval must not call a provider'))
+    monkeypatch.setattr('office.video_selection.paid_clip_estimate',lambda _,j:{'paid':clips and j['selections']['video'],'label':'유료 클립','clips':2,'credits':20,'reservation_krw':400,'model':'synthetic'})
+    client=TestClient(create_app(store),base_url='http://localhost:8510')
+    headers={'Origin':'http://localhost:3110','X-Office-CSRF':client.get('/api/session').json()['csrf']}
+    data={'version':job['source_hash'],'decision':'approved','selections':{'video':True},'auto_produce':True}
+    url=f"/api/jobs/{job['id']}/reviews/source"
+    assert client.post(url,json=data,headers=headers).status_code==409
+    assert store.job(job['id'])['source_approval'] is None and store.tasks()==[]
+    assert client.get(f"/api/jobs/{job['id']}/production-estimate?video=true").json()['thumbnail_artwork']==thumbnails
+    confirmed=client.post(url,json={**data,'confirm_paid_clips':True,'confirm_paid_thumbnails':True},headers=headers)
+    assert confirmed.status_code==200,confirmed.text
+    assert confirmed.json()['state']=='production_queued'
+    task=store.tasks(job['id'])[0]
+    assert task['payload'].get('thumbnail_artwork_confirmed',False)==thumbnails
+    assert task['payload'].get('paid_clips_confirmed',False)==clips
+    if clips:assert task['payload']['paid_clip_estimate']['reservation_krw']==400
+    assert client.post(url,json={**data,'confirm_paid_clips':True,'confirm_paid_thumbnails':True},headers=headers).status_code==409
+    assert len(store.tasks(job['id']))==1 and store.budget()['spent_krw']==0

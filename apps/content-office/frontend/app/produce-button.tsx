@@ -13,12 +13,14 @@ export function ProduceButton({
   disabled,
   children,
   onProduce,
+  video,
 }: {
   jobId: string;
   className: string;
   disabled: boolean;
   children: ReactNode;
   onProduce: (confirmPaidClips: boolean) => Promise<unknown> | void;
+  video?: boolean;
 }) {
   const [estimate, setEstimate] = useState<ClipEstimate | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -28,13 +30,13 @@ export function ProduceButton({
     let alive = true;
     setConfirming(false);
     api
-      .productionEstimate(jobId)
+      .productionEstimate(jobId, video)
       .then((result) => {if(alive){setEstimate(result.clips);setThumbnails(!!result.thumbnail_artwork);}})
       .catch(() => alive && setEstimate(null));
     return () => {
       alive = false;
     };
-  }, [jobId]);
+  }, [jobId, video]);
 
   const notice = [paidProduceNotice(estimate),thumbnails?"원고 기반 썸네일 이미지 3장 자동 생성 · 최대 600원 예약 · 기존 후보 재사용":""].filter(Boolean).join(" · ");
   if (!notice)

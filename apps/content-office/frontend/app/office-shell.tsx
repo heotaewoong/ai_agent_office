@@ -1699,14 +1699,16 @@ function Studio({
                 >
                   돌아가기
                 </button>
-                <button
+                <ProduceButton
+                  jobId={job.id}
+                  video={selections.video}
                   className="button primary small"
                   disabled={
                     locked ||
                     !passed ||
                     !approvalIsCurrent(approvalVersion, job.source_hash)
                   }
-                  onClick={async () => {
+                  onProduce={async (confirmPaid) => {
                     setApprovalError("");
                     const result = await action(
                       "원고 승인",
@@ -1717,6 +1719,7 @@ function Studio({
                           "approved",
                           selections,
                           true,
+                          confirmPaid,
                         );
                         setApprovalVersion(undefined);
                         onDelivery();
@@ -1727,7 +1730,7 @@ function Studio({
                   }}
                 >
                   이 원고 승인·자동 제작
-                </button>
+                </ProduceButton>
               </div>
             </div>
           )}

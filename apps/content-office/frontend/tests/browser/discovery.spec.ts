@@ -64,11 +64,11 @@ test('뉴스 점수 정렬은 분류와 기사 선택을 보존하고 API를 쓰
  expect(writes).toEqual([]);
 });
 
-async function newsJobHarness(page:Page) {
+async function newsJobHarness(page:Page, ready=false) {
  const article={id:'news-one',title:'선택한 뉴스',url:'https://example.com/news',feed_name:'검사 출처',score:85,segment:'ai',published_at:'2026-11-01T00:00:00Z'};
- const old={id:'job-existing-news',title:'같은 뉴스의 오래된 작업',state:'research_ready',article,selections:{blog:true,video:true,pdf:false,cards:false},source_packet:null,source_hash:null,tasks:[],events:[],drafts:[]};
+ const old={id:'job-existing-news',title:'같은 뉴스의 오래된 작업',state:ready?'source_review':'research_ready',article,selections:{blog:true,video:true,pdf:false,cards:false},source_packet:ready?{title:'검수된 원고',body:'사용자가 읽고 승인할 원고입니다.',quality:{status:'passed',critical:false},video:{scenes:[]}}:null,source_hash:ready?'a'.repeat(64):null,tasks:[],events:[],drafts:[]};
  const recent={...old,id:'job-recent',title:'더 최근 작업',article:{...article,id:'other'}};
- let opened=false;const writes:{path:string;body:any}[]=[];
+ let opened=ready;const writes:{path:string;body:any}[]=[];
  await page.route('**/api/**',async route=>{
   const req=route.request(),path=new URL(req.url()).pathname;let body:any;
   if(req.method()!=='GET')writes.push({path,body:req.postDataJSON()});
@@ -78,6 +78,8 @@ async function newsJobHarness(page:Page) {
   else if(path===`/api/jobs/${old.id}`)body=old;
   else if(path==='/api/session/window'){opened=true;body={work_window:{status:'open'},services:{started:[],running:[],note:'synthetic'}};}
   else if(path===`/api/jobs/${old.id}/draft`)body={id:'task-synthetic',kind:'draft',state:'queued'};
+  else if(path===`/api/jobs/${old.id}/production-estimate`)body={clips:{paid:false,clips:0},thumbnail_artwork:ready};
+  else if(path===`/api/jobs/${old.id}/reviews/source`)body={...old,state:'production_queued'};
   else if(path==='/api/jobs/summaries')body={jobs:[recent,old]};
   else if(path==='/api/channels')body={channels:[]};
   else if(path==='/api/newsletters')body={issues:[]};
@@ -106,4 +108,17 @@ test('닫힌 작업 시간은 실행 확인 후에만 열고 원고를 요청하
  await confirm.getByRole('button',{name:'작업 시간 열고 원고 생성',exact:true}).click();
  await expect.poll(()=>writes.map(row=>row.path)).toEqual(['/api/session/window',`/api/jobs/${old.id}/draft`]);
  expect(writes[0].body).toEqual({minutes:30});
+});
+
+test('승인① 화면에서 썸네일 비용을 확인한 뒤에만 승인·자동 제작을 함께 요청한다',async({page})=>{
+ const {writes,old}=await newsJobHarness(page,true);await page.goto(`/scripts/${old.id}`);
+ await page.getByRole('button',{name:'원고 승인',exact:true}).click();
+ const confirm=page.getByRole('region',{name:'원고 승인 최종 확인'});
+ await expect(confirm.getByText(/최대 600원 예약/)).toBeVisible();
+ expect(writes).toEqual([]);
+ await confirm.getByRole('button',{name:'이 원고 승인·자동 제작',exact:true}).click();
+ expect(writes).toEqual([]);
+ await confirm.getByRole('button',{name:'유료 포함 제작 확인',exact:true}).click();
+ await expect.poll(()=>writes.length).toBe(1);
+ expect(writes[0]).toEqual({path:`/api/jobs/${old.id}/reviews/source`,body:{version:old.source_hash,decision:'approved',selections:old.selections,auto_produce:true,confirm_paid_clips:true,confirm_paid_thumbnails:true}});
 });
