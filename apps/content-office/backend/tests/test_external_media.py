@@ -239,3 +239,16 @@ def test_same_verified_bundle_can_refresh_review_without_approval(tmp_path, monk
     refreshed = module.prepare_review(store, job['id'], draft['id'], current['source_hash'])
     assert refreshed['source_packet'] == current['source_packet']
     assert refreshed['source_approval'] is refreshed['manifest'] is None
+
+
+@pytest.mark.parametrize("seconds, accepted", [(120, True), (148.083008, True), (180, True), (180.001, False), (0, False)])
+def test_edited_vertical_duration_boundary(monkeypatch, seconds, accepted):
+    import json
+    probe = {"streams": [{"codec_type": "video", "codec_name": "h264", "width": 1080, "height": 1920},
+                         {"codec_type": "audio", "codec_name": "aac"}], "format": {"duration": str(seconds)}}
+    monkeypatch.setattr(module.subprocess, "check_output", lambda *args, **kwargs: json.dumps(probe).encode())
+    if accepted:
+        assert module._probe(Path("selected.mp4"))["seconds"] == seconds
+    else:
+        with pytest.raises(WorkflowError):
+            module._probe(Path("selected.mp4"))

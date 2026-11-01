@@ -61,7 +61,7 @@ def _probe(path, decode=False):
         video = next(x for x in result['streams'] if x['codec_type'] == 'video')
         audio = next(x for x in result['streams'] if x['codec_type'] == 'audio')
         seconds = float(result['format']['duration'])
-        if not 0 < seconds <= 120 or video.get('codec_name') != 'h264' or audio.get('codec_name') != 'aac' or not 0 < video.get('width',0) <= 4096 or not 0 < video.get('height',0) <= 4096:
+        if not 0 < seconds <= 180 or video.get('codec_name') != 'h264' or audio.get('codec_name') != 'aac' or not 0 < video.get('width',0) <= 4096 or not 0 < video.get('height',0) <= 4096:
             raise ValueError()
         if decode:
             check = subprocess.run(['nice', '-n', '15', 'ffmpeg', '-v', 'error', '-threads', '1', '-i', str(path), '-f', 'null', '-'], capture_output=True, timeout=180)
