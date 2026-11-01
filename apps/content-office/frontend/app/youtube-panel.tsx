@@ -27,17 +27,19 @@ export function YoutubePanel({
   busy,
   action,
   requestBlockedReason,
+  preferredChannelKey,
 }: {
   job: Job;
   youtubeConfigured: boolean;
   busy: boolean;
   action: Action;
   requestBlockedReason?: string;
+  preferredChannelKey?: string;
 }) {
   const [records, setRecords] = useState<DeliveryRecord[]>([]);
   const [loadError, setLoadError] = useState("");
   const [channels, setChannels] = useState<Channel[]>([]);
-  const [channelKey, setChannelKey] = useState(DEFAULT_CHANNEL);
+  const [channelKey, setChannelKey] = useState(preferredChannelKey ?? DEFAULT_CHANNEL);
   const channel = channels.find((c) => c.key === channelKey);
   const sourceLanguage = packetLanguage(job);
   const readiness = youtubePreflight(job, channel, requestBlockedReason);
@@ -53,7 +55,7 @@ export function YoutubePanel({
         if (!alive) return;
         const list = youtubeChannels(result.channels);
         setChannels(list);
-        if (!list.some((c) => c.key === DEFAULT_CHANNEL) && list[0]) setChannelKey(list[0].key);
+        if (!list.some((c) => c.key === (preferredChannelKey ?? DEFAULT_CHANNEL)) && list[0]) setChannelKey(list[0].key);
       })
       .catch(() => {
         if (alive) setChannels([]);
@@ -61,7 +63,7 @@ export function YoutubePanel({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [preferredChannelKey]);
 
   const load = useCallback(async () => {
     try {
@@ -111,7 +113,7 @@ export function YoutubePanel({
           비공개로 올리기
         </button>
       </div>
-      {channels.length > 0 && (
+      {!preferredChannelKey && channels.length > 0 && (
         <div className="channel-pick">
           <label>
             채널
@@ -265,6 +267,6 @@ export function ChannelHandoffPanel({ job, busy, action }: { job: Job; busy: boo
       </div>
       {current.notes.map((note) => <p className="muted" key={note}>{note}</p>)}
     </>}
-    <p className="muted">YouTube만 현재 출고 승인② 뒤 별도 요청으로 비공개 업로드할 수 있습니다. 네이버·티스토리·Instagram·Threads·LinkedIn 등의 플랫폼 임시저장·예약·공개 게시 연동은 아직 없습니다. 메일·홍보 발송은 동의와 회차 승인③이 별도로 필요합니다.</p>
+    <p className="muted">이 표는 출고 패키지의 준비 기록입니다. 플랫폼 임시저장의 실제 결과는 위 통합 선택 영역의 PC 전달 영수증으로 확인하세요. 지원되지 않는 전달 방식과 공개·예약 발행은 요청하지 않습니다. 메일·홍보 발송에는 동의와 회차 승인③이 별도로 필요합니다.</p>
   </section>;
 }

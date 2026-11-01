@@ -213,6 +213,7 @@ export const api = {
       ...(autoProduce && confirmPaid ? {confirm_paid_clips:true,confirm_paid_thumbnails:true} : {}),
       ...(draftTargets !== undefined ? {draft_targets:draftTargets} : {}),
     }),
+  requestReleasedDraft: (id:string, version:string, channelKey:string, target:Pick<Channel,"key"|"platform"|"locale"|"public_url"|"external_account_id"|"publication_enabled">) => request<{items:{id:string;channel_key:string;state:string;reason?:string}[]}>(`/jobs/${encodeURIComponent(id)}/owner-drafts/request`, "POST", {version,channel_key:channelKey,target}),
   ownerDrafts: (id:string) => request<{items:{id:string;channel_key:string;state:string;reason?:string}[]}>(`/jobs/${encodeURIComponent(id)}/owner-drafts`),
   produce: (id: string, confirmPaidClips = false) =>
     request(`/jobs/${encodeURIComponent(id)}/produce`, "POST", confirmPaidClips ? { confirm_paid_clips: true, confirm_paid_thumbnails:true } : {}),

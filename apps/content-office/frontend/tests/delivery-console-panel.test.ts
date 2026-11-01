@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
+import ts from 'typescript';
+import * as logic from '../lib/delivery-console.ts';
+const requireNative=createRequire(import.meta.url);
+const compiled=ts.transpileModule(readFileSync(new URL('../app/delivery-console.tsx',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+const account:any={key:'linkedin_personal',platform:'linkedin',label:'LinkedIn owner',locale:'en',public_url:'https://linkedin.com/in/owner',external_account_id:'owner',publication_enabled:true};
+const job:any={id:'job_review',source_hash:'s',source_packet:{audience:{language:'en'}},source_approval:{decision:'approved',version:'s'},release_approval:{decision:'approved',version:'m',outputs:['blog']},manifest:{hash:'m',source_hash:'s',files:[{name:'linkedin-personal.txt',outputs:['blog']}]}};
+function nodes(t:any):any[]{return Array.isArray(t)?t.flatMap(nodes):t?.props?[t,...nodes(t.props.children)]:[];}
+function setup(){let i=0;const state:any[]=[[account],'linkedin','','office',undefined,[],'',false];const calls:any[]=[];const mod={exports:{} as any};
+Function('require','exports',compiled)((name:string)=>name==='react'?{useState:(init:any)=>{const n=i++;if(!(n in state))state[n]=init;return[state[n],(v:any)=>state[n]=v];},useEffect:()=>{}}:name==='../lib/api'?{api:{requestReleasedDraft:async(...args:any[])=>{calls.push(args);return{items:[{id:'od_one',channel_key:account.key,state:'pending'}]};}}}:name==='../lib/delivery-console'?logic:name==='../lib/delivery-readiness'?{requireStagingSnapshot:()=>{},stagingExternalLabel:()=>'',stagingLocalLabel:()=>''}:name==='./youtube-panel'?{ChannelHandoffPanel:()=>null,YoutubePanel:()=>null}:requireNative(name),mod.exports);
+const prior=(globalThis as any).window;(globalThis as any).window={confirm:()=>true};
+return{calls,render:()=>{i=0;return nodes(mod.exports.DeliveryConsole({job,busy:false,youtubeConfigured:true,action:async(_label:any,fn:any)=>{await fn();return true;}}));},cleanup:()=>{(globalThis as any).window=prior;}};}
+test('selecting destination and mode never sends or changes approvals',()=>{const h=setup();try{const before=JSON.stringify(job);let n=h.render();const selects=n.filter(x=>x.type==='select');assert.equal(selects.length,3);selects[2].props.onChange({target:{value:'draft'}});n=h.render();assert.equal(h.calls.length,0);assert.equal(JSON.stringify(job),before);assert.equal(n.find(x=>x.type==='button'&&x.props.children==='선택 계정에 임시저장 요청').props.disabled,false);}finally{h.cleanup();}});
+test('explicit request binds current version and displayed account; repeat is blocked',async()=>{const h=setup();try{h.render().filter(x=>x.type==='select')[2].props.onChange({target:{value:'draft'}});await h.render().find(x=>x.type==='button'&&x.props.children==='선택 계정에 임시저장 요청').props.onClick();await new Promise(r=>setTimeout(r,0));assert.equal(h.calls.length,1);assert.deepEqual(h.calls[0],[job.id,'m',account.key,{key:account.key,platform:account.platform,locale:account.locale,public_url:account.public_url,external_account_id:'owner',publication_enabled:true}]);assert.equal(h.render().find(x=>x.type==='button').props.disabled,true);}finally{h.cleanup();}});
+test('switching to unregistered TikTok resets transfer to local mode',()=>{const h=setup();try{h.render().filter(x=>x.type==='select')[0].props.onChange({target:{value:'tiktok'}});const s=h.render().filter(x=>x.type==='select');assert.equal(s[2].props.value,'office');assert.equal(s[1].props.disabled,true);assert.equal(h.calls.length,0);}finally{h.cleanup();}});

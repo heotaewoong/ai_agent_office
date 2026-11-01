@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {choiceReadiness, platformChoices} from '../lib/delivery-console.ts';
+const job:any={source_hash:'s',source_packet:{audience:{language:'en'}},source_approval:{decision:'approved',version:'s'},manifest:{hash:'m',source_hash:'s',files:[{name:'short.mp4',outputs:['video']},{name:'linkedin-personal.txt',outputs:['blog']}]},release_approval:{decision:'approved',version:'m',outputs:['video','blog']}};
+const account:any={key:'linkedin_personal',platform:'linkedin',label:'LinkedIn',locale:'en',public_url:'https://linkedin.com/in/example',publication_enabled:true};
+test('current released text can be explicitly requested without changing approvals',()=>{const before=JSON.stringify(job);assert.equal(choiceReadiness(job,account,'draft').ok,true);assert.equal(JSON.stringify(job),before);});
+test('missing release, wrong language and stale manifest are blocked',()=>{assert.equal(choiceReadiness({...job,release_approval:null},account,'draft').ok,false);assert.equal(choiceReadiness(job,{...account,locale:'ko'},'draft').ok,false);assert.equal(choiceReadiness({...job,manifest:{...job.manifest,source_hash:'old'}},account,'draft').ok,false);});
+test('unregistered TikTok and unsupported Instagram draft never look ready',()=>{assert.ok(platformChoices.includes('tiktok'));assert.equal(choiceReadiness(job,undefined,'draft').ok,false);assert.equal(choiceReadiness(job,{...account,platform:'instagram'},'draft').ok,false);assert.equal(choiceReadiness(job,{...account,platform:'tiktok'},'draft').ok,false);});
+test('wrong output and missing current file cannot be requested',()=>{assert.equal(choiceReadiness({...job,release_approval:{...job.release_approval,outputs:['video']}},account,'draft').ok,false);assert.equal(choiceReadiness({...job,manifest:{...job.manifest,files:[]}},account,'draft').ok,false);});
+test('office mode is explicitly local and requires no remote action',()=>{assert.equal(choiceReadiness(job,undefined,'office').ok,true);assert.match(choiceReadiness(job,undefined,'office').reason,/EC2/);});

@@ -286,6 +286,13 @@ class YoutubeDeliveryRequest(BaseModel):
     channel_key: str = Field(default="youtube_main_ko", max_length=64)
 
 
+class ReleasedDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target: dict
+    version: str = Field(pattern=r"^[0-9a-f]{64}$")
+    channel_key: str = Field(max_length=64)
+
+
 class StagingRequest(BaseModel):
     expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
@@ -621,6 +628,11 @@ def create_app(store: Store | None = None):
                 production_options.update(paid_clips_confirmed=True, paid_clip_estimate={k: estimate[k] for k in ('clips','credits','reservation_krw','model')})
             contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None, thumbnail_artwork=thumbnails)['hash']
         return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract, production_options=production_options, draft_targets=review.draft_targets)
+
+    @app.post('/api/jobs/{job_id}/owner-drafts/request')
+    def released_draft_request(job_id: str, body: ReleasedDraftRequest):
+        from .owner_drafts import request_after_release
+        return request_after_release(store, job_id, body.version, body.channel_key, body.target)
 
     @app.get('/api/jobs/{job_id}/owner-drafts')
     def owner_draft_status(job_id: str):

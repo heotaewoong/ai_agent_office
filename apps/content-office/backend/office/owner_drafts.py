@@ -77,7 +77,7 @@ def _save(db, rows):
     db.execute('INSERT OR REPLACE INTO settings VALUES(?,?)', (SETTING, canonical(rows)))
 
 
-def prepare(store, jid):
+def prepare(store, jid, *, channel_keys=None):
     if not (store.job(jid).get('owner_draft_policy') or {}).get('channels'):
         return []
     job, selected = _approved(store, jid)
@@ -88,6 +88,8 @@ def prepare(store, jid):
     result = []
     for target in selected['channels']:
         key = target['key']
+        if channel_keys is not None and key not in channel_keys:
+            continue
         video = target['platform'] == 'youtube'
         needed = ['short.mp4', 'description.txt'] if video else [TEXT_FILES[key]]
         # Instagram drafts must include the selected media, never just an uploaded caption.
@@ -213,3 +215,36 @@ def claimed(store, rid, claim_id):
         raise WorkflowError('현재 PC가 처리 중인 초안이 아닙니다')
     _current(store, row)
     return {**row, 'authorized_end': store.setting('work_window', {})['authorized_end']}
+
+
+def request_after_release(store, jid, version, channel_key, expected_target):
+    """Explicit nonpublic destination request; never changes source/release approvals."""
+    if channel_key not in ('tistory_main', 'naver_blog_main', 'threads_main', 'linkedin_personal'):
+        raise WorkflowError('이 대상의 웹 임시저장은 지원하지 않습니다. YouTube는 비공개 전송을 사용하세요')
+    if expected_target != snapshot(store, channel_key):
+        raise WorkflowError('계정이 화면에서 확인한 대상과 달라졌습니다. 다시 확인하세요')
+    job = store.job(jid)
+    if (job.get('manifest') or {}).get('hash') != version:
+        raise WorkflowError('출고 판본이 변경되었습니다. 현재 파일을 다시 확인하세요')
+    from .staging import _verified_records
+    _, outputs = _verified_records(store, job)
+    if 'blog' not in outputs:
+        raise WorkflowError('블로그·소셜 원고를 출고 승인②에 포함해 주세요')
+    previous = job.get('owner_draft_policy') or {}
+    if previous.get('channels'):
+        _approved(store, jid)
+    keys = [row['key'] for row in previous.get('channels', [])]
+    if channel_key not in keys:
+        keys.append(channel_key)
+    selected = previous if channel_key in [row['key'] for row in previous.get('channels', [])] else policy(store, job, keys, 'local-operator-request')
+    with store.connection(transaction=True) as db:
+        if snapshot(store, channel_key) != expected_target:
+            raise WorkflowError('요청 중 대상 계정이 변경되었습니다')
+        current = store._job(db, jid)
+        for field in ('source_hash', 'source_approval', 'release_approval', 'manifest', 'owner_draft_policy'):
+            if current.get(field) != job.get(field):
+                raise WorkflowError('요청 중 승인·파일·대상이 변경되었습니다')
+        current['owner_draft_policy'] = selected
+        store._write_job(db, current)
+    prepare(store, jid, channel_keys=[channel_key])
+    return view(store, jid)

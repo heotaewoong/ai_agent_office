@@ -1,4 +1,5 @@
 "use client";
+import {DeliveryConsole} from "./delivery-console";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -52,7 +53,6 @@ import { ProduceButton } from "./produce-button";
 import { ThumbnailStudio } from "./thumbnail-studio";
 import { OwnerDraftOptions, OwnerDraftStatus } from './owner-draft-options';
 import { ArchitectureView } from "./architecture-view";
-import { YoutubePanel, ChannelHandoffPanel } from "./youtube-panel";
 import { BriefPanel } from "./brief-panel";
 import { updateBriefDrafts, type BriefDraft, type BriefDraftUpdate } from "../lib/briefs";
 import { updateOfferDrafts, type OfferDraft, type OfferDraftUpdate } from "../lib/offer";
@@ -2506,8 +2506,7 @@ function Delivery({
       </section>
       <section className={deliveryStyles.section} aria-labelledby={`delivery-channels-${job.id}`}>
       <header className={deliveryStyles.sectionHeading}><span>03</span><div><h2 id={`delivery-channels-${job.id}`} data-outline-title="채널 전달">채널 전달</h2><p>출고 승인과 실제 플랫폼 전달 상태를 각각 확인하세요.</p></div></header>
-        <ChannelHandoffPanel key={`staging-${job.id}`} job={job} busy={busy} action={action} />
-        {job.selections?.video && <YoutubePanel key={`youtube-${job.id}`} job={job} youtubeConfigured={youtubeConfigured} requestBlockedReason={requestBlockedReason} busy={busy} action={action} />}
+        <DeliveryConsole key={`delivery-console-${job.id}`} job={job} youtubeConfigured={youtubeConfigured} requestBlockedReason={requestBlockedReason} busy={busy} action={action} />
         <details className={deliveryStyles.disclosure}><summary>뉴스레터 회차 · 별도 승인③</summary><NewsletterPanel key={`newsletter-${job.id}`} job={job} busy={busy} action={action} /></details>
       </section>
       <section className={deliveryStyles.section} aria-labelledby={`delivery-history-${job.id}`}>
