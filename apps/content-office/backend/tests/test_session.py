@@ -75,3 +75,23 @@ def test_window_open_still_fails_when_nothing_could_be_stopped(tmp_path):
         with pytest.raises(WorkflowError, match='실행 중'):
             start_session(store, minutes=30, current=AT, stop_services=lambda s: [])
     assert store.setting('work_window') is None
+
+
+def test_early_closed_or_collect_only_window_does_not_block_the_operator(tmp_path):
+    """2026-11-02: the 07:00 daily collect closes its 15-minute window early (end still in the future). Opening a
+    work window then failed with '기존 작업 시간이 진행 중' while the screen said it was closed. A closed window or a
+    collect-only scheduled window is replaced; an active operator window still cannot be silently extended."""
+    from office.session import start_session
+    for previous in ({'id': 'w1', 'authorized_end': (AT + timedelta(minutes=10)).isoformat(), 'status': 'closed'},
+                     {'id': 'w2', 'authorized_end': (AT + timedelta(minutes=10)).isoformat(), 'status': 'active',
+                      'authorization_source': 'scheduled_daily_collect'}):
+        store = Store(tmp_path / previous['id'])
+        store.set_setting('work_window', previous)
+        new = start_session(store, minutes=120, current=AT, source='local_operator_ui')
+        assert new['status'] == 'active' and new['authorization_source'] == 'local_operator_ui'
+        assert store.setting('work_window_history')[-1] == previous
+    store = Store(tmp_path / 'operator')
+    store.set_setting('work_window', {'authorized_end': (AT + timedelta(minutes=10)).isoformat(), 'status': 'active',
+                                      'authorization_source': 'local_operator_ui'})
+    with pytest.raises(WorkflowError, match='진행'):
+        start_session(store, minutes=60, current=AT)
