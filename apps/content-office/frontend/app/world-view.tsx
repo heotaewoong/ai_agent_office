@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { api } from "../lib/api";
+import { AssistantReports } from "./assistant-reports";
 import { isDevAction, parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
 
 type View = "news" | "studio" | "delivery" | "activity" | "world";
@@ -93,6 +94,7 @@ export function WorldView({
           <button className="button secondary" type="button" onClick={() => onOpen("delivery", activeId)}>완성 파일·출고함</button>
         </div>
       </div>
+      <AssistantReports connected={connected} loadReports={api.assistantReports} />
       <iframe
         ref={frame}
         className="world-frame"

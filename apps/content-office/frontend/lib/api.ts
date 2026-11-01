@@ -116,6 +116,7 @@ async function request<T>(
 }
 
 export const api = {
+  assistantReports: () => request<unknown>("/assistant/reports"),
   thumbnailStudio:(id:string)=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio`),
   generateThumbnails:(id:string,body:{source_hash:string;revision:string;confirm_paid:boolean;edit_id?:string;instruction?:string})=>request(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/generate`,"POST",body),
   chooseStudioThumbnail:(id:string,candidate_id:string,revision:string,finalize:boolean,format:"landscape"|"shorts"="landscape")=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/choose`,"POST",{candidate_id,revision,finalize,format}),

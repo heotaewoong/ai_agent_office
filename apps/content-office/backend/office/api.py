@@ -1070,6 +1070,8 @@ def create_app(store: Store | None = None):
     register_discovery(app, store)
     from .api_world_music import register as register_world_music
     register_world_music(app, store)
+    from .api_assistant_reports import register as register_assistant_reports
+    register_assistant_reports(app, store)
     return app
 
 

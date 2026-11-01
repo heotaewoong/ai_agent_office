@@ -113,7 +113,7 @@ def test_card_renderer_follows_codex_profile_unless_images_are_switched_off(tmp_
 
 def fake_codex(tmp_path, body):
     script = tmp_path / "fake-codex"
-    script.write_text(f"#!{sys.executable}\n" + body, encoding="utf-8")
+    script.write_text(f"#!{os.path.realpath(sys.executable)}\n" + body, encoding="utf-8")
     script.chmod(script.stat().st_mode | stat.S_IXUSR)
     return script
 
