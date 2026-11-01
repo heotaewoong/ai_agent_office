@@ -422,9 +422,11 @@ def create_app(store: Store | None = None):
         from .api_leads_newsletter import dashboard_counts
         from .source_registry import classify_article, load_sources, visible_articles
         feed_report = store.setting("feed_report", {})
-        current_ids = {article["id"] for article in rank_articles(store.articles_list())}
+        article_rows = store.articles_list()
+        current_ids = {article["id"] for article in rank_articles(article_rows)}
         active_ids = set(feed_report.get("active_article_ids", current_ids))
-        articles = sorted([article for article in store.articles_list() if article["id"] in current_ids & active_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
+        eligible_ids = current_ids & active_ids
+        articles = sorted([article for article in article_rows if article["id"] in eligible_ids], key=lambda a: (a.get("score", 0), a.get("published_at") or ""), reverse=True)
         jobs = store.jobs()
         if compact:
             jobs = [_job_summary(job, compact=True) for job in jobs]

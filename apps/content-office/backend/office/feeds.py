@@ -77,10 +77,10 @@ def parse_date(value):
     if not value:
         return None
     try:
-        date = email.utils.parsedate_to_datetime(value)
+        date = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
     except (ValueError, TypeError):
         try:
-            date = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+            date = email.utils.parsedate_to_datetime(value)
         except (ValueError, TypeError):
             return None
     if date.tzinfo is None:
@@ -123,20 +123,21 @@ def parse_feed(xml: str | bytes, feed: dict, current: datetime | None = None) ->
 
 def rank_articles(articles, current=None, days=7):
     current = current or datetime.now(timezone.utc)
-    seen, ranked = set(), []
+    seen, ranked = {}, []
+    future_limit, oldest = current + timedelta(minutes=5), current - timedelta(days=days)
     for source in articles:
         article = dict(source)
         date = parse_date(article.get("published_at"))
-        if date is None or date > current + timedelta(minutes=5) or date < current - timedelta(days=days):
+        if date is None or date > future_limit or date < oldest:
             continue
         url = normalize_url(article["url"])
         if url in seen:
-            previous = next((r for r in ranked if normalize_url(r['url']) == url), None)
-            if previous is not None and article.get('signals'):
+            previous = seen[url]
+            if article.get('signals'):
                 previous['signals'] = {**previous.get('signals', {}), **article['signals']}
                 previous['related_sources'] = [*previous.get('related_sources', []), {'url': article.get('discussion_url', article['url']), 'feed_name': article.get('feed_name'), 'reason': '같은 원문을 가리키는 공개 반응 지표'}]
             continue
-        seen.add(url)
+        seen[url] = article
         text = (article["title"] + " " + article.get("summary", "")).lower()
         age_days = (current - date).total_seconds() / 86400
         freshness = max(0, 25 - age_days * 2)
