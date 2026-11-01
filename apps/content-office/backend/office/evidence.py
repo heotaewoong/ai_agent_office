@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .feeds import fetch_public
-from .store import WorkflowError, canonical, now
+from .store import SourceUnavailable, WorkflowError, canonical, now
 
 
 class ArticleTextParser(HTMLParser):
@@ -76,7 +76,7 @@ def collect_article_evidence(article, provider, output_dir: Path):
             raw, resolved, _ = fetch_public(url, maximum=2_000_000)
             text = extract_article_text(raw.decode("utf-8", errors="replace"))
         except Exception:
-            raise WorkflowError("원문을 직접 확인하지 못했습니다. 허용된 공개 원문을 입력하거나 다른 기사를 선택하세요. RSS 제목만으로 제작하지 않습니다") from None
+            raise SourceUnavailable("원문을 직접 확인하지 못했습니다. 허용된 공개 원문을 입력하거나 다른 기사를 선택하세요. RSS 제목만으로 제작하지 않습니다") from None
         source_kind = "http_article_body"
     if len(text) < 200:
         raise WorkflowError("확인한 원문이 너무 짧습니다. 본문 근거를 입력하세요")
