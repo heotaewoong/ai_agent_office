@@ -30,6 +30,26 @@ def test_draft_requires_explicit_current_source_approval_but_never_creates_relea
         owner_drafts.claim(store, rows[0]['id'], 'fixture')
 
 
+def test_tistory_queue_accepts_real_blog_export_names(tmp_path):
+    from office.channels import update_channel
+    from office.exports import write_blog_exports
+    from office.media import artifact_record
+    store, jid = ready(tmp_path)
+    update_channel(store, 'tistory_main', {'publication_enabled': True}, actor='fixture')
+    job = store.job(jid)
+    folder = store.artifacts / jid / 'actual-blog-export'
+    folder.mkdir()
+    paths = write_blog_exports(job['source_packet'], folder)
+    manifest = {**job['manifest'], 'files': [{**artifact_record(store.artifacts, p), 'outputs': ['blog']} for p in paths]}
+    store.update_job(jid, manifest=manifest, owner_draft_policy=owner_drafts.policy(store, job, ['tistory_main'], 'fixture'))
+    row, = owner_drafts.prepare(store, jid)
+    assert row['state'] == 'pending'
+    assert row['files'][0]['name'] == 'tistory.md'
+    assert row['text'] == (folder / 'tistory.md').read_text(encoding='utf-8')
+    assert store.job(jid)['source_approval'] == job['source_approval']
+    assert store.job(jid)['release_approval'] is None
+
+
 def test_claim_is_single_and_public_receipt_is_rejected(tmp_path):
     store, jid = ready(tmp_path)
     row, = owner_drafts.prepare(store, jid)
