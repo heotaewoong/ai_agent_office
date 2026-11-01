@@ -242,3 +242,27 @@ for(const width of [1440,375])test(`카드·출고함에서 ${width}px 원고 �
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  expect(writes).toEqual([]);
 });
+
+for(const width of [1440,375])test(`fragment 새로고침 뒤 ${width}px 왕복에서 URL을 중복하지 않는다`,async({page})=>{
+ const {writes,old}=await newsJobHarness(page,true);
+ const source=`/scripts/${old.id}#studio-blog-${old.id}`;
+ await page.setViewportSize({width,height:900});await page.goto(source);
+ await expect(page.locator(`#studio-blog-${old.id}`)).toBeVisible();
+ await page.reload();
+ const body=page.getByRole('textbox',{name:'본문 · Markdown',exact:true});
+ const expected=(await body.inputValue())+' 보존할 임시 메모';await body.fill(expected);
+ const docs:string[]=[];page.on('request',r=>{if(r.isNavigationRequest())docs.push(r.url());});
+ for(let round=0;round<2;round++){
+  await page.getByRole('button',{name:'완성 영상 확인',exact:true}).click();
+  await expect(page).toHaveURL(`/publish?job=${old.id}`);
+  const link=page.getByRole('link',{name:'현재 원고 검토·승인①으로 이동',exact:true});
+  if(width===375)await link.click();else await link.press('Enter');
+  await expect(page).toHaveURL(source);
+  await expect(page.locator(`#studio-blog-${old.id}`)).toBeFocused();
+  await expect(body).toHaveValue(expected);
+ }
+ await page.goBack();await expect(page).toHaveURL(`/publish?job=${old.id}`);
+ await page.goForward();await expect(page).toHaveURL(source);
+ await expect(body).toHaveValue(expected);
+ expect(docs).toEqual([]);expect(writes).toEqual([]);
+});
