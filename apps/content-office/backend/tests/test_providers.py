@@ -1,9 +1,17 @@
 import json
+from datetime import datetime, timedelta, timezone
 
 import requests
 import pytest
 from office.providers import Provider
 from office.store import Store, WorkflowError
+
+
+def priced_store(path):
+    store = Store(path)
+    # Transport tests need a current test price; expiry rejection is tested explicitly below.
+    store.set_setting("price_valid_until", (datetime.now(timezone.utc) + timedelta(days=1)).isoformat())
+    return store
 
 
 class Response:
@@ -19,7 +27,7 @@ SCHEMA = {"type": "object", "properties": {"passed": {"type": "boolean"}}, "requ
 def test_review_and_optional_drafts_use_strict_wire_without_changing_saved_contract(tmp_path):
     import copy
     from office.editorial import REVIEW_SCHEMA,KOREAN_REVIEW_SCHEMA,DRAFT_SCHEMA
-    provider=Provider(Store(tmp_path),model='gpt-5.4-mini')
+    provider=Provider(priced_store(tmp_path),model='gpt-5.4-mini')
     for schema in (REVIEW_SCHEMA,KOREAN_REVIEW_SCHEMA):
         _,_,payload=provider._openai_request('test-placeholder',[{'role':'user','content':'검수'}],schema,{'max_tokens':4096})
         assert payload['response_format']['json_schema']['strict'] is True
@@ -43,7 +51,7 @@ def test_optional_wire_null_restores_absence_and_schema_failure_logs_no_response
         status_code=200
         def __init__(self,value):self.value=value
         def json(self):return {'usage':{'prompt_tokens':5,'completion_tokens':5},'choices':[{'finish_reason':'stop','message':{'content':json.dumps(self.value)}}]}
-    store=Store(tmp_path)
+    store=priced_store(tmp_path)
     provider=Provider(store,model='gpt-5.4-mini',transport=lambda *a,**k:OpenAIResponse({'caption':'확인','footage':None}))
     assert provider.generate('gen',[{'role':'user','content':'synthetic'}],schema)=={'caption':'확인'}
     provider.transport=lambda *a,**k:OpenAIResponse({'caption':'PRIVATE_SENTINEL','footage':123})
@@ -58,7 +66,7 @@ def test_optional_wire_null_restores_absence_and_schema_failure_logs_no_response
 
 def test_job_budget_blocks_model_before_transport_and_preserves_other_job_costs(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     job_id = store.create_job({"id": "capped-provider", "title": "예산 시험"})["id"]
     current = store.get_job_budget(job_id)
     store.set_job_budget(job_id, 1000, "op", expected_hash=current["hash"])
@@ -73,7 +81,7 @@ def test_job_budget_blocks_model_before_transport_and_preserves_other_job_costs(
 
 def test_job_attributed_model_cache_reuse_is_free_even_after_job_budget_is_full(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     job_id = store.create_job({"id": "cached-provider", "title": "예산 시험"})["id"]
     current = store.get_job_budget(job_id)
     store.set_job_budget(job_id, 1000, "op", expected_hash=current["hash"])
@@ -101,7 +109,7 @@ def test_job_attributed_model_cache_reuse_is_free_even_after_job_budget_is_full(
 def test_run_scope_checks_maximum_before_transport_but_reuses_cache_for_free(tmp_path, monkeypatch):
     from office.store import CostScopeExceeded
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     calls = []
 
     def transport(*args, **kwargs):
@@ -124,7 +132,7 @@ def test_run_scope_checks_maximum_before_transport_but_reuses_cache_for_free(tmp
 
 def test_schema_invalid_model_result_is_not_cached_as_success(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     provider = Provider(store, transport=lambda *a, **kw: Response('{"passed":"false"}'))
     with pytest.raises(WorkflowError, match="형식|schema"):
         provider.generate("eval", [{"role": "user", "content": "test"}], SCHEMA)
@@ -135,7 +143,7 @@ def test_schema_invalid_model_result_is_not_cached_as_success(tmp_path, monkeypa
 
 def test_schema_valid_cache_reuse_does_not_reserve_or_spend_again(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     provider = Provider(store, transport=lambda *a, **kw: Response('{"passed":true}'))
     first = provider.generate("eval", [{"role": "user", "content": "test"}], SCHEMA)
     budget = store.budget()
@@ -146,7 +154,7 @@ def test_schema_valid_cache_reuse_does_not_reserve_or_spend_again(tmp_path, monk
 
 def test_lost_response_preserves_reservation_and_never_marks_success(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     def lost(*args, **kwargs):
         raise requests.ConnectionError("transport broke")
     provider = Provider(store, transport=lost)
@@ -158,7 +166,7 @@ def test_lost_response_preserves_reservation_and_never_marks_success(tmp_path, m
 
 def test_verified_price_expiry_blocks_new_paid_calls(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     provider = Provider(store, transport=lambda *a, **kw: Response('{"passed":true}'))
     store.set_setting("price_valid_until", "2026-01-01T00:00:00+00:00")
     with pytest.raises(WorkflowError, match="단가|요금"):
@@ -168,7 +176,7 @@ def test_verified_price_expiry_blocks_new_paid_calls(tmp_path, monkeypatch):
 
 def test_missing_output_usage_does_not_release_open_reservation(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     class MissingUsage(Response):
         def json(self):
             data = super().json()
@@ -183,7 +191,7 @@ def test_missing_output_usage_does_not_release_open_reservation(tmp_path, monkey
 @pytest.mark.parametrize('field,value', [('promptTokenCount', 3.5), ('candidatesTokenCount', True), ('candidatesTokenCount', '3'), ('thoughtsTokenCount', -1)])
 def test_invalid_usage_counter_types_keep_reservation(tmp_path, monkeypatch, field, value):
     monkeypatch.setenv('GEMINI_API_KEY', 'test-only-placeholder')
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     class InvalidCounter(Response):
         def json(self):
             data = super().json()
@@ -207,7 +215,7 @@ class ErrorResponse:
 
 def test_503_unavailable_is_settled_as_unbilled_and_retryable(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     busy = ErrorResponse(503, {"error": {"code": 503, "status": "UNAVAILABLE", "message": "high demand"}})
     provider = Provider(store, transport=lambda *a, **kw: busy)
     with pytest.raises(WorkflowError, match="503") as info:
@@ -221,7 +229,7 @@ def test_503_unavailable_is_settled_as_unbilled_and_retryable(tmp_path, monkeypa
 
 def test_other_5xx_keeps_reservation_unknown(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     provider = Provider(store, transport=lambda *a, **kw: ErrorResponse(500, {"error": {"status": "INTERNAL"}}))
     with pytest.raises(WorkflowError, match="예약을 유지"):
         provider.generate("card_ko", [{"role": "user", "content": "b"}], SCHEMA)
@@ -242,7 +250,7 @@ class OpenAIResponse:
 def test_openai_model_uses_chat_completions_with_schema_and_settles_real_usage(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-placeholder")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     calls = []
 
     def transport(url, **kwargs):
@@ -270,14 +278,14 @@ def test_openai_model_uses_chat_completions_with_schema_and_settles_real_usage(t
 def test_openai_model_requires_openai_key_not_gemini(tmp_path, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-only-placeholder")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    provider = Provider(Store(tmp_path), model="gpt-5.5", transport=lambda *a, **kw: OpenAIResponse('{"passed":true}'))
+    provider = Provider(priced_store(tmp_path), model="gpt-5.5", transport=lambda *a, **kw: OpenAIResponse('{"passed":true}'))
     with pytest.raises(WorkflowError, match="OpenAI"):
         provider.generate("gen", [{"role": "user", "content": "hi"}], SCHEMA)
 
 
 def test_openai_4xx_is_settled_unbilled_and_5xx_keeps_reservation(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     provider = Provider(store, model="gpt-5.4-mini", transport=lambda *a, **kw: ErrorResponse(429, {"error": {"type": "rate_limit_error", "message": "slow down"}}))
     with pytest.raises(WorkflowError, match="429"):
         provider.generate("gen", [{"role": "user", "content": "a"}], SCHEMA)
@@ -290,7 +298,7 @@ def test_openai_4xx_is_settled_unbilled_and_5xx_keeps_reservation(tmp_path, monk
 
 def test_openai_usage_missing_keeps_reservation(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-placeholder")
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     provider = Provider(store, model="gpt-5.4-mini", transport=lambda *a, **kw: OpenAIResponse('{"passed":true}', usage={"prompt_tokens": "x"}))
     with pytest.raises(WorkflowError, match="사용량"):
         provider.generate("gen", [{"role": "user", "content": "c"}], SCHEMA)
@@ -312,7 +320,7 @@ def test_openai_request_spells_out_array_counts_and_enums_the_json_schema_mode_i
     def transport(url, **kwargs):
         calls.append(kwargs["json"])
         return OpenAIResponse('{"title":"t"}')
-    Provider(Store(tmp_path), model="gpt-5.4-mini", transport=transport).generate("gen", [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}], schema)
+    Provider(priced_store(tmp_path), model="gpt-5.4-mini", transport=transport).generate("gen", [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}], schema)
     systems = [m["content"] for m in calls[0]["messages"] if m["role"] == "system"]
     assert systems[0] == "SYS" and any("정확히 5개" in s and "thumbnails" in s for s in systems)
     assert calls[0]["messages"][-1]["role"] == "user"
@@ -326,7 +334,7 @@ def test_openai_truncated_output_says_so(tmp_path, monkeypatch):
             data = super().json()
             data["choices"][0]["finish_reason"] = "length"
             return data
-    store = Store(tmp_path)
+    store = priced_store(tmp_path)
     with pytest.raises(WorkflowError, match="길이 제한"):
         Provider(store, model="gpt-5.4-mini", transport=lambda *a, **kw: Cut('{"passed":tr')).generate("gen", [{"role": "user", "content": "x"}], SCHEMA)
     assert store.budget()["spent_krw"] > 0 and store.budget()["reserved_krw"] == 0

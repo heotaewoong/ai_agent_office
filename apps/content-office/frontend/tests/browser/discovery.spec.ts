@@ -270,7 +270,7 @@ for(const width of [1440,375])test(`fragment 새로고침 뒤 ${width}px 왕복�
 for(const width of [375,768,1280,1440,1920])test(`긴 제작비 안내 ${width}px에서도 승인 설명이 눌리거나 버튼이 넘치지 않는다`,async({page})=>{
  const {old,writes}=await newsJobHarness(page,true);
  Object.assign(old,{state:'release_review',manifest:{hash:'layout-only',files:[{id:'layout-text',name:'tistory.md',kind:'markdown',url:'/api/layout-text',outputs:['blog']}],completed_outputs:['blog','video']}});
- await page.route(`**/api/jobs/${old.id}/production-estimate`,route=>route.fulfill({contentType:'application/json',body:JSON.stringify({clips:{paid:true,clips:5,credits:200,reservation_krw:4000,daily_cap:15,used_today:5,label:'유료: 영상 클립 5개(장면 길이에 맞춤) · 최대 200크레딧($2.00, 예약 최대 4,000원)'},thumbnail_artwork:true})}));
+ await page.route(`**/api/jobs/${old.id}/production-estimate*`,route=>route.fulfill({contentType:'application/json',body:JSON.stringify({clips:{paid:true,clips:5,credits:200,reservation_krw:4000,daily_cap:15,used_today:5,label:'유료: 영상 클립 5개(장면 길이에 맞춤) · 최대 200크레딧($2.00, 예약 최대 4,000원)'},thumbnail_artwork:true})}));
  await page.setViewportSize({width,height:1000});await page.goto(`/scripts/${old.id}`,{waitUntil:'domcontentloaded'});
  const panel=page.locator('.approval-panel');await expect(panel.getByText(/오늘 5\/15개 사용/)).toBeVisible();
  const check=async()=>{
@@ -289,4 +289,17 @@ for(const width of [375,768,1280,1440,1920])test(`긴 제작비 안내 ${width}p
  const release=page.locator('.approval-panel');const rb=await release.boundingBox();
  for(const e of await release.locator(':scope > div').all()){const b=await e.boundingBox();expect(b!.x+b!.width).toBeLessThanOrEqual(rb!.x+rb!.width+1);}
  expect(writes).toEqual([]);
+});
+
+for(const width of [375,1440])test(`승인 최종확인 ${width}px에서도 긴 비용안내와 취소가 영역 안에 남는다`,async({page})=>{
+ const {old,writes}=await newsJobHarness(page,true);
+ await page.route(`**/api/jobs/${old.id}/production-estimate*`,route=>route.fulfill({contentType:'application/json',body:JSON.stringify({clips:{paid:true,clips:5,credits:200,reservation_krw:4000,daily_cap:15,used_today:5,label:'유료: 영상 클립 5개(장면 길이에 맞춤) · 최대 200크레딧($2.00, 예약 최대 4,000원)'},thumbnail_artwork:true})}));
+ await page.setViewportSize({width,height:1000});await page.goto(`/scripts/${old.id}`,{waitUntil:'domcontentloaded'});
+ await page.getByRole('button',{name:'원고 승인',exact:true}).click();
+ const confirm=page.getByRole('region',{name:'원고 승인 최종 확인'});await expect(confirm.getByText(/오늘 5\/15개 사용/)).toBeVisible();
+ await confirm.getByRole('button',{name:'이 원고 승인·자동 제작',exact:true}).click();
+ await expect(confirm.getByRole('button',{name:'유료 포함 제작 확인',exact:true})).toBeVisible();
+ const box=await confirm.boundingBox();for(const el of await confirm.locator('.produce-confirm, .paid-notice, button').all()){const b=await el.boundingBox();expect(b!.x).toBeGreaterThanOrEqual(box!.x-1);expect(b!.x+b!.width).toBeLessThanOrEqual(box!.x+box!.width+1);}
+ await confirm.getByRole('button',{name:'취소',exact:true}).click();await confirm.getByRole('button',{name:'돌아가기',exact:true}).click();
+ expect(writes).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
