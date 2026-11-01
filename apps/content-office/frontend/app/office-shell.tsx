@@ -1,4 +1,5 @@
 "use client";
+import { ActionFeedback } from "./action-feedback";
 import {DeliveryConsole} from "./delivery-console";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -337,13 +338,15 @@ export default function Office({ children }: { children: React.ReactNode }) {
     success: string,
   ): Promise<true | string> {
     if (busy) return "이미 처리 중입니다";
-    if (!connected) return "연결을 확인해 주세요";
+    if (!connected) { setError("오피스 연결이 끊겨 요청을 보내지 않았습니다. 연결을 확인해 주세요."); return "연결을 확인해 주세요"; }
     const targetJobId = jobRefresh.current.activeId;
     setBusy(label);
     setError("");
     setNotice("");
+    let saved = false;
     try {
       await execute();
+      saved = true;
       jobRefresh.current.invalidate(targetJobId);
       await Promise.all([loadDashboard(true), loadJob()]);
       setNotice(success);
@@ -352,6 +355,10 @@ export default function Office({ children }: { children: React.ReactNode }) {
       jobRefresh.current.invalidate(targetJobId);
       const message =
         cause instanceof Error ? cause.message : "요청을 처리하지 못했습니다.";
+      if (saved) {
+        setNotice(`${success} 화면 새로고침에 실패했습니다. 저장된 요청을 다시 보내지 말고 상태를 새로 조회하세요.`);
+        return true;
+      }
       if (cause instanceof OfficeApiError && cause.status === 409) {
         try {
           await loadJob();
@@ -578,6 +585,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
 
           {view !== "world" && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
 
+          <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (
             <div className="notice error" role="alert">
               <Icon name="alert" size={18} />
@@ -2521,7 +2529,7 @@ function Delivery({
                     )
                   }
                 >
-                  이 파일 버전 승인하기
+                  {busy ? "출고 승인 저장 중…" : "이 파일 버전 승인하기"}
                 </button>
               </div>
             </div>
