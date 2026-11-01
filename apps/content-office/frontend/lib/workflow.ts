@@ -171,7 +171,7 @@ export function remainingWindow(
   if (!end || !Number.isFinite(Date.parse(end))) return "마감 미설정";
   const minutes = Math.ceil((Date.parse(end) - now) / 60_000);
   if (minutes <= 0) return "작업 시간 종료";
-  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`;
+  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분 남음`;
 }
 
 export const states: Record<
