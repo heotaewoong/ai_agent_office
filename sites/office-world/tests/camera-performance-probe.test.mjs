@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {summarizeTimings, assertComparableRuns} from './camera-performance-probe.mjs';
+import {summarizeTimings, assertComparableRuns, measureCameraScenario} from './camera-performance-probe.mjs';
 
 test('timing summaries preserve samples and missing GPU data stays unknown',()=>{
   const samples=[4,1,3,2];
@@ -20,4 +20,24 @@ test('different render resolution, quality, geometry or camera paths cannot be c
   for(const changed of [{canvas:[1920,1080]},{quality:'low'},{meshes:100},{cameraPath:{radius:430}},{sampleFrames:60}]) {
     assert.throws(()=>assertComparableRuns(run(),{...run(),...changed}),/conditions differ/);
   }
+});
+
+test('camera probes preserve the existing render pixel density by default',async()=>{
+  let scale=.5,clock=0;
+  const engine={getHardwareScalingLevel:()=>scale,setHardwareScalingLevel:v=>{scale=v;},resize(){},
+    getRenderWidth:()=>800/scale,getRenderHeight:()=>600/scale,getGlInfo:()=>({renderer:'test'})};
+  class Instrumentation {
+    frameTimeCounter={current:1};renderTimeCounter={current:1};
+    activeMeshesEvaluationTimeCounter={current:1};gpuFrameTimeCounter={current:0};dispose(){}
+  }
+  const env={document:{hidden:false},innerWidth:800,innerHeight:600,devicePixelRatio:2,
+    performance:{now:()=>clock},setTimeout,clearTimeout,cancelAnimationFrame(){},
+    requestAnimationFrame(fn){queueMicrotask(()=>fn(clock+=16));return 1;},
+    BABYLON:{SceneInstrumentation:Instrumentation,EngineInstrumentation:Instrumentation,Vector3:{FromArray:a=>a}}};
+  const camera={setTarget(){}};
+  const office={quality:'high',space:{view:'overview'},controls:{setLayer(){},overview:camera},
+    world:{engine,scene:{meshes:[{name:'fixed',getTotalVertices:()=>24}]}}};
+  const measured=await measureCameraScenario(office,{warmupFrames:1,sampleFrames:2},env);
+  assert.deepEqual(measured.canvas,[1600,1200],'measurement must not silently lower native rendering quality');
+  assert.equal(scale,.5,'original render density must remain after measurement');
 });

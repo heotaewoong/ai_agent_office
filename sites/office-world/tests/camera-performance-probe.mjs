@@ -28,9 +28,7 @@ export async function measureCameraScenario(office,{layer='office',warmupFrames=
     timer=env.setTimeout(()=>{env.cancelAnimationFrame(id);reject(Error('Frame probe timed out'));},
       Math.max(1,Math.min(2000,deadline-env.performance.now())));
   });
-  // Quality remains unchanged; both variants use one render pixel per CSS pixel.
-  const previousScale=world.engine.getHardwareScalingLevel();
-  world.engine.setHardwareScalingLevel(1);world.engine.resize();
+  // Keep the scene's native render density; matching CSS sizes alone is insufficient.
   controls.setLayer(layer);
   let si,ei,camera,alpha;
   try {
@@ -68,6 +66,5 @@ export async function measureCameraScenario(office,{layer='office',warmupFrames=
   } finally {
     si?.dispose();ei?.dispose();
     if(camera)camera.alpha=alpha;
-    world.engine.setHardwareScalingLevel(previousScale);world.engine.resize();
   }
 }
