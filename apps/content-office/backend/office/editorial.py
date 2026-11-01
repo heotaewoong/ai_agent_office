@@ -47,7 +47,7 @@ def content_context(packet):
     return context
 
 
-def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None, brief=None, offer=None, original_markdown=None):
+def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None, brief=None, offer=None, original_markdown=None, refine_limit=2):
     if original_markdown is not None and (not isinstance(original_markdown, str) or not original_markdown.strip()):
         raise WorkflowError("원문 보존 모드에는 직접 제공한 Markdown 본문이 필요합니다")
     packet = copy.deepcopy(packet)
@@ -60,7 +60,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
     draft_schema = copy.deepcopy(DRAFT_SCHEMA)
     draft_schema['properties']['channel_posts'] = copy_schema(brief.get('language', 'ko'))
     history = []
-    for round_no in range(3):
+    for round_no in range(refine_limit + 1):
         # Apply operator-selected titles before every review, including after model refinement.
         if selected_titles:
             packet['channel_titles'] = selected_titles
@@ -92,7 +92,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
         history.append({"round": round_no, "source_content_hash": digest(content_context(packet)), "reviews": reviews, "deterministic_checks": checks})
         critical = any(bool(r.get("critical_issues")) for r in reviews) or not checks["passed"] or bool(output_issues(packet))
         passed = not critical and all(r.get("passed") and float(r.get("score", 0)) >= 80 for r in reviews)
-        if passed or round_no == 2:
+        if passed or round_no == refine_limit:
             korean = next((r for r in reviews if r.get("role") == "korean"), {})
             korean_rule_issues = [issue for issue in checks.get("issues", []) if issue in check_texts(packet_texts(packet))]
             packet["quality"] = {"status": "passed" if passed else "blocked", "critical": critical, "reviews": reviews, "history": history, "refine_count": round_no, "rubric_version": RUBRIC["version"], "deterministic_checks": checks, "korean": {"passed": bool(korean.get("passed")) and not korean.get("critical_issues") and not korean_rule_issues, "score": korean.get("score"), "corrections": korean.get("corrections", []), "rule_issues": korean_rule_issues, "note": "주어·서술어 호응, 목적어·조사, 어미, 띄어쓰기, 번역투, 문장 길이 검수. 모델과 코드 규칙의 결과이며 사람 검토를 대신하지 않습니다"}, "note": "모델 검수 결과이며 사람 승인·독립 사실성 증명이 아닙니다"}
@@ -272,7 +272,7 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
         packet['channel_titles'] = selected_titles
     if 'channel_posts' in packet:
         packet['channel_policy_version'] = CHANNEL_POLICY_VERSION
-    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks, system=brand_system_prompt(BASE, brand) + adaptation_prompt(packet), packaging=job.get("packaging"), brief=brief, offer=job.get("offer"), original_markdown=original_markdown)
+    packet = review_until_ready(packet, provider, event=lambda kind, data: store.event(kind, data, job_id), checks_fn=deterministic_checks, system=brand_system_prompt(BASE, brand) + adaptation_prompt(packet), packaging=job.get("packaging"), brief=brief, offer=job.get("offer"), original_markdown=original_markdown, refine_limit=0 if evaluate_only and (packet.get('video') or {}).get('scenes') else 2)
     if experiences and not evaluate_only:
         packet['experience_sources'] = experiences
     checks = deterministic_checks(packet)

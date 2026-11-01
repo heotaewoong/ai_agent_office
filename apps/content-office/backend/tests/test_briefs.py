@@ -42,6 +42,17 @@ def test_current_editorial_review_does_not_mix_archived_channel_copy():
     packet['editorial_copy']=False
     assert content_context(packet)['external_media']['channel_pack']==packet['external_media']['channel_pack']
 
+def test_review_only_preserves_derivative_prices_when_review_rejects():
+    from office.editorial import review_until_ready
+    packet={'title':'제목','body':'원문','video':{'title':'영상','description':'50% 할인 · 구독자 100% 할인','scenes':[{'caption':'확인','narration':'확인해요','visual':'도해'}]*3,'thumbnails':[{'title':'제목','subtitle':'내용','angle':'소개'}]*5},'channel_posts':{'threads_main':'50% 할인 · 구독자 100% 할인'}}
+    class Reviewer:
+        def generate(self,role,*args):
+            assert role!='refine','Review-only must never rewrite the text'
+            return {'role':role,'passed':False,'score':50,'critical_issues':['조건 확인 필요'],'minor_issues':[],'summary':'확인 필요'}
+    result=review_until_ready(packet,Reviewer(),refine_limit=0)
+    assert result['video']==packet['video'] and result['channel_posts']==packet['channel_posts']
+    assert result['quality']['status']=='blocked'
+
 
 def test_presets_cover_both_axes_and_legacy_default():
     from office.briefs import PRESETS, DEFAULT_PRESET, build_brief
