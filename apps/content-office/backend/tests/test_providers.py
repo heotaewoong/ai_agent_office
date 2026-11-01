@@ -32,6 +32,8 @@ def test_review_and_optional_drafts_use_strict_wire_without_changing_saved_contr
     assert 'footage' in scene['required']
     assert {'type':'null'} in scene['properties']['footage']['anyOf']
     assert DRAFT_SCHEMA==before
+    from office.providers import closed_required_schema
+    assert not closed_required_schema({'anyOf':[{'type':'string'}], 'type':'object'})
 
 
 def test_optional_wire_null_restores_absence_and_schema_failure_logs_no_response(tmp_path,monkeypatch):
