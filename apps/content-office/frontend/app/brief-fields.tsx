@@ -39,7 +39,7 @@ export function BriefFields({
         <select id={`${uid}-brief_preset`} value={String(form.brief_preset ?? "")} onChange={(e) => onChange("brief_preset", e.target.value)}>
           <option value="">기본 프리셋{defaultPreset ? ` (${presets.find((p) => p.id === defaultPreset)?.label ?? defaultPreset})` : ""}</option>
           {axes.map((axis) => (
-            <optgroup key={axis} label={`${axis}축 · ${axisLabel(axis)}`}>
+            <optgroup key={axis} label={axis === 'source' ? axisLabel(axis) : `${axis}축 · ${axisLabel(axis)}`}>
               {presets
                 .filter((p) => p.axis === axis)
                 .map((p) => (

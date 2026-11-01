@@ -122,3 +122,21 @@ test('승인① 화면에서 썸네일 비용을 확인한 뒤에만 승인·자
  await expect.poll(()=>writes.length).toBe(1);
  expect(writes[0]).toEqual({path:`/api/jobs/${old.id}/reviews/source`,body:{version:old.source_hash,decision:'approved',selections:old.selections,auto_produce:true,confirm_paid_clips:true,confirm_paid_thumbnails:true}});
 });
+
+test('내 원고 등록은 주제 선택 전에는 저장하지 않고 선택한 기획을 함께 전송한다',async({page})=>{
+ const {writes,old}=await newsJobHarness(page);
+ await page.route('**/api/briefs',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({default:'ai-agent',presets:[{id:'transfer-admission',axis:'A',label:'대학 편입 준비',reader:'편입 영어 학습자',language:'ko'}]})}));
+ await page.route('**/api/owned-source/jobs',async route=>{writes.push({path:'/api/owned-source/jobs',body:route.request().postDataJSON()});await route.fulfill({contentType:'application/json',body:JSON.stringify(old)});});
+ await page.goto('/plans');
+ const panel=page.getByRole('region',{name:'내 원고로 콘텐츠 만들기'});
+ const body='합성 검증용 편입 학습 원고입니다. '.repeat(12);
+ await panel.getByLabel('콘텐츠 제목 필수').fill('합성 편입 후기');
+ await panel.getByLabel('원고·자료·만들고 싶은 내용 필수').fill(body);
+ await panel.getByRole('checkbox').check();
+ const save=panel.getByRole('button',{name:'내 원고로 작업실 열기'});
+ await expect(save).toBeDisabled();expect(writes).toEqual([]);
+ await panel.getByLabel('누구를 위한 주제인가요? · 필수').selectOption('transfer-admission');
+ await save.click();
+ await expect.poll(()=>writes.length).toBe(1);
+ expect(writes[0].body).toEqual({title:'합성 편입 후기',body,source_url:'',owner_confirmed:true,brief_preset:'transfer-admission'});
+});

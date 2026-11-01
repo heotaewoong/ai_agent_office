@@ -15,6 +15,7 @@ class Intake(BaseModel):
     body:str=Field(min_length=100,max_length=50000)
     source_url:str=Field(default='',max_length=2000)
     owner_confirmed:bool=Field(strict=True)
+    brief_preset:str|None=Field(default=None,max_length=100)
 
 def register(app:FastAPI,store):
     @app.get('/api/jobs/{job_id}/drafts/{draft_id}/files/{name}')
@@ -40,4 +41,6 @@ def register(app:FastAPI,store):
                 if any(c.isspace() for c in request.source_url):raise ValueError()
                 reference_url(request.source_url)
             except ValueError:raise WorkflowError('올바른 공개 HTTPS 원문 주소를 입력해 주세요') from None
-        return create_owned_job(store,request.title.strip(),request.body,request.source_url)
+        from .briefs import build_brief
+        brief = build_brief(request.brief_preset, {'topic':request.title.strip()} if request.brief_preset=='source-faithful' else None) if request.brief_preset else None
+        return create_owned_job(store,request.title.strip(),request.body,request.source_url,brief=brief)

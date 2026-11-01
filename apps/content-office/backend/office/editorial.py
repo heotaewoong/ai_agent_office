@@ -17,7 +17,7 @@ from .store import Store, WorkflowError, canonical, digest
 
 # 과거 고정 독자 설정. 이제 기본 프리셋(ai-agent)의 필드와 같으며, 실제 호출은 작업별 브리프를 쓴다.
 AUDIENCE = {field: PRESETS[DEFAULT_PRESET][field] for field in ("topic", "reader", "prior_knowledge", "problem", "outcome", "tone")}
-RUBRIC = {"version": "heobrain-news-2026-10-26-v2-reader-value", "critical": ["출처 없는 핵심 주장·숫자", "공급사 주장과 독립 검증 혼동", "합성·표본 결과의 일반화", "국가 지원·가격·상품 조건 조작", "원문에 없는 개인 경험·매출 보장", "영상이 원고보다 강한 주장"], "dimensions": ["주장과 근거 일치", "숫자·기간·단위", "독자 질문에 대한 구체적인 답", "완결 사례의 입력·판단·다음 행동", "필요한 비교표와 읽기 구조", "관련 한계와 반증", "한 질문을 끝까지 설명하는 영상", "말하기와 화면 문구의 분리"], "pass_score": 80, "refine_limit": 2}
+RUBRIC = {"version": "heobrain-2026-11-01-v3-topic-bound", "critical": ["출처 없는 핵심 주장·숫자", "공급사 주장과 독립 검증 혼동", "합성·표본 결과의 일반화", "국가 지원·가격·상품 조건 조작", "원문에 없는 개인 경험·매출 보장", "영상이 원고보다 강한 주장"], "dimensions": ["주장과 근거 일치", "숫자·기간·단위", "독자 질문에 대한 구체적인 답", "선택한 독자·주제에 맞는 설명 구조", "필요한 비교표와 읽기 구조", "관련 한계와 반증", "한 질문을 끝까지 설명하는 영상", "말하기와 화면 문구의 분리"], "pass_score": 80, "refine_limit": 2}
 
 SCENE_SCHEMA = {"type": "object", "properties": {"narration": {"type": "string"}, "caption": {"type": "string"}, "visual": {"type": "string"}, "footage": {"type": "string"}}, "required": ["narration", "caption", "visual"], "additionalProperties": False}
 DRAFT_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string"}, "video": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "scenes": {"type": "array", "items": SCENE_SCHEMA}}, "required": ["title", "description", "tags", "scenes"], "additionalProperties": False}}, "required": ["title", "body", "video"], "additionalProperties": False}
@@ -40,7 +40,11 @@ ORIGINAL_MODE_PROMPT = "원문 보존 모드다. 운영자가 직접 제공한 �
 
 
 def content_context(packet):
-    return {key: value for key, value in packet.items() if key not in ("quality", "call_log", "approval")}
+    context = {key: value for key, value in packet.items() if key not in ("quality", "call_log", "approval")}
+    if packet.get('editorial_copy') is True and isinstance(packet.get('external_media'), dict):
+        context['external_media'] = {key:packet['external_media'][key] for key in ('draft_id','asset_hashes') if key in packet['external_media']}
+        context['external_media'].update(review_scope='archived_external_media_not_current_copy', note='이전 외부 편집본의 보관 정보다. 현재 검수 대상은 위의 body·video·channel_posts다. 과거 채널 문구나 실제 영상 내용을 확인했다고 주장하지 않는다.')
+    return context
 
 
 def review_until_ready(packet, provider, event=None, checks_fn=None, system=None, packaging=None, brief=None, offer=None, original_markdown=None):
@@ -80,7 +84,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
                 review.setdefault("corrections", [])
                 reviews.append(review)
                 continue
-            role_prompt = "독자가 글을 읽고 사례의 입력·판단·다음 행동을 설명할 수 있는지 비평하라. 예시를 언급만 하고 실제 입력과 판단 결과를 보여주지 않거나, 영상이 여러 뉴스 항목을 나열하며 첫 질문을 끝내지 못하면 passed=false로 하라. 가상 사례는 가상으로 명시해야 한다. 비교가 필요한 수치를 문장으로만 반복하는지, 제작용 라벨이나 발음용 문장을 시청자 화면에 노출하는지, 같은 문구를 제목·도해·자막에서 중복하는지도 지적하라. 사실 검토와 별개로 독자 가치가 부족한 원고를 통과시키지 말라. 외국어 문자가 무관하게 섞이거나 한 문단으로 길게 이어지면 지적하라." if role == "critique" else "블로그뿐 아니라 영상의 caption/narration과 썸네일을 문장별로 원자화해 근거와 비교하라. 숫자가 같아도 지표명·분모·대상·누적/현재가 바뀌면 중대 오류다. 특히 평균 시도 성공, 20회 전부 성공, 20회 중 한번 이상 성공을 혼동하지 말라. 광고주 수와 캠페인 수/횟수도 다르다. 비평자의 답을 보지 않는 독립 호출이다."
+            role_prompt = "현재 audience의 주제·독자·문제·기대 결과에 맞춰 비평하라. 모든 주제에 AI 업무 사례나 입력·판단·다음 행동 구조를 강요하지 않는다. 개인 후기·상품 소개는 확인된 경험, 학습 접근, 상품 설명과 조건을 구분하는지 확인한다. 자동화 활용 사례를 설명하는 콘텐츠라면 실제 입력·판단·다음 행동을 보여주는지 확인한다. 영상이 첫 질문을 끝내지 못하면 passed=false로 하라. 가상 사례는 가상으로 명시해야 한다. 비교가 필요한 수치를 문장으로만 반복하는지, 제작용 라벨이나 발음용 문장을 시청자 화면에 노출하는지, 같은 문구를 제목·도해·자막에서 중복하는지도 지적하라. 사실 검토와 별개로 독자 가치가 부족한 원고를 통과시키지 말라. 외국어 문자가 무관하게 섞이거나 한 문단으로 길게 이어지면 지적하라." if role == "critique" else "블로그뿐 아니라 영상의 caption/narration과 썸네일을 문장별로 원자화해 근거와 비교하라. 숫자가 같아도 지표명·분모·대상·누적/현재가 바뀌면 중대 오류다. 특히 평균 시도 성공, 20회 전부 성공, 20회 중 한번 이상 성공을 혼동하지 말라. 광고주 수와 캠페인 수/횟수도 다르다. 비평자의 답을 보지 않는 독립 호출이다."
             review = provider.generate(role, [{"role": "system", "content": BASE + role_prompt + " 총점과 관계없이 중대 오류가 하나라도 있으면 passed=false로 하라." + preserve_prompt}, {"role": "user", "content": payload}], REVIEW_SCHEMA, {"max_tokens": 4096, "temperature": 0.2})
             review["role"] = role
             reviews.append(review)
@@ -279,6 +283,6 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False):
     packet["quality"]["gates"] = run_gates(packet, previous, packet.get("assets", []), brand)
     if packet["quality"]["gates"]["status"] == "block":
         packet["quality"].update(status="blocked", critical=True)
-    result = store.save_source(job_id, packet, expected_hash=job["source_hash"], expected_offer_hash=job.get("offer_hash"))
+    result = store.save_source(job_id, packet, expected_hash=job["source_hash"], expected_offer_hash=job.get("offer_hash"), expected_brief_hash=digest(job.get('brief')))
     store.event("source_review_requested", {"role": "편집", "source_hash": result["source_hash"], "next_action": "현재 원고와 검수 결과를 확인하고 승인① 또는 수정"}, job_id)
     return result

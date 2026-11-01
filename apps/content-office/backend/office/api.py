@@ -956,7 +956,7 @@ def create_app(store: Store | None = None):
         overrides = card.pop("brief", None)
         preset = card.pop("brief_preset", None)
         # 잘못된 프리셋·필드는 WorkflowError → 409. 브리프는 기획 카드에 함께 저장되어 선택⓪ 때 작업으로 넘어간다.
-        card["brief"] = build_brief(preset or DEFAULT_PRESET, overrides)
+        card["brief"] = build_brief(preset or 'source-faithful', overrides if preset else {'topic':card['title'], **(overrides or {})})
         return store.save_idea(score_idea(card, lessons=store.lessons("approved")))
 
     @app.put("/api/ideas/{idea_id}/sources")

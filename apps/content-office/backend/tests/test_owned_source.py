@@ -47,3 +47,28 @@ def test_api_ownership_and_csrf_guards(tmp_path):
     assert client.post('/api/owned-source/jobs',json={**data,'owner_confirmed':False},headers=headers).status_code==409
     response=client.post('/api/owned-source/jobs',json=data,headers=headers)
     assert response.status_code==200 and response.json()['source_approval'] is None
+
+def test_owner_text_without_a_preset_never_inherits_ai_topic(tmp_path):
+    job=create_owned_job(Store(tmp_path),'편입 합격 후기와 영단어장',BODY)
+    assert job['brief']['preset']=='source-faithful'
+    assert job['brief']['topic']=='편입 합격 후기와 영단어장'
+    assert 'AI 뉴스' not in job['brief']['problem']
+    assert job['article']['operator_source_text']==BODY
+
+def test_owned_api_keeps_explicit_preset_and_rejects_unknown_before_creation(tmp_path):
+    store=Store(tmp_path);client=TestClient(create_app(store),base_url='http://localhost:8510')
+    headers={'Origin':'http://localhost:3110','X-Office-CSRF':client.get('/api/session').json()['csrf']}
+    data={'title':'편입 후기','body':BODY,'owner_confirmed':True,'brief_preset':'transfer-admission'}
+    result=client.post('/api/owned-source/jobs',json=data,headers=headers)
+    assert result.status_code==200 and result.json()['brief']['preset']=='transfer-admission'
+    assert result.json()['source_packet']['body']==BODY
+    assert client.post('/api/owned-source/jobs',json={**data,'title':'다른 글','brief_preset':'missing'},headers=headers).status_code==409
+    assert len(store.jobs())==1 and store.tasks()==[]
+
+def test_reimport_cannot_silently_ignore_a_different_explicit_brief(tmp_path):
+    from office.briefs import build_brief
+    store=Store(tmp_path)
+    first=create_owned_job(store,'내 글',BODY,brief=build_brief('transfer-admission'))
+    with pytest.raises(WorkflowError,match='다른 주제'):
+        create_owned_job(store,'내 글',BODY,brief=build_brief('ai-agent'))
+    assert store.job(first['id'])==first

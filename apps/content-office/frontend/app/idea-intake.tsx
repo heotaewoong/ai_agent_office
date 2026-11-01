@@ -108,7 +108,7 @@ export function IdeaIntake({ onSaved }: { onSaved: () => void }) {
           </div>
           {field("policy_flags", "정책 플래그 (쉼표로 구분)", "no_primary_source, templated_series, ai_persona_real_person_ymyl")}
           <p className="muted">자유 입력도 가능합니다. 위 세 키나 1차 출처 0개는 ⓪ 기획 선택을 막습니다(저장은 됩니다).</p>
-          <BriefFields uid={uid} presets={presets.presets} defaultPreset={presets.default} form={form} onChange={set} loadError={presetError} />
+          <BriefFields uid={uid} presets={presets.presets} defaultPreset="source-faithful" form={form} onChange={set} loadError={presetError} />
         </div>
         </fieldset>
         {error && (

@@ -19,6 +19,29 @@ class RecordingProvider:
             return {"title": "오픽 IM 탈출", "body": body, "video": {"title": "오픽 IM 탈출 3단계", "description": "", "tags": [], "thumbnails": [{"title": f"안 {i}", "subtitle": "", "angle": "a"} for i in range(5)], "scenes": [{"narration": "세 도구를 직접 비교해요", "caption": "비교", "visual": "화면"}] * 3}}
         return {"role": role, "score": 90, "passed": True, "critical_issues": [], "minor_issues": [], "summary": "검토"}
 
+def test_results_from_an_old_brief_cannot_replace_current_source(tmp_path):
+    from office.briefs import build_brief
+    from office.store import digest
+    store=Store(tmp_path);job=store.create_job({'id':'brief-race','title':'원고','url':''})
+    old_hash=digest(job['brief'])
+    current=store.set_brief(job['id'],build_brief('transfer-admission'),'operator')
+    with pytest.raises(WorkflowError,match='브리프'):
+        store.save_source(job['id'],{'title':'옛 AI 주제','body':'다른 주제 결과'},expected_hash=None,expected_brief_hash=old_hash)
+    assert store.job(job['id'])==current
+
+def test_current_editorial_review_does_not_mix_archived_channel_copy():
+    from office.editorial import content_context
+    packet={'title':'현재 원고','body':'보존 본문','editorial_copy':True,'channel_posts':{'threads_main':'현재 문구'},'external_media':{'draft_id':'old','asset_hashes':{'short.mp4':'a'*64},'channel_pack':{'platforms':[{'text':'[1/4] 옛 주제 https://example.com/old'}]}}}
+    before=json.dumps(packet,ensure_ascii=False)
+    context=content_context(packet)
+    assert context['channel_posts']=={'threads_main':'현재 문구'}
+    assert 'channel_pack' not in context['external_media']
+    assert context['external_media']['asset_hashes']=={'short.mp4':'a'*64}
+    assert context['external_media']['review_scope']=='archived_external_media_not_current_copy'
+    assert json.dumps(packet,ensure_ascii=False)==before
+    packet['editorial_copy']=False
+    assert content_context(packet)['external_media']['channel_pack']==packet['external_media']['channel_pack']
+
 
 def test_presets_cover_both_axes_and_legacy_default():
     from office.briefs import PRESETS, DEFAULT_PRESET, build_brief
@@ -26,7 +49,7 @@ def test_presets_cover_both_axes_and_legacy_default():
     assert DEFAULT_PRESET == "ai-agent"
     assert {"ai-agent", "exam-opic", "exam-info-processing", "transfer-admission", "productivity-automation"} <= set(PRESETS)
     axes = {p["axis"] for p in PRESETS.values()}
-    assert axes == {"A", "B"}
+    assert axes == {"A", "B", "source"}
     for key, preset in PRESETS.items():
         for field in ("axis", "topic", "reader", "prior_knowledge", "problem", "outcome", "tone", "language"):
             assert preset[field], (key, field)

@@ -11,7 +11,7 @@ export const BRIEF_FIELDS: { key: keyof BriefOverrides; label: string; hint: str
   { key: "cta", label: "CTA", hint: "예: 무료 체크리스트 받기" },
 ];
 
-export const AXIS_LABELS: Record<string, string> = { A: "시험·편입", B: "AI·자동화" };
+export const AXIS_LABELS: Record<string, string> = { A: "시험·편입", B: "AI·자동화", source: "내 원문" };
 export const LANGUAGE_LABELS: Record<string, string> = { ko: "한국어", en: "영어" };
 
 export function axisLabel(axis: string): string {

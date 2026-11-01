@@ -466,7 +466,7 @@ export type IdeaInput = {
 };
 export type IdeaSourcesInput = { source_urls: string[]; operator_verified: true; expected_hash: string };
 export type BriefLanguage = "ko" | "en";
-export type BriefAxis = "A" | "B";
+export type BriefAxis = "A" | "B" | "source";
 export type BriefPreset = {
   current_solution?: string;
   goal?: string;

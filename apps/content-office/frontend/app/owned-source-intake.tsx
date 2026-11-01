@@ -1,7 +1,7 @@
 "use client";
-import {useId,useRef,useState} from "react";
+import {useEffect,useId,useRef,useState} from "react";
 import {api} from "../lib/api";
-import type {Job} from "../lib/types";
+import type {BriefPreset,Job} from "../lib/types";
 import styles from "./owned-source-intake.module.css";
 
 export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
@@ -11,9 +11,11 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
   const [busy,setBusy]=useState(false);const [error,setError]=useState("");
   const [notice,setNotice]=useState("");const revision=useRef(0);
   const [mode,setMode]=useState<"write"|"url">("write");
+  const [preset,setPreset]=useState("");const [presets,setPresets]=useState<BriefPreset[]>([]);
+  useEffect(()=>{let alive=true;api.briefs().then(value=>{if(!Array.isArray(value.presets))throw new Error('Invalid presets');if(alive)setPresets(value.presets);}).catch(()=>{if(alive)setError("주제 설정을 불러오지 못했습니다. 다시 불러온 뒤 선택해 주세요.");});return()=>{alive=false;};},[]);
   const bodyLength=body.trim().length;
-  const ready=Boolean(owned&&title.trim()&&bodyLength>=100);
-  const nextStep=!title.trim()?"제목을 입력해 주세요.":bodyLength<100?`본문을 ${100-bodyLength}자 더 적으면 다음으로 이동할 수 있어요.`:!owned?"자료 사용 권한을 확인해 주세요.":"준비됐어요. 작업실에서 원고 검수를 이어가세요.";
+  const ready=Boolean(owned&&title.trim()&&bodyLength>=100&&presets.some(row=>row.id===preset));
+  const nextStep=!title.trim()?"제목을 입력해 주세요.":bodyLength<100?`본문을 ${100-bodyLength}자 더 적으면 다음으로 이동할 수 있어요.`:!preset?"콘텐츠의 주제·독자를 선택해 주세요.":!owned?"자료 사용 권한을 확인해 주세요.":"준비됐어요. 작업실에서 원고 검수를 이어가세요.";
   async function preview(){
     if(busy)return;setBusy(true);setError("");const current=++revision.current;
     try{
@@ -23,7 +25,8 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
   }
   async function create(){
     if(busy)return;setBusy(true);setError("");
-    try{const job=await api.createOwnedSource({title,body,source_url:url,owner_confirmed:owned});onCreated(job);}
+    if(!ready){setBusy(false);return;}
+    try{const job=await api.createOwnedSource({title,body,source_url:url,owner_confirmed:owned,brief_preset:preset});onCreated(job);}
     catch(e){setError(e instanceof Error?e.message:"작업을 저장하지 못했습니다.");}finally{setBusy(false);}
   }
   return <section className={styles.panel} aria-label="내 원고로 콘텐츠 만들기" aria-busy={busy}>
@@ -56,6 +59,7 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
         <textarea className={styles.body} id={id+"-body"} value={body} rows={12} maxLength={50000} aria-describedby={id+"-body-help"} placeholder={"준비한 원고를 붙여넣거나, 전하고 싶은 내용을 적어 주세요.\n\n누구에게 도움이 되는 글인가요?\n어떤 경험이나 방법을 전하고 싶나요?\n읽고 나서 무엇을 할 수 있으면 좋을까요?"} onChange={e=>{revision.current++;setBody(e.target.value);}} />
         <div id={id+"-body-help"} className={styles.bodyHelp}><span>본문 100자 이상 · 최대 50,000자</span><span>사진·표·코드는 Markdown으로 보존해요.</span></div>
       </div>
+      <div className={styles.field}><label htmlFor={id+"-preset"}>누구를 위한 주제인가요? · 필수</label><select className={styles.input} id={id+"-preset"} value={preset} onChange={e=>setPreset(e.target.value)}><option value="">주제·독자를 직접 선택해 주세요</option>{presets.map(row=><option key={row.id} value={row.id}>{row.label}</option>)}</select><p className={styles.hint}>{presets.find(row=>row.id===preset)?.reader??"알맞은 항목이 없으면 ‘내 원문 중심’을 선택하세요. AI 실무 주제를 자동으로 연결하지 않습니다."}</p></div>
       <label className={styles.consent}><input type="checkbox" checked={owned} onChange={e=>setOwned(e.target.checked)} /><span>내가 작성했거나 제작에 사용할 권한이 있는 자료입니다.</span></label>
       {error&&<p className={styles.error} role="alert">{error}</p>}
       <footer className={styles.footer}><div><strong>{nextStep}</strong><p>저장 후에도 수정할 수 있어요. 원고 승인·유료 제작·공개 게시에는 별도 확인이 필요해요.</p></div><button className={styles.submit} type="button" aria-describedby={id+"-next"} disabled={busy||!ready} onClick={()=>void create()}>{busy?"처리 중…":"내 원고로 작업실 열기"}<span aria-hidden="true">→</span></button></footer>

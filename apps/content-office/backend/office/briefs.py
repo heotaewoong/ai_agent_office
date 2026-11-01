@@ -13,6 +13,15 @@ DEFAULT_PRESET = "ai-agent"
 MAX_FIELD_LENGTH = 500
 
 PRESETS = {
+    "source-faithful": {
+        "axis": "source", "label": "내 원문 중심 · 주제 추정 없음",
+        "topic": "사용자가 제공한 원문의 주제", "reader": "이 원문의 주제와 경험에 관심 있는 독자",
+        "prior_knowledge": "원문에 명시된 범위를 넘어 배경지식을 가정하지 않음",
+        "problem": "원문의 경험·주장·자료를 이해하고 필요한 조건을 확인하고 싶음",
+        "outcome": "원문에서 확인할 수 있는 내용과 미확인 조건을 구분할 수 있음",
+        "tone": "원문의 주제·경험·수치·상품 및 할인 조건을 보존한다. 다른 주제의 사례나 광고 효과를 만들어 넣지 않는다. 파생 문구는 자연스러운 해요체로 쓴다.",
+        "language": "ko", "cta": "원문에 있는 다음 행동과 조건 확인",
+    },
     "ai-agent": {
         "axis": "B",
         "label": "AI·에이전트 실무",
