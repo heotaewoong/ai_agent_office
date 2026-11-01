@@ -93,12 +93,14 @@ async function newsJobHarness(page:Page, ready=false) {
 test('뉴스 작업 재열기는 해당 ID로 이동하고 오래된 작업도 목록 맨 위에 표시한다',async({page})=>{
  const {writes,old}=await newsJobHarness(page);await page.goto('/news?seg=all');
  await page.getByRole('checkbox',{name:'선택한 뉴스 선택',exact:true}).check();
- await page.getByRole('button',{name:'콘텐츠 작업 만들기',exact:true}).click();
+ // 2026-11-02 operator instruction (one click from news to draft): with auto drafting on and the window closed,
+ // the button itself states that it opens a 120-minute window, so the click is the explicit confirmation.
+ await page.getByRole('button',{name:'작업 시간 120분 열고 작업 만들기',exact:true}).click();
  await expect(page).toHaveURL(`/scripts/${old.id}`);
  await expect(page.locator('.job-list .job-item').first()).toHaveAttribute('aria-current','page');
  await expect(page.locator('.job-list .job-item').first()).toContainText(old.title);
  await expect(page.getByRole('button',{name:'원고 생성 시작',exact:true})).toBeEnabled();
- expect(writes).toEqual([{path:'/api/jobs',body:{article_ids:['news-one'],start_draft:true}}]);
+ expect(writes).toEqual([{path:'/api/session/window',body:{minutes:120}},{path:'/api/jobs',body:{article_ids:['news-one'],start_draft:true}}]);
 });
 
 test('닫힌 작업 시간은 실행 확인 후에만 열고 원고를 요청하며 승인·제작을 자동 실행하지 않는다',async({page})=>{
