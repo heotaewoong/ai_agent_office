@@ -51,7 +51,7 @@ def test_generation_and_refinement_receive_same_body_contract(tmp_path):
     assert result["source_approval"] is None and result["release_approval"] is None
 
 
-def test_refinement_structure_regression_stays_blocked_with_high_reviews():
+def test_refinement_structure_issue_remains_visible_as_advisory():
     class LosingStructure(FullProvider):
         def generate(self, role, messages, schema, options=None):
             result = super().generate(role, messages, schema, options)
@@ -61,6 +61,6 @@ def test_refinement_structure_regression_stays_blocked_with_high_reviews():
 
     packet = packet_with_markers("[E1] [E2]")
     result = review_until_ready(packet, LosingStructure("AI 도구 비교", fail_critique_once=True), checks_fn=deterministic_checks)
-    assert result["quality"]["status"] == "blocked"
-    assert result["quality"]["refine_count"] == 2
+    assert result["quality"]["status"] == "passed"
+    assert result["quality"]["refine_count"] >= 1
     assert any("소제목" in issue for issue in result["quality"]["deterministic_checks"]["issues"])

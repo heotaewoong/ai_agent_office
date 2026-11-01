@@ -147,7 +147,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
             refine_context["format_targets"] = format_targets(packet)
         if packaging is not None:
             refine_context["packaging"] = packaging
-        body_instruction = "파생 제목·영상·설명만 수정하고 body는 빈 문자열로 반환하라. 선택적 titles·hashtags는 파생 정보로만 고친다. 서버가 저자 원문을 그대로 보존한다." + preserve_prompt if original_markdown is not None else "korean 검토의 corrections는 original 문장을 revised로 고치는 국어 교정이니 뜻과 근거 ID를 유지하며 반영하라. body는 1,500자±10%의 전체 원고이며 titles 3안·hashtags 5개를 함께 고친다. format_targets의 현재 수치를 목표 범위로 맞춘다. " + FORMAT_CONTRACT
+        body_instruction = "파생 제목·영상·설명만 수정하고 body는 빈 문자열로 반환하라. 선택적 titles·hashtags는 파생 정보로만 고친다. 서버가 저자 원문을 그대로 보존한다." + preserve_prompt if original_markdown is not None else "korean 검토의 corrections는 original 문장을 revised로 고치는 국어 교정이니 뜻과 근거 ID를 유지하며 반영하라. body는 1,500자±10%의 전체 원고이며 titles 3안·hashtags 5개를 함께 고친다. format_targets의 현재 수치를 목표 범위로 맞춘다. " + FORMAT_CONTRACT + SUMMARY_BODY_PROMPT + "이미 통과한 소제목·근거 연결·사실은 보존한다."
         refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라." + body_instruction + "영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], draft_schema, {"max_tokens": 8192, "temperature": 0.4})
         for key in ("title", "body", "video", "titles", "hashtags", "channel_posts"):
             if key in refined:
