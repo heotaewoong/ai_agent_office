@@ -110,7 +110,8 @@ test('닫힌 작업 시간은 실행 확인 후에만 열고 원고를 요청하
  expect(writes).toEqual([]);
  await confirm.getByRole('button',{name:'작업 시간 열고 원고 생성',exact:true}).click();
  await expect.poll(()=>writes.map(row=>row.path)).toEqual(['/api/session/window',`/api/jobs/${old.id}/draft`]);
- expect(writes[0].body).toEqual({minutes:30});
+ // Same 120-minute default as the settings page (draft + review + production exceed 30 minutes).
+ expect(writes[0].body).toEqual({minutes:120});
 });
 
 test('승인① 화면에서 썸네일 비용을 확인한 뒤에만 승인·자동 제작을 함께 요청한다',async({page})=>{
