@@ -106,7 +106,9 @@ def validate_packet(store, job):
     return records, paths
 
 
-def prepare_review(store, job_id, draft_id, expected_hash):
+def prepare_review(store, job_id, draft_id, expected_hash, *, language="ko"):
+    if language not in ("ko", "en"):
+        raise WorkflowError("원고 언어는 ko 또는 en으로 명시해 주세요")
     job = store.job(job_id)
     if job.get('source_hash') != expected_hash or job['state'] in BUSY:
         raise WorkflowError('현재 원고 판본·작업 상태를 다시 확인하세요')
@@ -141,7 +143,7 @@ def prepare_review(store, job_id, draft_id, expected_hash):
         previous_end = end
     packet = {
         'title': draft['title'], 'body': text, 'preserve_original': True,
-        'source_input_hash': digest(text), 'audience': {'language': 'ko'}, 'evidence': [],
+        'source_input_hash': digest(text), 'audience': {'language': language}, 'evidence': [],
         'video': {'title': draft['title'], 'description': _text(paths['description.txt']), 'tags': [],
                   'scenes': [{'narration': text, 'caption': '기존 편집본의 전체 자막 사용', 'visual': '기존 편집 영상 그대로'}]},
         'quality': {'status': 'external_review_required', 'critical': False, 'reviews': [],

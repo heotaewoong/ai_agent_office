@@ -252,3 +252,18 @@ def test_edited_vertical_duration_boundary(monkeypatch, seconds, accepted):
     else:
         with pytest.raises(WorkflowError):
             module._probe(Path("selected.mp4"))
+
+
+def test_explicit_english_import_preserves_spoken_text_and_manual_review(tmp_path, monkeypatch):
+    store, job, draft = context(tmp_path, monkeypatch)
+    current = module.prepare_review(store, job['id'], draft['id'], job['source_hash'], language='en')
+    assert current['source_packet']['audience']['language'] == 'en'
+    assert current['source_packet']['body'] == '새 원문입니다.\n'
+    assert current['source_approval'] is current['manifest'] is None
+
+
+def test_unknown_import_language_cannot_change_source(tmp_path, monkeypatch):
+    store, job, draft = context(tmp_path, monkeypatch)
+    with pytest.raises(WorkflowError):
+        module.prepare_review(store, job['id'], draft['id'], job['source_hash'], language='unknown')
+    assert store.job(job['id'])['source_hash'] == job['source_hash']
