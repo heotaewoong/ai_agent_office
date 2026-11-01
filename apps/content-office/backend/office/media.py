@@ -733,12 +733,29 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
     backgrounds = []
     clips = []
     clip_issues = []
+    background_issues = []
     for index, (scene, audio, duration) in enumerate(zip(scenes, audios, durations)):
         if check_current:
             check_current()
         image = folder / f'scene-{index + 1:02}.png'
-        background, background_meta = scene_background(background_renderer, folder, index)
-        generated, generated_meta, issue = obtain_clip(clip_renderer, folder, index, background, duration)
+        # 2026-11-02: one failed background or clip no longer fails the whole video. That scene and the rest
+        # degrade to stills, and the failing provider is not called again in this production (no repeated
+        # paid attempts; an unknown result keeps its reservation for reconciliation).
+        try:
+            background, background_meta = scene_background(background_renderer, folder, index)
+        except WorkflowError as error:
+            background_issues.append({'scene': index + 1, 'reason': str(error)[:200]})
+            background_renderer, background, background_meta = None, None, None
+        if clip_renderer is not None and index in list(getattr(clip_renderer, 'generated_scenes', [])) \
+                and getattr(clip_renderer, 'needs_background', True) and not background:
+            clip_issues.append({'scene': index + 1, 'reason': '배경 이미지가 없어 이 장면은 실사 영상 없이 만들었어요. 유료 영상은 호출하지 않았어요'})
+            generated, generated_meta, issue = None, None, None
+        else:
+            try:
+                generated, generated_meta, issue = obtain_clip(clip_renderer, folder, index, background, duration)
+            except WorkflowError as error:
+                generated, generated_meta, issue = None, None, {'scene': index + 1, 'reason': str(error)[:200]}
+                clip_renderer = None
         if issue:
             clip_issues.append(issue)
         still, still_meta = background, background_meta
@@ -808,6 +825,8 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
         media['clips'] = clip_summary(clips)
     if clip_issues:
         media['clip_issues'] = clip_issues
+    if background_issues:
+        media['background_issues'] = background_issues
     write_json(folder / 'media.json', media)
     paths.append(folder / 'media.json')
     return {'files': paths, 'media': media, 'thumbnails': thumbs, 'backgrounds': backgrounds, 'clips': clips}
@@ -960,10 +979,17 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 from .thumbnail_studio import enabled
                 if enabled(store, job):
                     from .thumbnail_studio import production_candidates
-                    old_thumbs = set(rendered['thumbnails'])
-                    rendered['files'] = [p for p in rendered['files'] if p not in old_thumbs]
-                    rendered['thumbnails'] = production_candidates(store, job_id, folder)
-                    rendered['files'].extend(rendered['thumbnails'])
+                    try:
+                        studio_thumbs = production_candidates(store, job_id, folder)
+                    except WorkflowError as error:
+                        # 2026-11-02: the locally drawn thumbnails stay; the video is not lost over artwork.
+                        rendered['media']['thumbnail_studio_issue'] = str(error)[:200]
+                        studio_thumbs = None
+                    if studio_thumbs:
+                        old_thumbs = set(rendered['thumbnails'])
+                        rendered['files'] = [p for p in rendered['files'] if p not in old_thumbs]
+                        rendered['thumbnails'] = studio_thumbs
+                        rendered['files'].extend(rendered['thumbnails'])
                 credits = (rendered['media'].get('clips') or {}).get('attributions')
                 if credits:
                     description = folder / 'description.txt'
@@ -1023,6 +1049,11 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                     manifest['warnings'].append('일부 장면은 생성 영상입니다. 손·글자·로고·피사체 변형을 실제로 재생해 확인하세요')
             if (media or {}).get('clip_issues') and 'video' in completed:
                 manifest['warnings'].append(f"{len(media['clip_issues'])}개 장면은 실사 영상을 받지 못해 정지 화면으로 만들었습니다. 유료 대체 호출은 하지 않았습니다")
+            if (media or {}).get('thumbnail_studio_issue') and 'video' in completed:
+                manifest['warnings'].append(f"원고 기반 썸네일 이미지를 만들지 못해 기본 썸네일을 넣었어요({media['thumbnail_studio_issue'][:80]}). 출고함에서 다시 만들 수 있어요")
+            if (media or {}).get('background_issues') and 'video' in completed:
+                issue = media['background_issues'][0]
+                manifest['warnings'].append(f"{issue['scene']}번 장면부터 배경 이미지를 받지 못해 배경 없는 정지 화면으로 만들었습니다({issue['reason'][:80]}). 같은 호출을 반복하지 않았습니다")
             if thumbs:
                 local_reviews = json.loads((thumbs[0].parent / 'thumbnail-review.json').read_text(encoding="utf-8"))['candidates']
                 by_name = {review['name']: review for review in local_reviews}
