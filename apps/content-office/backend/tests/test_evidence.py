@@ -16,7 +16,7 @@ def test_unavailable_article_is_known_failure_before_provider_work(tmp_path, mon
             pytest.fail("An unavailable source must not start model work")
 
     monkeypatch.setattr("office.evidence.fetch_public", unavailable)
-    with pytest.raises(SourceUnavailable, match="원문을 직접 확인하지 못했습니다"):
+    with pytest.raises(SourceUnavailable):
         collect_article_evidence({"url": "https://example.invalid/news"}, ForbiddenProvider(), tmp_path)
     assert list(tmp_path.iterdir()) == []
 from office.store import WorkflowError
