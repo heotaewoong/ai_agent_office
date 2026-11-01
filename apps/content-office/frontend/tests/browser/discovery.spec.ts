@@ -70,7 +70,7 @@ async function newsJobHarness(page:Page) {
  const recent={...old,id:'job-recent',title:'더 최근 작업',article:{...article,id:'other'}};
  let opened=false;const writes:{path:string;body:any}[]=[];
  await page.route('**/api/**',async route=>{
-  const req=route.request(),path=new URL(req.url()).pathname;let body:any={};
+  const req=route.request(),path=new URL(req.url()).pathname;let body:any;
   if(req.method()!=='GET')writes.push({path,body:req.postDataJSON()});
   if(path==='/api/session')body={csrf:'synthetic-token'};
   else if(path==='/api/dashboard')body={articles:[article],jobs:[recent,old],feeds:[],agents:[],tasks:[],events:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:opened?'open':'closed',authorized_end:opened?new Date(Date.now()+3600000).toISOString():'2026-10-01T00:00:00Z'},provider:{model:'synthetic',configured:false},knowledge:{}};
@@ -79,7 +79,10 @@ async function newsJobHarness(page:Page) {
   else if(path==='/api/session/window'){opened=true;body={work_window:{status:'open'},services:{started:[],running:[],note:'synthetic'}};}
   else if(path===`/api/jobs/${old.id}/draft`)body={id:'task-synthetic',kind:'draft',state:'queued'};
   else if(path==='/api/jobs/summaries')body={jobs:[recent,old]};
-  await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
+  else if(path==='/api/channels')body={channels:[]};
+  else if(path==='/api/newsletters')body={issues:[]};
+  else if(path.endsWith('/deliveries'))body={deliveries:[],youtube_configured:false};
+  await route.fulfill({status:body===undefined?404:200,contentType:'application/json',body:JSON.stringify(body??{detail:'Synthetic fixture endpoint intentionally unavailable'})});
  });
  return {writes,old};
 }
