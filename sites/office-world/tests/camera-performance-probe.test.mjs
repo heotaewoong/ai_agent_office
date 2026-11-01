@@ -10,14 +10,14 @@ test('timing summaries preserve samples and missing GPU data stays unknown',()=>
   assert.throws(()=>summarizeTimings([1,NaN]),/finite/);
 });
 
-const run=()=>({layer:'office',quality:'high',qualityFeatures:{shadows:true,postProcesses:true,ssaoSamples:16},css:[1280,720],canvas:[1280,720],dpr:1,
+const run=()=>({measurementVersion:2,layer:'office',quality:'high',qualityFeatures:{shadows:true,postProcesses:true,ssaoSamples:16},css:[1280,720],canvas:[1280,720],dpr:1,
   renderer:'same GPU',meshes:885,vertices:680000,
   cameraPath:{alpha:-Math.PI/2,beta:1.15,radius:210,target:[0,-18,0],amplitude:.32,period:45},
   warmupFrames:100,sampleFrames:180});
 
 test('different render resolution, quality, geometry or camera paths cannot be called a fair A/B',()=>{
   assert.equal(assertComparableRuns(run(),run()),true);
-  for(const changed of [{canvas:[1920,1080]},{quality:'low'},{meshes:100},{cameraPath:{radius:430}},{sampleFrames:60}]) {
+  for(const changed of [{measurementVersion:1},{canvas:[1920,1080]},{quality:'low'},{meshes:100},{cameraPath:{radius:430}},{sampleFrames:60}]) {
     assert.throws(()=>assertComparableRuns(run(),{...run(),...changed}),/conditions differ/);
   }
 });
@@ -47,4 +47,19 @@ test('camera probes preserve the existing render pixel density by default',async
   const measured=await measureCameraScenario(office,{warmupFrames:1,sampleFrames:2},env);
   assert.deepEqual(measured.canvas,[1600,1200],'measurement must not silently lower native rendering quality');
   assert.equal(scale,.5,'original render density must remain after measurement');
+});
+
+
+test('GPU samples only include newly completed queries, not retained previous values',async()=>{
+ let clock=0,index=0,started=false;const counter={count:5,current:99000000};
+ const steps=[{count:6,current:99000000},{count:6,current:99000000},{count:7,current:1000000},{count:7,current:1000000},{count:8,current:3000000}];
+ class Instrumentation {constructor(){started=true;}frameTimeCounter={current:1};renderTimeCounter={current:1};activeMeshesEvaluationTimeCounter={current:1};gpuFrameTimeCounter=counter;dispose(){}}
+ const engine={getRenderWidth:()=>800,getRenderHeight:()=>600,getGlInfo:()=>({renderer:'test'})};
+ const env={document:{hidden:false},innerWidth:800,innerHeight:600,devicePixelRatio:1,performance:{now:()=>clock},setTimeout,clearTimeout,cancelAnimationFrame(){},
+ requestAnimationFrame(fn){queueMicrotask(()=>{if(started)Object.assign(counter,steps[index++]);fn(clock+=16);});return 1;},
+ BABYLON:{SceneInstrumentation:Instrumentation,EngineInstrumentation:Instrumentation,Vector3:{FromArray:a=>a}}};
+ const office={quality:'high',space:{view:'overview'},controls:{setLayer(){},overview:{setTarget(){}}},world:{engine,scene:{meshes:[{name:'fixed',getTotalVertices:()=>24}]}}};
+ const r=await measureCameraScenario(office,{warmupFrames:1,sampleFrames:4},env);
+ assert.deepEqual(r.gpu,{n:2,p50:3,p95:3,mean:2});
+ assert.deepEqual(r.gpuCoverage,{counterSupported:true,primingFrames:1,completedQueries:2,sampledFrames:4,collectedSamples:2});
 });
