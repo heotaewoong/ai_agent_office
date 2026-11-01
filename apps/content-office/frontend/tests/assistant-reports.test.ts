@@ -6,6 +6,10 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 
+// Complete the ESM import before registering a test that synchronously requires it.
+const modulePath = '../lib/assistant-reports.ts';
+const implementation: any = await import(modulePath).catch(() => null);
+
 test('React panel starts collapsed and read-only without fetching during render', () => {
   const url = new URL('../app/assistant-reports.tsx', import.meta.url);
   assert.ok(existsSync(url), 'React report panel must exist');
@@ -24,8 +28,6 @@ test('React panel starts collapsed and read-only without fetching during render'
   }
 });
 
-const modulePath = '../lib/assistant-reports.ts';
-const implementation: any = await import(modulePath).catch(() => null);
 function deferred() {
   let resolve!: (value: unknown) => void;
   let reject!: (reason: unknown) => void;
