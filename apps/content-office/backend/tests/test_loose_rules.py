@@ -107,3 +107,30 @@ def test_unreadable_news_source_is_a_plain_retryable_failure_not_an_unknown_resu
     assert store.task(task["id"])["state"] == "failed"
     assert store.job(job["id"])["state"] == "blocked"
     assert "다른 기사" in store.job(job["id"])["error"]
+
+
+def test_runtime_inspection_accepts_the_operator_raised_cap_up_to_the_ceiling(tmp_path):
+    """2026-11-02: the operator raised the total API cap to 30,000 KRW for the demo; that is not an integrity issue."""
+    from office.runtime import BUDGET_CEILING_KRW, inspect_state
+    from office.store import Store
+    store = Store(tmp_path)
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE settings SET value=? WHERE key='budget_cap'", (str(BUDGET_CEILING_KRW),))
+    assert BUDGET_CEILING_KRW == 30000
+    assert {"code": "budget_exceeded"} not in inspect_state(store, set())["issues"]
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE settings SET value=? WHERE key='budget_cap'", (str(BUDGET_CEILING_KRW + 1),))
+    assert {"code": "budget_exceeded"} in inspect_state(store, set())["issues"]
+
+
+def test_all_price_validity_windows_cover_the_interview_period():
+    """2026-11-02: text pricing expired at 2026-11-02 00:00 KST and every model call failed. All prices were
+    re-checked on the official pages on 2026-11-02 (Gemini's page states the rates hold through 2026-12-31)."""
+    from datetime import datetime
+    from office import image_provider, openai_speech, speech_provider, video_provider
+    from office.providers import DEFAULT_PRICE_VALID_UNTIL, OPENAI_PRICE_CHECKED
+    deadline = datetime.fromisoformat("2026-11-30T00:00:00+00:00")
+    for value in (DEFAULT_PRICE_VALID_UNTIL, image_provider.PRICE_VALID_UNTIL, openai_speech.PRICE_VALID_UNTIL,
+                  speech_provider.PRICE_VALID_UNTIL, video_provider.PRICE_VALID_UNTIL):
+        assert datetime.fromisoformat(value) >= deadline, value
+    assert OPENAI_PRICE_CHECKED == "2026-11-02"

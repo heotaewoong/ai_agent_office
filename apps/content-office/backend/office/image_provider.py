@@ -21,8 +21,8 @@ from .speech_provider import _hash, _json, _lock
 from .store import Store, WorkflowError, digest
 
 PRICE_SOURCE = "https://developers.openai.com/api/docs/pricing"
-PRICE_CHECKED = "2026-10-28"
-PRICE_VALID_UNTIL = "2026-11-04T00:00:00+00:00"
+PRICE_CHECKED = "2026-11-02"
+PRICE_VALID_UNTIL = "2026-12-01T00:00:00+00:00"
 FX_KRW = 2000
 MODEL = "gpt-image-2.5-flare"
 SIZE = "1024x1536"
