@@ -106,14 +106,15 @@ export function CardsPanel({ job, busy, action, blockedReason }: { job: Job; bus
       {cards && (
         <>
           <div className="derived-meta">
-            <span className={`badge ${cards.checks.passed ? "green" : "orange"}`}>{stale ? "이전 원고 · " : ""}{cards.checks.passed ? "검사 통과" : `검사 이슈 ${cards.checks.issues.length}개`}</span>
+            <span className={`badge ${cards.checks.passed ? "green" : "orange"}`}>{stale ? "이전 원고 · " : ""}{cards.checks.passed ? `검사 통과${cards.checks.issues.length ? ` · 확인 의견 ${cards.checks.issues.length}개` : ""}` : `검사 이슈 ${cards.checks.issues.length}개`}</span>
             <span className={`badge ${count >= 6 && count <= 8 ? "neutral" : "orange"}`}>{count}장</span>
             <span className="muted">
               버전 {cards.version} · {formatDate(cards.generated_at, true)} · 원고 {cards.source_hash.slice(0, 8)}
             </span>
           </div>
+          {cards.checks.issues.length > 0 && cards.checks.passed && <p className="muted">아래는 제작을 막지 않는 확인 의견이에요. 카드는 그대로 출고 제작물에 들어가요.</p>}
           {cards.checks.issues.length > 0 && (
-            <ul className="derived-issues" role="alert">
+            <ul className={cards.checks.passed ? "derived-issues muted" : "derived-issues"} role={cards.checks.passed ? undefined : "alert"}>
               {cards.checks.issues.map((issue, i) => (
                 <li key={i}>{issue}</li>
               ))}

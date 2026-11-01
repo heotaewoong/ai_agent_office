@@ -77,7 +77,15 @@ export type SourcePacket = {
     deterministic_checks?: {
       passed?: boolean;
       issues?: string[];
+      blocking?: string[];
+      warnings?: string[];
       checks?: string[];
+    };
+    advisories?: {
+      model_reviews_passed?: boolean;
+      review_issues?: string[];
+      rule_warnings?: string[];
+      note?: string;
     };
     korean?: {
       passed: boolean;

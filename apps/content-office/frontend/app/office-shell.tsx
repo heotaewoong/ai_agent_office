@@ -1921,16 +1921,23 @@ function QualityPanel({ job }: { job: Job }) {
   const quality = job.source_packet?.quality;
   const gateItems = quality?.gates?.items ?? [];
   const gateWarnings = gateItems.filter((item) => item.level === "warn");
+  // 2026-11-02: only integrity failures block. Older packets without `blocking` keep their stored verdict.
+  const checks = quality?.deterministic_checks;
+  const blockingChecks = checks?.blocking ?? (quality?.status === "blocked" ? checks?.issues ?? [] : []);
   const criticalIssues = [
     ...new Set([
-      ...(quality?.deterministic_checks?.issues ?? []),
-      ...(quality?.reviews?.flatMap((review) => review.critical_issues ?? []) ??
-        []),
+      ...blockingChecks,
       ...gateItems
         .filter((item) => item.level === "block")
         .map((item) => item.message),
     ]),
   ];
+  const advisoryIssues = [
+    ...new Set([
+      ...(checks?.warnings ?? (quality?.status === "blocked" ? [] : checks?.issues ?? [])),
+      ...(quality?.reviews?.flatMap((review) => review.critical_issues ?? []) ?? []),
+    ]),
+  ].filter((issue) => !criticalIssues.includes(issue));
   return (
     <section className="quality-panel">
       <div className="section-heading">
@@ -1970,6 +1977,17 @@ function QualityPanel({ job }: { job: Job }) {
             ))}
           </ul>
         </div>
+      )}
+      {advisoryIssues.length > 0 && (
+        <details className="quality-advisories">
+          <summary>확인 의견 {advisoryIssues.length}개 · 승인을 막지 않아요</summary>
+          <p className="muted">사실·숫자에 관한 의견은 승인 전에 원고에서 한 번 확인하세요. 형식 의견은 참고용이에요.</p>
+          <ul>
+            {advisoryIssues.map((issue, index) => (
+              <li key={index}>{issue}</li>
+            ))}
+          </ul>
+        </details>
       )}
       {gateWarnings.length > 0 && (
         <details>
