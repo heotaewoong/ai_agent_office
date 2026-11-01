@@ -245,6 +245,21 @@ def test_release_does_not_apply_to_a_source_changed_during_file_validation(conte
     assert store.job(job["id"])["state"] == "source_review"
 
 
+def test_video_release_uses_recommended_thumbnail_when_none_was_clicked(context):
+    """2026-11-02: an unclicked thumbnail no longer dead-ends approval②; the recommended (else first) candidate
+    is selected inside the same approval. The human media-review confirmation is still required."""
+    store, client, headers = context
+    job = approved_bundle(store, video=True)
+    without_review = client.post(f"/api/jobs/{job['id']}/reviews/release", json={"version": job["manifest"]["hash"], "decision": "approved"}, headers=headers)
+    assert without_review.status_code == 409 and "검토" in without_review.json()["detail"]
+    approved = client.post(f"/api/jobs/{job['id']}/reviews/release", json={"version": job["manifest"]["hash"], "decision": "approved", "media_reviewed": True}, headers=headers)
+    assert approved.status_code == 200
+    manifest = approved.json()["manifest"]
+    assert manifest["selected_thumbnail_id"] == "asset_one"
+    assert manifest["thumbnail_selection_status"] == "recommended_default_confirmed_at_release"
+    assert approved.json()["release_approval"]["version"] == manifest["hash"] != job["manifest"]["hash"]
+
+
 def test_video_release_requires_thumbnail_choice_and_media_review(context):
     store, client, headers = context
     job = approved_bundle(store, video=True)

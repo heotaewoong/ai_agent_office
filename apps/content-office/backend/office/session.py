@@ -44,7 +44,11 @@ def _issue_window(store, minutes, current, source, schedule=None):
         with store.connection(transaction=True) as db:
             row = db.execute("SELECT value FROM settings WHERE key='work_window'").fetchone()
             previous = json.loads(row[0]) if row else None
-            if previous and previous.get('authorized_end') and aware_time(previous['authorized_end']) > current:
+            # A window closed early (e.g. the 07:00 collect closes its own 15 minutes) or a collect-only scheduled
+            # window is not an operator window in progress: replace it. Collect closes only its own window id.
+            replaceable = previous and (previous.get('status') in ('closed', 'stopped')
+                                        or previous.get('authorization_source') == 'scheduled_daily_collect')
+            if previous and not replaceable and previous.get('authorized_end') and aware_time(previous['authorized_end']) > current:
                 raise WorkflowError('기존 작업 시간이 진행 중입니다. 현재 시간의 종료를 확인한 뒤 새 세션을 시작하세요')
             row = db.execute("SELECT value FROM settings WHERE key='work_window_history'").fetchone()
             history = json.loads(row[0]) if row else []

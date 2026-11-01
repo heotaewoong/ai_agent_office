@@ -43,7 +43,7 @@ export function ImprovementPanel({job}:{job:Job}) {
     {error&&<p className="notice error" role="alert">{error}</p>}
     {saved&&<p className="notice" role="status">{saved}</p>}
     {!data?<button className="button secondary" onClick={()=>void load().catch(e=>setError(String(e)))}>검토 기록 불러오기</button>:<>
-    {!current&&<p className="notice">아직 현재 원고가 없거나 판본이 변경됐습니다. 입력은 보존하며 최신 원고를 확인한 뒤 기록할 수 있습니다.</p>}
+    {!current&&<p className="muted">{job.source_hash?"원고 판본이 바뀌었어요. 입력은 보존했고 최신 원고를 확인한 뒤 기록할 수 있어요.":"원고가 만들어지면 여기서 품질 평가를 기록할 수 있어요."}</p>}
     {data.source_hash&&boundVersion!==reviewBinding(job)&&<button className="button secondary" disabled={busy} onClick={()=>{setBoundVersion(reviewBinding(job));setFormEpoch(n=>n+1);setSaved("");}}>평가·집계 입력 초기화 후 현재 판본으로 다시 시작</button>}
     <details><summary>1. 기존판·개선판 품질 비교 · 평가 {data.reviews.length}건</summary>
       <p>같은 내용·목적의 결과를 읽고 들은 뒤 기록하세요. 1점은 부족, 5점은 충분입니다. 사실 오류는 평균 점수로 상쇄하지 않습니다.</p>

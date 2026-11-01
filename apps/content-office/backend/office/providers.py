@@ -27,7 +27,10 @@ OPENAI_PRICES = {
     "gpt-5.4-nano": {"input_usd_million": 0.20, "output_usd_million": 1.25},
 }
 OPENAI_PRICE_SOURCE = "https://developers.openai.com/api/docs/pricing"
-OPENAI_PRICE_CHECKED = "2026-10-30"
+OPENAI_PRICE_CHECKED = "2026-11-02"
+# Re-checked on the official pricing pages 2026-11-02 (OpenAI and Gemini rates unchanged; Gemini states them
+# through 2026-12-31). Re-verify before this date; an operator setting may override it.
+DEFAULT_PRICE_VALID_UNTIL = "2026-12-01T00:00:00+00:00"
 FX_RESERVATION_KRW = 2000
 
 
@@ -139,7 +142,7 @@ class Provider:
                 raise WorkflowError("저장된 모델 결과 형식이 schema와 달라 검토가 필요합니다") from None
             self.store.event("model_cache_hit", {"role": role, "model": self.model, "key": key}, self.job_id)
             return cached
-        price_until = self.store.setting("price_valid_until", "2026-11-02T00:00:00+09:00")
+        price_until = self.store.setting("price_valid_until", DEFAULT_PRICE_VALID_UNTIL)
         if datetime.now(timezone.utc) >= datetime.fromisoformat(price_until):
             raise WorkflowError("검증한 요금 단가의 유효기간이 지났습니다. 단가를 재확인하세요")
         window = self.store.setting("work_window", {})

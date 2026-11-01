@@ -32,8 +32,8 @@ from .speech_provider import _hash, _json, _lock
 from .store import Store, WorkflowError, digest
 
 PRICE_SOURCE = "https://docs.dev.runwayml.com/guides/pricing/"
-PRICE_CHECKED = "2026-10-28"
-PRICE_VALID_UNTIL = "2026-11-04T00:00:00+00:00"
+PRICE_CHECKED = "2026-11-02"
+PRICE_VALID_UNTIL = "2026-12-01T00:00:00+00:00"
 FX_KRW = 2000
 CREDIT_USD = 0.01
 API_BASE = "https://api.dev.runwayml.com/v1"

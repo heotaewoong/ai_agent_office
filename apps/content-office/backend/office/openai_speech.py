@@ -32,8 +32,8 @@ from .speech_provider import _hash, _json, _lock
 from .store import Store, WorkflowError, digest
 
 PRICE_SOURCE = "https://developers.openai.com/api/docs/pricing"
-PRICE_CHECKED = "2026-10-30"
-PRICE_VALID_UNTIL = "2026-11-06T00:00:00+00:00"
+PRICE_CHECKED = "2026-11-02"
+PRICE_VALID_UNTIL = "2026-12-01T00:00:00+00:00"
 ENDPOINT = "https://api.openai.com/v1/audio/speech"
 FX_KRW = 2000
 MODEL = "gpt-4o-mini-tts"

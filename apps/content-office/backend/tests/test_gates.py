@@ -6,9 +6,9 @@ def packet(title="AI 도구 비교", body="세 가지 도구를 비교한다", n
             "video": {"title": "사용자 120만 명", "description": "", "tags": [], "scenes": [{"narration": narration}]}}
 
 
-def test_metadata_number_without_evidence_blocks():
+def test_metadata_number_without_evidence_warns_without_blocking():
     report = run_gates(packet(title="AI 도구 7가지"))
-    assert report["status"] == "block"
+    assert report["status"] == "warn"
     assert any("숫자 7" in item["message"] for item in report["items"])
 
 
@@ -32,7 +32,8 @@ def test_ymyl_persona_and_banned_claim_block():
     p = {**packet(), "topic": "finance"}
     assert run_gates(p, assets=[{"kind": "ai_persona_real_person"}])["status"] == "block"
     brand = {"banned": ["수익 보장"], "voice": "", "terms": {}, "pronunciation": {}}
-    assert run_gates(packet(body="이 방법은 수익 보장"), brand=brand)["status"] == "block"
+    # Banned brand wording is an advisory for the human approver; it no longer dead-ends the draft.
+    assert run_gates(packet(body="이 방법은 수익 보장"), brand=brand)["status"] == "warn"
 
 
 def test_thousands_separator_matches_plain_number():
@@ -46,14 +47,14 @@ def test_multi_group_thousands_separator_matches_evidence():
     assert run_gates(p)["status"] == "pass"
     q = packet(title="매출 1,200,000원")
     q["evidence"].append({"claim": "매출 공시", "numbers": ["1200"]})
-    assert run_gates(q)["status"] == "block"
+    assert run_gates(q)["status"] == "warn"
 
 
-def test_banned_claim_in_video_description_blocks():
+def test_banned_claim_in_video_description_warns():
     p = packet()
     p["video"]["description"] = "수익 보장 방법"
     report = run_gates(p, brand={"banned": ["수익 보장"]})
-    assert report["status"] == "block"
+    assert report["status"] == "warn"
     assert "banned_claim" in [i["rule"] for i in report["items"]]
 
 
@@ -73,11 +74,11 @@ def test_none_video_and_tags_do_not_raise():
     assert run_gates(p)["status"] in ("pass", "warn")
 
 
-def test_thumbnail_number_without_evidence_blocks():
+def test_thumbnail_number_without_evidence_warns():
     p = packet()
     p["video"]["thumbnails"] = [{"title": "수익 10배", "subtitle": ""}, "bad"]
     report = run_gates(p)
-    assert report["status"] == "block"
+    assert report["status"] == "warn"
     assert any(i["rule"] == "metadata_numbers" and "썸네일 1 제목" in i["message"] for i in report["items"])
 
 
@@ -88,4 +89,4 @@ def test_source_url_digits_do_not_become_claims_or_evidence():
     assert metadata_fact_check(packet) == []
     packet["video"]["description"] += " 실제 비용은 999만 원이에요."
     issues = metadata_fact_check(packet)
-    assert len(issues) == 1 and issues[0]["level"] == "block" and "999" in issues[0]["message"]
+    assert len(issues) == 1 and issues[0]["level"] == "warn" and "999" in issues[0]["message"]
