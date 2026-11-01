@@ -1,5 +1,8 @@
 import { posix, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
+import { gzip } from "node:zlib";
+import { promisify } from "node:util";
+const gzipAsync = promisify(gzip);
 
 export const WORLD_ROOT = resolve(process.cwd(), "..", "..", "..", "sites", "office-world");
 
@@ -37,7 +40,7 @@ export function acceptsWorldGzip(header: string | null): boolean {
   return (choices.get("gzip") ?? choices.get("*") ?? 0) > 0;
 }
 
-/** Precompressed static geometry/engine only; no runtime compression or API-data cache. */
+/** Keep existing sidecars; compress changing JS/CSS asynchronously without a stale cache. */
 export async function readWorldFile(file: { path: string; type: string }, encoding: string | null) {
   if ((file.path.endsWith(".json") || file.path.endsWith("/vendor/babylon.min.js")) && acceptsWorldGzip(encoding)) {
     try {
@@ -46,5 +49,10 @@ export async function readWorldFile(file: { path: string; type: string }, encodi
       if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
     }
   }
-  return { body: await readFile(file.path), encoding: null };
+  const body = await readFile(file.path);
+  if (/\.(js|css)$/.test(file.path) && body.length > 1024 && acceptsWorldGzip(encoding)) {
+    const compressed = await gzipAsync(body, { level: 6 });
+    if (compressed.length < body.length) return { body: compressed, encoding: "gzip" };
+  }
+  return { body, encoding: null };
 }

@@ -61,3 +61,16 @@ test("고정 엔진 gzip은 SRI 대상 원본과 바이트가 같고 라이선�
   const license = resolveWorldFile(WORLD_ROOT, ["vendor", "LICENSE-babylon.txt"])!;
   assert.equal((await readWorldFile(license, "gzip")).encoding, null);
 });
+
+
+for(const name of ['app.js','styles.css']) {
+  test(`${name} static source is compressed without changing decoded bytes`,async()=>{
+    const file=resolveWorldFile(WORLD_ROOT,[name])!;
+    const plain=await readWorldFile(file,'gzip;q=0, *;q=1');
+    const encoded=await readWorldFile(file,'gzip');
+    assert.equal(plain.encoding,null);
+    assert.equal(encoded.encoding,'gzip');
+    assert.deepEqual(gunzipSync(encoded.body),plain.body);
+    assert(encoded.body.length<plain.body.length*.35);
+  });
+}
