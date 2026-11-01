@@ -27,14 +27,20 @@ def test_none_is_default_and_selection_is_free(tmp_path, monkeypatch):
         select_profile(store, 'sora', actor='test-operator')
 
 
-def test_factory_requires_approval_video_selection_and_opted_scene(tmp_path, monkeypatch):
+def test_factory_metadata_is_free_but_render_requires_approval_and_video_selection(tmp_path, monkeypatch):
     from office.video_selection import select_profile, clip_renderer_for_job
     monkeypatch.setenv('RUNWAYML_API_SECRET', 'test-secret')
     store = Store(tmp_path)
     select_profile(store, 'runway-gen4.5', actor='test-operator')
     job = fixture(store)
+    monkeypatch.setattr('requests.post',lambda *a,**k:pytest.fail('Unapproved render must not call provider'))
+    monkeypatch.setattr('requests.get',lambda *a,**k:pytest.fail('Metadata must not fetch provider data'))
+    before=store.budget()
+    preview=clip_renderer_for_job(store,job)
+    assert preview.cache_key and store.budget()==before
     with pytest.raises(WorkflowError, match='승인'):
-        clip_renderer_for_job(store, job)
+        preview(0,store.root/'missing.png',store.root/'clip.mp4')
+    assert store.budget()==before
     store.review_source(job['id'], job['source_hash'], 'approved', 'op', {'cards': True})
     assert clip_renderer_for_job(store, store.job(job['id'])) is None
     store.review_source(job['id'], job['source_hash'], 'approved', 'op', {'video': True})
