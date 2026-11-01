@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 // Synthetic contracts: no source requests, account, approval or production writes.
-async function researchHarness(page: Page) {
+async function researchHarness(page: Page, articles: Record<string, unknown>[] = []) {
   const writes: { path: string; csrf?: string; body: unknown }[] = [];
   let config = { platforms: ['youtube', 'tistory'], topic: 'AI 자동화', region: 'KR', youtube_channels: ['UCXZCJLdBC09xxGZ6gcdrc6A'] };
   const snapshot = {
@@ -17,7 +17,7 @@ async function researchHarness(page: Page) {
       if (request.method()==='PUT') {const {expected_hash: ignored,...next}=request.postDataJSON();config=next;}
       body={config,config_hash:'a'.repeat(64),platforms:{youtube:'YouTube·Shorts',tistory:'티스토리·검색형 블로그',linkedin:'LinkedIn'},plan:{youtube:['youtube','community'],tistory:['search_trend']},window_open:false,stale:false,unconnected:['ViewStats 자동 연동 미구현'],snapshot,task:{state:'queued'}};
     } else if (path==='/api/session') body={csrf:'contract-token'};
-    else if (path==='/api/dashboard') body={articles:[],jobs:[],feeds:[],agents:[],events:[],tasks:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:'closed',authorized_end:'2026-10-01T00:00:00Z'},provider:{model:'gpt-5.4-mini',configured:false},knowledge:{}};
+    else if (path==='/api/dashboard') body={articles,jobs:[],feeds:[],agents:[],events:[],tasks:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:'closed',authorized_end:'2026-10-01T00:00:00Z'},provider:{model:'gpt-5.4-mini',configured:false},knowledge:{}};
     else if (path==='/api/jobs/summaries') body={jobs:[]};
     await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
   });
@@ -47,4 +47,19 @@ test('출처 실패와 누적 반응을 구분하고 조회만으로 업무를 �
   await expect(panel.getByText('HN · 수집 실패',{exact:true})).toBeVisible();
   await panel.getByText('YouTube·Shorts에 맞춰 살펴볼 후보 1건',{exact:true}).click();
   await expect(panel.getByText(/누적 조회 123/)).toBeVisible();expect(writes).toEqual([]);
+});
+
+
+test('뉴스 점수 정렬은 분류와 기사 선택을 보존하고 API를 쓰지 않는다',async({page})=>{
+ const articles=[['low',20,'ai'],['high',90,'exam'],['middle',60,'ai']].map(([id,score,segment])=>({id,score,segment,title:`후보 ${id}`,url:`https://example.com/${id}`,feed_name:'검사 출처',published_at:'2026-11-01T00:00:00Z'}));
+ const writes=await researchHarness(page,articles);await page.goto('/news?seg=all');
+ const titles=page.locator('.article-grid h3');await expect(titles).toHaveText(['후보 high','후보 middle','후보 low']);
+ await page.getByRole('checkbox',{name:'후보 low 선택',exact:true}).check();
+ await page.getByLabel('정렬',{exact:true}).selectOption('score-asc');
+ await expect(titles).toHaveText(['후보 low','후보 middle','후보 high']);
+ await expect(page.getByRole('checkbox',{name:'후보 low 선택',exact:true})).toBeChecked();
+ await page.getByRole('navigation',{name:'뉴스 분류'}).getByRole('link',{name:/AI·자동화/}).click();
+ await expect(titles).toHaveText(['후보 low','후보 middle']);await expect(page).toHaveURL(/sort=score-asc/);
+ await expect(page.getByRole('checkbox',{name:'후보 low 선택',exact:true})).toBeChecked();
+ expect(writes).toEqual([]);
 });

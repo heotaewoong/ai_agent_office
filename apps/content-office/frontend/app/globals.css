@@ -4491,3 +4491,9 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
   .job-list { display: flex; gap: 9px; overflow-x: auto; align-items: stretch; }
   .job-list > .small-empty { min-width: 100%; }
 }
+
+.news-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:16px 0 10px; }
+.news-toolbar .news-segments { margin:0; }
+.news-order { display:flex; align-items:center; gap:10px; color:#294c3b; font-size:14px; font-weight:650; }
+.news-order select { min-height:44px; padding:10px 36px 10px 14px; border:1px solid #aebfac; border-radius:9px; background:#fffefa; color:#294c3b; font:inherit; }
+.news-order select:focus-visible { outline:3px solid #497056; outline-offset:3px; }

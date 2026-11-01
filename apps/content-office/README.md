@@ -781,3 +781,7 @@ EC2에 보관한 완성 영상은 재렌더 없이 원문·SRT·표지·설명�
 음원: [Titan — Scott Buckley](https://www.scottbuckley.com.au/library/titan/), [공식 사용 조건](https://www.scottbuckley.com.au/library/using-this-music/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). 표기: 'Titan' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au. 오피스에서는 원곡을 반복 재생하고 음량을 조절합니다. 영상 발췌·페이드·음량 조정은 별도 영상 제작 기록에 남깁니다. 공개 영상 승인 시에는 설명에도 출처를 표기해야 합니다.
 
 검사: `node --test sites/office-world/tests/music.test.mjs`, 백엔드 `python -m pytest -q tests/test_api_world_music.py`. 제거는 버튼/오디오/모듈 import와 API register를 함께 되돌립니다. 음원 원본과 기존 영상은 임의 삭제하지 않습니다.
+
+## 뉴스 점수 정렬 · 2026-11-01
+
+오늘의 뉴스에서 ‘점수 높은 순’과 ‘점수 낮은 순’을 선택합니다. 처음에는 높은 순으로 표시합니다. 분류를 바꿔도 현재 정렬과 선택한 기사 ID를 유지하며, URL의 `sort=score-desc|score-asc`로 정렬을 복원합니다. 동점은 기존 순서를 유지하고 유효하지 않은 점수는 마지막에 둡니다. 원본 기사·편집 점수·조사 추천 순위·승인·API 비용을 변경하지 않는 화면 정렬입니다.

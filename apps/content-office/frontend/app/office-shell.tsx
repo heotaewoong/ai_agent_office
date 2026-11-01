@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { officeHref, officeRoute, type View } from "../lib/navigation";
-import { filterNews, newsSegment, newsSegments, newsEmptyState } from "../lib/news";
+import { filterNews, newsSegment, newsSegments, newsEmptyState, newsSort, newsSorts, sortNews, newsHref } from "../lib/news";
 import { DecisionHome } from "./decision-home";
 import { DiscoveryPanel } from './discovery-panel';
 import { api, OfficeApiError } from "../lib/api";
@@ -144,6 +144,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const route = officeRoute(pathname);
   const view = route.view;
   const segment = newsSegment(search.get("seg"));
+  const articleSort = newsSort(search.get("sort"));
   const [localDrafts, setLocalDrafts] = useState<Record<string, LocalDraft>>(
     {},
   );
@@ -216,11 +217,11 @@ export default function Office({ children }: { children: React.ReactNode }) {
     if (search.has("seg")) {
       try { localStorage.setItem("heobrain-news-segment-v1", segment); } catch { /* Storage can be disabled. */ }
     } else {
-      let remembered = "all";
+      let remembered = newsSegment(null);
       try { remembered = newsSegment(localStorage.getItem("heobrain-news-segment-v1")); } catch { /* URL still works. */ }
-      if (remembered !== "all") router.replace(`/news?seg=${remembered}`, { scroll: false });
+      if (remembered !== "all") router.replace(newsHref(remembered, articleSort), { scroll: false });
     }
-  }, [view, segment, search, router]);
+  }, [view, segment, articleSort, search, router]);
   const loadDashboard = useCallback(async (force = false) => {
     const ticket = dashboardRefresh.current.begin(force);
     if (!ticket) return;
@@ -379,7 +380,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const visibleJobs = filterJobs(jobs, jobQuery, jobStateFilter, jobOutputFilter);
   const clearJobFilters = () => { setJobQuery(""); setJobStateFilter("all"); setJobOutputFilter("all"); };
   const articles = dashboard?.articles ?? [];
-  const visibleArticles = filterNews(articles, segment);
+  const visibleArticles = sortNews(filterNews(articles, segment), articleSort);
   const sources = dashboard?.source_registry ?? [];
   const relevantSources = sources.filter(source => segment === "all" || source.segment === segment);
   const emptyNews = newsEmptyState(segment, articles.length, relevantSources.length, Boolean(dashboard?.feed_report?.checked_at), Boolean(dashboard?.feed_report?.partial_failure));
@@ -688,7 +689,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         최대 3개 선택 · 점수는 편집 기준
                       </span>
                     </div>
-                    <nav className="news-segments" aria-label="뉴스 분류">{newsSegments.map(item => <Link key={item.id} href={`/news?seg=${item.id}`} scroll={false} prefetch={false} aria-current={segment === item.id ? "page" : undefined} onClick={() => setShowAll(false)}>{item.label} <span>{filterNews(articles, item.id).length}</span></Link>)}</nav>
+                    <div className="news-toolbar"><nav className="news-segments" aria-label="뉴스 분류">{newsSegments.map(item => <Link key={item.id} href={newsHref(item.id, articleSort)} scroll={false} prefetch={false} aria-current={segment === item.id ? "page" : undefined} onClick={() => setShowAll(false)}>{item.label} <span>{filterNews(articles, item.id).length}</span></Link>)}</nav><label className="news-order">정렬<select value={articleSort} onChange={event => { setShowAll(false); router.push(newsHref(segment, newsSort(event.target.value)), { scroll: false }); }}>{newsSorts.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label></div>
                     <p className="news-scope">최근 7일의 선정 후보 · 분류별 전체 후보 수이며 오늘 새 기사 수가 아닙니다. 분류를 바꿔도 선택한 기사 {selected.length}건은 유지됩니다.</p>
                     {dashboard.feed_report?.partial_failure && <p className="notice" role="status">일부 출처 수집에 실패했어요. 보이는 기사는 보존했습니다. 운영 기록에서 출처별 결과를 확인하세요.</p>}
                     {visibleArticles.length === 0 ? (

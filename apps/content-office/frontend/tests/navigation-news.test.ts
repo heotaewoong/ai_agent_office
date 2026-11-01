@@ -22,3 +22,13 @@ test('empty collection, collection failure, missing sources and filtered zero di
  assert.equal(newsEmptyState('ai',0,2,true,false).kind,'empty');
  assert.equal(newsEmptyState('exam',4,1,true,false).kind,'filtered');
 });
+
+import { newsSort, sortNews, newsHref } from '../lib/news.ts';
+test('score ordering is explicit, stable, non-mutating and leaves unknown scores last',()=>{
+ const rows=[{id:'a',score:40},{id:'b',score:90},{id:'c',score:90},{id:'unknown',score:NaN}];
+ assert.deepEqual(sortNews(rows,'score-desc').map(x=>x.id),['b','c','a','unknown']);
+ assert.deepEqual(sortNews(rows,'score-asc').map(x=>x.id),['a','b','c','unknown']);
+ assert.deepEqual(rows.map(x=>x.id),['a','b','c','unknown']);
+ assert.equal(newsSort(null),'score-desc');assert.equal(newsSort('bad'),'score-desc');
+ assert.equal(newsHref('exam',newsSort('score-asc')),'/news?seg=exam&sort=score-asc');
+});
