@@ -20,6 +20,8 @@ export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedRe
   const [large,setLarge]=useState<string|null>(null);
   const requestId=useRef(0);
   const dialog=useRef<HTMLDialogElement>(null);
+  const previewOpener=useRef<HTMLButtonElement|null>(null);
+  function closePreview(){dialog.current?.close();setLarge(null);previewOpener.current?.focus();}
   const load=useCallback(async()=>{const seq=++requestId.current;try {const next=await api.thumbnailStudio(job.id);if(seq===requestId.current){setData(next);setError("");}}catch(e){if(seq===requestId.current)setError(e instanceof Error?e.message:"썸네일을 불러오지 못했습니다");}},[job.id,job.source_hash]);
   useEffect(()=>{setData(null);setReviewed(false);setInstruction("");setLarge(null);void load();return()=>{requestId.current++;};},[load]);
   useEffect(()=>{if(large)dialog.current?.showModal();},[large]);
@@ -44,20 +46,20 @@ export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedRe
     </fieldset>
     {error&&<p role="alert" className="notice">{error} <button type="button" className="button text" onClick={()=>void load()}>다시 불러오기</button></p>}
     {!data&&!error&&<p role="status">현재 원고의 썸네일을 확인하고 있어요.</p>}
-    {data?.stale&&<p role="alert" className="notice">원고가 바뀌었습니다. 이전 후보는 보존했으며 새 원고로 3장을 다시 만들어야 합니다.</p>}
+    {data?.stale&&<p role="alert" className="notice">원고가 바뀌었습니다. 이전 후보는 보존했으며 새 원고로 3장을 다시 만들어야 합니다. 이전 후보는 확대해서 비교할 수 있지만, 선택·수정·최종 확정은 새 원고의 후보를 만든 뒤 가능합니다.</p>}
     {data?.task?.result?.error&&<p role="alert" className="notice">{data.task.result.error} 이미 받은 후보는 보존됩니다. 결과 불명 요청은 자동으로 반복하지 않습니다.</p>}
     {pending&&<p role="status">{data?.task?.state==="queued"?"이미지 제작 대기 중입니다. 작업 시간과 작업자 상태를 확인하세요.":"이미지를 만들고 있습니다. 완료된 후보부터 표시됩니다."}</p>}
     {!!data?.candidates.length&&<div className={styles.grid}>{data.candidates.map((c,i)=><article key={c.id} className={sameFormat&&c.id===data.selected_id?styles.selected:styles.card}>
-      <button type="button" className={styles.image} onClick={()=>setLarge(c.id)} aria-label={`${c.parent_id?"수정본":"후보"} ${i+1} 크게 보기`}><img src={picture(c)} alt={`${c.angle} — ${c.title}`} /></button>
+      <button type="button" className={styles.image} onClick={e=>{previewOpener.current=e.currentTarget;setLarge(c.id);}} aria-label={`${c.parent_id?"수정본":"후보"} ${i+1} 크게 보기`}><img src={picture(c)} alt={`${c.angle} — ${c.title}`} /></button>
       <h3>{c.parent_id?"선택 이미지 수정본":`후보 ${i+1}`} · {c.angle}</h3>
       <p>{c.provenance?.provider||"생성 이미지"}{c.parent_id&&" · 원본 보존"}</p>
       <button type="button" className="button secondary" disabled={disabled} aria-pressed={sameFormat&&c.id===data.selected_id} onClick={()=>void run(()=>action("썸네일 비교 선택",()=>api.chooseStudioThumbnail(job.id,c.id,data.revision,false,format),"이미지를 선택했습니다. 필요하면 수정본을 만든 뒤 최종 확정하세요."))}>{sameFormat&&c.id===data.selected_id?"현재 비교 선택":"이 이미지 선택"}</button>
     </article>)}</div>}
-    {large&&<dialog ref={dialog} className={styles.dialog} aria-label="썸네일 크게 보기" onCancel={()=>setLarge(null)}><button type="button" className="button secondary" autoFocus onClick={()=>setLarge(null)}>확대 닫기</button><img src={picture(data?.candidates.find(c=>c.id===large))} alt="확대한 썸네일 후보" /></dialog>}
+    {large&&<dialog ref={dialog} className={styles.dialog} aria-label="썸네일 크게 보기" onCancel={e=>{e.preventDefault();closePreview();}}><button type="button" className="button secondary" autoFocus onClick={closePreview}>확대 닫기</button><img src={picture(data?.candidates.find(c=>c.id===large))} alt="확대한 썸네일 후보" /></dialog>}
     {before&&selected&&<div className={styles.comparison}><figure><img src={picture(before)} alt="수정 전 선택 이미지"/><figcaption>수정 전</figcaption></figure><figure><img src={picture(selected)} alt="수정한 이미지"/><figcaption>수정 후 · {selected.instruction}</figcaption></figure></div>}
     <div className={styles.controls}>
       <label><input type="checkbox" checked={paid} onChange={e=>setPaid(e.target.checked)} disabled={busy||pending}/> OpenAI 이미지 비용 확인: 새 후보 최대 3장 × 200원 예약, 수정 1회 200원 예약 · 같은 작업 합산 최대 2,000원 · 기존 예산 안에서만 호출</label>
-      {blockedReason&&<p className="notice">{blockedReason} 비교·선택·최종 확정은 계속할 수 있습니다.</p>}
+      {blockedReason&&<p className="notice">{blockedReason} {data?.stale?"이전 후보의 확대 비교는 계속할 수 있습니다.":"비교·선택·최종 확정은 계속할 수 있습니다."}</p>}
       {(!data?.candidates.length||data.stale||data.candidates.filter(c=>!c.parent_id).length<3)&&<button type="button" className="button primary" disabled={busy||pending||!paid||!!blockedReason||!job.source_hash} onClick={()=>void generate()}>원고로 이미지 3장 만들기</button>}
       {selected&&!data?.stale&&<><label htmlFor={`thumb-edit-${job.id}`}>선택 이미지에서 바꾸고 싶은 부분</label><textarea id={`thumb-edit-${job.id}`} value={instruction} maxLength={1200} onChange={e=>setInstruction(e.target.value)} placeholder="예: 인물과 구도는 유지하고 새벽 러닝의 빛을 더 자연스럽게 해주세요." disabled={busy||pending}/><button type="button" className="button secondary" disabled={disabled||!paid||!instruction.trim()||!!blockedReason} onClick={()=>void generate(true)}>선택 이미지 수정본 만들기</button>
       <label><input type="checkbox" checked={reviewed} onChange={e=>setReviewed(e.target.checked)} disabled={disabled}/> 선택한 이미지의 제목·내용·권리를 확인했습니다.</label>
