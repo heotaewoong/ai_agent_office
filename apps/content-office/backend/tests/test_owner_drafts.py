@@ -78,3 +78,28 @@ def test_expired_window_and_stale_policy_do_not_dispatch(tmp_path):
     assert owner_drafts.pending(store) == []
     with pytest.raises(WorkflowError):
         owner_drafts.claim(store, row['id'], 'fixture')
+
+
+def test_human_approval_records_policy_and_explicit_empty_selection_clears_it(tmp_path):
+    store, jid = ready(tmp_path)
+    job = store.job(jid)
+    approved = store.review_source(jid, job['source_hash'], 'approved', 'fixture-human', production_contract='c'*64, draft_targets=['youtube_main_ko'])
+    assert approved['owner_draft_policy']['channels'][0]['key'] == 'youtube_main_ko'
+    assert approved['owner_draft_policy']['public_publish'] is False
+    assert not approved['release_approval']
+    cleared = store.review_source(jid, job['source_hash'], 'approved', 'fixture-human', draft_targets=[])
+    assert cleared['owner_draft_policy']['channels'] == []
+
+
+def test_account_change_and_unknown_result_are_never_silently_retried(tmp_path):
+    store, jid = ready(tmp_path)
+    row, = owner_drafts.prepare(store, jid)
+    claimed = owner_drafts.claim(store, row['id'], 'fixture')
+    proof = {k:claimed[k] for k in ('claim_id','account_id','content_hash')}
+    owner_drafts.receipt(store, row['id'], {**proof,'state':'unknown','reason':'connection ended'})
+    assert owner_drafts.pending(store) == []
+    assert owner_drafts.prepare(store, jid)[0]['state'] == 'unknown'
+    from office.channels import update_channel
+    update_channel(store, 'youtube_main_ko', {'publication_enabled':False}, actor='fixture')
+    with pytest.raises(WorkflowError, match='채널'):
+        owner_drafts.prepare(store, jid)

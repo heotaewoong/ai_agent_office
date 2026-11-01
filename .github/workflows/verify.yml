@@ -62,6 +62,12 @@ jobs:
       - name: 배포·자동 배포 스크립트 테스트
         run: backend/.venv/bin/python -m unittest discover -s scripts/tests -p 'test_*.py'
 
+      - name: PC 초안 실행기 공개발행 차단 검사
+        run: |
+          node --check scripts/owner-draft-extension/background.mjs
+          node --check scripts/owner-draft-extension/web-adapters.js
+          node --test scripts/owner-draft-extension/policy.test.mjs
+
       - name: 화면 타입 검사
         working-directory: apps/content-office/frontend
         run: node node_modules/typescript/bin/tsc --noEmit --incremental false

@@ -1,3 +1,4 @@
+import './guards.js';
 export const TARGETS = Object.freeze({
  youtube_main_ko:{platform:'youtube'},youtube_english:{platform:'youtube'},
  threads_main:{platform:'threads',url:'https://www.threads.com/'},
@@ -14,9 +15,7 @@ export function validateItem(row, now=Date.now()) {
  if(row.visibility!==(target.platform==='youtube'?'private':'draft') || row.publish_at || row.public_publish) throw Error('공개·예약 발행은 차단했습니다');
  return target;
 }
-export function safeButton(label) {
- return /^(임시저장|임시 저장|저장|Save|Save draft|Save as draft|닫기|Close|Cancel|취소|글쓰기|게시물 작성|Start a post|만들기|Create|초안|Drafts|내 메뉴|나|Me)$/i.test(label.trim());
-}
+export const safeButton=globalThis.HeoBrainDraftGuards.safeButton;
 export function proof(row,state,externalId,reason='') {
  const expected=row.visibility==='private'?'platform_private':'platform_draft';
  if(![expected,'blocked','unknown'].includes(state))throw Error('공개 결과는 기록할 수 없습니다');

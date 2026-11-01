@@ -14,7 +14,7 @@ export function OwnerDraftOptions({language, selected, onChange}: {language?: st
     <p>선택한 채널은 제작 후 PC 실행기로 전달합니다. 공개·예약 발행은 하지 않습니다. 로그인·지원 여부는 채널마다 확인하며, 미연결은 대기로 남습니다.</p>
     <p>이 선택은 출고 승인②가 아닙니다. 승인된 원고의 초안을 외부 플랫폼에 비공개로 전송하도록 허용합니다.</p>
     {error && <p role="alert">{error}</p>}
-    {channels.map(c => <label key={c.key} className="check-label"><input type="checkbox" checked={selected.includes(c.key)} onChange={e => onChange(e.target.checked ? [...selected,c.key] : selected.filter(k => k!==c.key))}/>{c.label}{c.platform==='youtube' ? ' · 비공개' : ' · 임시저장'}</label>)}
+    {channels.map(c => <label key={c.key} className="check-label"><input type="checkbox" checked={selected.includes(c.key)} onChange={e => onChange(e.target.checked ? [...selected,c.key] : selected.filter(k => k!==c.key))}/>{c.label}{c.platform==='youtube' ? ' · 비공개 · PC 실행기 필요' : c.platform==='instagram' ? ' · Meta 계정·초안 지원 확인 필요' : ' · 웹 확장 저장·재열기 검증 필요'}</label>)}
     <p>{selected.length ? `${selected.length}개 채널 선택 · PC와 Chrome이 켜져 있어야 합니다` : '선택하지 않으면 기존 자동 제작만 진행합니다'}</p>
   </fieldset>;
 }

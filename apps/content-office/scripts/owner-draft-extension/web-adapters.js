@@ -4,7 +4,7 @@
  globalThis.heobrainDraftListener=true;
  const visible=e=>e.getClientRects().length>0;
  const exact=(root,labels)=>[...root.querySelectorAll('button,[role="button"]')].filter(visible).filter(e=>labels.includes((e.getAttribute('aria-label')||e.textContent).trim()));
- const click=(root,labels)=>{const found=exact(root,labels);if(found.length!==1)throw Error('초안 전용 버튼을 확인하지 못했습니다');found[0].click();};
+ const click=(root,labels)=>{if(!labels.every(globalThis.HeoBrainDraftGuards.safeButton))throw Error('공개·예약 버튼은 실행하지 않습니다');const found=exact(root,labels);if(found.length!==1)throw Error('초안 전용 버튼을 확인하지 못했습니다');found[0].click();};
  const editor=()=>{const a=[...document.querySelectorAll('[contenteditable="true"][role="textbox"],.ql-editor[contenteditable="true"]')].filter(visible);if(a.length!==1)throw Error('편집 영역 확인 필요');return a[0];};
  const expectedAccount=(item)=>{
   if(item.channel_key==='tistory_main')return location.hostname==='onethingflow.tistory.com' && location.pathname.startsWith('/manage/') && !!document.querySelector('#post-title-inp');

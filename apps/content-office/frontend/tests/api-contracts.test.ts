@@ -2,6 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { api } from "../lib/api.ts";
 
+test('원고 승인에 고른 초안 채널과 선택 해제를 명시하며 공개 발행은 요청하지 않는다', async t => {
+ const old=globalThis.fetch;t.after(()=>{globalThis.fetch=old;});
+ const bodies:Record<string,unknown>[]=[];
+ globalThis.fetch=async(input,init)=>{if(String(input)==='/api/session')return Response.json({csrf:'fixture'});assert.equal(String(input),'/api/jobs/job-test/reviews/source');bodies.push(JSON.parse(String(init?.body)));return Response.json({id:'job-test'});};
+ const selections={blog:true,video:false,pdf:false,cards:false};
+ await api.reviewSource('job-test','a'.repeat(64),'approved',selections,true,false,['threads_main']);
+ await api.reviewSource('job-test','a'.repeat(64),'approved',selections,true,false,[]);
+ assert.deepEqual(bodies.map(b=>b.draft_targets),[['threads_main'],[]]);
+ for(const b of bodies){assert.equal(b.auto_produce,true);assert.equal('private_delivery_channel' in b,false);assert.equal('publish_at' in b,false);}
+});
+
 test("회차 검토는 화면에서 읽은 판본 토큰을 승인과 반려 요청에 함께 보낸다", async (t) => {
   const originalFetch = globalThis.fetch;
   const requests: { url: string; body: Record<string, unknown> }[] = [];

@@ -45,13 +45,13 @@ async function webDraft(item,target){
  const frame = async()=>{const frames=await chrome.scripting.executeScript({target:{tabId:tab.id,allFrames:true},func:()=>location.href});return target.platform==='naver' ? frames.find(f=>new URL(f.result).pathname==='/oneflowwhy/postwrite')?.frameId : 0;};
  const frameId=await frame();
  if(frameId===undefined)throw Error('대상 편집 프레임 확인 필요');
- await chrome.scripting.executeScript({target:{tabId:tab.id,frameIds:[frameId]},files:['web-adapters.js']});
+ await chrome.scripting.executeScript({target:{tabId:tab.id,frameIds:[frameId]},files:['guards.js','web-adapters.js']});
  const response=await chrome.tabs.sendMessage(tab.id,{kind:'save-nonpublic',item},{frameId});
  if(response?.state!=='saved_candidate')throw Error('임시저장 미확인');
  await chrome.tabs.reload(tab.id);
  await new Promise(resolve=>{const timer=setTimeout(resolve,15000);const listener=(id,change)=>{if(id===tab.id&&change.status==='complete'){clearTimeout(timer);chrome.tabs.onUpdated.removeListener(listener);resolve();}};chrome.tabs.onUpdated.addListener(listener);});
  const reopened=await frame();if(reopened===undefined)throw Error('저장본 프레임 확인 필요');
- await chrome.scripting.executeScript({target:{tabId:tab.id,frameIds:[reopened]},files:['web-adapters.js']});
+ await chrome.scripting.executeScript({target:{tabId:tab.id,frameIds:[reopened]},files:['guards.js','web-adapters.js']});
  const checked=await chrome.tabs.sendMessage(tab.id,{kind:'verify-nonpublic',item},{frameId:reopened});
  if(!checked?.verified)throw Error('임시저장 재열기 확인 필요');
  return native({command:'receipt',id:item.id,claim_id:item.claim_id,proof:proof(item,'platform_draft',checked.external_id)});

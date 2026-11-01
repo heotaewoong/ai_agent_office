@@ -41,12 +41,13 @@ def handle(message):
         return {'ok': True, 'item': remote('print(json.dumps(d.claim(store,' + bridge.argument(rid) + ',"owner-windows-native")))\n')}
     if command == 'receipt':
         proof = message.get('proof')
-        if not isinstance(proof, dict):
+        if (not isinstance(proof, dict) or not re.fullmatch(r'od_[0-9a-f]{24}', message.get('id', ''))
+                or not re.fullmatch(r'claim_[0-9a-f]{16}', message.get('claim_id', ''))):
             raise agent.OwnerError('초안 확인 결과가 필요합니다')
-        row = row_for(message)
-        if proof.get('claim_id') != row['claim_id']:
+        if proof.get('claim_id') != message['claim_id']:
             raise agent.OwnerError('다른 PC 처리 결과입니다')
-        value = bridge.argument({'id': row['id'], 'proof': proof})
+        # Recording an already-finished nonpublic result is allowed after the window expires.
+        value = bridge.argument({'id': message['id'], 'proof': proof})
         result = remote('v=' + value + '\nr=d.receipt(store,v["id"],v["proof"])\nprint(json.dumps({"id":r["id"],"state":r["state"]}))\n')
         return {'ok': True, **result}
     if command not in ('youtube-private', 'asset-chunk'):
