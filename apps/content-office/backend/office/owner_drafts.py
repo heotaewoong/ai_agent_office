@@ -12,7 +12,7 @@ from .store import WorkflowError, canonical, digest, identifier, now
 SETTING = 'owner_draft_deliveries'
 TARGETS = ('youtube_main_ko', 'youtube_english', 'instagram_main', 'instagram_english',
            'threads_main', 'linkedin_personal', 'tistory_main', 'naver_blog_main')
-TEXT_FILES = {'tistory_main': 'blog.md', 'naver_blog_main': 'naver.txt',
+TEXT_FILES = {'tistory_main': 'tistory.md', 'naver_blog_main': 'naver.txt',
               'threads_main': 'threads-main.txt', 'linkedin_personal': 'linkedin-personal.txt',
               'instagram_main': 'instagram-main-caption.txt', 'instagram_english': 'instagram-english-caption.txt'}
 

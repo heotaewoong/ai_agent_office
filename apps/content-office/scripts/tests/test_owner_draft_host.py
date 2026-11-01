@@ -37,6 +37,14 @@ class HostTests(unittest.TestCase):
         self.assertIn('d.pending(store)', code)
         self.assertNotIn('private_upload', code)
 
+    def test_youtube_verification_allows_only_platform_trailing_line_break_normalization(self):
+        host = self.load(SimpleNamespace())
+        expected = {'title': '승인된 제목', 'description': '첫 문단\n\n둘째 문단\n'}
+        self.assertTrue(host.youtube_metadata_matches({'title': '승인된 제목', 'description': '첫 문단\n\n둘째 문단'}, expected))
+        self.assertFalse(host.youtube_metadata_matches({'title': '다른 제목', 'description': '첫 문단\n\n둘째 문단'}, expected))
+        self.assertFalse(host.youtube_metadata_matches({'title': '승인된 제목', 'description': '첫 문단\n둘째 문단'}, expected))
+        self.assertFalse(host.youtube_metadata_matches({'title': '승인된 제목', 'description': '첫 문단\n\n둘째 문단 '}, expected))
+
 
 if __name__ == '__main__':
     unittest.main()
