@@ -1868,6 +1868,17 @@
         ? B.Camera.FOVMODE_HORIZONTAL_FIXED : B.Camera.FOVMODE_VERTICAL_FIXED;
     },
 
+    prepareSsaoDepthGuard() {
+      if (B.Engine?.Version !== '7.54.0') return false;
+      const shaders = B.Effect?.ShadersStore, source = shaders?.ssao2PixelShader;
+      const anchor = 'depth=depth*depthSign;';
+      const fade = 'occlusion=occlusion*(1.0-smoothstep(maxZ*0.75,maxZ,depth));';
+      const guard = 'if(depth>=maxZ){gl_FragColor=vec4(vec3(clamp(1.0+base,0.0,1.0)),1.0);return;}';
+      if (typeof source !== 'string' || !source.includes(fade) || source.indexOf(anchor) < 0 || source.indexOf(anchor) !== source.lastIndexOf(anchor)) return false;
+      if (!source.includes(guard)) shaders.ssao2PixelShader = source.replace(anchor, anchor + guard);
+      return true;
+    },
+
     init() {
       const s = world.scene, canvas = world.canvas;
       this.overview = new B.ArcRotateCamera('overview', -Math.PI / 2, 1.15, 430, new B.Vector3(0, -18, 0), s);
@@ -1885,6 +1896,8 @@
       this.syncCameraFraming();
 
       if (QUALITY !== 'low') {
+        // The bundled shader already fades AO to exactly 1+base at maxZ; skip its dead sample loop.
+        this.ssaoDepthGuardApplied = this.prepareSsaoDepthGuard();
         // 화면 공간 주변광 차폐: 블록 틈과 가구 밑을 어둡게 (톤 매핑보다 먼저 적용되도록 먼저 만든다)
         const ssao = new B.SSAO2RenderingPipeline('ssao', s, { ssaoRatio: 0.5, blurRatio: 0.5 }, [this.overview, this.walk]);
         ssao.radius = 1.6;
