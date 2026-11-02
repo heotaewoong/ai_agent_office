@@ -18,6 +18,14 @@ Slack 전달은 native 연결이 허용한 상태 알림만 다룹니다. 업무
 
 relay의 native 소유0600 설정에는 운영자가 실제 기존 Slack/Lumi 승인 구독에서 확인한 `target_chat_id`를 고정합니다. `source_task_id`는 그 승인 근거를 가리키는 감사 참조이며 서비스가 native SQLite를 열거나 변경된 알림 대상을 자동 추적하는 데 쓰지 않습니다. 채널 ID는 native 전용 메타데이터로만 유지하고 Ubuntu·화면에는 대상 해시만 반환합니다. 대상 변경은 운영자의 재확인이 필요하며, 기존 감시 기록의 대상 해시와 현재 설정이 다르면 재전송·대상 변경·수신 완료 확인을 보류합니다. `approved_target()`은 서비스 밖의 읽기 전용 설치 확인용입니다.
 
+## 실제 소유자의 Slack 업무 접수
+
+`scripts/slack-office-intake.py`는 Lumi의 현재 Slack 실행 맥락에서만 업무를 접수하는 native 전용 helper입니다. 같은 판본의 `backend/office/assistant_request_protocol.py`와 기존 relay를 native 소유 `~/.hermes/office-relay/code/`에 함께 설치합니다. Python 파일과 설정은0600, 코드·상태 디렉터리는0700으로 두고 마지막에 Lumi 전용 `heobrain-slack-intake` 스킬을 설치합니다. helper는 설정에서 검증한 native Python의 절대 경로에 `-I -B`를 붙여 실행합니다. Ubuntu 앱 소스·CWD·환경변수의 Python 모듈을 native 런타임에 직접 import하지 않습니다.
+
+helper는 SDK로 현재 팀·채널·메시지 시각·소유자를 다시 확인합니다. 명시된 인간 소유자의 수정·첨부 없는10분 이내 메시지만 `inspect`의 정확한 원문 SHA로 접수할 수 있습니다. 환경변수·본문·UUID를 모델이 만들어 출처를 대신할 수 없습니다. 기존 영속 admission 잠금만 재사용하며 별도 dispatcher·예약·봇 허용 확대는 없습니다. Slack 읽기 권한이 부족하면 접수 전에 중단합니다.
+
+접수 뒤 같은 UUID의 GET으로 기존 daemon의 감시 메타데이터를 연결합니다. Store에 없는 native root도 tenant·보드·담당·유일성을 검증해 읽으며 업무 POST나 Store 기록을 만들지 않습니다. `/office3d?assistant_request=<UUID>`는 GET만 복원합니다. 새 스킬의 실제 선택·인간 Slack 입력부터 완료 보고까지는 운영 설치와 별도로 검증해야 합니다. 기존 최소 상태 통지는 유지하며 현재 Slack 채널에 원문·완료 본문을 자동 재전송하지 않습니다.
+
 ## 선별한 무료 원고 점검·로컬 검색 — 2026-11-02
 
 블로그 영역의 ‘원고 구성 점검’은 저장된 현재 판본의 길이·소제목·목록·등록 근거 ID 연결과 SNS 글자 수를 읽기 전용으로 표시합니다. 짧다는 이유만으로 질문에 답한다고 판정하지 않으며, 미등록 ID·빈 글·코드 블록의 가짜 소제목을 긍정 신호로 세지 않습니다. SEO/조회 성과·사실 정확성·콘텐츠 품질 점수가 아니고 승인·원고·비용을 바꾸지 않습니다. 유료 모델 버튼·새 설정·공개 API는 추가하지 않았습니다.
