@@ -1,6 +1,6 @@
 "use client";
 import { ActionFeedback } from "./action-feedback";
-import { JobTrash } from './job-trash';
+import { JobTrash,jobTrashWorking,type JobTrashRequest } from './job-trash';
 import {DeliveryConsole} from "./delivery-console";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -159,6 +159,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const [briefDrafts, setBriefDrafts] = useState<Record<string, BriefDraft>>({});
   const [offerDrafts, setOfferDrafts] = useState<Record<string, OfferDraft>>({});
   const [ideaSourcesDrafts, setIdeaSourcesDrafts] = useState<Record<string, IdeaSourcesDraft>>({});
+  const [trashRequest,setTrashRequest]=useState<JobTrashRequest>();
   const updateIdeaSourcesDraft = useCallback((id: string, draft: IdeaSourcesDraft | null) => {
     setIdeaSourcesDrafts((previous) => {
       if (!draft && !previous[id]) return previous;
@@ -827,8 +828,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       </div>
                     ) : (
                       visibleJobs.length === 0 ? <div className="small-empty"><p>조건에 맞는 작업이 없습니다.</p><button type="button" className="inline-button" onClick={clearJobFilters}>검색 조건 지우기</button></div> : visibleJobs.map((item) => (
+                        <div className="job-list-row" key={item.id}>
                         <button
-                          key={item.id}
                           className={`job-item ${item.id === activeId ? "active" : ""}`}
                           aria-current={item.id === activeId ? "page" : undefined}
                           onClick={() => { selectJob(item.id); router.push(officeHref(view === "delivery" ? "delivery" : "studio", item.id)); }}
@@ -844,18 +845,26 @@ export default function Office({ children }: { children: React.ReactNode }) {
                             <Icon name="chevron" size={14} />
                           </span>
                         </button>
+                        <button type="button" className="job-list-delete button text small"
+                          aria-label={`${item.title || item.id} 삭제`}
+                          disabled={!!busy||!connected||jobTrashWorking(item)||!item.updated_at||Boolean(localDrafts[item.id]||intakeDrafts[item.id]||briefDrafts[item.id]||offerDrafts[item.id]||ideaSourcesDrafts[item.id])}
+                          title={jobTrashWorking(item)?'처리 중이거나 결과 불명인 작업은 삭제할 수 없습니다.':'휴지통으로 이동 · 원고·파일·승인 기록 보존'}
+                          onClick={event=>setTrashRequest({job:item,trigger:event.currentTarget})}>삭제</button>
+                        </div>
                       ))
                     )}</div>
                   </section>
                   <section className="job-content">
-                    <JobTrash job={job??undefined} busy={!!busy||!connected}
+                    <JobTrash job={job??undefined} items={jobs} deleteRequest={trashRequest} onDeleteRequestHandled={()=>setTrashRequest(undefined)} busy={!!busy||!connected}
                       unsaved={Boolean(job&&(localDrafts[job.id]||intakeDrafts[job.id]||briefDrafts[job.id]||offerDrafts[job.id]||ideaSourcesDrafts[job.id]))}
                       onChanged={async deletedId=>{
                         if(deletedId){
-                          const next=dashboard.jobs.find(item=>item.id!==deletedId)?.id||'';
-                          selectJob(next);
+                          if(deletedId===activeId){
+                            const next=dashboard.jobs.find(item=>item.id!==deletedId)?.id||'';
+                            selectJob(next);
+                            router.replace(officeHref(view==='delivery'?'delivery':'studio',next||undefined));
+                          }
                           setDashboard(previous=>previous?{...previous,jobs:previous.jobs.filter(item=>item.id!==deletedId)}:previous);
-                          router.replace(officeHref(view==='delivery'?'delivery':'studio',next||undefined));
                         }
                         await loadDashboard(true);
                       }}/>

@@ -4500,12 +4500,18 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 @media(max-width:720px) { .card-version-compare { padding: 15px; } .card-compare-controls, .card-compare-columns { grid-template-columns: minmax(0,1fr); } .card-compare-controls select { font-size: 16px; } }
 .card-compare-error { padding: 16px; } .card-compare-error p { padding: 0 0 8px; }
 .job-list { min-width: 0; }
+.job-list-row { min-width:0; display:flex; flex-direction:column; }
+.job-list-row + .job-list-row { margin-top:7px; }
+.job-list-row .job-item { width:100%; min-width:0; }
+.job-list-delete { align-self:flex-end; min-width:64px; min-height:44px; margin:0 6px 6px; }
 @media(max-width:1020px) {
   .job-sidebar { display: block; overflow-x: visible; }
   .job-sidebar > .section-heading { display: flex; }
   .job-filters { padding: 0 0 14px; }
   .job-list { display: flex; gap: 9px; overflow-x: auto; align-items: stretch; }
   .job-list > .small-empty { min-width: 100%; }
+  .job-list-row { flex:0 0 220px; }
+  .job-list-row + .job-list-row { margin-top:0; }
 }
 
 .news-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin:16px 0 10px; }

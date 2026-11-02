@@ -1,19 +1,24 @@
 "use client";
-import {useId,useRef,useState} from 'react';
+import {useEffect,useId,useRef,useState} from 'react';
 import {api} from '../lib/api';
 
 type Item={id:string;title:string;updated_at?:string;state?:string;tasks?:{state?:string}[]};
-export function JobTrash({job,busy,unsaved,onChanged}:{job?:Item;busy:boolean;unsaved:boolean;onChanged:(deletedId?:string)=>Promise<void>}){
+export type JobTrashRequest={job:Item;trigger:HTMLButtonElement};
+export function jobTrashWorking(job:Item){return ['drafting','production_queued','producing','needs_reconciliation'].includes(job.state??'')||Boolean(job.tasks?.some(task=>['queued','running','claimed','unknown'].includes(task.state??'')));}
+export function JobTrash({job,items,deleteRequest,onDeleteRequestHandled,busy,unsaved,onChanged}:{job?:Item;items?:Item[];deleteRequest?:JobTrashRequest;onDeleteRequestHandled?:()=>void;busy:boolean;unsaved:boolean;onChanged:(deletedId?:string)=>Promise<void>}){
  const dialog=useRef<HTMLDialogElement>(null),trigger=useRef<HTMLButtonElement|null>(null),trashButton=useRef<HTMLButtonElement>(null);
  const heading=useId();
  const [mode,setMode]=useState<'delete'|'trash'>('trash');
  const [snapshot,setSnapshot]=useState<Item>();
+ const [fromList,setFromList]=useState(false);
  const [rows,setRows]=useState<Item[]>([]);
  const [pending,setPending]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const working=Boolean(job&&(['drafting','production_queued','producing','needs_reconciliation'].includes(job.state??'')||job.tasks?.some(task=>['queued','running','claimed','unknown'].includes(task.state??''))));
+ const working=Boolean(job&&jobTrashWorking(job));
+ useEffect(()=>{if(deleteRequest){void open(deleteRequest.trigger,'delete',deleteRequest.job,true);onDeleteRequestHandled?.();}},[deleteRequest]);
  function close(){if(!pending)dialog.current?.close();}
- async function open(button:HTMLButtonElement,which:'delete'|'trash'){
-  trigger.current=button;setMode(which);setSnapshot(job?{...job}:undefined);setError('');setNotice('');
+ async function open(button:HTMLButtonElement,which:'delete'|'trash',target=job,list=false){
+  if(busy||pending)return;
+  trigger.current=button;setMode(which);setSnapshot(target?{...target}:undefined);setFromList(list);setError('');setNotice('');
   dialog.current?.showModal();
   if(which==='trash'){
    setPending(true);
@@ -23,7 +28,7 @@ export function JobTrash({job,busy,unsaved,onChanged}:{job?:Item;busy:boolean;un
  }
  async function move(item:Item,restore=false){
   if(pending||busy||!item.updated_at)return;
-  if(!restore&&item.id!==job?.id){setError('선택한 작업이 바뀌었습니다. 취소한 뒤 다시 확인하세요.');return;}
+  if(!restore&&(fromList?!items?.some(current=>current.id===item.id):item.id!==job?.id)){setError('선택한 작업이 바뀌었습니다. 취소한 뒤 다시 확인하세요.');return;}
   setPending(true);setError('');let saved=false;
   try{
    if(restore)await api.restoreJob(item.id,item.updated_at);else await api.trashJob(item.id,item.updated_at);
@@ -33,7 +38,7 @@ export function JobTrash({job,busy,unsaved,onChanged}:{job?:Item;busy:boolean;un
    await onChanged(restore?undefined:item.id);
    if(restore)dialog.current?.querySelector<HTMLElement>('h2')?.focus();
   }catch(e){setError(saved?'이동은 완료됐지만 목록 조회에 실패했습니다. 다시 이동하지 말고 목록을 새로 확인하세요.':e instanceof Error?e.message:'요청 결과를 확인하지 못했습니다. 휴지통과 운영 기록을 먼저 확인하세요.');}
-  finally{setPending(false);}
+  finally{setPending(false);if(saved&&!restore)requestAnimationFrame(()=>trashButton.current?.focus());}
  }
  return <>
   <div className="job-trash-actions" aria-label="작업 정리">
