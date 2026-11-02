@@ -14,6 +14,9 @@
 
 .free-drive-mobile-help{display:none}@media(max-width:720px){.free-drive-desktop-help{display:none}.free-drive-mobile-help{display:inline}}
 
+/* Keep dismount reachable after the play drawer closes on desktop too. */
+@media(min-width:721px){.vehicle-mounted .alien-game-mobile-actions{display:grid;position:fixed;right:18px;bottom:calc(190px + env(safe-area-inset-bottom,0px));z-index:35}.vehicle-mounted .alien-game-mobile-actions span,.vehicle-mounted .mobile-catch{display:none}.vehicle-mounted .mobile-ride{min-height:48px;padding:10px 20px;border:1px solid #c3ffef;border-radius:10px;background:#91eed5;color:#09242a;font:700 14px system-ui;cursor:pointer}.vehicle-mounted .mobile-ride:focus-visible{outline:3px solid #ffd383;outline-offset:3px}}
+
 /* Tourism reuses the free-drive panel and one steady scene marker. */
 .free-drive{max-height:55dvh;overflow:auto;scrollbar-width:thin}
 .drive-tour{margin-top:8px;border-top:1px solid #496578;padding-top:4px}

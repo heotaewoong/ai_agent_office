@@ -243,6 +243,8 @@ if (typeof document !== 'undefined') {
     return ALIENS.filter(a => !profile.captured.includes(a.id)).map(a => ({ ...a, distance: Math.hypot(a.x - p.x, a.z - p.z) })).sort((a, b) => a.distance - b.distance)[0];
   }
   function render() {
+    document.body.classList.toggle('vehicle-mounted', mounted);
+    mobileActions.querySelector('.mobile-ride').textContent = mounted ? '하차하기 · V' : '탑승';
     vehicleSelect.value = profile.selected;
     vehicleSelect.disabled = !ready || mounted;
     quickRide.disabled = !ready;
@@ -318,7 +320,7 @@ if (typeof document !== 'undefined') {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input,textarea,select,button,summary,a[href],[contenteditable="true"]')) return;
     if (!active || office()?.space.view !== 'walk' || office()?.space.playHubOpen) return;
     if (event.key.toLowerCase() === 'f') { event.preventDefault(); catchNearest(); }
-    if (event.key.toLowerCase() === 'v') { event.preventDefault(); toggleRide(); }
+    if (event.code === 'KeyV' || event.key.toLowerCase() === 'v') { event.preventDefault(); toggleRide(); }
   });
   const clearTouch = () => { for (const button of pad.querySelectorAll('button')) { office()?.controls.keys.delete(button.dataset.key); button.classList.remove('pressed'); } };
   pad.querySelectorAll('button').forEach(button => {
@@ -350,7 +352,7 @@ if (typeof document !== 'undefined') {
     mobileActions.querySelector('span').textContent = target ? `${target.name} ${Math.round(target.distance)}m` : '도감 완성!';
     mobileActions.querySelector('.mobile-catch').disabled = catchButton.disabled;
     mobileActions.querySelector('.mobile-ride').disabled = rideButton.disabled;
-    mobileActions.querySelector('.mobile-ride').textContent = mounted ? '하차' : '탑승';
+    mobileActions.querySelector('.mobile-ride').textContent = mounted ? '하차하기 · V' : '탑승';
   }, 200);
   window.addEventListener('pagehide', event => {
     if (!event.persisted) clearInterval(timer);

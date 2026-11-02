@@ -7,6 +7,19 @@ const { ALIENS, VEHICLES, credits, readProfile, capture, purchase, canRide, sele
   await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 const profile = () => readProfile(null);
 
+test('the physical V key dismounts on Korean layouts without intercepting form input', () => {
+  const start = source.indexOf("  window.addEventListener('keydown', event => {");
+  const end = source.indexOf('\n  });', start);
+  const body = source.slice(source.indexOf('{', start) + 1, end);
+  for (const [key, code, editing, expected] of [['ㅍ', 'KeyV', false, 1], ['v', '', false, 1], ['v', 'KeyV', true, 0], ['x', 'KeyX', false, 0]]) {
+    let rides = 0, prevented = 0;
+    const handler = Function('active', 'office', 'toggleRide', 'catchNearest', 'return event => {' + body + '}')(
+      true, () => ({ space: { view: 'walk', playHubOpen: false } }), () => rides++, () => {});
+    handler({ key, code, target: { closest: () => editing }, preventDefault: () => prevented++ });
+    assert.equal(rides, expected); assert.equal(prevented, expected);
+  }
+});
+
 test('only a creature between the camera and player obstructs the view, independent of world height', () => {
   for(const offset of [0,-82.625]) {
     const eye={x:0,y:4.8+offset,z:-10},player={x:0,y:offset,z:0};
