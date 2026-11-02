@@ -2,7 +2,7 @@
 import {useEffect,useId,useState} from 'react';
 import {api} from '../lib/api';
 import type {Channel,ChannelStagingSnapshot,Job} from '../lib/types';
-import {choiceReadiness,destinationFormat,platformChoices,platformNames} from '../lib/delivery-console';
+import {choiceReadiness,destinationFormat,hostStatusLine,platformChoices,platformNames,type HostStatus} from '../lib/delivery-console';
 import {requireStagingSnapshot,stagingExternalLabel,stagingLocalLabel} from '../lib/delivery-readiness';
 import {ChannelHandoffPanel,YoutubePanel} from './youtube-panel';
 import {OwnerDraftStatus} from './owner-draft-options';
@@ -19,10 +19,11 @@ export function DeliveryConsole({job,busy,action,youtubeConfigured,requestBlocke
  const [selection,setSelection]=useState<{revision:string;keys:string[]}>({revision:'',keys:[]});
  const [snapshot,setSnapshot]=useState<ChannelStagingSnapshot>();
  const [items,setItems]=useState<DraftItem[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+ const [host,setHost]=useState<HostStatus>();
  const revision=JSON.stringify([job.id,job.source_hash,job.manifest?.hash,job.release_approval]);
  const selected=selection.revision===revision?selection.keys:[];
  useEffect(()=>{let live=true;setLoading(true);setSnapshot(undefined);setItems([]);setError('');
- Promise.all([api.channels(),api.channelStaging(job.id),api.ownerDrafts(job.id)]).then(([c,s,d])=>{requireStagingSnapshot(s,job.id);if(live){setChannels(c.channels);setSnapshot(s);setItems(d.items);}}).catch(e=>{if(live){setChannels([]);setError(e instanceof Error?e.message:'준비 상태를 읽지 못했습니다');}}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[revision,job.id]);
+ Promise.all([api.channels(),api.channelStaging(job.id),api.ownerDrafts(job.id)]).then(([c,s,d])=>{requireStagingSnapshot(s,job.id);if(live){setChannels(c.channels);setSnapshot(s);setItems(d.items);setHost(d.host);}}).catch(e=>{if(live){setChannels([]);setError(e instanceof Error?e.message:'준비 상태를 읽지 못했습니다');}}).finally(()=>{if(live)setLoading(false);});return()=>{live=false;};},[revision,job.id]);
  function toggle(key:string,checked:boolean){setSelection({revision,keys:checked?[...selected.filter(k=>k!==key),key]:selected.filter(k=>k!==key)});}
  async function requestDraft(channel:Channel){
   const readiness=choiceReadiness(job,channel,'draft',requestBlockedReason);
@@ -34,6 +35,8 @@ export function DeliveryConsole({job,busy,action,youtubeConfigured,requestBlocke
   <h3>어디에 어떤 콘텐츠를 전달할까요?</h3>
   <p>플랫폼·계정을 여러 개 선택해 준비 상태를 함께 확인하세요. 선택만으로 전송하거나 승인·로그인 정보를 바꾸지 않습니다.</p>
   <p className="muted">영상은 YouTube 비공개, 글은 지원 플랫폼의 임시저장 경로를 사용합니다. 선택한 계정마다 내용을 확인하고 별도로 요청하세요. 공개·예약 발행은 하지 않습니다.</p>
+  <p className="muted">출고 승인②는 파일을 확정할 뿐 어디에도 올리지 않습니다. 실제 업로드는 아래에서 계정을 고르고 요청한 뒤, 허태웅 님 PC의 실행기가 가져가서 올립니다.</p>
+  {host&&<p className={host.online?'muted':'notice'} role="status"><strong>{hostStatusLine(host)}</strong></p>}
   {loading?<p role="status">현재 승인·계정·파일 상태를 확인하고 있습니다.</p>:error?<p role="alert">{error} · 상태를 확인하기 전에는 전송하지 않습니다.</p>:<>
    <fieldset className="delivery-destinations"><legend>전달할 플랫폼·계정 · 복수 선택</legend>
     {platformChoices.map(platform=>{const accounts=channels.filter(c=>c.platform===platform);return <div key={platform} className="delivery-platform"><h4>{platformNames[platform]}</h4><small>{destinationFormat(platform).label}</small>

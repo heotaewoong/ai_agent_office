@@ -2,6 +2,7 @@
 
 import {useEffect, useState} from 'react';
 import {api} from '../lib/api';
+import {hostStatusLine} from '../lib/delivery-console';
 import type {Channel} from '../lib/types';
 
 const keys = new Set(['youtube_main_ko','youtube_english','instagram_main','instagram_english','threads_main','linkedin_personal','tistory_main','naver_blog_main']);
@@ -19,7 +20,7 @@ export function OwnerDraftOptions({language, selected, onChange}: {language?: st
   </fieldset>;
 }
 
-type DraftView = {items: {id:string; channel_key:string; state:string; reason?:string}[]};
+type DraftView = {items: {id:string; channel_key:string; state:string; reason?:string}[]; host?: {online:boolean; last_seen:string|null}};
 const labels:Record<string,string>={office_held:'오피스 게시 대기 · 최종 승인② 전 전달 안 함',pending:'PC 연결·처리 대기',claimed:'처리 중 · 완료 확인 전',platform_private:'플랫폼 비공개 확인',platform_draft:'플랫폼 임시저장 확인',blocked:'확인 필요',unknown:'결과 불명 · 자동 재전송 안 함'};
 const channelNames:Record<string,string>={youtube_main_ko:'YouTube 메인',youtube_english:'YouTube 영어',instagram_main:'Instagram 메인',instagram_english:'Instagram 영어',threads_main:'Threads',linkedin_personal:'LinkedIn',tistory_main:'티스토리',naver_blog_main:'네이버 블로그'};
 export function OwnerDraftStatus({jobId, revision}: {jobId:string; revision?:string}) {
@@ -27,5 +28,5 @@ export function OwnerDraftStatus({jobId, revision}: {jobId:string; revision?:str
   const [error,setError]=useState('');
   const load=()=>{api.ownerDrafts(jobId).then(setView).catch(()=>setError('초안 전달 상태를 확인하지 못했습니다.'));};
   useEffect(()=>{let live=true; api.ownerDrafts(jobId).then(v=>{if(live)setView(v);}).catch(()=>{if(live)setError('초안 전달 상태를 확인하지 못했습니다.');});return()=>{live=false;};},[jobId,revision]);
-  return <section className="confirm-panel" aria-label="비공개·임시저장 진행"><h3>채널별 보관·전달 상태</h3><p>오피스 보관과 플랫폼 저장을 구분합니다. 이미 저장된 채널은 다시 보내지 않습니다. 공개·예약 발행은 하지 않습니다.</p>{error&&<p role="alert">{error}</p>}{view?.items.length ? <ul>{view.items.map(r=><li key={r.id}><strong>{channelNames[r.channel_key]||r.channel_key}</strong> · {labels[r.state]||'상태 확인 필요'}{r.reason ? <p>{r.reason}</p>:null}{r.state==='office_held'&&<p>현재 제작물의 블로그와 영상(또는 카드)을 검토한 뒤 출고 승인②에서 함께 선택해 주세요. 승인 뒤에도 Instagram 초안 미지원 시 차단하며 예약으로 바꾸지 않습니다. <a href={`/publish?job=${encodeURIComponent(jobId)}#delivery-release-${jobId}`}>출고 승인② 확인하기</a></p>}</li>)}</ul>:<p>전달 요청이 없습니다. 완성본 승인② 후 위에서 계정을 선택하고 전달을 요청하세요.</p>}<button type="button" className="button secondary small" onClick={load}>전달 상태 새로고침</button></section>;
+  return <section className="confirm-panel" aria-label="비공개·임시저장 진행"><h3>채널별 보관·전달 상태</h3><p>오피스 보관과 플랫폼 저장을 구분합니다. 이미 저장된 채널은 다시 보내지 않습니다. 공개·예약 발행은 하지 않습니다.</p>{view?.host&&<p className={view.host.online?'muted':'notice'} role="status">{hostStatusLine(view.host)}</p>}{error&&<p role="alert">{error}</p>}{view?.items.length ? <ul>{view.items.map(r=><li key={r.id}><strong>{channelNames[r.channel_key]||r.channel_key}</strong> · {labels[r.state]||'상태 확인 필요'}{r.reason ? <p>{r.reason}</p>:null}{r.state==='office_held'&&<p>현재 제작물의 블로그와 영상(또는 카드)을 검토한 뒤 출고 승인②에서 함께 선택해 주세요. 승인 뒤에도 Instagram 초안 미지원 시 차단하며 예약으로 바꾸지 않습니다. <a href={`/publish?job=${encodeURIComponent(jobId)}#delivery-release-${jobId}`}>출고 승인② 확인하기</a></p>}</li>)}</ul>:<p>전달 요청이 없습니다. 완성본 승인② 후 위에서 계정을 선택하고 전달을 요청하세요.</p>}<button type="button" className="button secondary small" onClick={load}>전달 상태 새로고침</button></section>;
 }

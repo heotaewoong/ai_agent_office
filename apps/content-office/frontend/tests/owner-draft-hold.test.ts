@@ -22,6 +22,7 @@ test('Instagram 대기는 승인 이동만 안내하고 이미 저장된 채널�
   const modules: Record<string, unknown> = {
     react: {useState: () => [cursor++ === 0 ? {items} : '', () => {}], useEffect: () => {}},
     '../lib/api': {api: new Proxy({}, {get: () => {throw new Error('렌더에서 API 작업 금지');}})},
+    '../lib/delivery-console': {hostStatusLine: () => 'PC 실행기 연결됨'},
   };
   const module = {exports: {} as {OwnerDraftStatus: (props: any) => any}};
   Function('require', 'module', 'exports', compiled)((name: string) => modules[name] ?? require(name), module, module.exports);
