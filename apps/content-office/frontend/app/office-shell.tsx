@@ -1284,6 +1284,8 @@ function Studio({
       "needs_reconciliation",
     ].includes(job.state);
   const sourceReady = Boolean(job.source_packet?.body);
+  const initialOwnedSource = job.article.preserve_original === true &&
+    quality?.status === "unverified" && !job.source_packet?.audience?.language;
   const evidenceItems =
     job.source_packet?.evidence ?? job.article?.evidence ?? [];
   const passed = canApproveSource(job, dirty || stale || (selections.video && platformsDirty));
@@ -1424,13 +1426,14 @@ function Studio({
           </span>
         </div>
         {editorTab === "write" ? (
-          !sourceReady ? (
-            <Empty title="근거에서 첫 원고를 시작하세요" icon="pen">
+          <>
+          {(!sourceReady || initialOwnedSource) && (
+            <Empty title={initialOwnedSource ? "등록한 원문을 보존하고 파생 원고를 준비하세요" : "근거에서 첫 원고를 시작하세요"} icon="pen">
               뉴스 원문을 다시 붙여 넣지 않아도 근거에서 원고를 자동 생성하고 비평·평가·수정을 진행합니다.
               검수가 끝나면 직접 원고 승인①을 하세요. 이후 선택한 글·영상 제작이 자동으로 이어집니다.
               <button
                 className="button primary"
-                disabled={locked || packagingRequired(job)}
+                disabled={locked || dirty || packagingRequired(job)}
                 onClick={() => setDraftStartOpen(true)}
               >
                 원고 생성 시작
@@ -1455,7 +1458,8 @@ function Studio({
                 <p className="muted">패키지(제목·썸네일·훅)를 먼저 확정하세요.</p>
               )}
             </Empty>
-          ) : (
+          )}
+          {sourceReady && (
             <div className="editor-fields">
               <label htmlFor="draft-title">콘텐츠 제목</label>
               <input
@@ -1495,7 +1499,8 @@ function Studio({
                 </button>
               </div>
             </div>
-          )
+          )}
+          </>
         ) : (
           <div className="evidence-list">
             {evidenceItems.length ? (

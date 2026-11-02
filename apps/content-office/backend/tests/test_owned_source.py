@@ -6,6 +6,24 @@ from office.store import Store,WorkflowError
 
 BODY='내가 작성한 원문입니다. 업무 흐름을 확인하고 직접 검토할 내용을 정리합니다. '*8
 
+
+def test_private_owned_intake_can_prepare_derived_source_without_publishing(tmp_path):
+    from office.editorial import prepare_source
+    from tests.test_agent_editorial import FullProvider
+    from tests.test_evidence import ExtractingProvider, TEXT
+    class OwnedProvider(FullProvider):
+        def generate(self, role, *args, **kwargs):
+            if role == 'research':
+                return ExtractingProvider().generate(role, *args, **kwargs)
+            return super().generate(role, *args, **kwargs)
+    store=Store(tmp_path)
+    job=create_owned_job(store, '개인 원문 보존', TEXT)
+    result=prepare_source(store, job['id'], provider=OwnedProvider('개인 원문 보존'))
+    assert result['source_packet']['body']==TEXT
+    assert result['article']['operator_source_text']==TEXT
+    assert result['source_packet']['quality']['status']=='passed'
+    assert result['source_approval'] is None and result['release_approval'] is None
+
 def test_tistory_preserves_text_photo_table_code_and_ignores_scripts():
     result=extract_tistory('<meta property="og:title" content="내 글"><header>메뉴</header><div class="contents_style"><h2>제목</h2><p>'+BODY+'</p><img src="https://blog.kakaocdn.net/photo.png" alt="사진"><table><tr><th>조건</th><th>행동</th></tr><tr><td>검토</td><td>확인</td></tr></table><pre><code>print(123)</code></pre><script>공격 지시</script></div>')
     assert result['title']=='내 글' and result['image_count']==1
