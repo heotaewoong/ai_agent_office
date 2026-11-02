@@ -1034,7 +1034,7 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
             run_output('cards', card_output)
             run_output('blog', blog_output)
             run_output('pdf', lambda: [write_reference_pdf(packet, folder, job.get('offer'))])
-            completed = [kind for kind, status in output_status.items() if status['state'] == 'completed']
+            completed = [kind for kind in ('blog','video','cards','pdf') if output_status.get(kind,{}).get('state') == 'completed']
             if not completed:
                 reasons = '; '.join(status.get('error', '') for status in output_status.values())
                 raise WorkflowError(reasons or '완료된 제작물이 없습니다')
