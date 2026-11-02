@@ -170,6 +170,11 @@ if (typeof document !== 'undefined') {
   const mobileActions = document.createElement('div'); mobileActions.className = 'alien-game-mobile-actions';
   mobileActions.innerHTML = '<span></span><button type="button" class="mobile-catch" disabled>포획</button><button type="button" class="mobile-ride" disabled>탑승</button>';
   document.body.append(mobileActions);
+  const captureFeedback = document.createElement('p'); captureFeedback.className = 'game-capture-feedback';
+  captureFeedback.setAttribute('role', 'status'); captureFeedback.setAttribute('aria-atomic', 'true'); captureFeedback.hidden = true;
+  document.body.append(captureFeedback);
+  let feedbackTimer = null;
+  function clearCaptureFeedback() { clearTimeout(feedbackTimer); feedbackTimer = null; captureFeedback.hidden = true; }
   const office = () => window.__officeWorld;
   const context = () => {
     const o = office(), p = o?.controls.player;
@@ -249,6 +254,7 @@ if (typeof document !== 'undefined') {
     return ALIENS.filter(a => !profile.captured.includes(a.id)).map(a => ({ ...a, distance: Math.hypot(a.x - p.x, a.z - p.z) })).sort((a, b) => a.distance - b.distance)[0];
   }
   function render() {
+    if (mounted) clearCaptureFeedback();
     document.body.classList.toggle('vehicle-mounted', mounted);
     mobileActions.querySelector('.mobile-ride').textContent = mounted ? '하차하기 · V' : '탑승';
     vehicleSelect.value = profile.selected;
@@ -299,7 +305,9 @@ if (typeof document !== 'undefined') {
   function catchNearest() {
     const target = nearest();
     if (target && capture(profile, target.id, context())) {
-      save(); say(`${target.name} 포획! +40 C${credits(profile) >= 80 && !profile.owned.length ? ' · 이제 첫 차를 구매할 수 있습니다.' : ''}`); render();
+      save(); say(`${target.name} 포획! +40 C${credits(profile) >= 80 && !profile.owned.length ? ' · 이제 첫 차를 구매할 수 있습니다.' : ''}`);
+      clearCaptureFeedback(); captureFeedback.textContent = status.textContent; captureFeedback.hidden = false;
+      feedbackTimer = setTimeout(clearCaptureFeedback, 4500); render();
     }
   }
   catchButton.onclick = catchNearest;
@@ -361,6 +369,7 @@ if (typeof document !== 'undefined') {
     mobileActions.querySelector('.mobile-ride').textContent = mounted ? '하차하기 · V' : '탑승';
   }, 200);
   window.addEventListener('pagehide', event => {
+    clearCaptureFeedback();
     if (!event.persisted) clearInterval(timer);
     office()?.controls.setVehicleSpeed(0); mounted = false; if (tour) tour.previous = null; render();
     if (!event.persisted) driveSize?.disconnect();

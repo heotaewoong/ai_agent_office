@@ -41,5 +41,10 @@
 }
 @media(min-width:721px) and (max-height:600px){.free-drive-open .alien-game-panel{bottom:calc(var(--free-drive-height,260px) + 28px)}}
 /* A rotated touch screen still needs direction controls, without covering the map. */
+.game-capture-feedback{display:none;position:fixed;z-index:40;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));width:max-content;max-width:min(520px,calc(100vw - 32px));box-sizing:border-box;margin:0;padding:10px 14px;border:1px solid #91eed5;border-radius:10px;background:#11293bf2;color:#d7fff1;font:14px/1.5 system-ui;text-align:center;overflow-wrap:anywhere;pointer-events:none}
+.alien-game-active .game-capture-feedback:not([hidden]){display:block}
+.game-capture-feedback[hidden],.play-hub-open .game-capture-feedback,.roster-view .game-capture-feedback,.building-view .game-capture-feedback,.results-view .game-capture-feedback,.vehicle-mounted .game-capture-feedback{display:none!important}
+@media(max-width:720px){.game-capture-feedback{bottom:calc(164px + env(safe-area-inset-bottom,0px))}}
+@media(min-width:600px) and (max-height:600px) and (pointer:coarse){.game-capture-feedback{max-width:min(260px,calc(100vw - 360px));bottom:calc(24px + env(safe-area-inset-bottom,0px))}}
 @media(min-width:721px) and (pointer:coarse){.alien-game-active .alien-game-pad{display:grid;bottom:max(24px,env(safe-area-inset-bottom,0px))}.alien-game-active .help{display:none}}
 @media(min-width:721px) and (max-height:600px) and (pointer:coarse){.vehicle-mounted .alien-game-mobile-actions{right:50%;transform:translateX(50%);bottom:max(24px,env(safe-area-inset-bottom,0px))}.meadow-layer.alien-game-active .rooms-menu{top:auto;left:calc(180px + env(safe-area-inset-left,0px));bottom:calc(134px + env(safe-area-inset-bottom,0px))}}
