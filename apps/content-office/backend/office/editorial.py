@@ -9,6 +9,7 @@ from .gates import run_gates
 from .output_specs import output_issues
 from .channel_adaptation import COPY_SCHEMA, VERSION as CHANNEL_POLICY_VERSION, adaptation_prompt, copy_schema, title_overrides
 from .korean import CORRECTION_SCHEMA, KOREAN_REVIEW_PROMPT, check_texts
+from .writing_style import KOREAN_WRITING_PROMPT, POLICY_ID
 from .packaging import require_packaging
 from .offers import campaign_packet, offer_snapshot, require_offer_ready
 from .providers import Provider
@@ -84,6 +85,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
         preserve_prompt += adaptation_prompt(packet) + "모든 channel_posts의 주장·조건·문체와 매체 적합성도 검수하라."
     # 비평·평가·수정은 생성과 같은 브리프를 받는다. 넘기지 않으면 원고에 저장된 독자 설정, 그것도 없으면 기본 프리셋.
     brief = brief if brief is not None else (packet.get("audience") or build_brief(DEFAULT_PRESET))
+    writing_prompt = KOREAN_WRITING_PROMPT if brief.get("language", "ko") == "ko" else ""
     draft_schema = copy.deepcopy(DRAFT_SCHEMA)
     draft_schema['properties']['channel_posts'] = copy_schema(brief.get('language', 'ko'))
     history = []
@@ -108,7 +110,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
                 event("editorial_role", {"role": role, "round": round_no, "packet_hash": digest(content_context(packet))})
             if role == "korean":
                 # 국어 검수: 사실 판단과 분리한 세 번째 독립 호출. 다른 검토자의 답을 보지 않는다.
-                review = provider.generate(role, [{"role": "system", "content": BASE + KOREAN_REVIEW_PROMPT + preserve_prompt}, {"role": "user", "content": payload}], KOREAN_REVIEW_SCHEMA, {"max_tokens": 4096, "temperature": 0.1})
+                review = provider.generate(role, [{"role": "system", "content": BASE + KOREAN_REVIEW_PROMPT + writing_prompt + preserve_prompt}, {"role": "user", "content": payload}], KOREAN_REVIEW_SCHEMA, {"max_tokens": 4096, "temperature": 0.1})
                 review["role"] = role
                 review.setdefault("corrections", [])
                 reviews.append(review)
@@ -136,7 +138,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
                                            + [f"{r.get('role')} {r.get('score')}점: {r.get('summary', '')}" for r in reviews if not r.get("passed") or float(r.get("score", 0)) < 80],
                           "rule_warnings": list(checks.get("warnings", checks.get("issues", []))) if passed else [],
                           "note": "승인을 막지 않는 확인 의견입니다. 사실·숫자 지적은 승인 전에 원고에서 확인하세요"}
-            packet["quality"] = {"status": "passed" if passed else "blocked", "critical": critical, "advisories": advisories, "reviews": reviews, "history": history, "refine_count": round_no, "rubric_version": RUBRIC["version"], "deterministic_checks": checks, "korean": {"passed": bool(korean.get("passed")) and not korean.get("critical_issues") and not korean_rule_issues, "score": korean.get("score"), "corrections": korean.get("corrections", []), "rule_issues": korean_rule_issues, "note": "주어·서술어 호응, 목적어·조사, 어미, 띄어쓰기, 번역투, 문장 길이 검수. 모델과 코드 규칙의 결과이며 사람 검토를 대신하지 않습니다"}, "note": "모델 검수 결과이며 사람 승인·독립 사실성 증명이 아닙니다"}
+            packet["quality"] = {"status": "passed" if passed else "blocked", "critical": critical, "advisories": advisories, "reviews": reviews, "history": history, "refine_count": round_no, "rubric_version": RUBRIC["version"], "deterministic_checks": checks, "korean": {"writing_policy": POLICY_ID if writing_prompt else None, "passed": bool(korean.get("passed")) and not korean.get("critical_issues") and not korean_rule_issues, "score": korean.get("score"), "corrections": korean.get("corrections", []), "rule_issues": korean_rule_issues, "note": "주어·서술어 호응, 목적어·조사, 어미, 띄어쓰기, 번역투, 문장 길이 검수. 모델과 코드 규칙의 결과이며 사람 검토를 대신하지 않습니다"}, "note": "모델 검수 결과이며 사람 승인·독립 사실성 증명이 아닙니다"}
             return packet
         if event:
             event("editorial_role", {"role": "refine", "round": round_no + 1})
@@ -148,7 +150,7 @@ def review_until_ready(packet, provider, event=None, checks_fn=None, system=None
         if packaging is not None:
             refine_context["packaging"] = packaging
         body_instruction = "파생 제목·영상·설명만 수정하고 body는 빈 문자열로 반환하라. 선택적 titles·hashtags는 파생 정보로만 고친다. 서버가 저자 원문을 그대로 보존한다." + preserve_prompt if original_markdown is not None else "korean 검토의 corrections는 original 문장을 revised로 고치는 국어 교정이니 뜻과 근거 ID를 유지하며 반영하라. body는 1,500자±10%의 전체 원고이며 titles 3안·hashtags 5개를 함께 고친다. format_targets의 현재 수치를 목표 범위로 맞춘다. " + FORMAT_CONTRACT + SUMMARY_BODY_PROMPT + "이미 통과한 소제목·근거 연결·사실은 보존한다."
-        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라." + body_instruction + "영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], draft_schema, {"max_tokens": 8192, "temperature": 0.4})
+        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "지적을 해결하되 원고의 근거·숫자를 임의로 바꾸지 말라." + writing_prompt + body_instruction + "영상제목은 18~28자, 썸네일은 5가지 서로 다른 각도(title/subtitle/angle)로 과장 없이 작성하라."}, {"role": "user", "content": canonical(refine_context)}], draft_schema, {"max_tokens": 8192, "temperature": 0.4})
         for key in ("title", "body", "video", "titles", "hashtags", "channel_posts"):
             if key in refined:
                 packet[key] = original_markdown if key == "body" and original_markdown is not None else refined[key]
