@@ -20,6 +20,23 @@ async function harness(page:Page,closed=false){
  });return {id,writes,job};
 }
 
+for(const width of [1440,375])test(`채널별 완성 원고 ${width}px LinkedIn·Threads를 바로 읽고 승인·전송하지 않는다`,async({page})=>{
+ const f=await harness(page);
+ f.job.manifest.files[0].url='/api/artifacts/f0';
+ f.job.manifest.files.push({id:'threads-file',name:'threads-main.txt',kind:'text',outputs:['blog'],sha256:'a'.repeat(64),url:'/api/artifacts/threads-file'});
+ await page.route('**/api/jobs/*/blog-preview?format=*',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<meta charset="utf-8"><p>검증된 채널 파일 본문</p>'}));
+ await page.setViewportSize({width,height:1000});await page.goto('/publish?job='+f.id);
+ const toolbar=page.getByRole('region',{name:'제작물 읽기'});
+ for(const [label,format] of [['LinkedIn','linkedin'],['Threads','threads']]){
+  await toolbar.getByRole('button',{name:label+' 글 읽기',exact:true}).click();
+  await expect(toolbar.getByRole('button',{name:label+' 글 읽기',exact:true})).toHaveAttribute('aria-pressed','true');
+  const preview=page.locator(`iframe[title="${f.job.title} · ${label}"]`);
+  await expect(preview).toHaveAttribute('src',`/api/jobs/${f.id}/blog-preview?format=${format}`);
+  await expect(preview.contentFrame().locator('body')).toContainText('검증된 채널 파일 본문');
+ }
+ expect(f.writes).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
 for(const width of [1440,375])test(`복수 대상 ${width}px 영상·글·미연결 상태를 함께 비교하고 개별 요청한다`,async({page})=>{
  const f=await harness(page);await page.setViewportSize({width,height:1000});await page.goto('/publish?job='+f.id);
  const panel=page.getByRole('region',{name:'멀티플랫폼 전달 선택',exact:true});

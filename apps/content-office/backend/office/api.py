@@ -877,13 +877,14 @@ def create_app(store: Store | None = None):
         return FileResponse(path, filename=f"{job_id}-출고패키지.zip")
 
     @app.get('/api/jobs/{job_id}/blog-preview')
-    def blog_preview(job_id: str, format: Literal['html', 'markdown', 'naver'] = 'html'):
+    def blog_preview(job_id: str, format: Literal['html', 'markdown', 'naver', 'linkedin', 'threads', 'instagram'] = 'html'):
         from .exports import blog_reader_html
         job = store.require_source_approval(job_id)
         manifest = job.get('manifest') or {}
         if manifest.get('source_hash') != job['source_hash'] or 'blog' not in manifest.get('completed_outputs', []):
             raise WorkflowError('현재 원고의 완성된 블로그를 찾을 수 없습니다')
-        filename = {'html': 'tistory.html', 'markdown': 'tistory.md', 'naver': 'naver.txt'}[format]
+        filename = {'html': 'tistory.html', 'markdown': 'tistory.md', 'naver': 'naver.txt',
+                    'linkedin': 'linkedin-personal.txt', 'threads': 'threads-main.txt', 'instagram': 'instagram-main-caption.txt'}[format]
         record = next((f for f in manifest.get('files', []) if f['name'] == filename and 'blog' in f.get('outputs', ['blog'])), None)
         if not record:
             raise WorkflowError('요청한 블로그 파일이 아직 없습니다')

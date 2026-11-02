@@ -335,7 +335,8 @@ def write_blog_exports(packet: dict, folder: Path, offer: dict | None = None) ->
 
 def blog_reader_html(title: str, content: str, format: str = 'html') -> str:
     """Readable preview of a verified export; the stored publishing fragment stays intact."""
-    labels = {'html': '블로그 읽기', 'markdown': 'Markdown 원문', 'naver': '네이버 텍스트', 'draft': '미승인 초안 · 블로그로 내보낼 때의 모습'}
+    labels = {'html': '블로그 읽기', 'markdown': 'Markdown 원문', 'naver': '네이버 텍스트', 'draft': '미승인 초안 · 블로그로 내보낼 때의 모습',
+              'linkedin': 'LinkedIn 원고 · 미게시', 'threads': 'Threads 원고 · 미게시', 'instagram': 'Instagram 원고 · 미게시'}
     if format not in labels:
         raise WorkflowError('지원하지 않는 블로그 형식입니다')
     body = content if format in ('html', 'draft') else '<pre class="source-text">' + escape(content) + '</pre>'

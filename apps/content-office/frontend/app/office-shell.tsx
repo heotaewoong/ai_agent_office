@@ -2179,6 +2179,14 @@ function Delivery({
     return file ? [{ ...format, file }] : [];
   });
   const videoFile = mainVideoFile(files);
+  const socialFormats = [
+    { name: 'linkedin-personal.txt', label: 'LinkedIn', format: 'linkedin' },
+    { name: 'threads-main.txt', label: 'Threads', format: 'threads' },
+    { name: 'instagram-main-caption.txt', label: 'Instagram', format: 'instagram' },
+  ].flatMap(format => {
+    const file = files.find(file => file.name === format.name);
+    return file ? [{ ...format, file }] : [];
+  });
   const firstThumbnail = job.manifest?.thumbnail_candidates?.[0];
   const selected =
     files.find((file) => file.id === preview) ??
@@ -2187,9 +2195,11 @@ function Delivery({
     files[0];
   const current = selected && safeArtifactUrl(selected.url);
   const blogFormat = blogFormats.find((format) => format.file.id === selected?.id);
+  const socialFormat = socialFormats.find(format => format.file.id === selected?.id);
+  const textFormat = blogFormat ?? socialFormat;
   const previewUrl =
-    blogFormat && current
-      ? `/api/jobs/${encodeURIComponent(job.id)}/blog-preview${blogFormat.format === "html" ? "" : `?format=${blogFormat.format}`}`
+    textFormat && current
+      ? `/api/jobs/${encodeURIComponent(job.id)}/blog-preview${textFormat.format === "html" ? "" : `?format=${textFormat.format}`}`
       : current;
   const isVideo =
     selected && (selected.kind === "video" || /\.mp4$/i.test(selected.name));
@@ -2266,6 +2276,10 @@ function Delivery({
           <section className="preview-toolbar" aria-label="제작물 읽기">
             <h3>현재 제작물 미리보기</h3>
             <div className="preview-output-buttons" role="group" aria-label="제작물 보기">
+              {socialFormats.map(format => <button key={format.file.id} type="button"
+                className={`button ${socialFormat?.file.id === format.file.id ? 'primary' : 'secondary'}`}
+                aria-pressed={socialFormat?.file.id === format.file.id}
+                onClick={() => setPreview(format.file.id)}>{format.label} 글 읽기</button>)}
               {blogFormats.length > 0 && (
                 <button
                   className={`button ${blogFormat ? "primary" : "secondary"}`}
@@ -2300,7 +2314,7 @@ function Delivery({
             )}
             <div className="preview-heading">
               <div>
-                <strong>{blogFormat ? "제작된 블로그 본문" : selected?.name}</strong>
+                <strong>{socialFormat ? `${socialFormat.label}에 전달할 원고` : blogFormat ? "제작된 블로그 본문" : selected?.name}</strong>
                 <p>출고 승인 전에도 읽고 내려받을 수 있습니다.</p>
               </div>
               {current && (
@@ -2322,7 +2336,7 @@ function Delivery({
               미리보기로 내용을 확인한 후 출고를 승인하세요.
             </span>
           </div>
-          <div className={`artifact-preview ${blogFormat ? "blog-preview" : ""}`}>
+          <div className={`artifact-preview ${textFormat ? "blog-preview" : ""}`}>
             {!current ? (
               <p>허용된 로컬 파일 주소를 확인할 수 없습니다.</p>
             ) : isVideo ? (
@@ -2337,12 +2351,12 @@ function Delivery({
             ) : (
               <iframe
                 sandbox=""
-                title={blogFormat ? `${job.title} · ${blogFormat.label}` : selected.name}
+                title={textFormat ? `${job.title} · ${textFormat.label}` : selected.name}
                 src={previewUrl ?? undefined}
               />
             )}
           </div>
-          {!blogFormat && (
+          {!textFormat && (
             <ThumbnailChoices
               job={job}
               busy={busy}

@@ -115,6 +115,9 @@ def test_brief_reaches_generation_review_refine_and_packet(tmp_path):
     assert roles[:3] == ["gen", "critique", "eval"]
     for role, system, user in provider.calls:
         payload = json.loads(user)
+        assert '원문 주제 우선' in system, role
+        assert '기사' in system, role
+        assert '독자 문제를 기사 주제로 바꾸지 않는다' in system, role
         assert payload["audience"]["preset"] == "exam-opic", role
         assert payload["audience"]["reader"] == "오픽 IM2에서 막힌 28살 취준생", role
         assert payload["audience"]["cta"] == "무료 문법 PDF 받기", role

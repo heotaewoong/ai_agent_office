@@ -517,6 +517,32 @@ def test_blog_preview_maps_verified_local_photos_to_artifact_ids_and_keeps_text_
     assert "변하지 않는 네이버 본문" in client.get(path + "?format=naver").text
 
 
+@pytest.mark.parametrize('format,name', [('linkedin', 'linkedin-personal.txt'), ('threads', 'threads-main.txt')])
+def test_social_preview_reads_exact_current_file_escapes_markup_and_checks_hash(context, format, name):
+    from office.media import artifact_record
+    store, client, _ = context
+    job, _, _ = photo_preview_fixture(store)
+    job = store.job(job['id'])
+    folder = store.artifacts / job['id'] / job['source_hash']
+    file = folder / name
+    text = '현재 채널 전용 원고\n<script>alert(1)</script>\n링크: https://example.com'
+    file.write_text(text, encoding='utf-8')
+    manifest = job['manifest']
+    manifest['files'].append({**artifact_record(store.artifacts, file), 'outputs': ['blog']})
+    manifest['hash'] = digest(manifest)
+    store.save_manifest_if_current(job['id'], job['source_hash'], job['selections'], manifest)
+    before = store.job(job['id'])
+    url = f"/api/jobs/{job['id']}/blog-preview?format={format}"
+    response = client.get(url)
+    assert response.status_code == 200
+    assert '현재 채널 전용 원고' in response.text
+    assert '&lt;script&gt;alert(1)&lt;/script&gt;' in response.text
+    assert '<script>' not in response.text
+    assert store.job(job['id']) == before
+    file.write_text('변경된 파일', encoding='utf-8')
+    assert client.get(url).status_code == 409
+
+
 @pytest.mark.parametrize("change", ["missing", "tampered"])
 def test_blog_preview_blocks_missing_or_modified_manifest_photos(context, change):
     store, client, _ = context
