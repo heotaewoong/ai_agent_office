@@ -52,6 +52,31 @@ def test_actual_client_admission_and_all_five_operations_match_real_relay(monkey
     assert sender.sent == [], "wire integration is local; it must never send Slack or call a model"
 
 
+def test_native_slack_intake_get_attaches_only_original_daemon_watch(monkeypatch, tmp_path):
+    from office import assistant_request_protocol
+    from test_slack_office_intake import intake, verified
+    monkeypatch.setattr(intake, "protocol_module", lambda: assistant_request_protocol)
+    app, native, sender, state = fixture(tmp_path)
+    native.details.clear()
+    client, envelopes = connected_client(monkeypatch, app)
+    store = Store(tmp_path / "office")
+    value = verified()
+    class Office:
+        def lookup(self, rid): return bridge.read_request(store, client, rid)
+    result = intake.submit(value, value["text_hash"], intake.NativeCreator(native, state), Office())
+    rid = value["request_id"]
+    assert result["native_task_id"] == "t_new123"
+    assert len(native.created) == 1 and store.setting("assistant_request:" + rid) is None
+    assert {item["op"] for item in envelopes} == {"board", "task", "delivery_status", "subscribe"}
+    assert all(item["op"] != "create" for item in envelopes)
+    assert app.watches[rid]["task_id"] == "t_new123"
+    assert json.loads(state.read_text())[rid]["task_id"] == "t_new123"
+    # A helper restart reads the shared journal but never overwrites daemon watch state.
+    intake.submit(value, value["text_hash"], intake.NativeCreator(native, state), Office())
+    assert len(native.created) == 1 and json.loads(state.read_text())[rid]["task_id"] == "t_new123"
+    assert sender.sent == []
+
+
 @pytest.mark.parametrize("key", [None, "wrong-prefix:" + RID, "office-world:not-a-uuid",
                                "office-world:" + RID.upper(), "office-world:" + RID.replace("-", "")])
 def test_malformed_create_identity_is_definitely_refused_before_any_socket(monkeypatch, tmp_path, key):

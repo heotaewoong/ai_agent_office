@@ -13,9 +13,8 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 from .store import canonical, digest, now
+from .assistant_request_protocol import BOARD, TENANT, task_payload
 
-BOARD = "heobrain-office"
-TENANT = "heobrain-world"
 PROFILES = {"default", "mybots-sage", "lumi", "ada", "ethan", "mia", "noah", "oliver", "sam"}
 TASK_ID = re.compile(r"t_[a-zA-Z0-9_-]{1,80}\Z")
 UNSAFE_DISPLAY = re.compile(
@@ -193,6 +192,13 @@ def _save(store, record):
     store.set_setting("assistant_request:" + record["request_id"], record)
 
 
+def _discard_reservation(store, record):
+    # Remove only our unchanged reservation, never another process's reconciled record.
+    with store.connection(transaction=True) as db:
+        db.execute("DELETE FROM settings WHERE key=? AND value=?",
+                   ("assistant_request:" + record["request_id"], canonical(record)))
+
+
 def _adopt(native, record):
     data = native.board()
     if not isinstance(data.get("columns"), list):
@@ -206,6 +212,29 @@ def _adopt(native, record):
     return _card_id(matches[0], record)
 
 
+def _native_record(native, request_id):
+    """Read-only, ephemeral reference for a root created by verified native intake."""
+    data = native.board()
+    if not isinstance(data.get("columns"), list):
+        raise BridgeError("native_invalid_response", "비서 보드의 응답 형식을 확인할 수 없습니다")
+    key = "office-world:" + request_id
+    matches = [card for column in data["columns"] for card in column.get("tasks", [])
+               if card.get("idempotency_key") == key]
+    if len(matches) > 1:
+        raise BridgeError("native_duplicate_request", "같은 요청의 업무가 여러 개입니다. 확인이 필요합니다", 409)
+    if not matches:
+        raise BridgeError("request_not_found", "이 화면의 요청을 찾을 수 없습니다", 404)
+    card = matches[0]
+    body = card.get("body")
+    if not isinstance(body, str) or not body.strip() or len(body) > 8000 or len(body.encode()) > 24000:
+        raise BridgeError("native_request_conflict", "기존 비서 업무의 범위를 확인할 수 없습니다", 409)
+    record = {"request_id": request_id, "native_key": key,
+              "body_hash": hashlib.sha256(body.encode()).hexdigest(), "board": BOARD,
+              "created_at": card.get("created_at"), "phase": "admitted"}
+    record["native_task_id"] = _card_id(card, record)
+    return record
+
+
 def _card_id(card, record):
     body_hash = hashlib.sha256(str(card.get("body") or "").encode()).hexdigest()
     if (body_hash != record["body_hash"] or card.get("idempotency_key") != record["native_key"]
@@ -217,13 +246,8 @@ def _card_id(card, record):
 
 def submit(store, native, request_id, text):
     fingerprint = digest({"text": text, "assignee": "lumi"})
-    body = ("3D 오피스에서 사용자가 요청한 내부 업무입니다. 필요한 기존 역할에게만 인계하고 검토 후 "
-            "이 카드에 실제 결과와 남은 사람 행동을 보고하세요. 외부 게시·발송·결제·실거래·권한 확대·"
-            "새 예약·서비스 재시작·유료 호출은 별도 사람 승인 없이 실행하지 마세요. 승인⓪①②③과 "
-            "기존 예산을 유지하세요. 최대 역할 4개·인계 깊이 3·전체 카드 5개로 제한하고 넘으면 사람에게 보고하세요. "
-            "고정된 코디네이터 스킬의 담당 작업·독립 검토·루미 최종 카드 절차를 따르세요.\n\n"
-            "사용자에게 돌려줄 완료 요약에는 내부 파일 경로·비밀·인증값을 넣지 마세요. 상세 근거는 기존 보드에 보존하세요.\n\n"
-            + text)
+    payload = task_payload(request_id, text)
+    body = payload["body"]
     with store.connection(transaction=True) as db:
         key = "assistant_request:" + request_id
         row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
@@ -249,6 +273,10 @@ def submit(store, native, request_id, text):
     try:
         task_id = _adopt(native, record)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        if fresh and isinstance(error, BridgeError) and error.status == 409:
+            # The existing native-only root must remain readable after a conflicting web POST.
+            _discard_reservation(store, record)
+            raise
         if fresh:
             record["phase"] = "preflight_failed"
             _save(store, record)
@@ -261,18 +289,21 @@ def submit(store, native, request_id, text):
         record["phase"] = "posting"
         _save(store, record)
         try:
-            data = native.create({
-                "title": "3D 비서 요청 · " + request_id[:8], "body": body,
-                "assignee": "lumi", "tenant": TENANT, "idempotency_key": record["native_key"],
-                "max_runtime_seconds": 300, "goal_mode": False,
-                "skills": ["heobrain-office-coordinator"],
-            })
+            data = native.create(payload)
             task_id = _card_id(data["task"], record)
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             if isinstance(error, BridgeError) and error.code in {"unsafe_request_body", "native_request_too_large", "native_invalid_request"}:
                 record.update(phase="preflight_failed", rejection_code=error.code)
                 _save(store, record)
                 raise
+            # A native intake may win after our empty preflight. Prove a conflicting
+            # root by GET before removing our reservation; absence/timeouts stay unknown.
+            try:
+                _adopt(native, record)
+            except (OSError, ValueError, KeyError, TypeError, AttributeError) as conflict:
+                if isinstance(conflict, BridgeError) and conflict.status == 409:
+                    _discard_reservation(store, record)
+                    raise
             # A timeout can follow successful admission; neither retry nor replace this UUID.
             raise BridgeError("native_admission_unknown", "접수 결과를 확인 중입니다. 같은 요청 번호를 유지해 주세요") from None
     record["native_task_id"] = task_id
@@ -328,8 +359,9 @@ def _validated_notice_ref(value, request_id):
 
 def read_request(store, native, request_id):
     record = _record(store, request_id)
-    if not record:
-        raise BridgeError("request_not_found", "이 화면의 요청을 찾을 수 없습니다", 404)
+    native_only = not record
+    if native_only:
+        record = _native_record(native, request_id)
     if record.get("rejection_code") and not record["native_task_id"]:
         return {**_ack(record), "status": "failed", "native_status": "not_submitted", "assignee": "lumi",
                 "title": "접수 전 검토 필요", "updated_at": record["created_at"], "current_run_id": None,
@@ -344,8 +376,9 @@ def read_request(store, native, request_id):
                     "message": "접수 여부를 대사 중입니다. 새 요청 번호로 다시 보내지 마세요"}}
         record["native_task_id"] = task_id
         record["phase"] = "admitted"
-        _save(store, record)
     data = native.task(record["native_task_id"])
+    if native_only:
+        _card_id(data.get("task", {}), record)
     result = project_collaboration(native, record, data)
     result["delivery"] = _delivery(native, record, result.pop("_notice_ref", None))
     return result
