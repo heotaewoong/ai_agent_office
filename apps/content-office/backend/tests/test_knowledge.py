@@ -166,3 +166,23 @@ def test_source_hash_search_finds_the_registered_document(tmp_path):
     assert len(hits) == 1
     assert hits[0]["path"] == "database/source.md"
     assert hits[0]["sha256"] == digest
+
+
+def test_spacing_fallback_preserves_exact_results_and_requires_all_terms(tmp_path):
+    manifest=manifest_for(tmp_path,{'database/exam.md':'# 편입 영어\n편입 영어 단어를 회상하며 연습해요.\n','database/cloud.md':'# AWS\n클라우드 자격증 학습 자료예요.\n'})
+    output=tmp_path/'index.json';build_knowledge_index(tmp_path,manifest,output)
+    original=output.read_bytes()
+    exact=search_knowledge(output,'편입 영어')
+    compact=search_knowledge(output,'편입영어')
+    assert len(exact)==len(compact)==1
+    assert compact[0]['path']==exact[0]['path'] and compact[0]['match_mode']=='spacing'
+    assert 'match_mode' not in exact[0]
+    assert search_knowledge(output,'편입영어 날씨')==[]
+    assert search_knowledge(output,'없는것')==[]
+    assert output.read_bytes()==original
+
+
+def test_spacing_fallback_does_not_join_unrelated_lines(tmp_path):
+    manifest=manifest_for(tmp_path,{'database/lines.md':'# 분리 기록\n편입\n영어\n'})
+    output=tmp_path/'index.json';build_knowledge_index(tmp_path,manifest,output)
+    assert search_knowledge(output,'편입영어')==[]

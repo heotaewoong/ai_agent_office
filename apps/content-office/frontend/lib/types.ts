@@ -402,6 +402,7 @@ export type KnowledgeSummary = {
   manifest_sha256?: string;
 };
 export type KnowledgeResult = {
+  match_mode?: 'spacing';
   path: string;
   sha256: string;
   section_id: string;
@@ -423,6 +424,8 @@ export type KnowledgeSearch = {
   summary: KnowledgeSummary;
   results: KnowledgeResult[];
 };
+export type DiagnosticCheck = {id:string;label:string;passed:boolean;detail:string};
+export type ContentDiagnostics = {source_hash?:string|null;analysis:{blog:DiagnosticCheck[];social:Record<string,DiagnosticCheck[]>;note:string}|null};
 
 export type Idea = {
   id: string;

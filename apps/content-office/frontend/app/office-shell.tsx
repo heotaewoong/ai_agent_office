@@ -62,6 +62,7 @@ import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
 import { QuizPanel } from "./quiz-panel";
 import { CardsPanel } from "./cards-panel";
+import { ContentDiagnosticsPanel } from './content-diagnostics-panel';
 import { InstagramPreview } from './instagram-preview';
 import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
@@ -1832,6 +1833,7 @@ function Studio({
         </>
       )}
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 원고 읽기·기획 편집·저장은 계속할 수 있습니다. 원고 승인과 자동 제작은 작업 시간을 연 뒤 함께 요청하세요. <Link href="/settings">작업 시간 열고 승인·자동 제작 계속하기</Link></p>}
+      <ContentDiagnosticsPanel key={job.id} job={job}/>
       {sourceApproved(job.state) && (
         <p className="derived-note" role="status">
           <Icon name="check" size={14} />

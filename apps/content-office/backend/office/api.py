@@ -1011,6 +1011,12 @@ def create_app(store: Store | None = None):
         path = store.setting("knowledge_index_path")
         return {"summary": store.setting("knowledge_summary", {}), "results": search_knowledge(path, query, limit=min(max(limit, 1), 20)) if path and query.strip() else []}
 
+    @app.get('/api/jobs/{job_id}/content-diagnostics')
+    def content_diagnostics(job_id: str):
+        from .content_diagnostics import analyse_packet
+        job=store.job(job_id);packet=job.get('source_packet') or {}
+        return {'source_hash':job.get('source_hash'),'analysis':analyse_packet(packet) if packet.get('body') else None}
+
     @app.get("/api/ideas")
     def list_ideas():
         return {"ideas": rank_ideas([with_edit_hash(card) for card in store.ideas()], lessons=store.lessons("approved"))}
