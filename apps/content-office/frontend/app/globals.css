@@ -4503,7 +4503,7 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .job-list-row { min-width:0; display:flex; flex-direction:column; }
 .job-list-row + .job-list-row { margin-top:7px; }
 .job-list-row .job-item { width:100%; min-width:0; }
-.job-list-delete { align-self:flex-end; min-width:64px; min-height:44px; margin:0 6px 6px; }
+.job-list-row .job-list-delete { align-self:flex-end; min-width:64px; min-height:44px; margin:0 6px 6px; }
 @media(max-width:1020px) {
   .job-sidebar { display: block; overflow-x: visible; }
   .job-sidebar > .section-heading { display: flex; }

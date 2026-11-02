@@ -26,6 +26,7 @@ for(const width of [1440,375])for(const view of ['studio','delivery'])test(`목�
  const list=page.getByRole('region',{name:'콘텐츠 작업 목록'}),trigger=list.getByRole('button',{name:`${other.title} 삭제`,exact:true});
  await trigger.click();const confirm=page.getByRole('dialog',{name:'작업 삭제 확인'});await expect(confirm).toContainText(other.title);expect(writes).toEqual([]);
  await page.keyboard.press('Escape');await expect(trigger).toBeFocused();
+ const buttonBox=await trigger.boundingBox();expect(buttonBox!.width).toBeGreaterThanOrEqual(44);expect(buttonBox!.height).toBeGreaterThanOrEqual(44);
  expect(page.url()).toContain(job.id);
  await trigger.click();await confirm.getByRole('button',{name:'휴지통으로 이동',exact:true}).click();
  await expect(trigger).toHaveCount(0);await expect(list.getByText(job.title,{exact:true})).toBeVisible();expect(page.url()).toContain(job.id);
