@@ -70,3 +70,24 @@ test('이전 Reels 전용 판본은 기존 목적지 수정·재승인 경로를
  await expect(panel).toContainText('새 원고 판본에서 승인①·②');
  expect(f.writes).toEqual([]);expect(f.job.source_packet.video_platforms).toEqual(['instagram_reels']);
 });
+
+for(const video of [true,false])test(`${video?'영상':'글'} 완성본 승인은 검토 조건과 현재 범위만 보내고 전송 계정을 지정하지 않는다`,async({page})=>{
+ const f=await harness(page);f.job.state='release_review';f.job.release_approval=null;
+ f.job.manifest.completed_outputs=video?['blog','video']:['blog'];f.job.manifest.selected_thumbnail_id='synthetic-thumb';
+ await page.goto('/publish?job='+f.id);await page.getByRole('button',{name:'출고 승인',exact:true}).click();
+ const confirm=page.getByRole('region',{name:'출고 승인 확인'}),submit=confirm.getByRole('button',{name:'이 파일 버전 승인하기'});
+ const reviewed=confirm.getByRole('checkbox',{name:'영상 재생·음성·자막을 확인했습니다'});
+ if(video){await expect(submit).toBeDisabled();await reviewed.check();}else await expect(reviewed).toHaveCount(0);
+ await expect(submit).toBeEnabled();await submit.click();await expect.poll(()=>f.writes.length).toBe(1);
+ expect(f.writes[0].body).toEqual({version:f.job.manifest.hash,decision:'approved',media_reviewed:video,outputs:video?['blog','video']:['blog']});
+});
+
+test('승인 확인 중 범위를 바꾸면 이전 확인을 닫고 새 범위로만 승인한다',async({page})=>{
+ const f=await harness(page);f.job.state='release_review';f.job.release_approval=null;f.job.manifest.completed_outputs=['blog','video'];f.job.manifest.selected_thumbnail_id='synthetic-thumb';
+ await page.goto('/publish?job='+f.id);await page.getByRole('button',{name:'출고 승인',exact:true}).click();
+ const scope=page.getByRole('region',{name:'제작물 승인 범위'});await scope.locator('summary').click();
+ await scope.getByRole('checkbox',{name:'세로 영상 출고',exact:true}).uncheck();
+ await expect(page.getByRole('region',{name:'출고 승인 확인'})).toHaveCount(0);expect(f.writes).toEqual([]);
+ await page.getByRole('button',{name:'출고 승인',exact:true}).click();await page.getByRole('button',{name:'이 파일 버전 승인하기'}).click();
+ await expect.poll(()=>f.writes.length).toBe(1);expect(f.writes[0].body.outputs).toEqual(['blog']);expect(f.job.selections.video).toBe(true);
+});
