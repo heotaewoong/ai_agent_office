@@ -1,0 +1,31 @@
+[Unit]
+Description=HeoBrain native Hermes board relay
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ihtwa
+Group=ubuntu
+Environment=HOME=/home/ihtwa
+ExecStart=/usr/bin/python3 /home/ihtwa/.hermes/office-relay/code/hermes-board-relay.py --config /home/ihtwa/.hermes/office-relay/config.json
+RuntimeDirectory=heobrain-hermes-board
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+UMask=0077
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ihtwa/.hermes/office-relay/state /run/heobrain-hermes-board
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+LockPersonality=true
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

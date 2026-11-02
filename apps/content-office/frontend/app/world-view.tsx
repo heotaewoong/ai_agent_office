@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { AssistantReports } from "./assistant-reports";
+import { AssistantChat } from "./assistant-chat";
+import type { AssistantRequest } from "../lib/assistant-requests";
 import { isDevAction, parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
 
 type View = "news" | "studio" | "delivery" | "activity" | "world";
@@ -21,12 +23,18 @@ export function WorldView({
   onAction: (action: "draft" | "produce", itemId: string) => Promise<void>;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const [chatSignal, setChatSignal] = useState(0);
+  const lastAssistant = useRef<AssistantRequest | null>(null);
   const post = useCallback((message: Record<string, unknown>) => {
     frame.current?.contentWindow?.postMessage(
       { source: "content-office", ...message },
       window.location.origin,
     );
   }, []);
+  const observeAssistant = useCallback((request: AssistantRequest) => {
+    lastAssistant.current = request;
+    post({ type: 'assistant-observation', request });
+  }, [post]);
   const latest = useRef({ activeId, busy, connected, onOpen, onAction });
   useLayoutEffect(() => {
     latest.current = { activeId, busy, connected, onOpen, onAction };
@@ -37,6 +45,10 @@ export function WorldView({
     async function handle(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (event.source !== frame.current?.contentWindow) return;
+      if (event.data?.source === 'office-world' && event.data?.type === 'assistant-open') {
+        setChatSignal(signal => signal + 1);
+        return;
+      }
       const message = parseWorldMessage(event.data);
       if (!message) return;
       const current = latest.current;
@@ -47,6 +59,7 @@ export function WorldView({
       });
       if (route.kind === "focus") {
         post({ type: "focus", itemId: current.activeId });
+        if (lastAssistant.current) post({ type: 'assistant-observation', request: lastAssistant.current });
       } else if (route.kind === "open" && message.type === "open") {
         current.onOpen(message.view, message.itemId);
       } else if (route.kind === "reply") {
@@ -95,6 +108,7 @@ export function WorldView({
         </div>
       </div>
       <AssistantReports connected={connected} loadReports={api.assistantReports} />
+      <AssistantChat connected={connected} openSignal={chatSignal} createRequest={api.createAssistantRequest} loadRequest={api.assistantRequest} onObservation={observeAssistant} />
       <iframe
         ref={frame}
         className="world-frame"
