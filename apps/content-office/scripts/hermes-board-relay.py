@@ -282,12 +282,36 @@ def trusted_runtime(config):
         raise RelayError('status_sender_runtime_required')
     if not isinstance(config['pythonpath'], list) or len(config['pythonpath']) > 8:
         raise RelayError('invalid_runtime_configuration')
+    if os.name != 'nt':
+        import grp
+        import pwd
+        owner = pwd.getpwuid(os.geteuid())
+        group = grp.getgrgid(owner.pw_gid)
+        private_group = (group.gr_gid == owner.pw_gid
+                         and not any(user.pw_gid == owner.pw_gid and user.pw_uid != owner.pw_uid for user in pwd.getpwall())
+                         and not any(member != owner.pw_name for member in group.gr_mem))
     for value, directory in [(config['native_python'], False), (config['native_repo'], True), *[(value, True) for value in config['pythonpath']]]:
         path = Path(value)
         info = path.stat()
-        if (not path.is_absolute() or (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)) is False
-                or (os.name != 'nt' and (info.st_uid not in {0, os.geteuid()} or stat.S_IMODE(info.st_mode) & 0o022))):
+        if not path.is_absolute() or (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)) is False:
             raise RelayError('invalid_runtime_configuration')
+        if os.name != 'nt':
+            # Check both the configured link ancestry and its resolved target; service GID is unrelated.
+            for candidate in {path, path.resolve(strict=True)}:
+                for node in (candidate, *candidate.parents):
+                    node_info = node.stat()
+                    mode = stat.S_IMODE(node_info.st_mode)
+                    if node_info.st_uid not in {0, owner.pw_uid} or mode & 0o002:
+                        raise RelayError('invalid_runtime_configuration')
+                    if mode & 0o020:
+                        if (not stat.S_ISDIR(node_info.st_mode) or node_info.st_uid == 0
+                                or node_info.st_uid != owner.pw_uid or node_info.st_gid != owner.pw_gid or not private_group):
+                            raise RelayError('invalid_runtime_configuration')
+                        try:
+                            if {'system.posix_acl_access', 'system.posix_acl_default'} & set(os.listxattr(node)):
+                                raise RelayError('invalid_runtime_configuration')
+                        except (AttributeError, OSError):
+                            raise RelayError('invalid_runtime_configuration') from None
     if not os.access(config['native_python'], os.X_OK):
         raise RelayError('invalid_runtime_configuration')
     return {key: config[key] for key in ('native_python', 'native_repo', 'pythonpath')}

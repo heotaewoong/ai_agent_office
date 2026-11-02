@@ -9,7 +9,7 @@ Type=simple
 User=ihtwa
 Group=ubuntu
 Environment=HOME=/home/ihtwa
-ExecStart=/usr/bin/python3 /home/ihtwa/.hermes/office-relay/code/hermes-board-relay.py --config /home/ihtwa/.hermes/office-relay/config.json
+ExecStart=/usr/bin/python3 -I /home/ihtwa/.hermes/office-relay/code/hermes-board-relay.py --config /home/ihtwa/.hermes/office-relay/config.json
 RuntimeDirectory=heobrain-hermes-board
 RuntimeDirectoryMode=0750
 RuntimeDirectoryPreserve=no

@@ -536,6 +536,67 @@ def test_missing_native_runtime_is_rejected_without_guessing_an_executable():
         relay.trusted_runtime({})
 
 
+@pytest.mark.parametrize('case,allowed', [
+    ('private_primary_group', True), ('other_primary_member', False),
+    ('other_supplemental_member', False), ('wrong_group', False),
+    ('world_writable', False), ('root_owned_group_write', False),
+    ('file_group_write', False), ('access_acl', False), ('default_acl', False),
+    ('acl_unreadable', False), ('writable_ancestor', False),
+])
+def test_native_runtime_allows_only_owner_private_group_directories(monkeypatch, case, allowed):
+    """Exercise runtime admission with controlled OS ownership/group/ACL metadata, not service GID."""
+    import stat
+    from pathlib import PurePosixPath
+    owner = types.SimpleNamespace(pw_uid=1001, pw_gid=1001, pw_name='native')
+    users = [owner]
+    members = ['native']
+    if case == 'other_primary_member':
+        users.append(types.SimpleNamespace(pw_uid=1000, pw_gid=1001, pw_name='ubuntu'))
+    if case == 'other_supplemental_member':
+        members.append('ubuntu')
+    monkeypatch.setitem(sys.modules, 'pwd', types.SimpleNamespace(getpwuid=lambda uid: owner, getpwall=lambda: users))
+    monkeypatch.setitem(sys.modules, 'grp', types.SimpleNamespace(getgrgid=lambda gid: types.SimpleNamespace(gr_gid=1001, gr_mem=members)))
+    modes = {'/': (0, 0, 0o755), '/home': (0, 0, 0o755), '/home/native': (1001, 1001, 0o750),
+             '/home/native/runtime': (1001, 1001, 0o755),
+             '/home/native/runtime/python': (1001, 1001, 0o755),
+             '/home/native/repo': (1001, 1001, 0o755),
+             '/home/native/site-packages': (1001, 1001, 0o775)}
+    if case == 'wrong_group':
+        modes['/home/native/site-packages'] = (1001, 1000, 0o775)
+    if case == 'world_writable':
+        modes['/home/native/site-packages'] = (1001, 1001, 0o777)
+    if case == 'root_owned_group_write':
+        modes['/home/native/site-packages'] = (0, 1001, 0o775)
+    if case == 'file_group_write':
+        modes['/home/native/runtime/python'] = (1001, 1001, 0o775)
+    if case == 'writable_ancestor':
+        modes['/home/native'] = (1001, 1000, 0o770)
+    class RuntimePath(PurePosixPath):
+        def stat(self):
+            uid, gid, mode = modes[str(self)]
+            kind = stat.S_IFREG if self.name == 'python' else stat.S_IFDIR
+            return types.SimpleNamespace(st_uid=uid, st_gid=gid, st_mode=kind | mode)
+        def resolve(self, strict=False):
+            return self
+    def listxattr(path):
+        if str(path) == '/home/native/site-packages':
+            if case == 'acl_unreadable':
+                raise OSError('ACL metadata unavailable')
+            if case in {'access_acl', 'default_acl'}:
+                return ['system.posix_acl_' + case.removesuffix('_acl')]
+        return []
+    monkeypatch.setattr(relay, 'Path', RuntimePath)
+    monkeypatch.setattr(relay, 'os', types.SimpleNamespace(name='posix', geteuid=lambda: 1001,
+                       getegid=lambda: 1000, access=lambda *args: True, X_OK=os.X_OK, listxattr=listxattr))
+    config = {'native_python': '/home/native/runtime/python', 'native_repo': '/home/native/repo',
+              'pythonpath': ['/home/native/site-packages']}
+    if allowed:
+        assert relay.trusted_runtime(config) == config
+    else:
+        with pytest.raises(relay.RelayError, match='비서'):
+            relay.trusted_runtime(config)
+
+
 def test_loaded_watch_state_cannot_carry_a_private_body_or_foreign_fields(tmp_path):
     app, native, sender, path = fixture(tmp_path)
     app.handle(request('subscribe', request_id=RID, task_id=ROOT), 1000)
