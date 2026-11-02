@@ -232,3 +232,16 @@ test("API 전환으로 종료한 구독 경로는 연결 오류 선택지와 달
  assert.equal(visibleProfileOptions(provider,"image").some(o=>o.subscription),false);
  assert.ok(visibleProfileOptions(provider,"text").some(o=>o.id==="gpt-5.4-mini"));
 });
+
+test("the open-window button cannot be pressed while an operator window is already open", async () => {
+  const { openWindowButton } = await import("../lib/settings.ts");
+  const now = Date.parse("2026-11-02T13:00:00Z");
+  const open = openWindowButton({ status: "active", authorized_end: "2026-11-02T13:38:03Z", authorization_source: "local_operator_ui" }, now);
+  assert.equal(open.disabled, true);
+  assert.match(open.label, /이미 열려 있어요/);
+  assert.match(open.label, /22:38까지/);
+  assert.equal(openWindowButton({ status: "closed", authorized_end: "2026-11-02T13:38:03Z" }, now).disabled, false);
+  assert.equal(openWindowButton({ status: "active", authorized_end: "2026-11-02T12:00:00Z" }, now).label, "작업 시간 열기");
+  // A collect-only window is not a production window: opening replaces it.
+  assert.equal(openWindowButton({ status: "active", authorized_end: "2026-11-02T13:38:03Z", authorization_source: "scheduled_daily_collect" }, now).disabled, false);
+});

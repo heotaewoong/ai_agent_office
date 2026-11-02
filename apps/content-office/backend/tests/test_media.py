@@ -22,6 +22,9 @@ def approved_job(tmp_path, *, blog=True, video=True, cards=False, pdf=False):
             {"narration": "승인한 원고로 제작합니다.", "caption": "승인 후 제작", "visual": "comparison"},
         ]},
     }
+    packet['video']['subtitle_layout']='en-main-ko-sub'
+    for scene,en in zip(packet['video']['scenes'],['First, check the evidence.','Create content from the approved script.']):
+        scene.update(subtitle_en=en,subtitle_ko=scene['narration'])
     job = store.save_source(job["id"], packet)
     selections = {"blog": blog, "video": video, "pdf": pdf, "cards": cards}
     store.review_source(job["id"], job["source_hash"], "approved", "검증 운영자", selections)
@@ -33,7 +36,8 @@ def cache_social_cards(store, job_id):
     from office.quiz import artifact_record
     root=store.artifacts; job=store.job(job_id); slides=[]
     for n in range(7):
-        path=root/f'card-{n+1:02}.png'
+        path=root/job_id/job['source_hash']/'cards'/f'card-{n+1:02}.png'
+        path.parent.mkdir(parents=True,exist_ok=True)
         Image.new('RGB',(1080,1350),(n*30,60,90)).save(path)
         slides.append({'artifact':artifact_record(root,path),'index':n+1})
     store.update_job(job_id,cards={'source_hash':job['source_hash'],'slides':slides,'checks':{'passed':True,'issues':[]},'images':[]})
@@ -109,7 +113,7 @@ def test_blog_can_be_released_independently_when_selected_video_fails(tmp_path, 
     result = media.produce(store, job_id, voice_renderer=tone_renderer())
     assert result['completed_outputs'] == ['blog']
     assert result['output_status']['video']['state'] == 'failed'
-    assert {row['name'] for row in result['files']} == {'tistory.md', 'tistory.html', 'naver.txt', 'asset-rights.json', 'channel-handoff.json', 'x-main.txt', 'threads-main.txt', 'linkedin-personal.txt', 'instagram-main-caption.txt', 'instagram-english-caption.txt'}
+    assert {row['name'] for row in result['files']} == {'tistory.md', 'tistory.html', 'naver.txt', 'asset-rights.json', 'blog-assets.json', 'channel-handoff.json', 'x-main.txt', 'threads-main.txt', 'linkedin-personal.txt', 'instagram-main-caption.txt', 'instagram-english-caption.txt'}
     assert all('blog' in row['outputs'] for row in result['files'] if row['name'].endswith('-caption.txt') or row['name'] == 'channel-handoff.json')
     assert all(row.get('outputs') for row in result['files'])
     with pytest.raises(WorkflowError, match='완료.*제작물|미완료'):
@@ -140,14 +144,16 @@ def test_new_checked_card_revision_changes_manifest_without_overwriting_old_file
     cache_social_cards(store,job_id)
     first=media.produce(store,job_id)
     old={r['path']:(store.artifacts/r['path']).read_bytes() for r in first['files'] if 'cards' in r['outputs']}
-    folder=store.artifacts/'cards-v2';folder.mkdir();slides=[]
+    folder=store.artifacts/job_id/first['source_hash']/'cards-v2';folder.mkdir();slides=[]
     for i in range(7):
         path=folder/f'card-{i+1:02}.png';Image.new('RGB',(1080,1350),(i*30+1,80,100)).save(path)
         slides.append({'artifact':artifact_record(store.artifacts,path),'index':i+1})
     store.update_job(job_id,cards={'source_hash':first['source_hash'],'slides':slides,'checks':{'passed':True,'issues':[]},'version':2})
-    monkeypatch.setattr(media,'write_blog_exports',lambda *a:pytest.fail('성공한 글은 재사용해야 합니다'))
     second=media.produce(store,job_id)
     assert second['hash']!=first['hash'] and second['completed_outputs']==['blog','cards']
+    old_blog=next(r for r in first['files'] if r['name']=='blog-image-01.png')
+    new_blog=next(r for r in second['files'] if r['name']=='blog-image-01.png')
+    assert old_blog['sha256']!=new_blog['sha256'] and old_blog['path']!=new_blog['path']
     assert all((store.artifacts/path).read_bytes()==data for path,data in old.items())
 
 
@@ -844,7 +850,8 @@ def test_synthetic_coupon_cta_reaches_real_mp4_subtitles_and_approved_blog_hando
     files = {item["name"]: store.artifacts / item["path"] for item in result["files"]}
     assert next(stream for stream in probe(files["short.mp4"])["streams"] if stream["codec_type"] == "video")["width"] == 1080
     assert "50퍼센트" in files["captions.srt"].read_text(encoding="utf-8")
-    assert "허브레인 점 케이알" in files["captions.srt"].read_text(encoding="utf-8")
+    assert "heobrain.kr" in files["captions.ko.srt"].read_text(encoding="utf-8")
+    assert "허브레인 점 케이알" in source['source_packet']['video']['scenes'][-1]['narration']
     drawn_cta = files["scene-03.json"].read_text(encoding="utf-8")
     assert "50%" in drawn_cta and "heobrain.kr" in drawn_cta and "FIXTURE50" in drawn_cta
     assert "FIXTURE50" in files["description.txt"].read_text(encoding="utf-8")

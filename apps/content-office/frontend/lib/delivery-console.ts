@@ -20,6 +20,17 @@ export function choiceReadiness(job:Job, channel:Channel|undefined, mode:Deliver
  return {ok:true,reason:'요청 가능 · PC 실행기가 계정·파일·현재 작업시간을 다시 검사합니다. 실제 저장 완료는 영수증으로 확인합니다.'};
 }
 
+export type HostStatus={online:boolean;last_seen:string|null};
+/** One plain line about the owner PC runner. Deliveries only move while it polls; 'pending' is not progress. */
+export function hostStatusLine(host:HostStatus|undefined, now=Date.now()):string{
+ if(!host)return '';
+ if(host.online)return 'PC 실행기 연결됨 · 전달 요청을 바로 가져갑니다.';
+ if(!host.last_seen)return 'PC 실행기가 한 번도 접속하지 않았어요. 허태웅 님 PC에서 Chrome 확장과 Windows 실행기를 켜야 플랫폼에 올라갑니다.';
+ const minutes=Math.max(1,Math.round((now-Date.parse(host.last_seen))/60_000));
+ const ago=minutes>=120?`${Math.round(minutes/60)}시간 전`:`${minutes}분 전`;
+ return `PC 실행기가 꺼져 있어요 · 마지막 접속 ${ago}. 켜기 전에는 전달 요청이 '대기'에 머물고 어디에도 올라가지 않습니다.`;
+}
+
 /** Existing connectors accept these formats; this does not enable an external connector. */
 export function destinationFormat(platform:string):{mode:DeliveryMode;label:string;note:string}{
  if(platform==='youtube')return {mode:'private',label:'영상 · YouTube 비공개',note:'출고 승인②에 포함된 영상과 제목·설명을 사용합니다. 표지 자동 전송은 별도 지원하지 않습니다.'};

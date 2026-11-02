@@ -43,6 +43,29 @@ for(const width of [1440,375])test(`채널별 완성 원고 ${width}px LinkedIn�
  }
 });
 
+for(const width of [1440,375])test(`Instagram ${width}px는 현재 완성 카드 순서와 접힌 캡션을 먼저 검토한다`,async({page})=>{
+ const f=await harness(page);
+ f.job.manifest.files.push({id:'ig-caption',name:'instagram-main-caption.txt',kind:'text',outputs:['blog'],url:'/api/artifacts/ig-caption'});
+ for(const n of [2,1])f.job.manifest.files.push({id:`card-${n}`,name:`card-0${n}.png`,kind:'image',outputs:['cards'],url:`/api/artifacts/card-${n}`});
+ await page.route('**/api/artifacts/card-*',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350"><rect width="1080" height="1350" fill="#223322"/></svg>'}));
+ await page.route('**/blog-preview?format=instagram',route=>route.fulfill({contentType:'text/html',body:'<p>함께 올릴 글</p>'}));
+ const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.setViewportSize({width,height:1000});await page.goto('/publish?job='+f.id);
+ const button=page.getByRole('button',{name:'Instagram 카드뉴스',exact:true});await button.click();
+ const panel=page.getByRole('region',{name:'Instagram 카드뉴스 미리보기'});
+ await expect(panel.getByRole('img')).toHaveCount(2);
+ await expect(panel.getByRole('img').first()).toHaveAttribute('src','/api/artifacts/card-1');
+ await expect(panel.getByRole('link',{name:'1장 내려받기'})).toHaveAttribute('href','/api/artifacts/card-1');
+ await expect(panel.locator('iframe')).not.toBeVisible();
+ await panel.getByText('함께 올릴 글 확인', {exact:true}).click();await expect(panel.locator('iframe')).toBeVisible();
+ await button.focus();await page.keyboard.press('Space');await expect(button).toBeFocused();
+ expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
+ f.job.manifest.source_hash='older-source';await page.reload();await button.click();
+ await expect(panel.getByRole('img')).toHaveCount(0);await expect(panel).toContainText('현재 원고의 출고 카드뉴스가 아직 없습니다');
+ expect(f.writes).toEqual([]);expect(errors).toEqual([]);
+});
+
 for(const width of [1440,375])test(`복수 대상 ${width}px 영상·글·미연결 상태를 함께 비교하고 개별 요청한다`,async({page})=>{
  const f=await harness(page);await page.setViewportSize({width,height:1000});await page.goto('/publish?job='+f.id);
  const panel=page.getByRole('region',{name:'멀티플랫폼 전달 선택',exact:true});

@@ -1,4 +1,5 @@
 """Source-approved, nonpublic drafts. Never creates release approvals or public posts."""
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import re
@@ -193,11 +194,38 @@ def view(store, jid):
             except WorkflowError as error:
                 item.update(state='office_held', reason=str(error))
         items.append(item)
-    return {'policy': job.get('owner_draft_policy'), 'items': items,
+    return {'policy': job.get('owner_draft_policy'), 'items': items, 'host': host_status(store),
             'note': '플랫폼 비공개·임시저장만 허용합니다. 공개·예약 발행과 출고 승인②를 실행하지 않습니다'}
 
 
+HOST_SEEN = 'owner-draft-host-seen'
+HOST_ONLINE_WINDOW = timedelta(minutes=3)  # the extension polls every minute
+
+
+def _touch_host_seen(store):
+    """The owner PC's poll leaves a timestamp file under runtime/. Never a settings row: the deploy compares
+    business records and a minute-by-minute write would stop every deploy (the Runway cache did, 2026-10-30)."""
+    runtime = store.root / 'runtime'
+    runtime.mkdir(exist_ok=True)
+    partial = runtime / (HOST_SEEN + '.partial')
+    partial.write_text(datetime.now(timezone.utc).isoformat(), encoding='utf-8')
+    partial.replace(runtime / HOST_SEEN)
+
+
+def host_status(store, current=None):
+    """Whether the owner PC runner (Chrome extension + Windows host) has polled recently. Deliveries only
+    move when it is on; a screen must say so instead of showing 'pending' as progress."""
+    path = store.root / 'runtime' / HOST_SEEN
+    try:
+        seen = datetime.fromisoformat(path.read_text(encoding='utf-8').strip())
+    except (OSError, ValueError):
+        return {'online': False, 'last_seen': None}
+    current = current or datetime.now(timezone.utc)
+    return {'online': current - seen < HOST_ONLINE_WINDOW, 'last_seen': seen.isoformat()}
+
+
 def pending(store):
+    _touch_host_seen(store)
     window = store.setting('work_window', {})
     if not window.get('authorized_end') or not window_open(store):
         return []

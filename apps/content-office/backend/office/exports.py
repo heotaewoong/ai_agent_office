@@ -91,6 +91,9 @@ def safe_inline(text: str) -> str:
 
 
 def _source_image_url(value):
+    from .blog_assets import NAME_PATTERN
+    if NAME_PATTERN.fullmatch(value):
+        return value
     if SOURCE_PHOTO_NAME_PATTERN.fullmatch(value):
         return value
     # Only the public image hosts used by the owner's source articles; never local paths or arbitrary tracking hosts.
@@ -319,11 +322,14 @@ def _localize_source_photos(packet, folder):
     return "".join(localized), [original_path, cache_path, *paths]
 
 
-def write_blog_exports(packet: dict, folder: Path, offer: dict | None = None) -> list[Path]:
+def write_blog_exports(packet: dict, folder: Path, offer: dict | None = None, *, images=()) -> list[Path]:
     extra = []
     if packet.get("preserve_original") is True:
         localized, extra = _localize_source_photos(packet, folder)
         packet = {**packet, "body": localized}
+    if images:
+        from .blog_assets import compose_body
+        packet = {**packet, 'body': compose_body(packet['body'], images)}
     body = blog_markdown(packet, offer)
     files = [write_text(folder, "tistory.md", body + "\n"),
             write_text(folder, "tistory.html", safe_fragment(body)),

@@ -10,3 +10,13 @@ test('wrong output and missing current file cannot be requested',()=>{assert.equ
 test('office mode is explicitly local and requires no remote action',()=>{assert.equal(choiceReadiness(job,undefined,'office').ok,true);assert.match(choiceReadiness(job,undefined,'office').reason,/EC2/);});
 
 test('Naver uses the real registry platform id and approved text file',()=>{assert.ok((platformChoices as readonly string[]).includes('naver_blog'));const n={...account,key:'naver_blog_main',platform:'naver_blog'};const j={...job,manifest:{...job.manifest,files:[{name:'naver.txt',outputs:['blog']}]}};assert.equal(choiceReadiness(j,n,'draft').ok,true);});
+
+test('host status line says plainly when the owner PC runner is off, so a pending delivery is not mistaken for progress',async()=>{
+ const {hostStatusLine}=await import('../lib/delivery-console.ts');
+ const now=Date.parse('2026-11-02T13:00:00Z');
+ assert.match(hostStatusLine({online:false,last_seen:null},now),/한 번도 접속하지 않았/);
+ assert.match(hostStatusLine({online:false,last_seen:'2026-11-01T10:41:02Z'},now),/꺼져 있/);
+ assert.match(hostStatusLine({online:false,last_seen:'2026-11-01T10:41:02Z'},now),/26시간 전/);
+ assert.match(hostStatusLine({online:true,last_seen:'2026-11-02T12:59:30Z'},now),/연결됨/);
+ assert.equal(hostStatusLine(undefined,now),'');
+});

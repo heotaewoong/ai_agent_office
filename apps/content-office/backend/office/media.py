@@ -125,6 +125,8 @@ def production_contract(voice_renderer, selections, image_renderer=None, clip_re
     config = {'renderer_version': RENDER_VERSION, 'voice_cache_version': VOICE_CACHE_VERSION,
               'implementation_sha256': file_hash(Path(__file__)),
               'export_implementation_sha256': file_hash(Path(__file__).with_name('exports.py')),
+              'bilingual_implementation_sha256': file_hash(Path(__file__).with_name('bilingual_captions.py')),
+              'blog_assets_implementation_sha256': file_hash(Path(__file__).with_name('blog_assets.py')),
               'offer_implementation_sha256': file_hash(Path(__file__).with_name('offers.py')),
               'channel_handoff_implementation_sha256': file_hash(Path(__file__).with_name('channel_handoff.py')),
               'channel_adaptation_implementation_sha256': file_hash(Path(__file__).with_name('channel_adaptation.py')),
@@ -404,8 +406,12 @@ def footage_layer(content, index, total):
     accent = ACCENTS[index % 4]
     draw = ImageDraw.Draw(layer)
     text_box(draw, 'HeoBrain / AI 개념 노트', (70, 150, 900, 50), 30, accent, stroke_width=3, stroke_fill=OUTLINE)
-    title_metrics = text_box(draw, content['caption'], (70, 290, 940, 370), 92, minimum_size=50, font_path=korean_font('bold'),
-                             line_gap=14, stroke_width=7, stroke_fill=OUTLINE)
+    if content.get('subtitle_en') and content.get('subtitle_ko'):
+        from .bilingual_captions import draw_captions
+        title_metrics = draw_captions(draw, content, footage=True)
+    else:
+        title_metrics = text_box(draw, content['caption'], (70, 290, 940, 370), 92, minimum_size=50, font_path=korean_font('bold'),
+                                 line_gap=14, stroke_width=7, stroke_fill=OUTLINE)
     comparison_metrics, number_metrics, box = lower_third(layer, content, accent)
     draw = ImageDraw.Draw(layer)
     text_box(draw, f'{index+1:02} / {total:02} · 출처와 한계는 설명란 확인', (70, 1640, 880, 44), 27, '#e8eef8', stroke_width=3, stroke_fill=OUTLINE)
@@ -415,6 +421,8 @@ def footage_layer(content, index, total):
 
 def draw_scene(plan, scene, index, total, path, *, background=None, background_meta=None, overlay_only=False):
     content = scene_content(scene, index)
+    if plan.get('subtitle_layout') == 'en-main-ko-sub':
+        content.update(subtitle_en=scene.get('subtitle_en'), subtitle_ko=scene.get('subtitle_ko'))
     if overlay_only or background:
         # Real picture (photo, stock clip or generated clip) underneath: footage layout instead of slide panels.
         layer, extra = footage_layer(content, index, total)
@@ -441,7 +449,11 @@ def draw_scene(plan, scene, index, total, path, *, background=None, background_m
     text_box(draw, 'HeoBrain / AI 개념 노트', (85, 100, 900, 70), 32, accent)
     # The current scene is the headline. The approved global title remains in
     # the plan/thumbnail, rather than competing with every scene's explanation.
-    title_metrics = text_box(draw, content['caption'], (85, 235, 910, 310), 80, minimum_size=46, font_path=korean_font('bold'))
+    if content.get('subtitle_en') and content.get('subtitle_ko'):
+        from .bilingual_captions import draw_captions
+        title_metrics = draw_captions(draw, content)
+    else:
+        title_metrics = text_box(draw, content['caption'], (85, 235, 910, 310), 80, minimum_size=46, font_path=korean_font('bold'))
     kind = content['kind']
     comparison_metrics = []
     number_metrics = []
@@ -688,6 +700,8 @@ def clip_command(generated, overlay, audio, duration, out):
 
 
 def render_short(plan, folder, *, voice_renderer=None, check_current=None, source_text=None, voice_cache_dir=None, background_renderer=None, clip_renderer=None):
+    from .bilingual_captions import validate_plan, write_tracks
+    validate_plan(plan)
     scenes = plan.get('scenes', [])
     if not isinstance(scenes, list) or not 1 <= len(scenes) <= 12:
         raise WorkflowError('영상에는 1~12개 장면이 필요합니다')
@@ -726,7 +740,6 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
         raise WorkflowError(f'실제 음성이 60초를 초과합니다 ({sum(durations):.1f}초). 대본 수정이 필요합니다. 성공 음성은 보존했습니다')
     if check_current:
         check_current()
-    subtitles = []
     elapsed = 0.0
     paths = list(audios)
     templates = []
@@ -795,11 +808,8 @@ def render_short(plan, folder, *, voice_renderer=None, check_current=None, sourc
             if not clip.is_file() or cached_clip.get('key') != clip_key or cached_clip.get('sha256') != file_hash(clip):
                 command([executable('ffmpeg'), '-y', '-v', 'error', '-loop', '1', '-framerate', '24', '-i', image, '-i', audio, '-t', str(duration), '-vf', "zoompan=z='min(zoom+0.00035,1.025)':d=1:s=1080x1920:fps=24,setsar=1", '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '24', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-ac', '2', '-movflags', '+faststart', clip], 300)
                 write_json(clip_meta, {'key': clip_key, 'sha256': file_hash(clip)})
-        subtitles.append(f'{index + 1}\n{stamp(elapsed)} --> {stamp(elapsed + duration)}\n{scene['narration']}\n')
         elapsed += duration
-    srt = folder / 'captions.srt'
-    srt.write_text('\n'.join(subtitles), encoding='utf-8')
-    paths.append(srt)
+    paths.extend(write_tracks(plan, durations, folder))
     concat = folder / 'concat.txt'
     concat.write_text('\n'.join((f"file 'clip-{i + 1:02}.mp4'" for i in range(len(scenes)))), encoding='ascii')
     video = folder / 'short.mp4'
@@ -941,6 +951,10 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                     if previous.get('production_contract', {}).get('hash') == contract['hash'] and previous.get('output_status', {}).get(kind, {}).get('state') == 'completed':
                         old_records = [record for record in previous.get('files', []) if kind in record.get('outputs', [])]
                         valid = bool(old_records)
+                        if valid and kind == 'blog':
+                            from .blog_assets import verify_manifest
+                            try:verify_manifest(store, store.job(job_id), previous)
+                            except WorkflowError:valid = False
                         for record in old_records:
                             path = (root / record['path']).resolve()
                             valid = valid and path.is_relative_to(root) and path.is_file() and file_hash(path) == record['sha256']
@@ -972,6 +986,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
 
             def video_output():
                 nonlocal media, thumbs, backgrounds, clips
+                from .bilingual_captions import validate_plan
+                validate_plan(packet['video'], require=True)
                 if contract['font_status'] != 'ready':
                     raise WorkflowError('한국어 폰트를 확인한 뒤 영상 제작을 다시 요청하세요. 유료 음성은 호출하지 않았습니다')
                 exports = write_video_exports(packet, folder, job.get('offer'))
@@ -1010,11 +1026,15 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                 return card_paths(store,job_id,source_hash,folder)
 
             from .channel_handoff import write_channel_handoffs
-            run_output('blog', lambda: write_blog_exports(packet, folder, job.get('offer')) + write_channel_handoffs(packet, folder, job.get('offer'), source_hash=source_hash, language=(packet.get('audience') or {}).get('language'), channels=channel_registry))
+            def blog_output():
+                from .blog_assets import collect_assets
+                images, paths, _ = collect_assets(store, store.job(job_id), folder)
+                return paths + write_blog_exports(packet, folder, job.get('offer'), images=images) + write_channel_handoffs(packet, folder, job.get('offer'), source_hash=source_hash, language=(packet.get('audience') or {}).get('language'), channels=channel_registry)
             run_output('video', video_output)
             run_output('cards', card_output)
+            run_output('blog', blog_output)
             run_output('pdf', lambda: [write_reference_pdf(packet, folder, job.get('offer'))])
-            completed = [kind for kind, status in output_status.items() if status['state'] == 'completed']
+            completed = [kind for kind in ('blog','video','cards','pdf') if output_status.get(kind,{}).get('state') == 'completed']
             if not completed:
                 reasons = '; '.join(status.get('error', '') for status in output_status.values())
                 raise WorkflowError(reasons or '완료된 제작물이 없습니다')

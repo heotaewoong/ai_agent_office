@@ -8,6 +8,7 @@ import re
 from .channel_handoff import SOCIAL_TARGETS
 from .channels import registry
 from .exports import SOURCE_PHOTO_NAME_PATTERN
+from .blog_assets import NAME_PATTERN as BLOG_IMAGE_NAME_PATTERN
 from .runtime import window_open
 from .store import WorkflowError, digest, now
 
@@ -38,6 +39,9 @@ def _verified_records(store, job):
             or manifest.get("source_hash") != job.get("source_hash") or not release.get("outputs")):
         raise WorkflowError("현재 완성품의 출고 승인②가 필요합니다")
     selected = set(release["outputs"])
+    if 'blog' in selected:
+        from .blog_assets import verify_manifest
+        verify_manifest(store, job, manifest)
     requested = {key for key, enabled in job["selections"].items() if enabled}
     completed = set(manifest.get("completed_outputs", requested))
     if not selected.issubset(requested & completed):
@@ -104,7 +108,7 @@ def staging_view(store, job_id):
         if reels:
             required = ['instagram-reels-caption.txt', 'short.mp4']
         if key == "tistory_main":
-            required.extend(name for name in verified if name in ("source-original.md", "source-photos.json") or SOURCE_PHOTO_NAME_PATTERN.fullmatch(name))
+            required.extend(name for name in verified if name in ("source-original.md", "source-photos.json", "blog-assets.json") or SOURCE_PHOTO_NAME_PATTERN.fullmatch(name) or BLOG_IMAGE_NAME_PATTERN.fullmatch(name))
             if source.get("preserve_original") is True:
                 required.extend(["source-original.md", "source-photos.json"])
                 cache = verified.get("source-photos.json")
@@ -149,7 +153,7 @@ def staging_view(store, job_id):
         if platform == "instagram" and not reels:
             media = [name for name, (record, _) in verified.items()
                      if (name == "short.mp4" and "video" in selected)
-                     or (name.startswith("scene-") and name.endswith(".png") and "cards" in selected and "cards" in record.get("outputs", []))]
+                     or (re.fullmatch(r'card-\d{2}\.png',name) and "cards" in selected and "cards" in record.get("outputs", []))]
             required.append("출고 승인된 영상 또는 장면 카드")
             if not media:
                 local_issues.append("캡션 외에 출고 승인한 영상·카드 파일이 필요합니다")

@@ -431,3 +431,22 @@ def test_web_draft_receipt_rejects_synthetic_or_wrong_platform_reference(tmp_pat
 def test_actual_reopen_locator_and_threads_domain_alias(platform, host, value, valid):
     row={'visibility':'draft','target':{'platform':platform,'public_url':host}}
     assert owner_drafts._platform_reference(row,value) is valid
+
+
+def test_host_poll_leaves_a_runtime_heartbeat_outside_business_records_and_view_reports_it(tmp_path):
+    """2026-11-02: deliveries sat 'pending' all day because the owner PC extension was off, and no screen said so.
+    The host's poll leaves a timestamp file under runtime/ (never a settings row: the deploy compares business
+    records) and the status view reports whether the host is online."""
+    store, jid = ready(tmp_path)
+    assert owner_drafts.host_status(store) == {'online': False, 'last_seen': None}
+    assert owner_drafts.view(store, jid)['host'] == {'online': False, 'last_seen': None}
+    before = store.setting('owner_draft_deliveries')
+    owner_drafts.pending(store)
+    assert store.setting('owner_draft_deliveries') == before  # no business-record write
+    status = owner_drafts.host_status(store)
+    assert status['online'] is True and status['last_seen']
+    assert (store.root / 'runtime' / 'owner-draft-host-seen').is_file()
+    old = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+    (store.root / 'runtime' / 'owner-draft-host-seen').write_text(old, encoding='utf-8')
+    assert owner_drafts.host_status(store)['online'] is False
+    assert owner_drafts.host_status(store)['last_seen'] == old

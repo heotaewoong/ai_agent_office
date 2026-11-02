@@ -73,9 +73,9 @@ def test_media_produce_passes_job_offer_to_blog_export(tmp_path, monkeypatch):
     seen = {}
     real = media.write_blog_exports
 
-    def capture(packet, folder, offer=None):
+    def capture(packet, folder, offer=None, **kwargs):
         seen["offer"] = offer
-        return real(packet, folder, offer)
+        return real(packet, folder, offer, **kwargs)
     monkeypatch.setattr(media, "write_blog_exports", capture)
     manifest = media.produce(store, job_id)
     assert seen["offer"]["product"] == "오픽 7일 연습표"

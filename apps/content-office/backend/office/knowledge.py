@@ -182,7 +182,7 @@ def build_knowledge_index(workspace, manifest_path, output_path) -> dict:
             "manifest_sha256": index["manifest_sha256"], "output_path": str(output_path)}
 
 
-def search_knowledge(index_path, query, limit=10) -> list[dict]:
+def search_knowledge(index_path, query, limit=10, *, _spacing=False) -> list[dict]:
     """Return locally matched sections, grouping exact copies by their source hash.
 
     Whitespace-separated terms must all occur in the section/path. Korean substring
@@ -207,9 +207,10 @@ def search_knowledge(index_path, query, limit=10) -> list[dict]:
         for section in document["sections"]:
             paths = "\n".join([document["path"], *duplicates[document["path"]]])
             haystack = _normalized(paths + "\n" + document["sha256"] + "\n" + section["title"] + "\n" + section["text"])
-            if not all(term in haystack for term in terms):
+            match_text=re.sub(r'[^\S\r\n]+','',haystack) if _spacing else haystack
+            if not all(term in match_text for term in terms):
                 continue
-            matching_lines = [line for line in section["text"].splitlines() if any(term in _normalized(line) for term in terms)]
+            matching_lines = [line for line in section["text"].splitlines() if any(term in (re.sub(r'[^\S\r\n]+','',_normalized(line)) if _spacing else _normalized(line)) for term in terms)]
             excerpt = "\n".join(matching_lines)[:1200]
             hits.append({"path": document["path"], "sha256": document["sha256"],
                          "source_kind": document["source_kind"], "section_id": section["id"],
@@ -217,6 +218,8 @@ def search_knowledge(index_path, query, limit=10) -> list[dict]:
                          "start_line": section["start_line"], "end_line": section["end_line"],
                          "excerpt": excerpt, "duplicate_paths": duplicates[document["path"]],
                          "contracts": section["contracts"],
-                         "score": sum(haystack.count(term) for term in terms)})
+                         "score": sum(match_text.count(term) for term in terms), **({'match_mode':'spacing'} if _spacing else {})})
     hits.sort(key=lambda hit: (-hit["score"], hit["path"], hit["start_line"]))
+    if not hits and not _spacing and any(len(term)>1 for term in terms):
+        return search_knowledge(index_path,query,limit,_spacing=True)
     return hits[:limit]

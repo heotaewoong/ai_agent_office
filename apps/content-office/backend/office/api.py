@@ -310,10 +310,12 @@ def _local_photo_preview(store, job, html_path, content):
     from html.parser import HTMLParser
     from urllib.parse import urlsplit
     from .exports import SOURCE_PHOTO_HOSTS, SOURCE_PHOTO_MAX_BYTES, SOURCE_PHOTO_NAME_PATTERN
+    from .blog_assets import NAME_PATTERN
+    image_pattern = re.compile('(?:'+SOURCE_PHOTO_NAME_PATTERN.pattern+'|'+NAME_PATTERN.pattern+')')
 
     records = [file for file in (job.get("manifest") or {}).get("files", [])
-               if "blog" in file.get("outputs", []) and SOURCE_PHOTO_NAME_PATTERN.fullmatch(file.get("name", ""))]
-    if not records and job["article"].get("preserve_original") is not True:
+               if "blog" in file.get("outputs", []) and image_pattern.fullmatch(file.get("name", ""))]
+    if not records and job["article"].get("preserve_original") is not True and 'blog-image-' not in content:
         return content
     root, urls = store.artifacts.resolve(), {}
     try:
@@ -337,7 +339,7 @@ def _local_photo_preview(store, job, html_path, content):
             raise WorkflowError("블로그의 원문 사진이 현재 제작물 목록에 없습니다")
         return match[1] + match[2] + urls[match[3]] + match[2]
 
-    localized = re.sub(rf'''((?i:src|href)\s*=\s*)(["'])({SOURCE_PHOTO_NAME_PATTERN.pattern})\2''', replace, content)
+    localized = re.sub(rf'''((?i:src|href)\s*=\s*)(["'])({image_pattern.pattern})\2''', replace, content)
 
     class PhotoReferences(HTMLParser):
         def handle_starttag(self, tag, attributes):
@@ -756,6 +758,9 @@ def create_app(store: Store | None = None):
         manifest = job.get("manifest") or {}
         if manifest.get("source_hash") != job.get("source_hash"):
             raise WorkflowError("현재 원고와 제작물 버전이 다릅니다")
+        if outputs is None or 'blog' in outputs:
+            from .blog_assets import verify_manifest
+            verify_manifest(store, job, manifest)
         for file in released_files(job, outputs):
             path = (store.artifacts / file["path"]).resolve()
             if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != file["sha256"]:
@@ -881,6 +886,9 @@ def create_app(store: Store | None = None):
         from .exports import blog_reader_html
         job = store.require_source_approval(job_id)
         manifest = job.get('manifest') or {}
+        if format in ('html', 'markdown', 'naver'):
+            from .blog_assets import verify_manifest
+            verify_manifest(store, job, manifest)
         if manifest.get('source_hash') != job['source_hash'] or 'blog' not in manifest.get('completed_outputs', []):
             raise WorkflowError('현재 원고의 완성된 블로그를 찾을 수 없습니다')
         filename = {'html': 'tistory.html', 'markdown': 'tistory.md', 'naver': 'naver.txt',
@@ -1002,6 +1010,12 @@ def create_app(store: Store | None = None):
         from .knowledge import search_knowledge
         path = store.setting("knowledge_index_path")
         return {"summary": store.setting("knowledge_summary", {}), "results": search_knowledge(path, query, limit=min(max(limit, 1), 20)) if path and query.strip() else []}
+
+    @app.get('/api/jobs/{job_id}/content-diagnostics')
+    def content_diagnostics(job_id: str):
+        from .content_diagnostics import analyse_packet
+        job=store.job(job_id);packet=job.get('source_packet') or {}
+        return {'source_hash':job.get('source_hash'),'analysis':analyse_packet(packet) if packet.get('body') else None}
 
     @app.get("/api/ideas")
     def list_ideas():
