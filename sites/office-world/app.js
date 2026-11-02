@@ -181,6 +181,7 @@
         events: Array.isArray(raw.events) ? raw.events.slice(0, 40) : [],
         flows: Array.isArray(raw.flows) ? raw.flows : [],
         dev: raw.dev && raw.dev.version === 1 ? raw.dev : null,
+        stocks: raw.stocks && raw.stocks.version === 1 ? raw.stocks : null,
       };
       const seen = new Set();
       (raw.stages || []).forEach((s, i) => {
@@ -266,6 +267,27 @@
       return { connection:'dev', items, approval: dev.enabled ? '검증 → 배포 → 확인 자동 진행' : '검증 → 배포 → 확인 · 자동 배포 꺼짐' };
     },
 
+    // 주식 팀: 서버의 /api/space가 stocks(포트폴리오 점검)를 줄 때만 연결된 팀으로 바뀐다. 매매·주문 버튼은 없다.
+    stocksTeam(stocks) {
+      const allowed = new Set(['stocks-refresh']);
+      if (!stocks.configured) {
+        return { connection:'stocks', approval: stocks.approval || '포트폴리오 파일 연결 전',
+          items:[{ id:'stocks-setup', title: stocks.error ? '포트폴리오 파일을 읽지 못했어요' : '포트폴리오 파일 연결 전',
+            state:'info', stateLabel: stocks.error || '서버 상태 폴더 stocks/에 보유 종목·목표 비중 파일을 올리면 점검을 시작합니다',
+            needsHuman: !!stocks.error, actions:[] }] };
+      }
+      const items = (Array.isArray(stocks.items) ? stocks.items : []).filter(it => it && typeof it.id === 'string').map(it => ({
+        id: it.id, title: String(it.title || ''), state: String(it.state || 'info'), stateLabel: String(it.stateLabel || ''),
+        needsHuman: !!it.needsHuman, view: '',
+        actions: (Array.isArray(it.actions) ? it.actions : []).filter(a => a && allowed.has(a.id) && typeof a.label === 'string').map(a => ({ id: a.id, label: a.label })),
+      }));
+      return { connection:'stocks', items, approval: stocks.approval || '포트폴리오 점검',
+        description:'내 포트폴리오를 내 원칙대로 점검하는 팀', goals:[
+          '유형 비중을 목표와 비교해 5%p 넘게 벗어나면 표시',
+          '시세·환율은 버튼을 누를 때만 확인하고 출처와 기준일을 붙임',
+          '이번 달 적립금을 유형별 금액으로만 나눔(종목 선택·매매 판단은 직접)'] };
+    },
+
     project(d) {
       const legacy = ['inbox', 'scripts', 'creative', 'outbox', 'ops'];
       if (d.organizationVersion === 1 || d.stages.length !== 5 || !legacy.every(id => d.stages.some(st => st.id === id))) return d;
@@ -290,6 +312,8 @@
       const stages = workflowStages.map(st => ({ ...teams.find(team => team.id === st.id), url:'', view:'', items:[], workflowStages:[] }));
       const devTeam = stages.find(team => team.teamId === 'dev');
       if (d.dev) Object.assign(devTeam, organization.devTeam(d.dev));
+      const stocksTeam = stages.find(team => team.teamId === 'stocks');
+      if (d.stocks) Object.assign(stocksTeam, organization.stocksTeam(d.stocks));
       const content = stages.find(team => team.teamId === 'content');
       const studio = workflowStages.find(st => st.id === 'scripts');
       content.url = studio.url;
@@ -2284,21 +2308,21 @@
       const panel = $('panel');
       panel.style.setProperty('--stage', st.color);
       $('panel-title').textContent = st.name;
-      $('panel-sub').textContent = `${st.approval ? st.approval + ' · ' : ''}작업 ${st.items.length}건`;
+      $('panel-sub').textContent = `${st.approval ? st.approval + ' · ' : ''}${st.connection === 'stocks' ? '점검 항목' : '작업'} ${st.items.length}건`;
       const agentName = (aid) => { const a = space.agents.find((x) => x.id === aid); return a ? `${a.name} (${a.engine})` : ''; };
       const bodyHtml = st.items.length ? st.items.map((it) => {
         const cls = it.needsHuman ? 'human' : /fail|error/.test(it.state) ? 'failed' : /writing|producing|research|measuring/.test(it.state) ? 'running' : '';
         const acts = embed.enabled ? `<div class="item-actions">${(data.source === 'live' ? it.actions : []).map((a) => `<button type="button" class="item-action" data-action="${esc(a.id)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['action', it.id, a.id]))}"${data.error || space.pendingActions.has(it.id + ':' + a.id) ? ' disabled' : ''}>${esc(a.label)}</button>`).join('')}${it.view ? `<button type="button" class="item-link" data-open="${esc(it.view)}" data-item="${esc(it.id)}" data-focus-key="${esc(JSON.stringify(['open', it.id, it.view]))}">오피스에서 열기</button>` : ''}</div>` : '';
         return `<div class="item${space.embedFocus === it.id ? ' active' : ''}" data-item-id="${esc(it.id)}"><span class="item-stripe ${cls}"></span><div>${it.workflowStageName ? `<div class="item-agent">${esc(it.workflowStageName)}</div>` : ''}<div class="item-title">${esc(it.title)}</div><div class="item-state">${esc(it.stateLabel)}</div>${it.agentId ? `<div class="item-agent">담당 ${esc(agentName(it.agentId))}</div>` : ''}${acts}</div></div>`;
       }).join('') : `<p class="panel-note">${st.teamId ? '실제 업무 연결 전입니다. 등록된 실행 작업은 없습니다.' : '이 단계에 등록된 작업이 없습니다.'}</p>`;
-      const goals = st.teamId ? `<section class="team-goals"><p>${esc(st.description)}</p><ul>${st.goals.map(goal => `<li>${esc(goal)}</li>`).join('')}</ul>${st.connection === 'content' ? '<p class="panel-note">아래 상태는 기존 콘텐츠 앱의 기록입니다. Hermes 비서 연결이나 모든 채널 업로드 완료를 뜻하지 않습니다.</p>' : st.connection === 'dev' ? '<p class="panel-note">검증은 GitHub에서 하고, 검증을 통과한 커밋만 서버 감시기가 10분마다 배포합니다. 실패하면 이전 버전으로 되돌립니다.</p>' : '<p class="panel-note">메일·파일 조회나 비서 실행을 이 화면에서 시작하지 않습니다.</p>'}</section>` : '';
+      const goals = st.teamId ? `<section class="team-goals"><p>${esc(st.description)}</p><ul>${st.goals.map(goal => `<li>${esc(goal)}</li>`).join('')}</ul>${st.connection === 'content' ? '<p class="panel-note">아래 상태는 기존 콘텐츠 앱의 기록입니다. Hermes 비서 연결이나 모든 채널 업로드 완료를 뜻하지 않습니다.</p>' : st.connection === 'dev' ? '<p class="panel-note">검증은 GitHub에서 하고, 검증을 통과한 커밋만 서버 감시기가 10분마다 배포합니다. 실패하면 이전 버전으로 되돌립니다.</p>' : st.connection === 'stocks' ? '<p class="panel-note">사세요·파세요 같은 판단이나 주문은 하지 않습니다. 화면에는 비중·수익률(%)만 보이고 보유 금액은 띄우지 않습니다.</p>' : '<p class="panel-note">메일·파일 조회나 비서 실행을 이 화면에서 시작하지 않습니다.</p>'}</section>` : '';
       const workflow = st.workflowStages?.length ? `<section class="workflow-map"><h3>콘텐츠 팀 내부 공정</h3>${st.workflowStages.map(step => {
         const safeUrl = /^(https?:\/\/|\/(?!\/))/.test(step.url || '') ? step.url : '';
         const key = esc(JSON.stringify(['workflow', step.id]));
         const link = embed.enabled && step.view ? `<button type="button" class="item-link" data-open="${esc(step.view)}" data-item="" data-focus-key="${key}">공정 열기</button>` : safeUrl ? `<a class="item-link" href="${esc(safeUrl)}" target="_blank" rel="noopener" data-focus-key="${key}">공정 열기</a>` : '';
         return `<div><span>${esc(step.name)} · ${step.items.length}건</span>${link}</div>`;
       }).join('')}</section>` : '';
-      const stageNote = st.connection === 'dev' ? '이 화면에서는 자동 배포를 켜고 끄기만 합니다. 콘텐츠 승인(⓪·①·②·③)과는 별개입니다.' : st.teamId && st.connection !== 'content' ? '팀의 업무 범위만 정리한 상태입니다. 실제 비서 연결·실행 전입니다.' : embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.';
+      const stageNote = st.connection === 'dev' ? '이 화면에서는 자동 배포를 켜고 끄기만 합니다. 콘텐츠 승인(⓪·①·②·③)과는 별개입니다.' : st.connection === 'stocks' ? '시세 확인만 요청합니다. 매매 결정과 보유 내역 수정은 직접 합니다. 콘텐츠 승인(⓪·①·②·③)과는 별개입니다.' : st.teamId && st.connection !== 'content' ? '팀의 업무 범위만 정리한 상태입니다. 실제 비서 연결·실행 전입니다.' : embed.enabled ? '승인(⓪·①·②·③)은 오피스 화면에서 합니다. 여기서는 열기와 생성·제작 요청만 보냅니다.' : '승인(⓪·①·②·③)은 오피스 앱에서 사람이 합니다. 이 공간은 상태를 보여주기만 합니다.';
       const footHtml = `<button type="button" class="item-link walk-only" data-enter="${esc(st.id)}" data-focus-key="${esc(JSON.stringify(['enter', st.id]))}">걸어서 들어가기</button>${!embed.enabled && st.url ? `<a class="item-link" href="${esc(st.url)}" target="_blank" rel="noopener" data-focus-key="${esc(JSON.stringify(['stage-link', st.id]))}">${data.source === 'live' ? '오피스에서 열기' : '플레이북에서 보기'}</a>` : ''}<span class="panel-note">${esc(stageNote)}</span>${embed.enabled ? `<span class="${space.embedResult && space.embedResult.ok ? 'panel-result ok' : 'panel-result'}" role="status">${space.embedResult ? esc(space.embedResult.message) : ''}</span>` : ''}`;
       const teamBody = goals + workflow + bodyHtml;
       this.replaceContent($('panel-body'), teamBody, () => { $('panel-body').innerHTML = teamBody; });

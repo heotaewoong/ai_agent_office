@@ -5,7 +5,7 @@ import { api } from "../lib/api";
 import { AssistantReports } from "./assistant-reports";
 import { AssistantChat } from "./assistant-chat";
 import type { AssistantRequest } from "../lib/assistant-requests";
-import { isDevAction, parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
+import { isDevAction, isStocksAction, parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
 
 type View = "news" | "studio" | "delivery" | "activity" | "world";
 
@@ -71,6 +71,9 @@ export function WorldView({
             const on = message.action === "auto-deploy-on";
             await api.setAutoDeploy(on);
             post({ type: "result", ok: true, message: on ? "자동 배포를 켰습니다" : "자동 배포를 껐습니다" });
+          } else if (isStocksAction(message.action)) {
+            const result = await api.refreshStocks();
+            post({ type: "result", ok: result.started, message: result.message });
           } else {
             await current.onAction(message.action, message.itemId);
             post({ type: "result", ok: true, message: "요청했습니다" });

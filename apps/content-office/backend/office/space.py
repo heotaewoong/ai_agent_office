@@ -41,7 +41,7 @@ EVENT_TEXT = {
     "evidence_collected": "근거 수집", "source_input_saved": "근거 입력 저장", "operator_source_registered": "운영자 근거 등록",
     "draft_registered": "초안 등록", "task_result_unknown": "호출 결과 불명", "cost_unknown": "비용 불명",
     "cost_exceeded_reservation": "예약 초과", "model_cache_hit": "모델 캐시 적중", "speech_request_started": "음성 요청 시작",
-    "operator_retry_requested": "재시도 요청",
+    "operator_retry_requested": "재시도 요청", "stocks_refresh_requested": "주식 팀 시세 확인",
 }
 FLOW = {
     "idea_selected": ("inbox", "scripts"), "job_created": ("inbox", "scripts"), "source_approved": ("scripts", "creative"),

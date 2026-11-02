@@ -3,13 +3,18 @@ export type WorldMessage =
   | { type: "open"; view: "news" | "studio" | "delivery" | "activity"; itemId: string }
   | { type: "action"; action: WorldAction; itemId: string };
 
-export type WorldAction = "draft" | "produce" | "auto-deploy-on" | "auto-deploy-off";
+export type WorldAction = "draft" | "produce" | "auto-deploy-on" | "auto-deploy-off" | "stocks-refresh";
 const VIEWS = ["news", "studio", "delivery", "activity"];
-const ACTIONS: WorldAction[] = ["draft", "produce", "auto-deploy-on", "auto-deploy-off"];
+const ACTIONS: WorldAction[] = ["draft", "produce", "auto-deploy-on", "auto-deploy-off", "stocks-refresh"];
 
 /** 개발 팀 스위치는 콘텐츠 작업이 아니므로 작업 선택·진행 중 상태와 무관하게 처리한다. */
 export function isDevAction(action: WorldAction): action is "auto-deploy-on" | "auto-deploy-off" {
   return action === "auto-deploy-on" || action === "auto-deploy-off";
+}
+
+/** 주식 팀 시세 확인은 무료 공개 시세 읽기다. 매매·보유 내역 변경·콘텐츠 승인과 무관하다. */
+export function isStocksAction(action: WorldAction): action is "stocks-refresh" {
+  return action === "stocks-refresh";
 }
 
 export function parseWorldMessage(data: unknown): WorldMessage | null {

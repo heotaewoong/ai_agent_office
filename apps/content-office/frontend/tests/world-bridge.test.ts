@@ -30,3 +30,14 @@ test("개발 팀 자동 배포 스위치 신호는 통과하고 콘텐츠 작업
   assert.equal(isDevAction("auto-deploy-off"), true);
   assert.equal(isDevAction("draft"), false);
 });
+
+test("주식 팀 시세 확인 신호는 통과하고 매매 같은 다른 신호는 막는다", async () => {
+  const { isStocksAction, isDevAction } = await import("../lib/world-bridge.ts");
+  const refresh = parseWorldMessage({ source: "office-world", type: "action", action: "stocks-refresh", itemId: "stocks-quotes" });
+  assert.deepEqual(refresh, { type: "action", action: "stocks-refresh", itemId: "stocks-quotes" });
+  for (const action of ["stocks-buy", "stocks-sell", "stocks-order"])
+    assert.equal(parseWorldMessage({ source: "office-world", type: "action", action, itemId: "stocks-quotes" }), null);
+  assert.equal(isStocksAction("stocks-refresh"), true);
+  assert.equal(isStocksAction("draft"), false);
+  assert.equal(isDevAction("stocks-refresh"), false);
+});
