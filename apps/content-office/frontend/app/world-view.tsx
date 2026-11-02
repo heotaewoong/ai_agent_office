@@ -45,6 +45,10 @@ export function WorldView({
     latest.current = { activeId, busy, connected, onOpen, onAction };
   });
   const inFlight = useRef(false);
+  const focusAssistantWorld = useCallback(() => {
+    frame.current?.scrollIntoView({ block: 'start', behavior: 'auto' });
+    frame.current?.focus({ preventScroll: true });
+  }, []);
 
   const openAssistantReport = useCallback(async (request: AssistantRequest, action: 'visit' | 'result') => {
     const report = request.report;
@@ -154,7 +158,7 @@ export function WorldView({
         </div>
       </div>
       <AssistantReports connected={connected} loadReports={api.assistantReports} />
-      <AssistantChat connected={connected} openSignal={chatSignal} requestedAssistant={chatAssistant} createRequest={api.createAssistantRequest} loadRequest={api.assistantRequest} onObservation={observeAssistant} onReportAction={openAssistantReport} />
+      <AssistantChat connected={connected} openSignal={chatSignal} requestedAssistant={chatAssistant} createRequest={api.createAssistantRequest} loadRequest={api.assistantRequest} onObservation={observeAssistant} onReportAction={openAssistantReport} onReportOpened={focusAssistantWorld} />
       <iframe
         ref={frame}
         className="world-frame"

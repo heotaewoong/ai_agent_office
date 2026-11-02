@@ -64,3 +64,29 @@ test('explicit Lumi entry selects Lumi after another NPC while preserving the un
     for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete (globalThis as any)[key]; else (globalThis as any)[key] = value; }
   }
 });
+
+test('successful report navigation gives focus to the world after closing instead of the old trigger', async () => {
+  const controller = createAssistantRequestsController(); controller.setAvailability(true, true); controller.restore(request.request_id);
+  await controller.refresh(async () => ({ ...request, native_task_id: 't_root123', assignee: 'lumi', title: '검증 업무', updated_at: 1, current_run_id: null, error: null,
+    events: request.events.map(event => ({ ...event, created_at: 1 })) }));
+  assert.ok(controller.getSnapshot().request);
+  const url = new URL('../app/assistant-chat.tsx', import.meta.url), require = createRequire(url);
+  const react = { ...require('react'), useState: (() => { let i = 0; return () => [i++ === 0 ? controller : false, () => {}]; })(),
+    useRef: (value: unknown) => ({ current: value }), useId: () => 'id', useCallback: (value: unknown) => value,
+    useSyncExternalStore: (_subscribe: unknown, snapshot: () => unknown) => snapshot(), useEffect() {}, useLayoutEffect() {} };
+  const exports: any = {}, code = ts.transpileModule(readFileSync(url, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
+  new Function('require', 'exports', code)((name: string) => name === 'react' ? react : require(name), exports);
+  const previous = globalThis.requestAnimationFrame; let opened = 0, oldFocus = 0;
+  try {
+    (globalThis as any).requestAnimationFrame = (fn: () => void) => fn();
+    const tree = exports.AssistantChat({ connected: true, openSignal: 0, createRequest() {}, loadRequest() {}, onObservation() {},
+      onReportAction: async () => '열었습니다.', onReportOpened() { opened++; } });
+    const all = (node: any): any[] => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(all)];
+    const nodes = all(tree), dialog = nodes.find(node => node.type === 'dialog');
+    nodes.find(node => node.type === 'button' && node.props.children === '루미와 대화하기').props.ref.current = { focus() { oldFocus++; } };
+    dialog.props.ref.current = { open: true, close() { this.open = false; dialog.props.onClose(); } };
+    nodes.find(node => node.type === exports.AssistantCompletion).props.onAction('result');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(opened, 1); assert.equal(oldFocus, 0);
+  } finally { if (previous === undefined) delete (globalThis as any).requestAnimationFrame; else globalThis.requestAnimationFrame = previous; }
+});

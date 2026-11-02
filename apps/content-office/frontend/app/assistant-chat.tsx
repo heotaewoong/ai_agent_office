@@ -31,13 +31,14 @@ export function AssistantCompletion({ request, busy, onAction }: {
   </section>;
 }
 
-export function AssistantChat({ connected, openSignal, requestedAssistant = 'lumi', createRequest, loadRequest, onObservation, onReportAction }: {
+export function AssistantChat({ connected, openSignal, requestedAssistant = 'lumi', createRequest, loadRequest, onObservation, onReportAction, onReportOpened }: {
   connected: boolean; openSignal: number;
   requestedAssistant?: AssistantProfile;
   createRequest: (body: AssistantSubmission) => Promise<unknown>;
   loadRequest: (id: string) => Promise<unknown>;
   onObservation: (request: AssistantRequest) => void;
   onReportAction?: (request: AssistantRequest, action: 'visit' | 'result') => Promise<string>;
+  onReportOpened?: () => void;
 }) {
   const [controller] = useState(createAssistantRequestsController);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
@@ -47,6 +48,7 @@ export function AssistantChat({ connected, openSignal, requestedAssistant = 'lum
   const dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLButtonElement>(null), input = useRef<HTMLTextAreaElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null), lastSignal = useRef(0), latestObservation = useRef(onObservation);
   const desiredAssistant = useRef<AssistantProfile>('lumi');
+  const closingForReport = useRef(false);
   const readReport = useRef<string | null>(null), latestReport = useRef<string | null>(null);
   const reportKey = state.request?.report?.verified ? `${state.request.request_id}:${state.request.report.task_id}:${state.request.report.run_id}:${state.request.report.event_id}` : null;
   const heading = useId(), inputId = useId(), help = useId();
@@ -94,7 +96,8 @@ export function AssistantChat({ connected, openSignal, requestedAssistant = 'lum
     try {
       if (!onReportAction) throw new Error('작업실 연결을 확인할 수 없습니다. 기존 보고는 보존했습니다.');
       await onReportAction(state.request, action);
-      dialog.current?.close();
+      if (dialog.current?.open) { closingForReport.current = true; dialog.current.close(); }
+      else onReportOpened?.();
     } catch (cause) {
       setReportNotice(cause instanceof Error ? cause.message : '작업실을 열지 못했습니다. 기존 보고는 보존했습니다.');
     } finally { setReportBusy(false); }
@@ -113,7 +116,14 @@ export function AssistantChat({ connected, openSignal, requestedAssistant = 'lum
     <button ref={trigger} type="button" className="button" onClick={() => requestChat('lumi')}>루미와 대화하기</button>
     <div aria-live="polite">{request?.report?.verified && reportKey !== readReport.current && !open ? <p>루미의 완료 보고가 도착했습니다. <button type="button" className="button secondary" onClick={show}>보고 열기</button></p> : request && <p className="muted">{statusText[request.status]} · {assistantNames[request.assignee]}</p>}{delivery && <p className="muted">Slack 알림: {slackStatus(delivery)}</p>}</div>
     <dialog ref={dialog} className="job-trash-dialog" aria-labelledby={heading} style={{ width: 'min(42rem, calc(100vw - 2rem))', maxHeight: '85dvh', overflowY: 'auto', boxSizing: 'border-box' }}
-      onClose={() => { setOpen(false); requestAnimationFrame(() => { if (!dialog.current?.open) (previousFocus.current?.isConnected ? previousFocus.current : trigger.current)?.focus(); }); }}>
+      onClose={() => {
+        setOpen(false); const reportOpened = closingForReport.current; closingForReport.current = false;
+        requestAnimationFrame(() => {
+          if (dialog.current?.open) return;
+          if (reportOpened) onReportOpened?.();
+          else (previousFocus.current?.isConnected ? previousFocus.current : trigger.current)?.focus();
+        });
+      }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
         <h2 id={heading}>{state.selectedAssistant === 'lumi' ? '루미와 대화' : `${assistantNames[state.selectedAssistant]}에게 업무 요청`}</h2>
         <button type="button" className="button secondary" onClick={() => dialog.current?.close()}>닫기</button>
