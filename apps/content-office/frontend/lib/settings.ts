@@ -112,6 +112,18 @@ export function unavailableSelectionWarnings(provider: ProviderStatus | undefine
   return lines;
 }
 
+// Settings page "작업 시간 열기": pressing it while an operator window is open only earns a 409 from the server
+// (2026-11-02: six such clicks read as random failures). Say it is open instead; a closed, expired or
+// collect-only window can be opened/replaced.
+export function openWindowButton(window: { status?: unknown; authorized_end?: string; authorization_source?: unknown } | undefined, now = Date.now()): { disabled: boolean; label: string } {
+  const end = window?.authorized_end;
+  const active = !["closed", "stopped"].includes(String(window?.status)) && window?.authorization_source !== "scheduled_daily_collect"
+    && !!end && Number.isFinite(Date.parse(end)) && Date.parse(end) > now;
+  if (!active) return { disabled: false, label: "작업 시간 열기" };
+  const until = new Date(Date.parse(end!)).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Seoul" });
+  return { disabled: true, label: `이미 열려 있어요 · ${until}까지` };
+}
+
 export const PROFILE_CHANGE_NOTE = "다음 제작부터 적용됩니다. 이미 만든 영상은 작업실의 '현재 설정으로 다시 제작'으로 다시 만들 수 있어요.";
 
 export function dailyClipUsage(provider: ProviderStatus | undefined): string | null {

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import type { Dashboard } from "../lib/types";
-import { PROFILE_CHANGE_NOTE, PROFILE_COST_GUIDANCE, PROFILE_OPTIONS, dailyClipUsage, keyChips, settingsWarnings, validWindowMinutes, visibleProfileOptions, type ProfileKind } from "../lib/settings";
+import { PROFILE_CHANGE_NOTE, PROFILE_COST_GUIDANCE, PROFILE_OPTIONS, dailyClipUsage, keyChips, openWindowButton, settingsWarnings, validWindowMinutes, visibleProfileOptions, type ProfileKind } from "../lib/settings";
 import { Icon } from "./icons";
 import { ChannelsPanel } from "./channels-panel";
 import { DailyCollectPanel } from "./daily-collect-panel";
@@ -44,6 +44,7 @@ export function SettingsPanel({
     clip: provider?.clip?.id,
   };
   const parsedMinutes = validWindowMinutes(minutes);
+  const windowButton = openWindowButton(dashboard.window);
   const budget = dashboard.budget;
   const selectedProfiles = GROUPS.map(group => ({title: group.title, option: PROFILE_OPTIONS[group.kind].find(option => option.id === current[group.kind])}));
 
@@ -147,8 +148,8 @@ export function SettingsPanel({
             열 시간(분)
             <input inputMode="numeric" value={minutes} onChange={(e) => setMinutes(e.target.value)} aria-invalid={parsedMinutes == null} />
           </label>
-          <button className="button primary" disabled={busy || parsedMinutes == null} onClick={() => void openWindow()}>
-            작업 시간 열기
+          <button className="button primary" disabled={busy || parsedMinutes == null || windowButton.disabled} onClick={() => void openWindow()}>
+            {windowButton.label}
           </button>
         </div>
         {parsedMinutes == null && <p className="field-error">1~360분 사이의 정수로 입력하세요.</p>}
