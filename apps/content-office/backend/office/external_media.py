@@ -12,6 +12,7 @@ PACK_TEXTS = {'tistory-article.md': '티스토리', 'naver-article.txt': '네이
 PACK_CARDS = tuple(f'card-{i:02}.png' for i in range(1, 9))
 PACK_NAMES = (*PACK_TEXTS, *PACK_CARDS)
 BUSY = ('drafting', 'production_queued', 'producing', 'needs_reconciliation')
+MAX_IMPORTED_VIDEO_BYTES = 160_000_000
 
 
 def files_for(store, job, draft_id):
@@ -28,7 +29,8 @@ def files_for(store, job, draft_id):
     for name in (*REQUIRED, *(PACK_NAMES if has_pack else ())):
         a = records[name]
         path = (root / a['path']).resolve()
-        if not path.is_relative_to(root) or not path.is_file() or not 0 < path.stat().st_size <= 100_000_000:
+        limit = MAX_IMPORTED_VIDEO_BYTES if name == 'short.mp4' else 100_000_000
+        if not path.is_relative_to(root) or not path.is_file() or not 0 < path.stat().st_size <= limit:
             raise WorkflowError('편집 파일 경로·크기가 올바르지 않습니다')
         checksum = hashlib.sha256()
         with path.open('rb') as content:

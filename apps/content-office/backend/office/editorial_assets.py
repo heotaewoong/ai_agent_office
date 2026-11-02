@@ -3,11 +3,12 @@ import hashlib
 import re
 from pathlib import Path
 from .store import WorkflowError,digest
+from .external_media import MAX_IMPORTED_VIDEO_BYTES
 
 KINDS={'.png':'image/png','.jpg':'image/jpeg','.mp4':'video/mp4','.md':'text/plain','.txt':'text/plain','.srt':'text/plain'}
 MAX_REVIEW_FILE_BYTES=32*1024*1024
-MAX_REVIEW_VIDEO_BYTES=100_000_000  # Match the existing external-media import bound.
-MAX_REVIEW_TOTAL_BYTES=128*1024*1024
+MAX_REVIEW_VIDEO_BYTES=MAX_IMPORTED_VIDEO_BYTES
+MAX_REVIEW_TOTAL_BYTES=192*1024*1024
 MAX_REVIEW_STANDARD_TOTAL_BYTES=64*1024*1024
 
 def register_assets(store,job_id,source_hash,title,body,files):

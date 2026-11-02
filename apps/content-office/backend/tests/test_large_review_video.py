@@ -105,3 +105,32 @@ def test_larger_video_bundle_limit_does_not_depend_on_file_order(tmp_path, monke
         store = Store(tmp_path / f'artifacts-{i}')
         assets.register_assets(store, 'job_review', 'a' * 64, '제목', '검토', files)
         assert store.registered is not None
+
+
+def test_formal_import_checks_the_shared_video_bound(tmp_path, monkeypatch):
+    from tests.test_external_media import context
+    store, job, draft = context(tmp_path, monkeypatch)
+    monkeypatch.setattr(external_media, 'MAX_IMPORTED_VIDEO_BYTES', len(b'synthetic-video') - 1)
+    with pytest.raises(WorkflowError, match='크기'):
+        external_media.files_for(store, job, draft['id'])
+    monkeypatch.setattr(external_media, 'MAX_IMPORTED_VIDEO_BYTES', len(b'synthetic-video'))
+    assert external_media.files_for(store, job, draft['id'])[2]['short.mp4'].read_bytes() == b'synthetic-video'
+
+
+def test_large_review_video_supports_authenticated_inline_range_delivery(tmp_path, monkeypatch, limits):
+    from fastapi.testclient import TestClient
+    from office.api import create_app
+    from office.store import Store as ActualStore
+    store = ActualStore(tmp_path / 'state')
+    job = store.create_job({'id': 'review-video', 'title': '검토', 'url': ''})
+    job = store.save_source(job['id'], {'title': '검토', 'body': '원문', 'quality': {'status': 'passed', 'critical': False}})
+    source = tmp_path / 'film.mp4'; source.write_bytes(b'synthetic-video')
+    monkeypatch.setattr(external_media, '_probe', lambda p: {'codec': 'h264/aac', 'seconds': 148})
+    before = store.job(job['id'])
+    draft = assets.register_assets(store, job['id'], job['source_hash'], '가로 영상', '미승인 검토', [('film.mp4', source)])
+    client = TestClient(create_app(store), base_url='http://localhost:8510')
+    response = client.get(f'/api/jobs/{job["id"]}/drafts/{draft["id"]}/files/film.mp4', headers={'Range': 'bytes=0-5'})
+    assert response.status_code == 206 and response.content == b'synthe'
+    assert response.headers['content-range'] == 'bytes 0-5/15'
+    assert response.headers['content-disposition'] == 'inline'
+    assert store.job(job['id']) == before
