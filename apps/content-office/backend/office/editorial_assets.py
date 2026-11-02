@@ -5,6 +5,10 @@ from pathlib import Path
 from .store import WorkflowError,digest
 
 KINDS={'.png':'image/png','.jpg':'image/jpeg','.mp4':'video/mp4','.md':'text/plain','.txt':'text/plain','.srt':'text/plain'}
+MAX_REVIEW_FILE_BYTES=32*1024*1024
+MAX_REVIEW_VIDEO_BYTES=100_000_000  # Match the existing external-media import bound.
+MAX_REVIEW_TOTAL_BYTES=128*1024*1024
+MAX_REVIEW_STANDARD_TOTAL_BYTES=64*1024*1024
 
 def register_assets(store,job_id,source_hash,title,body,files):
     if not re.fullmatch(r'job_[a-zA-Z0-9_-]+',job_id) or not re.fullmatch(r'[0-9a-f]{64}',source_hash or ''):
@@ -13,15 +17,22 @@ def register_assets(store,job_id,source_hash,title,body,files):
         raise WorkflowError('편집 결과의 제목·본문·파일 수를 확인해 주세요')
     if not files:raise WorkflowError('연결할 검토 파일이 없습니다')
     if store.job(job_id).get('source_hash')!=source_hash:raise WorkflowError('연결 대상 원고가 변경되었습니다')
+    large_video=any(Path(name).suffix.lower()=='.mp4' and Path(path).stat().st_size>MAX_REVIEW_FILE_BYTES for name,path in files)
+    total_limit=MAX_REVIEW_TOTAL_BYTES if large_video else MAX_REVIEW_STANDARD_TOTAL_BYTES
     records=[];total=0;seen=set()
     for name,path in files:
         path=Path(path)
         if name in seen or not name or Path(name).name!=name or any(c in name for c in '/\\:') or Path(name).suffix.lower() not in KINDS:
             raise WorkflowError('검토 파일 이름 또는 형식을 확인해 주세요')
-        seen.add(name);total+=path.stat().st_size
-        if total>64*1024*1024 or path.stat().st_size>32*1024*1024:raise WorkflowError('검토 파일 용량 한도를 넘었습니다')
-        with path.open('rb') as f:data=f.read(32*1024*1024+1)
-        if len(data)>32*1024*1024:raise WorkflowError('검토 파일 용량이 변경되었습니다')
+        size=path.stat().st_size
+        limit=MAX_REVIEW_VIDEO_BYTES if Path(name).suffix.lower()=='.mp4' else MAX_REVIEW_FILE_BYTES
+        seen.add(name);total+=size
+        if total>total_limit or size>limit:raise WorkflowError('검토 파일 용량 한도를 넘었습니다')
+        if size>MAX_REVIEW_FILE_BYTES:
+            from .external_media import _probe
+            _probe(path)
+        with path.open('rb') as f:data=f.read(limit+1)
+        if len(data)>limit or len(data)!=size:raise WorkflowError('검토 파일 용량이 변경되었습니다')
         checksum=hashlib.sha256(data).hexdigest()
         relative=Path(job_id)/source_hash/'editorial'/checksum/name
         destination=store.artifacts/relative
