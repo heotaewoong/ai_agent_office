@@ -39,6 +39,7 @@
     rosterOpen: false,
     buildingOpen: false,
     resultsOpen: false,
+    nativeReportOpen: false,
     selectedStage: null,
     embedFocus: null,
     embedResult: null,
@@ -1967,9 +1968,9 @@
       window.addEventListener('keyup', (e) => this.onKey(e, false));
       window.addEventListener('blur', () => { this.keys.clear(); this.dragging=false; });
       document.addEventListener('visibilitychange', () => { if(document.hidden){this.keys.clear();this.dragging=false;} });
-      canvas.addEventListener('pointerdown', (e) => { if (space.view === 'walk') { this.dragging = true; this.lastX = e.clientX; this.lastY = e.clientY; canvas.setPointerCapture(e.pointerId); } });
+      canvas.addEventListener('pointerdown', (e) => { if (space.view === 'walk' && !space.nativeReportOpen) { this.dragging = true; this.lastX = e.clientX; this.lastY = e.clientY; canvas.setPointerCapture(e.pointerId); } });
       canvas.addEventListener('pointermove', (e) => {
-        if (!this.dragging || space.view !== 'walk') return;
+        if (!this.dragging || space.view !== 'walk' || space.nativeReportOpen) return;
         this.yaw -= (e.clientX - this.lastX) * 0.006;
         this.pitch = Math.max(-0.25, Math.min(0.8, this.pitch + (e.clientY - this.lastY) * 0.004));
         this.lastX = e.clientX; this.lastY = e.clientY;
@@ -1977,7 +1978,7 @@
       const stop = () => { this.dragging = false; };
       canvas.addEventListener('pointerup', stop); canvas.addEventListener('pointercancel', stop);
       s.onPointerObservable.add((info) => {
-        if (info.type !== B.PointerEventTypes.POINTERTAP || space.view !== 'overview' || workshop.opened) return;
+        if (info.type !== B.PointerEventTypes.POINTERTAP || space.view !== 'overview' || workshop.opened || space.nativeReportOpen) return;
         const pick = info.pickInfo;
         if (!pick || !pick.hit || !pick.pickedMesh) return;
         const meta = pick.pickedMesh.metadata || {};
@@ -2005,6 +2006,7 @@
     },
 
     setView(view) {
+      if (space.nativeReportOpen) hud.closePanel();
       if (view === 'walk' && isPhone() && !this.touchWalkEnabled) view = 'overview';
       space.view = view;
       document.body.classList.toggle('walking-view', view === 'walk');
@@ -2036,6 +2038,7 @@
     onKey(e, down) {
       const k = /^Key[WASDMER]$/.test(e.code) ? e.code.slice(3).toLowerCase() : e.key.toLowerCase();
       if (!down) this.keys.delete(k);
+      if (space.nativeReportOpen) { if (down && k === 'escape') hud.closePanel(); return; }
       if (space.rosterOpen || space.buildingOpen || space.resultsOpen || space.playHubOpen) return;
       if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
       if (down && k === 'escape') {
@@ -2059,6 +2062,7 @@
     },
 
     tick(dt) {
+      if (space.nativeReportOpen) return;
       if(this.cameraTween){
         const t=this.cameraTween;t.elapsed+=dt;const q=Math.min(1,t.duration?t.elapsed/t.duration:1),u=q*q*(3-2*q),cam=this.overview;
         cam.setTarget(B.Vector3.Lerp(t.from.target,t.to.target,u));
@@ -2151,7 +2155,7 @@
       $('btn-command')?.addEventListener('click', () => this.openBrain());
       $('panel-body').addEventListener('click', (e) => {
         if (e.target.closest('[data-assistant-open]')) {
-          if (embed.enabled && data.source === 'live' && !data.error) { controls.keys.clear(); embed.post({ type: 'assistant-open' }); }
+          if (embed.enabled && data.source === 'live' && !data.error) { controls.keys.clear(); embed.post({ type: 'assistant-open', assistant: 'lumi' }); }
           return;
         }
         const team = e.target.closest('[data-team]');
@@ -2292,6 +2296,7 @@
     },
 
     openStage(id, silent) {
+      if (space.nativeReportOpen) { if (silent) return; this.closePanel(); }
       if(results.opened)results.close();
       if (space.layer !== 'office') controls.setLayer('office');
       exploration(id);
@@ -2330,6 +2335,7 @@
 
     openBrain() {
       if (!space.data) return;
+      if (space.nativeReportOpen) this.closePanel();
       if(results.opened)results.close();
       if(workshop.opened)workshop.setOpen(false);
       if(space.rosterOpen)workbench.setRoster(false);
@@ -2365,12 +2371,16 @@
 
     closePanel() {
       if(results.opened)results.close();
+      space.nativeReportOpen = false;
+      document.body.classList.remove('native-report-view');
       $('panel').hidden = true;
       space.selectedStage = null;
       this.cards.forEach((el) => el.classList.remove('active'));
     },
 
     toggleNearestAgent() {
+      const native = world.assistantNative?.nearby();
+      if (native) { world.assistantNative.talk(native.profile); return; }
       const p = controls.player.pos;
       let best = null, bestD = 3.2;
       space.agents.forEach((a) => { const d = B.Vector3.Distance(a.pos, p); if (d < bestD) { best = a; bestD = d; } });
@@ -2380,6 +2390,7 @@
     hideAgentCard() { if (this.agentCard) this.agentCard.hidden = true; },
 
     tick() {
+      world.assistantNative?.updateTalk();
       const now = performance.now(), redrawMini = now - this.miniT >= 200;
       if (redrawMini) this.miniT = now;
       if (isPhone() || space.layer === 'meadow') { this.cards.forEach((el) => { el.hidden = false; }); this.brainCard.hidden = false; this.agentCard.hidden = true; if (!isPhone() && redrawMini) this.drawMinimap(); return; }
@@ -2874,7 +2885,7 @@
     },
 
     setRoster(open) {
-      if(open&&space.resultsOpen)hud.closePanel();
+      if(open&&(space.resultsOpen||space.nativeReportOpen))hud.closePanel();
       space.rosterOpen = open === true;
       controls.keys.clear(); controls.dragging = false;
       $('roster-panel').hidden = !space.rosterOpen;
@@ -2974,10 +2985,81 @@
   // ======================================================================
   // Native Hermes actors stay separate from the nine content-workflow roles.
   const assistantNative = {
-    actors: new Map(), seen: new Set(), requestId: null, reported: null,
+    actors: new Map(), seen: new Set(), requestId: null, reported: null, observation: null,
     names: { lumi:'루미', ada:'에이다', ethan:'이든', mia:'미아', noah:'노아', oliver:'올리버', sam:'샘', 'mybots-sage':'세이지', default:'Hermes' },
+    available() { return embed.enabled && data.source === 'live' && !data.error; },
+    ensureActor(profile) {
+      if (!this.actors.has(profile)) {
+        const index = Object.keys(this.names).indexOf(profile), angle = index * Math.PI * 2 / Object.keys(this.names).length;
+        const av = world.buildAvatar('native-'+profile,'#f1c9a5','#53cfcd','#24394c');
+        const home = new B.Vector3(Math.cos(angle)*4,0,Math.sin(angle)*4);
+        const actor = { profile, name:this.names[profile], av, index, pos:home.clone(), home, phase:'unknown', taskId:null, eventId:null, path:[], walkT:0 };
+        av.root.position.copyFrom(home); world.setPose(av,'stand'); this.actors.set(profile,actor);
+      }
+      return this.actors.get(profile);
+    },
+    ensureProfiles() {
+      if (this.available()) Object.keys(this.names).forEach(profile => this.ensureActor(profile));
+    },
+    nearby() {
+      if (!this.available() || space.layer !== 'office' || space.view !== 'walk' || space.rosterOpen || space.resultsOpen || space.buildingOpen || space.playHubOpen || space.nativeReportOpen || !controls.player) return null;
+      let best = null, distance = 4.5;
+      const p = controls.player.pos;
+      this.actors.forEach(actor => { const d = Math.hypot(actor.pos.x-p.x,actor.pos.y-p.y,actor.pos.z-p.z); if (d < distance) { best=actor; distance=d; } });
+      return best;
+    },
+    talk(profile) {
+      const actor = this.nearby();
+      if (!actor || actor.profile !== profile) return false;
+      controls.keys.clear(); controls.dragging=false;
+      embed.post({ type:'assistant-open', assistant:profile }); return true;
+    },
+    updateTalk() {
+      const button = $('native-talk'), actor = this.nearby();
+      if (!button) return;
+      button.hidden = !actor;
+      if (actor) { button.dataset.assistant=actor.profile; button.textContent=this.names[actor.profile]+'에게 말걸기 · '+(actor.phase==='unknown'?'응답 상태 미확인':'실제 업무 기록 있음')+' · E'; }
+    },
+    openReport(report, station) {
+      hud.closePanel(); controls.keys.clear(); controls.dragging=false;
+      space.nativeReportOpen=true; document.body.classList.add('native-report-view');
+      $('panel-title').textContent='이 업무의 완료 보고';
+      $('panel-sub').textContent=station.name+' · Hermes 업무실';
+      $('panel-body').innerHTML='<p class="panel-note">현재 실제 Hermes 작업자가 사용하는 업무실입니다. 콘텐츠 원고 작업·출고 승인과는 별개입니다.</p><section class="native-report"><h3>검증된 비서 보고</h3><p class="native-report-summary">'+esc(report.summary)+'</p><dl class="result-meta"><dt>요청 번호</dt><dd>'+esc(report.request_id)+'</dd><dt>업무 번호</dt><dd>'+esc(report.task_id)+'</dd><dt>실행 번호</dt><dd>'+esc(report.run_id)+'</dd><dt>완료 기록</dt><dd>'+esc(report.event_id)+'</dd></dl></section>';
+      $('panel-foot').innerHTML='<span class="panel-note">이 업무의 검증된 보고를 읽기 전용으로 열었습니다. 파일 경로나 다른 콘텐츠 작업을 대신 열지 않습니다.</span>';
+      $('panel').hidden=false;
+    },
+    reportAction(message) {
+      const keys=['request_id','task_id','run_id','event_id'];
+      if (!message || message.source!=='content-office' || message.type!=='assistant-report-action' || !['visit','result'].includes(message.action) || Object.keys(message).length!==7 || typeof message.request_id!=='string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(message.request_id) || typeof message.task_id!=='string' || message.task_id.length>120 || !/^t_[a-zA-Z0-9_-]+$/.test(message.task_id) || !Number.isSafeInteger(message.run_id) || message.run_id<1 || !Number.isSafeInteger(message.event_id) || message.event_id<1) return false;
+      const reply = (ok,text) => { embed.post({ type:'assistant-report-result', action:message.action, ...Object.fromEntries(keys.map(key=>[key,message[key]])), ok, message:text }); return ok; };
+      const report=this.observation, station=space.stages.find(stage=>stage.id==='inbox');
+      if (!this.available() || !report || !keys.every(key=>report[key]===message[key])) return reply(false,'현재 업무의 검증된 완료 보고와 일치하지 않습니다. 상태를 다시 확인해 주세요.');
+      if (!station || !controls.player) return reply(false,'실제 Hermes 업무실을 찾지 못했습니다. 월드를 다시 확인해 주세요.');
+      const closePlay = space.playHubOpen ? document.querySelector('#play-hub .play-hub-close') : null;
+      if (space.playHubOpen && !closePlay) return reply(false,'열린 탐험 창을 닫지 못했습니다. 창을 닫은 뒤 다시 확인해 주세요.');
+      closePlay?.click();
+      if (workshop.opened) workshop.setOpen(false);
+      if (space.rosterOpen) workbench.setRoster(false);
+      hud.closePanel(); $('world-tools').open=false;
+      const position=controls.player.pos.clone();
+      controls.keys.clear(); controls.dragging=false; controls.vy=0; controls.setVehicleSpeed(0);
+      if (message.action==='result') controls.player.pos.copyFrom(position);
+      if (message.action==='visit') {
+        if (isPhone() && !controls.touchWalkEnabled) controls.enableTouchWalk(true);
+        controls.enterStage(station);
+      }
+      this.openReport(report,station);
+      return reply(true,message.action==='visit'?'실제 Hermes 업무실 입구로 이동하고 이 업무의 보고를 열었습니다.':'이 업무의 검증된 완료 보고를 열었습니다.');
+    },
+    init() {
+      $('native-talk')?.addEventListener('click', event => this.talk(event.currentTarget.dataset.assistant));
+    },
     sync(request) {
+      this.observation=null;
       if (!embed.enabled || data.source !== 'live' || data.error || !request || request.board !== 'heobrain-office' || typeof request.request_id !== 'string' || !Array.isArray(request.events) || request.events.length > 200) return;
+      const report=request.report;
+      if (/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(request.request_id) && request.status==='completed' && request.native_status==='done' && report?.verified===true && typeof report.summary==='string' && report.summary.length<=6000 && Number.isSafeInteger(report.run_id) && report.run_id>0 && Number.isSafeInteger(report.event_id) && report.event_id>0 && /^t_[a-zA-Z0-9_-]+$/.test(report.task_id) && request.events.some(event=>event.id===report.event_id && event.task_id===report.task_id && event.run_id===report.run_id && event.kind==='completed' && event.assignee==='lumi')) this.observation={ request_id:request.request_id, task_id:report.task_id, run_id:report.run_id, event_id:report.event_id, summary:report.summary };
       if (this.requestId !== request.request_id) { this.requestId = request.request_id; this.seen.clear(); this.reported = null; }
       const station = space.stages.find(stage => stage.id === 'inbox');
       if (!station) return;
@@ -2985,21 +3067,13 @@
         if (!Number.isSafeInteger(event.id) || event.id <= 0 || !Object.hasOwn(this.names,event.assignee) || !/^t_[a-zA-Z0-9_-]+$/.test(event.task_id) || !['claimed','spawned','worker_bound','blocked','crashed','completed'].includes(event.kind)) return;
         const key = event.task_id + ':' + event.id;
         if (this.seen.has(key)) return; this.seen.add(key);
-        let actor = this.actors.get(event.assignee);
-        if (!actor) {
-          const index = Object.keys(this.names).indexOf(event.assignee), angle = index * Math.PI * 2 / Object.keys(this.names).length;
-          const av = world.buildAvatar('native-'+event.assignee,'#f1c9a5','#53cfcd','#24394c');
-          const home = new B.Vector3(Math.cos(angle)*4,0,Math.sin(angle)*4);
-          actor = { av, index, pos:home.clone(), home, phase:'waiting', path:[], walkT:0 };
-          av.root.position.copyFrom(home); world.setPose(av,'stand'); this.actors.set(event.assignee,actor);
-        }
+        const actor = this.ensureActor(event.assignee);
         actor.taskId = event.task_id; actor.eventId = event.id;
         if (['claimed','spawned','worker_bound'].includes(event.kind)) {
           if (actor.phase !== 'working') { actor.phase = 'working'; this.route(actor,station,false); }
         } else { actor.phase = event.kind === 'crashed' ? 'failed' : 'waiting'; actor.path = []; world.setPose(actor.av,'stand'); }
         actor.av.marker.material = world.mat('native-marker', actor.phase === 'working' ? '#4ad994' : actor.phase === 'failed' ? '#ff6b7a' : '#f5c451', {emissive:1,unlit:true});
       });
-      const report = request.report;
       if (request.status === 'completed' && request.native_status === 'done' && report?.verified === true && request.events.some(event => event.id === report.event_id && event.task_id === report.task_id && event.run_id === report.run_id && event.kind === 'completed' && event.assignee === 'lumi') && this.reported !== report.event_id) {
         const coordinator = this.actors.get(request.assignee);
         if (coordinator && coordinator.taskId === report.task_id) { coordinator.phase = 'returning'; this.route(coordinator,station,true); this.reported = report.event_id; }
@@ -3056,7 +3130,10 @@
       this.onMessage((m) => {
         if (m.type === 'assistant-observation') {
           assistantNative.sync(m.request);
+        } else if (m.type === 'assistant-report-action') {
+          assistantNative.reportAction(m);
         } else if (m.type === 'focus') {
+          if (space.nativeReportOpen) return;
           const st = space.stages.find((s) => s.items.some((it) => it.id === m.itemId));
           if (!st) return;
           space.embedFocus = m.itemId;
@@ -3081,6 +3158,7 @@
     world.init($('scene'));
     hud.init();
     controls.init();
+    world.assistantNative?.init();
     data.init();
     embed.init();
     workbench.init();
@@ -3112,6 +3190,7 @@
         if (agentKey !== prevAgentKey) world.buildAgents(d.agents); else world.updateAgentStatuses(d.agents);
         hud.refresh(d);
       }
+      world.assistantNative?.ensureProfiles();
       const projectionSource = data.source;
       if (!REDUCED) d.flows.forEach((f, i) => setTimeout(() => { if (data.source === projectionSource) world.spawnFlow(f); }, 600 + i * 1800));
       if (data.source === 'live' && simTimer) { clearInterval(simTimer); simTimer = null; }

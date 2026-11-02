@@ -176,3 +176,71 @@ test('Slack delivery metadata is bounded and separate from native completion evi
     assert.throws(() => implementation.parseAssistantRequest({ ...complete, delivery: { ...confirmed, notice_ref: { ...notice, ...patch } } }, requestId));
   }
 });
+
+test('selecting an actual Hermes profile preserves the draft and never changes the native Lumi assignee', async () => {
+  const controller = implementation.createAssistantRequestsController();
+  assert.equal(typeof controller.selectAssistant, 'function');
+  assert.equal(controller.getSnapshot().selectedAssistant, 'lumi');
+  controller.setDraft('원본 업무\n내용');
+  for (const profile of ['director', '__proto__', '../ada', '', null, {}]) assert.equal(controller.selectAssistant(profile), false);
+  assert.equal(controller.selectAssistant('ada'), true);
+  assert.equal(controller.getSnapshot().draft, '원본 업무\n내용');
+  controller.setAvailability(true, true);
+  let sent: any;
+  await controller.submit(async (input: any) => { sent = input; return accepted(); }, () => requestId);
+  assert.equal(sent.assignee, 'lumi');
+  assert.equal(sent.text, '[배정 요청: 에이다 (ada)]\n아래 업무를 에이다에게 배정해 주세요. 배정할 수 없으면 이유를 보고해 주세요.\n\n원본 업무\n내용');
+  assert.equal(sent.text.includes('\n'), true);
+  assert.equal(sent.text.includes('\\n'), false);
+  assert.equal(controller.getSnapshot().draft, '원본 업무\n내용');
+  assert.equal(controller.selectAssistant('ethan'), false, 'an admitted UUID cannot change its recipient');
+});
+
+test('a selected recipient is locked while pending and exact rejected text retries once without prefix duplication', async () => {
+  const controller = implementation.createAssistantRequestsController();
+  assert.equal(typeof controller.selectAssistant, 'function');
+  controller.setAvailability(true, true); controller.setDraft('확인할 업무'); controller.selectAssistant('ethan');
+  let reject!: (error: unknown) => void, sent: any;
+  const pending = controller.submit(async (input: any) => { sent = input; return new Promise((_yes, no) => { reject = no; }); }, () => requestId);
+  assert.equal(controller.selectAssistant('ada'), false);
+  reject({ code: 'native_preflight_failed' }); await pending;
+  const original = { ...sent };
+  await controller.retrySubmission(async (input: any) => { assert.deepEqual(input, original); return accepted(); });
+  assert.equal(controller.getSnapshot().selectedAssistant, 'ethan');
+  assert.equal(controller.getSnapshot().draft, '확인할 업무');
+});
+
+test('explicitly editing a rejected assignment restores the raw draft and recipient, and new work resets the recipient', async () => {
+  const controller = implementation.createAssistantRequestsController();
+  assert.equal(typeof controller.selectAssistant, 'function');
+  controller.setAvailability(true, true); controller.setDraft('보존할 원문'); controller.selectAssistant('ada');
+  await controller.submit(async () => { throw { code: 'unsafe_request_body' }; }, () => requestId);
+  assert.equal(controller.editRejectedRequest(), true);
+  assert.equal(controller.getSnapshot().draft, '보존할 원문');
+  assert.equal(controller.getSnapshot().selectedAssistant, 'ada');
+  await controller.submit(async (input: any) => {
+    assert.equal(input.text, implementation.assistantSubmissionText('ada', '보존할 원문'));
+    assert.equal(input.text.match(/\[배정 요청:/g).length, 1);
+    throw { code: 'native_preflight_failed' };
+  }, () => requestId);
+  assert.equal(controller.newRequest(), true);
+  assert.equal(controller.getSnapshot().selectedAssistant, 'lumi');
+  assert.equal(controller.getSnapshot().draft, '');
+});
+
+test('assignment prefix counts toward the existing 4000 character limit without truncating the draft', async () => {
+  assert.equal(typeof implementation?.assistantDraftLimit, 'function');
+  assert.equal(implementation.assistantDraftLimit('lumi'), 4000);
+  const limit = implementation.assistantDraftLimit('ada');
+  assert(limit > 0 && limit < 4000);
+  assert.equal([...implementation.assistantSubmissionText('ada', '가'.repeat(limit))].length, 4000);
+  const controller = implementation.createAssistantRequestsController();
+  controller.setAvailability(true, true); controller.selectAssistant('ada'); controller.setDraft('가'.repeat(limit + 1));
+  let writes = 0;
+  await controller.submit(async () => { writes++; return accepted(); }, () => requestId);
+  assert.equal(writes, 0); assert.equal(controller.getSnapshot().draft, '가'.repeat(limit + 1));
+  assert.equal(controller.getSnapshot().submission, null);
+  controller.setDraft('가'.repeat(limit));
+  await controller.submit(async (input: any) => { writes++; assert.equal([...input.text].length, 4000); return accepted(); }, () => requestId);
+  assert.equal(writes, 1);
+});

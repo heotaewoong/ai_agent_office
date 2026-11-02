@@ -1,15 +1,28 @@
 export type AssistantSubmission = { request_id: string; text: string; assignee: 'lumi' };
-export type AssistantEvent = { id: number; task_id: string; run_id: number | null; kind: string; created_at: string | number; assignee: string };
+export type AssistantEvent = { id: number; task_id: string; run_id: number | null; kind: string; created_at: string | number; assignee: AssistantProfile };
 export type AssistantNoticeRef = { request_id: string; task_id: string; run_id: number; event_id: number; terminal_state: 'completed' | 'blocked' };
 export type AssistantDelivery = { slack: 'watching' | 'pending' | 'sent_unverified' | 'confirmed' | 'unknown' | 'not_attached' | 'failed' | 'privacy_review_required'; external_delivery_verified: boolean; error_code?: string | null; notice_ref?: AssistantNoticeRef | null };
 export type AssistantAccepted = { request_id: string; native_task_id: string | null; board: 'heobrain-office'; status: 'queued' | 'running' | 'blocked' | 'completed' | 'failed'; delivery?: AssistantDelivery };
 export type AssistantRequest = AssistantAccepted & {
-  native_status: string | null; assignee: string; title: string; updated_at: string | number; current_run_id: number | null;
+  native_status: string | null; assignee: AssistantProfile; title: string; updated_at: string | number; current_run_id: number | null;
   events: AssistantEvent[];
   report: null | { summary: string; verified: boolean; task_id: string; run_id: number; event_id: number };
   error: null | { code: string; message: string };
 };
-export const assistantNames: Record<string, string> = { lumi: '루미', ada: '에이다', ethan: '이든', mia: '미아', noah: '노아', oliver: '올리버', sam: '샘', 'mybots-sage': '세이지', default: 'Hermes' };
+export const assistantNames = { lumi: '루미', ada: '에이다', ethan: '이든', mia: '미아', noah: '노아', oliver: '올리버', sam: '샘', 'mybots-sage': '세이지', default: 'Hermes' } as const;
+export type AssistantProfile = keyof typeof assistantNames;
+export function isAssistantProfile(value: unknown): value is AssistantProfile {
+  return typeof value === 'string' && Object.hasOwn(assistantNames, value);
+}
+export function assistantSubmissionText(assistant: AssistantProfile, draft: string): string {
+  if (!isAssistantProfile(assistant)) return invalid();
+  if (assistant === 'lumi') return draft;
+  const name = assistantNames[assistant];
+  return `[배정 요청: ${name} (${assistant})]\n아래 업무를 ${name}에게 배정해 주세요. 배정할 수 없으면 이유를 보고해 주세요.\n\n${draft}`;
+}
+export function assistantDraftLimit(assistant: AssistantProfile): number {
+  return 4000 - [...assistantSubmissionText(assistant, '')].length;
+}
 const states = ['queued', 'running', 'blocked', 'completed', 'failed'];
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function initialAssistantRequestId(search: string, saved: string | null): string | null {
@@ -25,7 +38,7 @@ function text(value: unknown, limit = 300): string {
 }
 const id = (value: unknown): string => { const s = text(value, 120); return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(s) ? s : invalid(); };
 const integer = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : invalid();
-const profile = (value: unknown): string => typeof value === 'string' && Object.hasOwn(assistantNames, value) ? value : invalid();
+const profile = (value: unknown): AssistantProfile => isAssistantProfile(value) ? value : invalid();
 function noticeRef(value: unknown, expected: string): AssistantNoticeRef | null | undefined {
   if (value === undefined || value === null) return value;
   const row = object(value);
@@ -91,9 +104,9 @@ const noAdmissionCode = (error: unknown): NoAdmissionCode | null => {
   const code = (error as { code?: unknown })?.code;
   return code === 'native_preflight_failed' || code === 'assistant_not_configured' || code === 'unsafe_request_body' ? code : null;
 };
-type State = { draft: string; submission: AssistantSubmission | null; receipt: AssistantAccepted | null; request: AssistantRequest | null; pending: boolean; error: string | null; noAdmissionCode: NoAdmissionCode | null };
+type State = { draft: string; selectedAssistant: AssistantProfile; submission: AssistantSubmission | null; receipt: AssistantAccepted | null; request: AssistantRequest | null; pending: boolean; error: string | null; noAdmissionCode: NoAdmissionCode | null };
 export function createAssistantRequestsController() {
-  let state: State = { draft: '', submission: null, receipt: null, request: null, pending: false, error: null, noAdmissionCode: null };
+  let state: State = { draft: '', selectedAssistant: 'lumi', submission: null, receipt: null, request: null, pending: false, error: null, noAdmissionCode: null };
   let connected = false, open = false, generation = 0, busy = false;
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<State>) => { state = { ...state, ...patch }; listeners.forEach(fn => fn()); };
@@ -109,21 +122,26 @@ export function createAssistantRequestsController() {
     getSnapshot: () => state,
     subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
     setDraft(draft: string) { if (!state.submission) publish({ draft }); },
+    selectAssistant(assistant: unknown) {
+      if (!isAssistantProfile(assistant) || busy || state.pending || state.submission) return false;
+      publish({ selectedAssistant: assistant });
+      return true;
+    },
     setAvailability(nextConnected: boolean, nextOpen: boolean) { if (connected !== nextConnected) generation++; connected = nextConnected; open = nextOpen; },
     restore(requestId: string) { if (!uuidPattern.test(requestId)) return invalid(); if (!state.submission && !state.draft) publish({ submission: { request_id: requestId, text: '', assignee: 'lumi' } }); },
     newRequest() {
       if (busy || (state.submission && !state.noAdmissionCode && !['blocked', 'failed', 'completed'].includes(state.request?.status || ''))) return false;
-      publish({ draft: '', submission: null, receipt: null, request: null, error: null, noAdmissionCode: null });
+      publish({ draft: '', selectedAssistant: 'lumi', submission: null, receipt: null, request: null, error: null, noAdmissionCode: null });
       return true;
     },
     editRejectedRequest() {
       if (busy || !state.noAdmissionCode || !state.submission) return false;
-      publish({ draft: state.submission.text, submission: null, receipt: null, request: null, error: null, noAdmissionCode: null });
+      publish({ submission: null, receipt: null, request: null, error: null, noAdmissionCode: null });
       return true;
     },
     async submit(create: (input: AssistantSubmission) => Promise<unknown>, uuid: () => string) {
-      if (!connected || !open || busy || state.submission || !state.draft.trim() || [...state.draft].length > 4000) return;
-      const submission: AssistantSubmission = { request_id: uuid(), text: state.draft, assignee: 'lumi' };
+      if (!connected || !open || busy || state.submission || !state.draft.trim() || [...state.draft].length > assistantDraftLimit(state.selectedAssistant)) return;
+      const submission: AssistantSubmission = { request_id: uuid(), text: assistantSubmissionText(state.selectedAssistant, state.draft), assignee: 'lumi' };
       await send(create, submission);
     },
     async retrySubmission(create: (input: AssistantSubmission) => Promise<unknown>) {

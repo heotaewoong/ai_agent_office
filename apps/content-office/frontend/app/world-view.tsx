@@ -4,8 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { api } from "../lib/api";
 import { AssistantReports } from "./assistant-reports";
 import { AssistantChat } from "./assistant-chat";
-import type { AssistantRequest } from "../lib/assistant-requests";
-import { isDevAction, isStocksAction, parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
+import { parseAssistantRequest } from "../lib/assistant-requests.ts";
+import type { AssistantProfile, AssistantRequest } from "../lib/assistant-requests";
+import { isDevAction, isStocksAction, matchesAssistantReportRef, parseAssistantReportResult, parseWorldMessage, routeWorldMessage } from "../lib/world-bridge";
+import type { AssistantReportAction } from "../lib/world-bridge";
 
 type View = "news" | "studio" | "delivery" | "activity" | "world";
 
@@ -24,7 +26,10 @@ export function WorldView({
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [chatSignal, setChatSignal] = useState(0);
+  const [chatAssistant, setChatAssistant] = useState<AssistantProfile>('lumi');
   const lastAssistant = useRef<AssistantRequest | null>(null);
+  const reportAction = useRef<{ action: AssistantReportAction; resolve: (message: string) => void; reject: (reason: Error) => void; timer: number } | null>(null);
+  const reportChecking = useRef(false);
   const post = useCallback((message: Record<string, unknown>) => {
     frame.current?.contentWindow?.postMessage(
       { source: "content-office", ...message },
@@ -41,12 +46,47 @@ export function WorldView({
   });
   const inFlight = useRef(false);
 
+  const openAssistantReport = useCallback(async (request: AssistantRequest, action: 'visit' | 'result') => {
+    const report = request.report;
+    if (!report || !latest.current.connected || reportChecking.current || reportAction.current) throw new Error('작업실 연결을 확인해 주세요. 기존 보고는 보존했습니다.');
+    const reference: AssistantReportAction = { type: 'assistant-report-action', action, request_id: request.request_id,
+      task_id: report.task_id, run_id: report.run_id, event_id: report.event_id };
+    if (!matchesAssistantReportRef(reference, lastAssistant.current)) throw new Error('현재 업무와 완료 보고가 다릅니다. 같은 요청 상태를 확인해 주세요.');
+    reportChecking.current = true;
+    try {
+      const fresh = parseAssistantRequest(await api.assistantRequest(request.request_id), request.request_id);
+      if (!latest.current.connected || !frame.current?.contentWindow || !matchesAssistantReportRef(reference, fresh)
+        || !matchesAssistantReportRef(reference, lastAssistant.current)) throw new Error('최신 완료 기록이 바뀌었습니다. 기존 보고를 보존했으니 같은 요청 상태를 확인해 주세요.');
+      observeAssistant(fresh);
+      return await new Promise<string>((resolve, reject) => {
+        const timer = window.setTimeout(() => {
+          reportAction.current = null;
+          reject(new Error('작업실의 응답을 확인하지 못했습니다. 기존 보고를 보존했으며 자동으로 다시 실행하지 않습니다.'));
+        }, 10_000);
+        reportAction.current = { action: reference, resolve, reject, timer };
+        post(reference);
+      });
+    } finally { reportChecking.current = false; }
+  }, [observeAssistant, post]);
+
+  useEffect(() => () => {
+    const pending = reportAction.current;
+    if (pending) { window.clearTimeout(pending.timer); reportAction.current = null; pending.reject(new Error('화면 연결이 종료됐습니다. 기존 업무는 보존됩니다.')); }
+  }, []);
+
   useEffect(() => {
     async function handle(event: MessageEvent) {
       if (event.origin !== window.location.origin) return;
       if (event.source !== frame.current?.contentWindow) return;
-      if (event.data?.source === 'office-world' && event.data?.type === 'assistant-open') {
-        setChatSignal(signal => signal + 1);
+      const result = parseAssistantReportResult(event.data);
+      if (result) {
+        const pending = reportAction.current;
+        if (!pending || result.action !== pending.action.action
+          || result.request_id !== pending.action.request_id || result.task_id !== pending.action.task_id
+          || result.run_id !== pending.action.run_id || result.event_id !== pending.action.event_id
+          || !matchesAssistantReportRef(result, lastAssistant.current)) return;
+        window.clearTimeout(pending.timer); reportAction.current = null;
+        if (result.ok) pending.resolve(result.message); else pending.reject(new Error(result.message));
         return;
       }
       const message = parseWorldMessage(event.data);
@@ -60,6 +100,9 @@ export function WorldView({
       if (route.kind === "focus") {
         post({ type: "focus", itemId: current.activeId });
         if (lastAssistant.current) post({ type: 'assistant-observation', request: lastAssistant.current });
+      } else if (route.kind === 'assistant' && message.type === 'assistant-open') {
+        setChatAssistant(message.assistant);
+        setChatSignal(signal => signal + 1);
       } else if (route.kind === "open" && message.type === "open") {
         current.onOpen(message.view, message.itemId);
       } else if (route.kind === "reply") {
@@ -111,7 +154,7 @@ export function WorldView({
         </div>
       </div>
       <AssistantReports connected={connected} loadReports={api.assistantReports} />
-      <AssistantChat connected={connected} openSignal={chatSignal} createRequest={api.createAssistantRequest} loadRequest={api.assistantRequest} onObservation={observeAssistant} />
+      <AssistantChat connected={connected} openSignal={chatSignal} requestedAssistant={chatAssistant} createRequest={api.createAssistantRequest} loadRequest={api.assistantRequest} onObservation={observeAssistant} onReportAction={openAssistantReport} />
       <iframe
         ref={frame}
         className="world-frame"

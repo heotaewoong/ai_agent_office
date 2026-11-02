@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { assistantNames, createAssistantRequestsController, initialAssistantRequestId } from '../lib/assistant-requests.ts';
-import type { AssistantDelivery, AssistantRequest, AssistantSubmission } from '../lib/assistant-requests.ts';
+import { assistantDraftLimit, assistantNames, createAssistantRequestsController, initialAssistantRequestId, isAssistantProfile } from '../lib/assistant-requests.ts';
+import type { AssistantDelivery, AssistantProfile, AssistantRequest, AssistantSubmission } from '../lib/assistant-requests.ts';
+import { matchesAssistantReportRef } from '../lib/world-bridge.ts';
 
 const statusText = { queued: '접수 확인·담당 배정 대기', running: '실제 비서가 처리 중', blocked: '추가 확인이 필요합니다', completed: '처리 결과 확인', failed: '처리하지 못했습니다' };
 const eventText: Record<string, string> = { created: '업무 등록', claimed: '담당 접수', spawned: '비서 실행', completed: '업무 완료 기록', blocked: '확인 대기', crashed: '실행 중단', worker_result: '실행 결과 수신', dependency_wait: '앞 업무 대기' };
@@ -14,17 +15,38 @@ function slackStatus(delivery: AssistantDelivery) {
   return labels[delivery.slack] + (delivery.error_code === 'status_sender_disabled' ? ' · 상태 알림 전송 설정이 필요합니다' : delivery.error_code ? ' · 알림 상태 검토 필요' : '');
 }
 
-export function AssistantChat({ connected, openSignal, createRequest, loadRequest, onObservation }: {
+export function AssistantCompletion({ request, busy, onAction }: {
+  request: AssistantRequest; busy: boolean; onAction: (action: 'visit' | 'result') => void;
+}) {
+  const report = request.report;
+  if (!report || !matchesAssistantReportRef({ request_id: request.request_id, task_id: report.task_id, run_id: report.run_id, event_id: report.event_id }, request)) return null;
+  return <section aria-label="검증된 비서 보고">
+    <h3>루미의 완료 보고</h3><p>{report.summary}</p>
+    <p className="muted">업무 {report.task_id} · 실행 {report.run_id} · 완료 기록 {report.event_id}</p>
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <button type="button" className="button" disabled={busy} onClick={() => onAction('visit')}>작업실로 이동</button>
+      <button type="button" className="button secondary" disabled={busy} onClick={() => onAction('result')}>결과물 열기</button>
+    </div>
+    <p className="muted">생활 비서 팀의 비서 업무실과 이 업무의 완료 보고를 엽니다. 콘텐츠 파일·첨부는 연결이 확인된 경우에만 열 수 있습니다.</p>
+  </section>;
+}
+
+export function AssistantChat({ connected, openSignal, requestedAssistant = 'lumi', createRequest, loadRequest, onObservation, onReportAction }: {
   connected: boolean; openSignal: number;
+  requestedAssistant?: AssistantProfile;
   createRequest: (body: AssistantSubmission) => Promise<unknown>;
   loadRequest: (id: string) => Promise<unknown>;
   onObservation: (request: AssistantRequest) => void;
+  onReportAction?: (request: AssistantRequest, action: 'visit' | 'result') => Promise<string>;
 }) {
   const [controller] = useState(createAssistantRequestsController);
   const state = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const [open, setOpen] = useState(false);
+  const [targetNotice, setTargetNotice] = useState<string | null>(null);
+  const [reportBusy, setReportBusy] = useState(false), [reportNotice, setReportNotice] = useState<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null), trigger = useRef<HTMLButtonElement>(null), input = useRef<HTMLTextAreaElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null), lastSignal = useRef(0), latestObservation = useRef(onObservation);
+  const desiredAssistant = useRef<AssistantProfile>('lumi');
   const readReport = useRef<string | null>(null), latestReport = useRef<string | null>(null);
   const reportKey = state.request?.report?.verified ? `${state.request.request_id}:${state.request.report.task_id}:${state.request.report.run_id}:${state.request.report.event_id}` : null;
   const heading = useId(), inputId = useId(), help = useId();
@@ -47,13 +69,36 @@ export function AssistantChat({ connected, openSignal, createRequest, loadReques
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog.current?.showModal(); readReport.current = latestReport.current; setOpen(true); input.current?.focus();
   }, []);
-  useEffect(() => { if (openSignal > lastSignal.current) { lastSignal.current = openSignal; if (!dialog.current?.open) show(); } }, [openSignal, show]);
+  const requestChat = useCallback((assistant: AssistantProfile) => {
+    desiredAssistant.current = assistant;
+    const selected = controller.selectAssistant(assistant);
+    setTargetNotice(!selected && assistant !== controller.getSnapshot().selectedAssistant
+      ? `${assistantNames[assistant]}에게 말걸기를 선택했습니다. 기존 업무와 입력을 보존했으니, 확인 후 ‘새 업무 작성’을 누르면 이 비서에게 요청할 수 있습니다.` : null);
+    if (!dialog.current?.open) show();
+  }, [controller, show]);
+  useEffect(() => {
+    if (openSignal <= lastSignal.current) return;
+    lastSignal.current = openSignal;
+    requestChat(requestedAssistant);
+  }, [openSignal, requestedAssistant, requestChat]);
   useEffect(() => { if (state.request && connected) latestObservation.current(state.request); }, [state.request, connected]);
   const requestId = state.submission?.request_id;
   const delivery = state.request?.delivery || state.receipt?.delivery;
   const waitingForSlack = delivery && (['watching', 'pending', 'sent_unverified', 'unknown'].includes(delivery.slack) || (delivery.slack === 'confirmed' && !delivery.external_delivery_verified));
   const settled = Boolean(state.noAdmissionCode) || state.request?.native_status === 'archived' || (state.request?.report?.verified === true && !waitingForSlack);
   const pollDelay = state.request?.report?.verified || state.request?.status === 'blocked' || state.request?.status === 'failed' ? 30_000 : 2500;
+  const draftLimit = assistantDraftLimit(state.selectedAssistant);
+  async function openReport(action: 'visit' | 'result') {
+    if (reportBusy || !state.request) return;
+    setReportBusy(true); setReportNotice(null);
+    try {
+      if (!onReportAction) throw new Error('작업실 연결을 확인할 수 없습니다. 기존 보고는 보존했습니다.');
+      await onReportAction(state.request, action);
+      dialog.current?.close();
+    } catch (cause) {
+      setReportNotice(cause instanceof Error ? cause.message : '작업실을 열지 못했습니다. 기존 보고는 보존했습니다.');
+    } finally { setReportBusy(false); }
+  }
   useEffect(() => {
     if (!connected || !requestId || settled) return;
     const refresh = () => { if (!document.hidden) void controller.refresh(loadRequest); };
@@ -65,22 +110,25 @@ export function AssistantChat({ connected, openSignal, createRequest, loadReques
   return <section className="panel" aria-label="실제 비서에게 업무 맡기기" style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
     <h2>루미에게 업무 맡기기</h2>
     <p className="muted">요청을 보내면 실제 업무판에서 접수·협업·결과를 확인합니다. 아래 콘텐츠 역할 9개와 별도의 비서입니다.</p>
-    <button ref={trigger} type="button" className="button" onClick={show}>루미와 대화하기</button>
+    <button ref={trigger} type="button" className="button" onClick={() => requestChat('lumi')}>루미와 대화하기</button>
     <div aria-live="polite">{request?.report?.verified && reportKey !== readReport.current && !open ? <p>루미의 완료 보고가 도착했습니다. <button type="button" className="button secondary" onClick={show}>보고 열기</button></p> : request && <p className="muted">{statusText[request.status]} · {assistantNames[request.assignee]}</p>}{delivery && <p className="muted">Slack 알림: {slackStatus(delivery)}</p>}</div>
     <dialog ref={dialog} className="job-trash-dialog" aria-labelledby={heading} style={{ width: 'min(42rem, calc(100vw - 2rem))', maxHeight: '85dvh', overflowY: 'auto', boxSizing: 'border-box' }}
       onClose={() => { setOpen(false); requestAnimationFrame(() => { if (!dialog.current?.open) (previousFocus.current?.isConnected ? previousFocus.current : trigger.current)?.focus(); }); }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 }}>
-        <h2 id={heading}>루미와 대화</h2>
+        <h2 id={heading}>{state.selectedAssistant === 'lumi' ? '루미와 대화' : `${assistantNames[state.selectedAssistant]}에게 업무 요청`}</h2>
         <button type="button" className="button secondary" onClick={() => dialog.current?.close()}>닫기</button>
       </div>
       <p id={help} className="muted">무엇을 확인하고 어떤 결과를 받을지 적어 주세요. 루미가 실제 비서 업무판에 접수합니다. 콘텐츠 원고 승인①·출고②와 유료 제작·게시에는 기존 검토가 필요합니다.</p>
+      {state.selectedAssistant !== 'lumi' && <p className="muted">{assistantNames[state.selectedAssistant]}에게 배정을 요청합니다. 루미가 접수·배정을 조율하며 실제 담당과 결과는 협업 기록으로 확인합니다.</p>}
+      {targetNotice && <p role="status">{targetNotice}</p>}
       <form onSubmit={event => { event.preventDefault(); void controller.submit(createRequest, () => { const uuid = crypto.randomUUID(); try { sessionStorage.setItem(storageKey, uuid); } catch { /* 현재 화면의 요청 ID는 유지한다. */ } return uuid; }); }}>
         <label htmlFor={inputId}>맡길 업무</label>
-        <textarea id={inputId} ref={input} value={state.draft} maxLength={4000} rows={5} readOnly={Boolean(state.submission)} aria-describedby={help}
+        <textarea id={inputId} ref={input} value={state.draft} maxLength={draftLimit} rows={5} readOnly={Boolean(state.submission)} aria-describedby={help}
           style={{ width: '100%', minHeight: 140, fontSize: 16, boxSizing: 'border-box' }} onChange={event => controller.setDraft(event.target.value)} placeholder="예: 오늘 확인할 자료를 정리하고, 출처와 확인하지 못한 부분을 알려 주세요." />
-        <p className="muted">{[...state.draft].length} / 4,000자</p>
+        <p className="muted">{[...state.draft].length} / {draftLimit.toLocaleString('ko-KR')}자{state.selectedAssistant !== 'lumi' ? ' · 비서 배정 안내를 포함해 총 4,000자까지' : ''}</p>
+        {[...state.draft].length > draftLimit && <p role="alert">선택한 비서의 배정 안내를 포함하면 4,000자를 넘습니다. 입력을 줄여 주세요. 자동으로 잘라 보내지 않습니다.</p>}
         {state.submission && !state.submission.text && <p className="muted">기존 요청의 상태를 복원했습니다. 새로고침 전 입력 원문은 브라우저에 저장하지 않습니다.</p>}
-        <button className="button" type="submit" disabled={!connected || state.pending || Boolean(state.submission) || !state.draft.trim()}>실제 비서에게 보내기</button>
+        <button className="button" type="submit" disabled={!connected || state.pending || Boolean(state.submission) || !state.draft.trim() || [...state.draft].length > draftLimit}>실제 비서에게 보내기</button>
       </form>
       {!connected && <p role="status">오피스 연결을 확인해 주세요. 입력은 보존되며 요청을 보내지 않습니다.</p>}
       <div aria-live="polite" aria-busy={state.pending} style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
@@ -97,17 +145,19 @@ export function AssistantChat({ connected, openSignal, createRequest, loadReques
         {delivery && <p className="muted">Slack 알림: {slackStatus(delivery)}</p>}
         {request && <>
           <h3>{statusText[request.status]}</h3>
-          <p>{assistantNames[request.assignee]} · {request.title}</p>
+          <p>{isAssistantProfile(request.assignee) ? assistantNames[request.assignee] : 'Hermes'} · {request.title}</p>
           <p className="muted">업무 번호: {request.native_task_id || '접수 여부 확인 중'} · 실제 상태: {request.native_status || '확인 중'}</p>
           {request.error && <p role="status">{request.error.code === 'native_admission_unknown' ? '접수 여부를 확인하고 있습니다. 같은 요청을 새로 보내지 않습니다.' : request.error.message}</p>}
           {request.status === 'blocked' && <p>아래 사유와 기존 업무 번호를 확인한 뒤 필요한 내용을 보완하세요. 자동으로 다시 실행하지 않습니다.</p>}
           {request.status === 'failed' && <p>기존 요청과 입력을 보존했습니다. 실제 업무판의 오류를 확인한 뒤 다음 요청을 결정하세요.</p>}
           {request.events.length > 0 && <details><summary>실제 협업 기록 {request.events.length}개</summary><ol>{request.events.slice(-30).map(event => <li key={event.id}>{assistantNames[event.assignee]} · {eventText[event.kind] || '업무 상태 변경'} · {event.task_id} · 기록 {event.id}</li>)}</ol></details>}
-          {request.report?.verified ? <section aria-label="검증된 비서 보고"><h3>루미의 완료 보고</h3><p>{request.report.summary}</p><p className="muted">업무 {request.report.task_id} · 실행 {request.report.run_id} · 완료 기록 {request.report.event_id}</p></section> : request.status === 'completed' ? <p>완료 근거를 확인하는 중입니다. 확인 전에는 완료 보고로 표시하지 않습니다.</p> : null}
+          {request.report?.verified ? <AssistantCompletion request={request} busy={reportBusy || !connected} onAction={action => { void openReport(action); }} /> : request.status === 'completed' ? <p>완료 근거를 확인하는 중입니다. 확인 전에는 완료 보고로 표시하지 않습니다.</p> : null}
+          {reportBusy && <p role="status">최신 완료 기록과 작업실 연결을 확인하고 있습니다.</p>}
+          {reportNotice && <p role="alert">{reportNotice}</p>}
         </>}
       </div>
       {requestId && <button type="button" className="button secondary" disabled={!connected || state.pending} onClick={() => { void controller.refresh(loadRequest); }}>같은 요청 상태 확인</button>}
-      {settled && !state.noAdmissionCode && <button type="button" className="button secondary" disabled={state.pending} onClick={() => { if (controller.newRequest()) { try { sessionStorage.removeItem(storageKey); } catch { /* 현재 화면은 새 요청을 작성한다. */ } input.current?.focus(); } }}>새 업무 작성</button>}
+      {settled && !state.noAdmissionCode && <button type="button" className="button secondary" disabled={state.pending || reportBusy} onClick={() => { if (controller.newRequest()) { controller.selectAssistant(desiredAssistant.current); setTargetNotice(null); setReportNotice(null); try { sessionStorage.removeItem(storageKey); } catch { /* 현재 화면은 새 요청을 작성한다. */ } input.current?.focus(); } }}>새 업무 작성</button>}
     </dialog>
   </section>;
 }
