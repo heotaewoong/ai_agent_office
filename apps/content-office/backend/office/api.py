@@ -119,6 +119,10 @@ class JobSelection(BaseModel):
     start_draft: bool = Field(default=False, strict=True)
 
 
+class JobTrashRequest(BaseModel):
+    expected_updated_at: str = Field(min_length=1, max_length=100)
+
+
 class SourceEdit(BaseModel):
     packet: dict
     version: str | None = None
@@ -508,6 +512,20 @@ def create_app(store: Store | None = None):
                     task = store.enqueue("draft", {"job_id": job["id"], "source_hash": None}, key=f"draft:{job['id']}:initial")
                     requests.append({"job_id": job["id"], "state": task["state"], "task_id": task["id"]})
         return {"jobs": jobs, "draft_requests": requests}
+
+    @app.get('/api/trash/jobs')
+    def job_trash_list():
+        return {'jobs': [{**_job_summary(j, compact=True), 'deleted_at':j['deleted_at']} for j in store.jobs(deleted=True)]}
+
+    @app.post('/api/jobs/{job_id}/trash')
+    def trash_job(job_id: str, body: JobTrashRequest):
+        from .job_trash import move
+        return move(store, job_id, body.expected_updated_at)
+
+    @app.post('/api/jobs/{job_id}/restore')
+    def restore_job(job_id: str, body: JobTrashRequest):
+        from .job_trash import move
+        return move(store, job_id, body.expected_updated_at, restore=True)
 
     @app.get("/api/jobs/summaries")
     def job_summaries(limit: int = Query(80, ge=1, le=80)):

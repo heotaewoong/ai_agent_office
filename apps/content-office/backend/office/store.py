@@ -93,17 +93,22 @@ class Store:
             db.close()
 
     @staticmethod
-    def _job(db, job_id):
+    def _job(db, job_id, *, include_deleted=False):
         row = db.execute("SELECT data FROM jobs WHERE id=?", (job_id,)).fetchone()
         if not row:
             raise WorkflowError("업무를 찾을 수 없습니다")
-        return json.loads(row[0])
+        job = json.loads(row[0])
+        if job.get('deleted_at') and not include_deleted:
+            raise WorkflowError('휴지통에 있는 작업입니다. 복원한 뒤 다시 요청하세요')
+        return job
 
     @staticmethod
     def _write_job(db, job):
         from .version_history import archive_production
         previous = db.execute("SELECT data FROM jobs WHERE id=?", (job['id'],)).fetchone()
         if previous:
+            if json.loads(previous[0]).get('deleted_at'):
+                raise WorkflowError('휴지통에 있는 작업은 변경할 수 없습니다. 먼저 복원하세요')
             archive_production(db, json.loads(previous[0]))
         archive_production(db, job)
         job["updated_at"] = now()
@@ -155,6 +160,8 @@ class Store:
         for row in db.execute("SELECT data FROM jobs"):
             existing = json.loads(row[0])
             if existing["article"]["id"] == article["id"]:
+                if existing.get('deleted_at'):
+                    raise WorkflowError('같은 기사의 작업이 휴지통에 있습니다. 기존 작업을 복원하세요')
                 return existing
         job = {"id": identifier("job"), "article": article, "title": article.get("editorial_title", article["title"]), "state": "research_ready", "error": None, "source_hash": None, "source_packet": None, "source_approval": None, "release_approval": None, "manifest": None, "selections": {"blog": True, "video": True, "pdf": False, "cards": False}, "brief": brief, "created_at": now(), "updated_at": now()}
         db.execute("INSERT INTO jobs VALUES(?,?,?)", (job["id"], canonical(job), now()))
@@ -186,12 +193,13 @@ class Store:
                 job["offer_hash"] = offer_hash(job.get("offer"))
             return job
 
-    def jobs(self, limit=None):
+    def jobs(self, limit=None, *, deleted=False):
         with self.connection() as db:
+            query = "SELECT data FROM jobs WHERE (json_extract(data,'$.deleted_at') IS NOT NULL)=? ORDER BY updated_at DESC"
             if limit is None:
-                rows = db.execute("SELECT data FROM jobs ORDER BY updated_at DESC")
+                rows = db.execute(query, (deleted,))
             else:
-                rows = db.execute("SELECT data FROM jobs ORDER BY updated_at DESC LIMIT ?", (limit,))
+                rows = db.execute(query + " LIMIT ?", (deleted, limit))
             return [json.loads(row[0]) for row in rows]
 
     def update_job(self, job_id, **values):
@@ -454,6 +462,9 @@ class Store:
         the operator's next click queues a fresh task (key suffixed with the attempt number). Queued,
         running, completed and unknown attempts are returned as they are; unknown stays until reconciled."""
         with self.connection(transaction=True) as db:
+            row = db.execute("SELECT data FROM jobs WHERE id=?", (payload.get('job_id'),)).fetchone()
+            if row and json.loads(row[0]).get('deleted_at'):
+                raise WorkflowError('휴지통에 있는 작업입니다. 복원한 뒤 다시 요청하세요')
             if guard_unknown_scope and db.execute(
                 "SELECT 1 FROM tasks WHERE kind=? AND json_extract(payload,'$.job_id') IS ? AND json_extract(payload,'$.source_hash') IS ? AND state='unknown' LIMIT 1",
                 (kind, payload.get("job_id"), payload.get("source_hash")),
@@ -739,6 +750,9 @@ class Store:
             raise WorkflowError("잘못된 비용 한도입니다")
         maximum = math.ceil(maximum_krw)
         with self.connection(transaction=True) as db:
+            row = db.execute("SELECT data FROM jobs WHERE id=?", (data.get('job_id'),)).fetchone()
+            if row and json.loads(row[0]).get('deleted_at'):
+                raise WorkflowError('휴지통에 있는 작업의 비용은 예약할 수 없습니다. 먼저 복원하세요')
             if data.get("cache_key"):
                 for row in db.execute("SELECT data FROM costs WHERE state IN ('reserved','unknown')"):
                     if json.loads(row[0]).get("cache_key") == data["cache_key"]:
