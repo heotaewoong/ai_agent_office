@@ -209,6 +209,7 @@ def scoped_card(card):
 
 
 def approved_target(source_id):
+    """Offline operator provisioning probe only; the read-only service uses its private target pin."""
     with sqlite3.connect(NATIVE_DB.as_uri() + '?mode=ro', uri=True) as db:
         db.row_factory = sqlite3.Row
         db.execute('PRAGMA query_only=ON')
@@ -216,6 +217,14 @@ def approved_target(source_id):
     if len(rows) != 1 or not re.fullmatch(r'[CGD][A-Z0-9]{8,24}', rows[0]['chat_id']):
         raise RelayError('notification_target_unavailable')
     return {'chat_id': rows[0]['chat_id']}
+
+
+def pinned_target(config):
+    task_id(config.get('source_task_id'))  # Audit reference, never an automatic destination lookup.
+    target = config.get('target_chat_id')
+    if not isinstance(target, str) or not re.fullmatch(r'[CG][A-Z0-9]{8,24}', target):
+        raise RelayError('notification_target_unavailable')
+    return {'chat_id': target}
 
 
 def status_message(metadata, office_origin=None):
@@ -486,6 +495,8 @@ class Relay:
             old = self.watches.get(rid)
             if old and old['task_id'] != ident:
                 raise RelayError('request_conflict')
+            if old and old['target_hash'] != hashlib.sha256(target.encode()).hexdigest():
+                raise RelayError('notification_target_changed')
             if not old:
                 if len(self.watches) >= 128:
                     raise RelayError('watch_limit')
@@ -505,11 +516,14 @@ class Relay:
         if not row or row['notice'] is None:
             self.reference(rid, ident)
         stored_ref = notice_reference(row['notice']) if row else None
-        verified = bool(row and row['state'] == 'confirmed' and stored_ref is not None and stored_ref == notice_reference(current))
+        target_matches = not row or row['target_hash'] == hashlib.sha256(self.source()['chat_id'].encode()).hexdigest()
+        verified = bool(row and target_matches and row['state'] == 'confirmed' and stored_ref is not None and stored_ref == notice_reference(current))
         state = row['state'] if row else 'not_attached'
         if state == 'confirmed' and not verified:
             state = 'watching'
         error = ({'code': row['error_code'], 'message': '상태 알림의 연결·실행 근거를 확인해야 합니다.'} if row and row.get('error_code') else None)
+        if not target_matches:
+            error = {'code': 'notification_target_changed', 'message': '기존 알림 대상과 서버 설정이 달라 운영 검토가 필요합니다.'}
         return {'task_id': ident, 'request_id': rid, 'state': state, 'notice_ref': stored_ref,
                 'subscription_id': row['subscription_id'] if row else None, 'target_hash': row['target_hash'] if row else None,
                 'external_delivery_verified': verified,
@@ -697,9 +711,10 @@ def main():
     if sys.platform != 'linux' or os.geteuid() != 1001:
         raise RelayError('native_runtime_required')
     config = private_json(args.config)
-    allowed = {'socket_path', 'socket_gid', 'state_file', 'source_task_id', 'notify_enabled', 'allow_uid', 'read_probe_uid', 'office_origin', 'native_python', 'native_repo', 'pythonpath'}
+    allowed = {'socket_path', 'socket_gid', 'state_file', 'source_task_id', 'target_chat_id', 'notify_enabled', 'allow_uid', 'read_probe_uid', 'office_origin', 'native_python', 'native_repo', 'pythonpath'}
     if set(config) - allowed or config.get('allow_uid', 1000) != 1000 or type(config.get('notify_enabled', False)) is not bool:
         raise RelayError('invalid_configuration')
+    target = pinned_target(config)
     runtime = trusted_runtime(config) if config.get('notify_enabled') or args.slack else None
     if args.slack:
         slack_child(args.slack, runtime); return
@@ -713,9 +728,7 @@ def main():
     info = socket_path.parent.lstat()
     if not socket_path.is_absolute() or socket_path.exists() or socket_path.is_symlink() or not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) & 0o027:
         raise RelayError('private_socket_directory_required')
-    source_id = task_id(config['source_task_id'])
-    source = lambda: approved_target(source_id)
-    source()
+    source = lambda: dict(target)
     app = Relay(NativeHTTP(), config['state_file'], source=source, sender=SlackSender(args.config, runtime, config.get('office_origin')) if runtime else None,
                 notify_enabled=config.get('notify_enabled', False), allow_uid=config.get('allow_uid', 1000), read_probe_uid=config.get('read_probe_uid'))
     class LocalServer(socketserver.UnixStreamServer):

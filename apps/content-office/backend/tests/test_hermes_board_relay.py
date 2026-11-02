@@ -536,6 +536,56 @@ def test_missing_native_runtime_is_rejected_without_guessing_an_executable():
         relay.trusted_runtime({})
 
 
+def test_service_start_uses_operator_pinned_target_without_opening_native_sqlite(monkeypatch, tmp_path):
+    import stat
+    class StartupReached(BaseException):
+        pass
+    config = {'socket_path': str(tmp_path / 'relay.sock'), 'socket_gid': 1000,
+              'state_file': str(tmp_path / 'state.json'), 'source_task_id': 't_approved_source',
+              'target_chat_id': 'G1234567890'}
+    monkeypatch.setattr(sys, 'argv', ['hermes-board-relay', '--config', str(tmp_path / 'config.json')])
+    monkeypatch.setattr(relay.sys, 'platform', 'linux')
+    monkeypatch.setattr(relay, 'os', types.SimpleNamespace(geteuid=lambda: 1001))
+    monkeypatch.setattr(relay, 'private_json', lambda path: config)
+    original_lstat = Path.lstat
+    def lstat(path):
+        info = original_lstat(path)
+        return types.SimpleNamespace(st_uid=1001, st_mode=(stat.S_IFDIR | 0o750) if path.is_dir() else (stat.S_IFREG | 0o600))
+    monkeypatch.setattr(Path, 'lstat', lstat)
+    def no_native_sqlite(*args, **kwargs):
+        raise AssertionError('service must not open the native SQLite file under read-only home')
+    monkeypatch.setattr(relay.sqlite3, 'connect', no_native_sqlite)
+    monkeypatch.setattr(relay, 'approved_target', no_native_sqlite)
+    def start(native, state_file, *, source, **kwargs):
+        assert source() == {'chat_id': 'G1234567890'}
+        raise StartupReached()
+    monkeypatch.setattr(relay, 'Relay', start)
+    with pytest.raises(StartupReached):
+        relay.main()
+
+
+@pytest.mark.parametrize('target', [None, '', 'D1234567890', 'G1234567890?token=secret', 'https://example.com', 'G1234567890\n'])
+def test_operator_target_pin_rejects_missing_dm_or_malformed_destinations(target):
+    with pytest.raises(relay.RelayError):
+        relay.pinned_target({'source_task_id': 't_approved_source', 'target_chat_id': target})
+
+
+def test_changed_operator_pin_cannot_confirm_or_retarget_an_existing_watch(tmp_path):
+    app, native, sender, _ = fixture(tmp_path)
+    collaboration(native)
+    app.subscribe(RID, ROOT); app.tick()
+    sender.confirm = True; app.tick()
+    assert app.delivery_status(RID, ROOT)['external_delivery_verified'] is True
+    app.source = lambda: {'chat_id': 'G0987654321'}
+    result = app.delivery_status(RID, ROOT)
+    assert result['external_delivery_verified'] is False
+    assert result['error']['code'] == 'notification_target_changed'
+    with pytest.raises(relay.RelayError):
+        app.subscribe(RID, ROOT)
+    app.tick()
+    assert len(sender.sent) == 1
+
+
 @pytest.mark.parametrize('case,allowed', [
     ('private_primary_group', True), ('other_primary_member', False),
     ('other_supplemental_member', False), ('wrong_group', False),

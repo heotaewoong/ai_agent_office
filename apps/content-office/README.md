@@ -16,6 +16,8 @@ EC2의 제한된 relay 서비스 예시는 `scripts/systemd/heobrain-hermes-boar
 
 Slack 전달은 native 연결이 허용한 상태 알림만 다룹니다. 업무 본문·모델 요약·파일·첨부를 보내는 native 칸반 자동 알림 구독은 만들지 않습니다. 기능이 없으면 `delivery.slack=not_attached`, 검토가 필요하면 `privacy_review_required`로 표시하며 비서 업무 접수는 보존합니다. `watching`은 감시 등록, `sent_unverified`는 전송 후 재확인 전, `unknown`은 결과 대기이며 실제 Slack 수신 완료와 다릅니다. native Slack 재조회가 `confirmed`와 명시적 검증값을 반환하고 `notice_ref`의 요청·task·run·event·종료 상태가 현재 실제 보고 근거와 모두 같아야만 `external_delivery_verified=true`가 됩니다. 과거 입력 대기 알림의 수신을 새 완료 보고의 수신으로 바꾸지 않습니다. 기존 채널·봇·예약을 보존합니다.
 
+relay의 native 소유0600 설정에는 운영자가 실제 기존 Slack/Lumi 승인 구독에서 확인한 `target_chat_id`를 고정합니다. `source_task_id`는 그 승인 근거를 가리키는 감사 참조이며 서비스가 native SQLite를 열거나 변경된 알림 대상을 자동 추적하는 데 쓰지 않습니다. 채널 ID는 native 전용 메타데이터로만 유지하고 Ubuntu·화면에는 대상 해시만 반환합니다. 대상 변경은 운영자의 재확인이 필요하며, 기존 감시 기록의 대상 해시와 현재 설정이 다르면 재전송·대상 변경·수신 완료 확인을 보류합니다. `approved_target()`은 서비스 밖의 읽기 전용 설치 확인용입니다.
+
 ## 선별한 무료 원고 점검·로컬 검색 — 2026-11-02
 
 블로그 영역의 ‘원고 구성 점검’은 저장된 현재 판본의 길이·소제목·목록·등록 근거 ID 연결과 SNS 글자 수를 읽기 전용으로 표시합니다. 짧다는 이유만으로 질문에 답한다고 판정하지 않으며, 미등록 ID·빈 글·코드 블록의 가짜 소제목을 긍정 신호로 세지 않습니다. SEO/조회 성과·사실 정확성·콘텐츠 품질 점수가 아니고 승인·원고·비용을 바꾸지 않습니다. 유료 모델 버튼·새 설정·공개 API는 추가하지 않았습니다.
