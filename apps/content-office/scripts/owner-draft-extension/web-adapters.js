@@ -35,7 +35,7 @@
     const fields=await wait(()=>{const f=blogFields(item);return f.every(Boolean)?f:null;});
     if(message.kind==='verify-nonpublic'){
      if(text(fields[0])!==item.title.trim() || text(fields[1])!==item.text.replace(/\r/g,'').trim())throw Error('저장본 재열기 본문 불일치');
-     reply({verified:true,external_id:location.origin+'/draft/'+item.id});return;
+     reply({verified:true,external_id:location.href});return;
     }
     put(fields[0],item.title);put(fields[1],item.text);
     if(text(fields[0])!==item.title.trim() || text(fields[1])!==item.text.replace(/\r/g,'').trim())throw Error('본문 입력 검증 실패');
@@ -49,7 +49,7 @@
    const field=await wait(()=>{try{return editor();}catch{return null;}});
    if(message.kind==='verify-nonpublic'){
     if(field.innerText.replace(/\r/g,'').trim()!==item.text.replace(/\r/g,'').trim())throw Error('재열기 본문 불일치');
-    reply({verified:true,external_id:location.origin+'/draft/'+item.id});return;
+    reply({verified:true,external_id:location.href});return;
    }
    if(field.innerText.trim())throw Error('기존 초안을 보존하기 위해 중단했습니다');
    const modal=field.closest('dialog,[role="dialog"]');

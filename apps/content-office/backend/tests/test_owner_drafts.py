@@ -48,6 +48,23 @@ def test_tistory_queue_accepts_real_blog_export_names(tmp_path):
     assert row['text'] == (folder / 'tistory.md').read_text(encoding='utf-8')
     assert store.job(jid)['source_approval'] == job['source_approval']
     assert store.job(jid)['release_approval'] is None
+    claimed = owner_drafts.claim(store, row['id'], 'fixture')
+    proof = {k: claimed[k] for k in ('claim_id', 'content_hash', 'account_id')}
+    saved = owner_drafts.receipt(store, row['id'], {**proof, 'state': 'platform_draft',
+        'external_id': 'https://onethingflow.tistory.com/manage/newpost/?draftId=12345'})
+    assert saved['state'] == 'platform_draft'
+    assert owner_drafts.view(store, jid)['items'][0]['external_id'] == saved['external_id']
+    # Preserve old evidence for audit; do not promote a synthetic legacy locator to a new package.
+    ledger = store.setting(owner_drafts.SETTING)
+    ledger[row['id']]['external_id'] = 'https://onethingflow.tistory.com/draft/' + row['id']
+    store.set_setting(owner_drafts.SETTING, ledger)
+    current = store.job(jid)
+    store.update_job(jid, manifest={**current['manifest'], 'hash': 'f' * 64})
+    newer, = owner_drafts.prepare(store, jid)
+    assert newer['state'] == 'pending'
+    assert store.setting(owner_drafts.SETTING)[row['id']]['state'] == 'platform_draft'
+    assert store.job(jid)['source_approval'] == job['source_approval']
+    assert store.job(jid)['release_approval'] is None
 
 
 def test_claim_is_single_and_public_receipt_is_rejected(tmp_path):
@@ -368,3 +385,49 @@ def test_content_only_source_review_preserves_existing_delivery_policy_and_pendi
     assert saved['owner_draft_policy'] == before['owner_draft_policy']
     assert saved['source_hash'] == before['source_hash']
     assert owner_drafts.prepare(store, jid) == rows
+
+
+@pytest.mark.parametrize('reference', [
+    'https://onethingflow.tistory.com/draft/{id}',
+    'https://other.tistory.com/manage/posts/123',
+    'https://onethingflow.tistory.com.evil.example/manage/posts/123',
+    'http://onethingflow.tistory.com/manage/posts/123',
+    'https://owner@onethingflow.tistory.com/manage/posts/123',
+    'https://onethingflow.tistory.com:444/manage/posts/123',
+    'local-draft-complete',
+])
+def test_web_draft_receipt_rejects_synthetic_or_wrong_platform_reference(tmp_path, reference):
+    from office.channels import update_channel
+    from office.exports import write_blog_exports
+    from office.media import artifact_record
+    store, jid = ready(tmp_path)
+    update_channel(store, 'tistory_main', {'publication_enabled': True}, actor='fixture')
+    job = store.job(jid)
+    folder = store.artifacts / jid / 'web-receipt'
+    folder.mkdir()
+    files = write_blog_exports(job['source_packet'], folder)
+    store.update_job(jid, manifest={**job['manifest'], 'files': [
+        {**artifact_record(store.artifacts, p), 'outputs': ['blog']} for p in files]},
+        owner_draft_policy=owner_drafts.policy(store, job, ['tistory_main'], 'fixture'))
+    row, = owner_drafts.prepare(store, jid)
+    claimed = owner_drafts.claim(store, row['id'], 'fixture')
+    before = store.setting(owner_drafts.SETTING)
+    proof = {k: claimed[k] for k in ('claim_id', 'content_hash', 'account_id')}
+    with pytest.raises(WorkflowError, match='플랫폼'):
+        owner_drafts.receipt(store, row['id'], {**proof, 'state': 'platform_draft',
+            'external_id': reference.format(id=row['id'])})
+    assert store.setting(owner_drafts.SETTING) == before
+    assert store.job(jid)['release_approval'] is None
+
+
+@pytest.mark.parametrize('platform, host, value, valid', [
+    ('tistory', 'https://onethingflow.tistory.com', 'https://onethingflow.tistory.com/manage/newpost/?draftId=12345', True),
+    ('naver_blog', 'https://blog.naver.com/oneflowwhy', 'https://blog.naver.com/oneflowwhy/postwrite', True),
+    ('threads', 'https://www.threads.net/@owner', 'https://www.threads.com/', True),
+    ('threads', 'https://www.threads.net/@owner', 'https://www.threads.com.evil.example/', False),
+    ('linkedin', 'https://www.linkedin.com/in/owner', 'https://www.linkedin.com/feed/', True),
+    ('tistory', 'https://onethingflow.tistory.com', 'https://onethingflow.tistory.com/draft/%6fd_' + 'a'*24, False),
+])
+def test_actual_reopen_locator_and_threads_domain_alias(platform, host, value, valid):
+    row={'visibility':'draft','target':{'platform':platform,'public_url':host}}
+    assert owner_drafts._platform_reference(row,value) is valid

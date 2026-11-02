@@ -3,7 +3,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from .channels import channel
 from .runtime import window_open
@@ -149,6 +149,7 @@ def prepare(store, jid, *, channel_keys=None):
                 previous = next((r for r in rows.values()
                                  if r['state'] in ('platform_private', 'platform_draft')
                                  and r.get('external_id') and r.get('verified_at')
+                                 and _platform_reference(r, r['external_id'])
                                  and _delivery_key(r) == _delivery_key(item)), None)
                 if previous:
                     item.update(state=previous['state'], external_id=previous['external_id'],
@@ -232,6 +233,25 @@ def claim(store, rid, actor):
         return {**current, 'authorized_end': store.setting('work_window', {})['authorized_end']}
 
 
+def _platform_reference(row, value):
+    """A returned web URL is a locator, not independent proof of persistence."""
+    if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_:/?.=&@%#\-]{1,500}', value):
+        return False
+    if row['visibility'] == 'private':
+        return True  # YouTube's uploader separately re-queries its opaque video ID.
+    try:
+        url = urlparse(value)
+        host = urlparse(row['target']['public_url']).hostname
+        hosts = {host}
+        if row['target']['platform'] == 'threads':
+            hosts = {'www.threads.net', 'threads.net', 'www.threads.com', 'threads.com'}
+        return (url.scheme == 'https' and url.hostname in hosts and url.port in (None, 443)
+                and not url.username and not url.password
+                and not re.search(r'od_[0-9a-f]{24}', unquote(value), re.IGNORECASE))
+    except ValueError:
+        return False
+
+
 def receipt(store, rid, proof):
     allowed = {'state', 'claim_id', 'content_hash', 'account_id', 'external_id', 'reason'}
     if not isinstance(proof, dict) or set(proof) - allowed or proof.get('state') not in ('platform_private', 'platform_draft', 'blocked', 'unknown'):
@@ -243,7 +263,7 @@ def receipt(store, rid, proof):
     if any(proof.get(k) != row.get(k) for k in ('claim_id', 'content_hash', 'account_id')):
         raise WorkflowError('초안 결과의 본문·계정·처리 키가 다릅니다')
     expected = 'platform_private' if row['visibility'] == 'private' else 'platform_draft'
-    if proof['state'] not in (expected, 'blocked', 'unknown') or (proof['state'] == expected and not re.fullmatch(r'[A-Za-z0-9_:/?.=&@%#\-]{1,500}', proof.get('external_id', ''))):
+    if proof['state'] not in (expected, 'blocked', 'unknown') or (proof['state'] == expected and not _platform_reference(row, proof.get('external_id'))):
         raise WorkflowError('플랫폼의 비공개·임시저장 확인이 필요합니다')
     with store.connection(transaction=True) as db:
         rows = _ledger(db)
