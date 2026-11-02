@@ -24,6 +24,8 @@ for(const width of [1440,375])test(`채널별 완성 원고 ${width}px LinkedIn�
  const f=await harness(page);
  f.job.manifest.files[0].url='/api/artifacts/f0';
  f.job.manifest.files.push({id:'threads-file',name:'threads-main.txt',kind:'text',outputs:['blog'],sha256:'a'.repeat(64),url:'/api/artifacts/threads-file'});
+ f.job.manifest.files.push({id:'instagram-file',name:'instagram-main-caption.txt',kind:'text',outputs:['blog'],sha256:'a'.repeat(64),url:'/api/artifacts/instagram-file'},
+  {id:'video-file',name:'short.mp4',kind:'video',outputs:['video'],sha256:'a'.repeat(64),url:'/api/artifacts/video-file'});
  await page.route('**/api/jobs/*/blog-preview?format=*',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<meta charset="utf-8"><p>검증된 채널 파일 본문</p>'}));
  await page.setViewportSize({width,height:1000});await page.goto('/publish?job='+f.id);
  const toolbar=page.getByRole('region',{name:'제작물 읽기'});
@@ -35,6 +37,10 @@ for(const width of [1440,375])test(`채널별 완성 원고 ${width}px LinkedIn�
   await expect(preview.contentFrame().locator('body')).toContainText('검증된 채널 파일 본문');
  }
  expect(f.writes).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ if(width===375){
+  const sizes=await toolbar.getByRole('group',{name:'제작물 보기'}).getByRole('button').evaluateAll(buttons=>buttons.map(button=>({width:button.getBoundingClientRect().width,height:button.getBoundingClientRect().height})));
+  expect(sizes).toHaveLength(5);expect(sizes.every(size=>size.width>=120&&size.height<=90)).toBe(true);
+ }
 });
 
 for(const width of [1440,375])test(`복수 대상 ${width}px 영상·글·미연결 상태를 함께 비교하고 개별 요청한다`,async({page})=>{

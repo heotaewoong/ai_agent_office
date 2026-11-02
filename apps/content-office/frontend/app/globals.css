@@ -1865,7 +1865,7 @@ h1 {
 @media (max-width: 640px) {
   .preview-toolbar { padding: 14px; }
   .preview-heading { align-items: flex-start; flex-direction: column; }
-  .preview-output-buttons .button { flex: 1; justify-content: center; }
+  .preview-output-buttons .button { flex: 1 1 140px; justify-content: center; }
   .preview-formats button { min-height: 42px; }
   .artifact-preview.blog-preview iframe { height: 780px; }
 }
