@@ -1990,7 +1990,7 @@
       $('btn-traffic').addEventListener('click', () => { if (REDUCED) return; world.trafficPaused = !world.trafficPaused; world.syncMotionUI(); });
       $('btn-rooms').addEventListener('click', () => { const open = $('cards').classList.toggle('mobile-open'); $('btn-rooms').setAttribute('aria-expanded', String(open)); });
       $('btn-layer').addEventListener('click', () => this.setLayer(space.layer === 'office' ? 'meadow' : 'office', space.view === 'walk'));
-      $('btn-overview').addEventListener('click', () => this.setView('overview'));
+      $('btn-overview').addEventListener('click', () => this.exitSpace());
       $('btn-walk').addEventListener('click', () => this.setView('walk'));
       $('btn-reset').addEventListener('click', () => { hud.closePanel(); this.resetOverview(); });
       $('btn-exit').addEventListener('click', () => this.exitSpace());
@@ -1998,10 +1998,16 @@
 
     // 걷기 시점에서 나가기: 전체 조망으로 복귀
     exitSpace() {
+      this.keys.clear();
+      this.dragging = false;
+      this.setVehicleSpeed(0);
+      if (workshop.opened) workshop.setOpen(false);
+      workbench.setRoster(false);
       hud.closePanel();
       this.focused = null;
       this.setView('overview');
       this.resetOverview();
+      world.syncRendering();
     },
 
     setView(view) {
