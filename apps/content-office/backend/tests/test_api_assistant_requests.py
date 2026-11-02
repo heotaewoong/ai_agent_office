@@ -89,6 +89,92 @@ def test_same_uuid_changed_payload_is_conflict_without_native_post(bridge):
     assert len(bridge[2].posts) == 1
 
 
+def native_only_root(bridge, rid, text="Slack에서 요청한 협업"):
+    # Native-owned Slack intake has no Content Office Store record.
+    from office.assistant_request_protocol import task_payload
+    native = bridge[2]
+    native.create(task_payload(rid, text))
+    native.posts.clear()
+    return native.cards[0]
+
+
+def test_get_adopts_native_only_root_without_store_or_task_writes(bridge):
+    store, _, native, client, _ = bridge
+    rid = str(uuid.uuid4())
+    native_only_root(bridge, rid)
+    before = store.setting("assistant_request:" + rid)
+    result = client.get("/api/assistant/requests/" + rid)
+    assert result.status_code == 200 and result.json()["native_task_id"] == "t_fixture"
+    assert result.json()["status"] == "queued"
+    assert "Slack에서 요청한 협업" not in result.text and "body_hash" not in result.text
+    assert before is None and store.setting("assistant_request:" + rid) is None
+    assert native.posts == []
+
+
+@pytest.mark.parametrize("patch", [{"tenant":"other"}, {"assignee":"ada"}, {"body":""}, {"body":"x"*8001}])
+def test_get_native_only_root_rejects_untrusted_scope_or_body(bridge, patch):
+    rid = str(uuid.uuid4())
+    card = native_only_root(bridge, rid)
+    card.update(patch)
+    response = bridge[3].get("/api/assistant/requests/" + rid)
+    assert response.status_code == 409
+    assert bridge[0].setting("assistant_request:" + rid) is None and bridge[2].posts == []
+
+
+def test_duplicate_native_only_uuid_is_not_adopted(bridge):
+    rid = str(uuid.uuid4())
+    card = native_only_root(bridge, rid)
+    bridge[2].cards.append({**card, "id":"t_other"})
+    response = bridge[3].get("/api/assistant/requests/" + rid)
+    assert response.status_code == 409 and response.json()["code"] == "native_duplicate_request"
+    assert bridge[0].setting("assistant_request:" + rid) is None and bridge[2].posts == []
+
+
+def test_native_only_detail_must_match_the_scoped_board_reference(bridge):
+    rid = str(uuid.uuid4())
+    card = native_only_root(bridge, rid)
+    bridge[2].details["t_fixture"]["task"] = {**card, "assignee":"ada"}
+    response = bridge[3].get("/api/assistant/requests/" + rid)
+    assert response.status_code == 409
+    assert bridge[0].setting("assistant_request:" + rid) is None and bridge[2].posts == []
+
+
+def test_conflicting_web_post_cannot_poison_native_only_get(bridge):
+    rid = str(uuid.uuid4())
+    native_only_root(bridge, rid)
+    rejected = submit(bridge, rid, "다른 내용")
+    assert rejected.status_code == 409
+    assert bridge[0].setting("assistant_request:" + rid) is None
+    assert bridge[3].get("/api/assistant/requests/" + rid).status_code == 200
+    assert bridge[2].posts == []
+
+
+def test_same_text_web_post_can_adopt_native_only_root_without_duplicate(bridge):
+    rid = str(uuid.uuid4())
+    native_only_root(bridge, rid)
+    response = submit(bridge, rid, "Slack에서 요청한 협업")
+    assert response.status_code == 202 and response.json()["native_task_id"] == "t_fixture"
+    assert bridge[2].posts == []
+
+
+def test_native_slack_win_between_web_preflight_and_create_cannot_poison_get(bridge):
+    from office.assistant_requests import BridgeError
+    from office.assistant_request_protocol import task_payload
+    rid = str(uuid.uuid4())
+    native = bridge[2]
+    original_create = native.create
+    def racing_create(_payload):
+        original_create(task_payload(rid, "원래 Slack 업무"))
+        # The relay definitively refuses web body A after the native intake admitted B.
+        raise BridgeError("native_relay_rejected", "relay refused")
+    native.create = racing_create
+    response = submit(bridge, rid, "경쟁 웹 업무")
+    assert response.status_code == 409
+    assert bridge[0].setting("assistant_request:" + rid) is None
+    assert bridge[3].get("/api/assistant/requests/" + rid).status_code == 200
+    assert len(native.posts) == 1
+
+
 def test_ack_timeout_reconciles_same_native_key_without_resubmission(bridge):
     _, _, native, client, _ = bridge
     native.timeout_after_create = True

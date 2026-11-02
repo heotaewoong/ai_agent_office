@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { assistantNames, createAssistantRequestsController } from '../lib/assistant-requests.ts';
+import { assistantNames, createAssistantRequestsController, initialAssistantRequestId } from '../lib/assistant-requests.ts';
 import type { AssistantDelivery, AssistantRequest, AssistantSubmission } from '../lib/assistant-requests.ts';
 
 const statusText = { queued: '접수 확인·담당 배정 대기', running: '실제 비서가 처리 중', blocked: '추가 확인이 필요합니다', completed: '처리 결과 확인', failed: '처리하지 못했습니다' };
@@ -33,7 +33,16 @@ export function AssistantChat({ connected, openSignal, createRequest, loadReques
     if (open && reportKey) readReport.current = reportKey;
   }, [controller, connected, open, onObservation, reportKey]);
   useEffect(() => () => { controller.setAvailability(false, false); }, [controller]);
-  useEffect(() => { try { const saved = sessionStorage.getItem(storageKey); if (saved) controller.restore(saved); } catch { /* 접수 원문과 인증은 저장하지 않는다. */ } }, [controller]);
+  useEffect(() => {
+    let saved: string | null = null;
+    try { saved = sessionStorage.getItem(storageKey); } catch { /* 저장소 없이도 명시된 요청을 조회할 수 있다. */ }
+    const requestId = initialAssistantRequestId(window.location?.search || '', saved);
+    if (!requestId) return;
+    controller.restore(requestId);
+    if (controller.getSnapshot().submission?.request_id === requestId && saved !== requestId) {
+      try { sessionStorage.setItem(storageKey, requestId); } catch { /* 요청 UUID만 현재 화면에 유지한다. */ }
+    }
+  }, [controller]);
   const show = useCallback(() => {
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog.current?.showModal(); readReport.current = latestReport.current; setOpen(true); input.current?.focus();

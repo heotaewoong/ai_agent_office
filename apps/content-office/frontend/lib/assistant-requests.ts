@@ -12,6 +12,11 @@ export type AssistantRequest = AssistantAccepted & {
 export const assistantNames: Record<string, string> = { lumi: '루미', ada: '에이다', ethan: '이든', mia: '미아', noah: '노아', oliver: '올리버', sam: '샘', 'mybots-sage': '세이지', default: 'Hermes' };
 const states = ['queued', 'running', 'blocked', 'completed', 'failed'];
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function initialAssistantRequestId(search: string, saved: string | null): string | null {
+  const linked = new URLSearchParams(search).getAll('assistant_request');
+  if (linked.length) return linked.length === 1 && uuidPattern.test(linked[0]) ? linked[0].toLowerCase() : null;
+  return saved && uuidPattern.test(saved) ? saved.toLowerCase() : null;
+}
 const invalid = () => { throw new Error('비서 업무 응답을 확인할 수 없습니다.'); };
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid();
 function text(value: unknown, limit = 300): string {
@@ -105,7 +110,7 @@ export function createAssistantRequestsController() {
     subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
     setDraft(draft: string) { if (!state.submission) publish({ draft }); },
     setAvailability(nextConnected: boolean, nextOpen: boolean) { if (connected !== nextConnected) generation++; connected = nextConnected; open = nextOpen; },
-    restore(requestId: string) { if (!uuidPattern.test(requestId)) return invalid(); if (!state.submission) publish({ submission: { request_id: requestId, text: '', assignee: 'lumi' } }); },
+    restore(requestId: string) { if (!uuidPattern.test(requestId)) return invalid(); if (!state.submission && !state.draft) publish({ submission: { request_id: requestId, text: '', assignee: 'lumi' } }); },
     newRequest() {
       if (busy || (state.submission && !state.noAdmissionCode && !['blocked', 'failed', 'completed'].includes(state.request?.status || ''))) return false;
       publish({ draft: '', submission: null, receipt: null, request: null, error: null, noAdmissionCode: null });
