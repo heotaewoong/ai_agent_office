@@ -36,11 +36,12 @@ export function YoutubePanel({
   requestBlockedReason?: string;
   preferredChannelKey?: string;
 }) {
-  const [records, setRecords] = useState<DeliveryRecord[]>([]);
+  const [allRecords, setRecords] = useState<DeliveryRecord[]>([]);
   const [loadError, setLoadError] = useState("");
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelKey, setChannelKey] = useState(preferredChannelKey ?? DEFAULT_CHANNEL);
   const channel = channels.find((c) => c.key === channelKey);
+  const records = allRecords.filter(record => !record.channel_key || record.channel_key === channelKey);
   const sourceLanguage = packetLanguage(job);
   const readiness = youtubePreflight(job, channel, requestBlockedReason);
   const mismatch = channel ? sourceChannelMismatch(job, channel) : null;
@@ -55,7 +56,7 @@ export function YoutubePanel({
         if (!alive) return;
         const list = youtubeChannels(result.channels);
         setChannels(list);
-        if (!list.some((c) => c.key === (preferredChannelKey ?? DEFAULT_CHANNEL)) && list[0]) setChannelKey(list[0].key);
+        if (!preferredChannelKey && !list.some((c) => c.key === DEFAULT_CHANNEL) && list[0]) setChannelKey(list[0].key);
       })
       .catch(() => {
         if (alive) setChannels([]);

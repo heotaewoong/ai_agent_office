@@ -4521,3 +4521,13 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .draft-start-confirm input { min-height:44px; max-width:160px; padding:10px; font:inherit; }
 
 .draft-start-confirm { text-align:left; margin-block:16px; }
+
+/* Multiple destinations retain independent account, format and delivery status. */
+.delivery-destinations { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)); gap:12px; min-width:0; margin:20px 0; padding:16px; border:1px solid var(--line,#d8dfd2); border-radius:12px; }
+.delivery-platform { min-width:0; padding:12px; border:1px solid var(--line,#d8dfd2); border-radius:8px; }
+.delivery-platform h4 { margin:0 0 6px; }
+.delivery-account { display:flex; align-items:center; gap:10px; min-height:44px; padding:8px 0; cursor:pointer; overflow-wrap:anywhere; }
+.delivery-account input { flex:0 0 auto; width:18px; height:18px; }
+.delivery-account span { min-width:0; }
+.delivery-target { min-width:0; margin:16px 0; padding:16px; border:1px solid var(--line,#d8dfd2); border-radius:10px; overflow-wrap:anywhere; }
+.delivery-target .button { max-width:100%; white-space:normal; }
