@@ -56,7 +56,7 @@ def test_pending_work_blocks_trash_atomically(ctx, state):
     assert store.task(task['id'])['state'] == state
 
 
-@pytest.mark.parametrize('key,state', [('owner_draft_deliveries','pending'), ('owner_draft_deliveries','claimed'), ('owner_draft_deliveries','unknown'), ('deliveries','accepted')])
+@pytest.mark.parametrize('key,state', [('owner_draft_deliveries','pending'), ('owner_draft_deliveries','claimed'), ('owner_draft_deliveries','unknown'), ('deliveries','accepted'), ('deliveries','pending_owner')])
 def test_inflight_external_delivery_is_not_hidden(ctx, key, state):
     store, job, _, client, headers = ctx
     store.set_setting(key, {'row': {'job_id': job['id'], 'state': state}})
@@ -119,3 +119,32 @@ def test_restore_preserves_ledger_rows_and_hidden_job_cannot_overwrite_a_newer_d
     with store.connection() as db:
         assert {table:[tuple(r) for r in db.execute('SELECT * FROM '+table)] for table in before}==before
     assert store.tasks()==[]
+
+
+def test_pc_delivery_checked_before_delete_cannot_be_queued_after_delete(tmp_path,monkeypatch):
+    from datetime import datetime,timedelta,timezone
+    from test_owner_auth import ready
+    from office import owner_auth,youtube_delivery
+    from office.job_trash import move
+    store,jid=ready(tmp_path,monkeypatch)
+    store.set_setting('work_window',{'status':'active','authorized_end':(datetime.now(timezone.utc)+timedelta(minutes=10)).isoformat()})
+    original=youtube_delivery._save
+    def delete_before_save(store,record,**kwargs):
+        move(store,jid,store.job(jid)['updated_at'])
+        return original(store,record,**kwargs)
+    monkeypatch.setattr(youtube_delivery,'_save',delete_before_save)
+    with pytest.raises(WorkflowError,match='휴지통'):
+        owner_auth.stage_delivery(store,jid,'youtube_main_ko','test-operator')
+    assert store.jobs(deleted=True)[0]['id']==jid
+    assert store.setting('deliveries',{})=={}
+
+
+def test_terminal_receipt_is_preserved_even_if_the_job_was_removed(ctx):
+    from office.youtube_delivery import _save
+    from office.job_trash import move
+    store,job,_,_,_=ctx
+    move(store,job['id'],job['updated_at'])
+    record={'key':'confirmed-receipt','job_id':job['id'],'state':'private','external_id':'synthetic-existing-video'}
+    assert _save(store,record)==record
+    assert store.setting('deliveries')['confirmed-receipt']==record
+    assert store.jobs()==[] and store.tasks()==[]

@@ -49,3 +49,10 @@ test('삭제 차단은 대화상자 안에 표시하고 원고와 목록을 보�
  await expect(confirm.getByRole('alert')).toContainText('전송 대기');
  await expect(page.getByRole('button',{name:'작업 삭제',exact:true})).toBeVisible();expect(writes).toHaveLength(1);
 });
+
+test('진행 중 작업은 삭제 버튼을 끄고 이유를 표시한다',async({page})=>{
+ const {job,writes}=await harness(page);job.state='drafting';await page.goto(`/scripts/${job.id}`);
+ await expect(page.getByRole('button',{name:'작업 삭제',exact:true})).toBeDisabled();
+ await expect(page.getByText('처리 중이거나 결과 불명인 작업은 운영 기록에서 결과를 확인한 뒤 삭제할 수 있습니다.')).toBeVisible();
+ expect(writes).toEqual([]);
+});

@@ -2,7 +2,7 @@
 import {useId,useRef,useState} from 'react';
 import {api} from '../lib/api';
 
-type Item={id:string;title:string;updated_at?:string};
+type Item={id:string;title:string;updated_at?:string;state?:string;tasks?:{state?:string}[]};
 export function JobTrash({job,busy,unsaved,onChanged}:{job?:Item;busy:boolean;unsaved:boolean;onChanged:(deletedId?:string)=>Promise<void>}){
  const dialog=useRef<HTMLDialogElement>(null),trigger=useRef<HTMLButtonElement|null>(null),trashButton=useRef<HTMLButtonElement>(null);
  const heading=useId();
@@ -10,6 +10,7 @@ export function JobTrash({job,busy,unsaved,onChanged}:{job?:Item;busy:boolean;un
  const [snapshot,setSnapshot]=useState<Item>();
  const [rows,setRows]=useState<Item[]>([]);
  const [pending,setPending]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const working=Boolean(job&&(['drafting','production_queued','producing','needs_reconciliation'].includes(job.state??'')||job.tasks?.some(task=>['queued','running','claimed','unknown'].includes(task.state??''))));
  function close(){if(!pending)dialog.current?.close();}
  async function open(button:HTMLButtonElement,which:'delete'|'trash'){
   trigger.current=button;setMode(which);setSnapshot(job?{...job}:undefined);setError('');setNotice('');
@@ -36,9 +37,10 @@ export function JobTrash({job,busy,unsaved,onChanged}:{job?:Item;busy:boolean;un
  }
  return <>
   <div className="job-trash-actions" aria-label="작업 정리">
-   {job&&<button type="button" className="button secondary" disabled={busy||pending||unsaved||!job.updated_at} onClick={e=>void open(e.currentTarget,'delete')}>작업 삭제</button>}
+   {job&&<button type="button" className="button secondary" disabled={busy||pending||unsaved||working||!job.updated_at} onClick={e=>void open(e.currentTarget,'delete')}>작업 삭제</button>}
    <button ref={trashButton} type="button" className="button text" disabled={busy||pending} onClick={e=>void open(e.currentTarget,'trash')}>휴지통</button>
    {unsaved&&<span className="muted">수정 내용을 저장하거나 취소한 뒤 삭제할 수 있습니다.</span>}
+   {working&&<span className="muted">처리 중이거나 결과 불명인 작업은 운영 기록에서 결과를 확인한 뒤 삭제할 수 있습니다.</span>}
   </div>
   {notice&&<p role="status">{notice}</p>}
   {error&&!dialog.current?.open&&<p role="alert">{error}</p>}

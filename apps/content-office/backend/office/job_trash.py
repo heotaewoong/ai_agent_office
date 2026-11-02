@@ -20,7 +20,7 @@ def move(store, job_id, expected_updated_at, *, restore=False):
             for key in ('owner_draft_deliveries', 'deliveries'):
                 row = db.execute('SELECT value FROM settings WHERE key=?', (key,)).fetchone()
                 records = json.loads(row[0]) if row else {}
-                if any(r.get('job_id') == job_id and r.get('state') in ('pending','office_held','claimed','created','accepted','unknown','needs_review') for r in records.values()):
+                if any(r.get('job_id') == job_id and r.get('state') in ('pending','pending_owner','office_held','claimed','created','accepted','unknown','needs_review') for r in records.values()):
                     raise WorkflowError('전송 대기 또는 확인 중인 결과가 있습니다. 전달 상태를 확인한 뒤 삭제하세요')
             job.update(deleted_at=now(), deleted_by='local-operator')
         else:

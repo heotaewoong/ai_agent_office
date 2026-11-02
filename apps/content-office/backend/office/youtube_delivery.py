@@ -88,6 +88,10 @@ def _delivery_lock(store, key):
 
 def _save(store, record, *, reserve=False):
     with store.connection(transaction=True) as db:
+        # Reserve a new transfer in the same transaction as the deleted-job check.
+        # Terminal receipts remain writable: never discard an already-sent result.
+        if reserve or record.get('state') in ('created', 'pending_owner'):
+            store._job(db, record['job_id'])
         row = db.execute("SELECT value FROM settings WHERE key=?", (LEDGER_KEY,)).fetchone()
         ledger = json.loads(row[0]) if row else {}
         existing = ledger.get(record["key"])
