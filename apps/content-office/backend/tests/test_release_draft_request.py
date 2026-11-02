@@ -87,3 +87,64 @@ def test_request_one_target_does_not_requeue_other_policy_targets(tmp_path):
     s.update_job(jid,owner_draft_policy=owner_drafts.policy(s,job,['tistory_main'],'fixture'))
     result=owner_drafts.request_after_release(s,jid,job['manifest']['hash'],'linkedin_personal',owner_drafts.snapshot(s,'linkedin_personal'))
     assert [r['channel_key'] for r in result['items']]==['linkedin_personal']
+
+
+@pytest.mark.parametrize('old_state',['pending','unknown','claimed','platform_draft'])
+def test_explicit_current_release_request_replaces_only_stale_policy(tmp_path,old_state):
+    from copy import deepcopy
+    s,jid=context(tmp_path)
+    update_channel(s,'tistory_main',{'publication_enabled':True},actor='fixture')
+    job=s.job(jid)
+    old_policy=owner_drafts.policy(s,job,['tistory_main','linkedin_personal'],'fixture')
+    old_policy['source_hash']='0'*64
+    old_rows={'old-request':{'id':'old-request','job_id':jid,'source_hash':'0'*64,
+                           'manifest_hash':'old-manifest','state':old_state,'channel_key':'tistory_main'}}
+    s.set_setting(owner_drafts.SETTING,deepcopy(old_rows))
+    s.update_job(jid,owner_draft_policy=old_policy)
+    before=s.job(jid)
+    first=owner_drafts.request_after_release(s,jid,job['manifest']['hash'],
+                                           'linkedin_personal',owner_drafts.snapshot(s,'linkedin_personal'))
+    after=s.job(jid)
+    assert after['owner_draft_policy']['source_hash']==job['source_hash']
+    assert [r['key'] for r in after['owner_draft_policy']['channels']]==['linkedin_personal']
+    assert [r['channel_key'] for r in first['items']]==['linkedin_personal']
+    assert s.setting(owner_drafts.SETTING)['old-request']==old_rows['old-request']
+    for field in ['source_packet','source_approval','release_approval','manifest','selections']:
+        assert after[field]==before[field]
+    again=owner_drafts.request_after_release(s,jid,job['manifest']['hash'],
+                                           'linkedin_personal',owner_drafts.snapshot(s,'linkedin_personal'))
+    assert again==first
+    from datetime import datetime,timedelta,timezone
+    s.set_setting('work_window',{'status':'active','user_confirmed':True,
+                  'authorized_start':(datetime.now(timezone.utc)-timedelta(minutes=1)).isoformat(),
+                  'authorized_end':(datetime.now(timezone.utc)+timedelta(minutes=5)).isoformat()})
+    assert [r['channel_key'] for r in owner_drafts.pending(s)]==['linkedin_personal']
+    with s.connection() as db:
+        saved=db.execute("SELECT data FROM events WHERE job_id=? AND kind='owner_draft_policy_replaced'",(jid,)).fetchall()
+    import json
+    assert len(saved)==1 and json.loads(saved[0][0])['previous_policy']==old_policy
+
+
+def test_stale_policy_recovery_keeps_http_approval_and_account_guards(tmp_path):
+    from fastapi.testclient import TestClient
+    from office.api import create_app
+    s,jid=context(tmp_path)
+    job=s.job(jid)
+    old=owner_drafts.policy(s,job,['linkedin_personal'],'fixture');old['source_hash']='0'*64
+    s.update_job(jid,owner_draft_policy=old)
+    before=s.job(jid)
+    with TestClient(create_app(s),base_url='http://localhost:8510') as c:
+        csrf=c.get('/api/session').json()['csrf']
+        headers={'X-Office-CSRF':csrf,'Origin':'http://localhost:8510'}
+        body={'version':job['manifest']['hash'],'channel_key':'linkedin_personal',
+              'target':owner_drafts.snapshot(s,'linkedin_personal')}
+        for invalid in [{**body,'version':'0'*64},
+                        {**body,'target':{**body['target'],'public_url':'https://www.linkedin.com/in/other'}}]:
+            assert c.post(f'/api/jobs/{jid}/owner-drafts/request',headers=headers,json=invalid).status_code==409
+            assert s.job(jid)==before
+        response=c.post(f'/api/jobs/{jid}/owner-drafts/request',headers=headers,json=body)
+        assert response.status_code==200
+        assert [r['channel_key'] for r in response.json()['items']]==['linkedin_personal']
+        assert c.post(f'/api/jobs/{jid}/owner-drafts/request',headers=headers,json=body).json()==response.json()
+        assert s.job(jid)['release_approval']==before['release_approval']
+        assert s.job(jid)['source_approval']==before['source_approval']
