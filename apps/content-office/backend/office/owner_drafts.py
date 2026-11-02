@@ -329,12 +329,14 @@ def request_after_release(store, jid, version, channel_key, expected_target):
     if 'blog' not in outputs:
         raise WorkflowError('블로그·소셜 원고를 출고 승인②에 포함해 주세요')
     previous = job.get('owner_draft_policy') or {}
-    if previous.get('channels'):
+    same_source = previous.get('source_hash') == job['source_hash']
+    if previous.get('channels') and same_source:
         _approved(store, jid)
-    keys = [row['key'] for row in previous.get('channels', [])]
+    # An explicit current-release request does not authorize old-source destinations.
+    keys = [row['key'] for row in previous.get('channels', [])] if same_source else []
     if channel_key not in keys:
         keys.append(channel_key)
-    selected = previous if channel_key in [row['key'] for row in previous.get('channels', [])] else policy(store, job, keys, 'local-operator-request')
+    selected = previous if same_source and channel_key in [row['key'] for row in previous.get('channels', [])] else policy(store, job, keys, 'local-operator-request')
     with store.connection(transaction=True) as db:
         if snapshot(store, channel_key) != expected_target:
             raise WorkflowError('요청 중 대상 계정이 변경되었습니다')
@@ -342,6 +344,10 @@ def request_after_release(store, jid, version, channel_key, expected_target):
         for field in ('source_hash', 'source_approval', 'release_approval', 'manifest', 'owner_draft_policy'):
             if current.get(field) != job.get(field):
                 raise WorkflowError('요청 중 승인·파일·대상이 변경되었습니다')
+        if previous and not same_source:
+            store._event(db, 'owner_draft_policy_replaced', {'previous_policy': previous,
+                         'source_hash': job['source_hash'], 'channel_key': channel_key,
+                         'public_sent': False}, jid)
         current['owner_draft_policy'] = selected
         store._write_job(db, current)
     prepare(store, jid, channel_keys=[channel_key])
