@@ -245,6 +245,17 @@ def status_message(metadata, office_origin=None):
     return message
 
 
+def slack_status_text_matches(actual, expected, office_origin=None):
+    if actual == expected:
+        return True
+    if not office_origin:
+        return False
+    url = office_origin.rstrip('/') + '/office3d'
+    # Slack readback autolinks this one fixed URL; all other text must remain exact.
+    return (expected.endswith('\n인증된 오피스에서 결과 확인: ' + url)
+            and actual == expected[:-len(url)] + '<' + url + '>')
+
+
 def notice_reference(notice):
     if notice is None:
         return None
@@ -368,7 +379,8 @@ def slack_child(mode, runtime):
         confirmed = any(message.get('user') == user_id and message.get('bot_id') == bot_id
                         and re.fullmatch(r'\d{9,16}\.\d{6}', str(message.get('ts', '')))
                         and message.get('thread_ts') in {None, message.get('ts')}
-                        and message.get('text') == text and not message.get('files') and not message.get('attachments')
+                        and slack_status_text_matches(message.get('text'), text, value.get('office_origin'))
+                        and not message.get('files') and not message.get('attachments')
                         and (message.get('client_msg_id') == client_id or (value.get('message_id') and message.get('ts') == value['message_id']))
                         for message in data.get('messages', []))
         return {'confirmed': bool(confirmed)}
