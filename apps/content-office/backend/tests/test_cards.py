@@ -11,6 +11,55 @@ from office.brand import load_brand
 from office.cards import CARDS_SCHEMA, card_checks, plan_cards
 from office.store import Store, WorkflowError
 
+
+def test_card_review_receives_approved_topic_and_source_not_only_audience(tmp_path):
+    store=Store(tmp_path); job=approved_job(store)
+    provider=FakeCardsProvider([good_slides()])
+    plan_cards(store,job['id'],provider=provider,images=False)
+    review=json.loads(provider.calls[1]['user'])
+    assert review['packet']==cards_module.packet_context(job['source_packet'])
+    assert review['source']['title']==job['article']['title']
+    assert '원고의 주제' in provider.calls[0]['user']
+    assert 'topic_matches' in provider.calls[1]['schema']['required']
+
+
+@pytest.mark.parametrize('missing',[False,True])
+@pytest.mark.parametrize('require_passed',[False,True])
+def test_topic_mismatch_or_missing_verdict_cannot_pass_or_buy_backgrounds(tmp_path,missing,require_passed):
+    store=Store(tmp_path); job=approved_job(store)
+    verdict={'cards':[]} if missing else {'cards':[], 'topic_matches':False,'topic_reason':'전파망원경 연구를 AI 뉴스 읽기 고민으로 바꿨어요'}
+    provider=FakeCardsProvider([good_slides(),verdict,good_slides(),verdict])
+    def paid(*args): pytest.fail('주제 미확인·불일치 카드에 유료 배경을 생성하면 안 됩니다')
+    result=plan_cards(store,job['id'],provider=provider,background_renderer=paid,require_passed=require_passed)
+    assert result['checks']['passed'] is False
+    assert any('주제' in i for i in result['checks']['blocking'])
+    assert [c['role'] for c in provider.calls]==['cards','cards_review','cards','cards_review']
+
+
+def test_refined_card_plan_must_be_reviewed_again_before_topic_pass(tmp_path):
+    store=Store(tmp_path);job=approved_job(store)
+    bad={'cards':[],'topic_matches':False,'topic_reason':'승인 원고의 사건을 다른 고민으로 바꿈'}
+    good={'cards':[],'topic_matches':True,'topic_reason':'원고의 주체와 사건 유지'}
+    provider=FakeCardsProvider([good_slides(),bad,good_slides(),good])
+    result=plan_cards(store,job['id'],provider=provider,images=False)
+    assert result['refined'] is True and result['checks']['passed'] is True
+    assert len([c for c in provider.calls if c['role']=='cards_review'])==2
+    assert result['review']['topic_matches'] is True
+
+
+def test_refined_plan_review_failure_cannot_reuse_previous_topic_pass(tmp_path):
+    store=Store(tmp_path);job=approved_job(store)
+    bad=good_slides();bad['slides'][1]['title']='클로드 소개'
+    class FailedSecondReview(FakeCardsProvider):
+        def generate(self,role,messages,schema,options=None):
+            if role=='cards_review' and any(c['role']=='cards_review' for c in self.calls):
+                raise WorkflowError('보완 원고 검수 실패')
+            return super().generate(role,messages,schema,options)
+    def paid(*args):pytest.fail('수정 카드 주제 미검수 상태에서 배경 구매 금지')
+    result=plan_cards(store,job['id'],provider=FailedSecondReview([bad,good_slides()]),background_renderer=paid)
+    assert result['checks']['passed'] is False
+    assert any('주제' in issue for issue in result['checks']['blocking'])
+
 EVIDENCE = [{"id": "E1", "claim": "공식 발표에 따르면 도구는 3가지", "url": "https://example.com/news", "numbers": ["3"]}]
 
 
@@ -41,7 +90,7 @@ class FakeCardsProvider:
             # 검토 응답을 따로 주지 않으면 '문제 없음'으로 답한다
             if self.responses and isinstance(self.responses[0], dict) and "cards" in self.responses[0]:
                 return json.loads(json.dumps(self.responses.pop(0)))
-            return {"cards": []}
+            return {"cards": [], "topic_matches": True, "topic_reason": "승인 원고 주제를 보존하는 합성 검수"}
         return json.loads(json.dumps(self.responses.pop(0)))
 
 
@@ -145,7 +194,7 @@ def test_plan_cards_refines_once_when_checks_fail(tmp_path):
     bad["slides"][1]["title"] = "클로드 소개"
     provider = FakeCardsProvider([bad, good_slides()])
     result = plan_cards(store, job["id"], provider=provider)
-    assert [call["role"] for call in provider.calls] == ["cards", "cards_review", "cards"]
+    assert [call["role"] for call in provider.calls] == ["cards", "cards_review", "cards", "cards_review"]
     assert "클로드" in provider.calls[1]["user"]
     assert result["checks"]["passed"] is True
 

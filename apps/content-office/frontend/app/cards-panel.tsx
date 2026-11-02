@@ -92,6 +92,7 @@ export function CardsPanel({ job, busy, action, blockedReason }: { job: Job; bus
       </div>
       <p className="muted">카드뉴스만 전체 ZIP으로 받거나 글·영상과 함께 통합 검토 ZIP으로 받을 수 있습니다. 검사 이슈도 포함되며, 출고 승인②와 플랫폼 업로드는 별도입니다.</p>
       <p className="muted">원고 승인에서 카드뉴스를 선택하면 검사에 통과한 현재 원고의 6~8장을 정식 제작물에 넣습니다. 여기서 별도로 다시 만든 카드는 기존 출고 승인본을 바꾸지 않습니다.</p>
+      <p className="muted">현재 원고: {job.source_packet?.title || job.title}</p>
       {approved && job.manifest?.hash && <a className="button secondary small" href={`/api/jobs/${encodeURIComponent(job.id)}/review-package`}>글·영상·카드 검토 ZIP 받기</a>}
       {!approved && <div className="muted"><span>카드뉴스는 원고 승인① 때 제작 항목에서 ‘카드 콘텐츠’를 고르면 자동으로 만들어져요. <a className="button secondary small" style={{ whiteSpace: "normal", maxWidth: "100%" }} href={`#studio-blog-${job.id}`}>현재 원고 검토·승인①으로 이동</a></span></div>}
       {approved && blockedReason && <p className="notice" role="status">{blockedReason}</p>}
@@ -100,13 +101,14 @@ export function CardsPanel({ job, busy, action, blockedReason }: { job: Job; bus
       {stale && (
         <div className="notice">
           <Icon name="alert" size={16} />
-          <span>이전 원고({cards?.source_hash.slice(0, 8)})로 만든 카드 미리보기입니다. {approved ? "현재 승인 원고로 다시 생성할 수 있습니다." : "새 카드는 현재 원고를 승인①한 뒤 만들 수 있습니다."}</span>
+          <span>현재 원고로 만든 카드는 아직 없습니다. 이전 원고({cards?.source_hash.slice(0, 8)})의 카드는 보관 기록이며 현재 주제의 결과물이 아닙니다. {approved ? "현재 승인 원고로 다시 생성할 수 있습니다." : "새 카드는 현재 원고를 승인①한 뒤 만들 수 있습니다."}</span>
         </div>
       )}
       {cards && (
-        <>
+        <details key={cards.source_hash} open={!stale}>
+          <summary>{stale ? `이전 원고 카드 ${count}장 확인` : `현재 원고 카드 ${count}장`}</summary>
           <div className="derived-meta">
-            <span className={`badge ${cards.checks.passed ? "green" : "orange"}`}>{stale ? "이전 원고 · " : ""}{cards.checks.passed ? `검사 통과${cards.checks.issues.length ? ` · 확인 의견 ${cards.checks.issues.length}개` : ""}` : `검사 이슈 ${cards.checks.issues.length}개`}</span>
+            <span className={`badge ${stale ? "neutral" : cards.checks.passed ? "green" : "orange"}`}>{stale ? "이전 검사 결과 · 현재 원고 미검사" : cards.checks.passed ? `검사 통과${cards.checks.issues.length ? ` · 확인 의견 ${cards.checks.issues.length}개` : ""}` : `검사 이슈 ${cards.checks.issues.length}개`}</span>
             <span className={`badge ${count >= 6 && count <= 8 ? "neutral" : "orange"}`}>{count}장</span>
             <span className="muted">
               버전 {cards.version} · {formatDate(cards.generated_at, true)} · 원고 {cards.source_hash.slice(0, 8)}
@@ -141,7 +143,7 @@ export function CardsPanel({ job, busy, action, blockedReason }: { job: Job; bus
               );
             })}
           </div>
-        </>
+        </details>
       )}
       {!cards && !loadError && approved && !pending && <p className="muted">아직 만든 카드뉴스가 없습니다.</p>}
     </section>
