@@ -148,3 +148,55 @@ def test_stale_policy_recovery_keeps_http_approval_and_account_guards(tmp_path):
         assert c.post(f'/api/jobs/{jid}/owner-drafts/request',headers=headers,json=body).json()==response.json()
         assert s.job(jid)['release_approval']==before['release_approval']
         assert s.job(jid)['source_approval']==before['source_approval']
+
+
+@pytest.mark.parametrize('key',['linkedin_personal','threads_main','tistory_main','naver_blog_main'])
+def test_stale_policy_recovery_supports_each_web_destination(tmp_path,key):
+    from office.media import artifact_record
+    s,jid=context(tmp_path)
+    update_channel(s,key,{'publication_enabled':True},actor='fixture')
+    job=s.job(jid)
+    if key!='linkedin_personal':
+        path=s.artifacts/jid/owner_drafts.TEXT_FILES[key]
+        path.write_text('Synthetic approved channel text',encoding='utf8')
+        s.update_job(jid,manifest={**job['manifest'],'files':[*job['manifest']['files'],
+                     {**artifact_record(s.artifacts,path),'outputs':['blog']}]})
+    old=owner_drafts.policy(s,s.job(jid),['linkedin_personal'],'fixture');old['source_hash']='0'*64
+    s.update_job(jid,owner_draft_policy=old)
+    result=owner_drafts.request_after_release(s,jid,job['manifest']['hash'],key,owner_drafts.snapshot(s,key))
+    row,=result['items']
+    assert row['state']=='pending' and row['channel_key']==key
+    assert row['visibility']=='draft' and not row.get('external_id')
+
+
+def test_stale_policy_recovery_race_leaves_no_policy_or_audit_write(tmp_path,monkeypatch):
+    from office import staging
+    s,jid=context(tmp_path);job=s.job(jid)
+    old=owner_drafts.policy(s,job,['linkedin_personal'],'fixture');old['source_hash']='0'*64
+    s.update_job(jid,owner_draft_policy=old)
+    original=staging._verified_records
+    def race(store,job):
+        result=original(store,job)
+        store.update_job(jid,release_approval=None)
+        return result
+    monkeypatch.setattr(staging,'_verified_records',race)
+    with pytest.raises(WorkflowError,match='요청 중 승인'):
+        owner_drafts.request_after_release(s,jid,job['manifest']['hash'],
+                                          'linkedin_personal',owner_drafts.snapshot(s,'linkedin_personal'))
+    assert s.job(jid)['owner_draft_policy']==old
+    assert s.setting(owner_drafts.SETTING,{})=={}
+    with s.connection() as db:
+        assert db.execute("SELECT count(*) FROM events WHERE kind='owner_draft_policy_replaced'").fetchone()[0]==0
+
+
+def test_current_source_other_account_changes_still_block_new_target(tmp_path):
+    s,jid=context(tmp_path)
+    update_channel(s,'tistory_main',{'publication_enabled':True},actor='fixture')
+    job=s.job(jid)
+    s.update_job(jid,owner_draft_policy=owner_drafts.policy(s,job,['tistory_main'],'fixture'))
+    before=s.job(jid)
+    update_channel(s,'tistory_main',{'public_url':'https://changed.tistory.com'},actor='fixture')
+    with pytest.raises(WorkflowError,match='초안 대상 채널이 변경'):
+        owner_drafts.request_after_release(s,jid,job['manifest']['hash'],
+                                          'linkedin_personal',owner_drafts.snapshot(s,'linkedin_personal'))
+    assert s.job(jid)==before and s.setting(owner_drafts.SETTING,{})=={}
