@@ -53,7 +53,6 @@ import { validWindowMinutes } from "../lib/settings";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ThumbnailStudio } from "./thumbnail-studio";
-import { OwnerDraftOptions, OwnerDraftStatus } from './owner-draft-options';
 import { ArchitectureView } from "./architecture-view";
 import { BriefPanel } from "./brief-panel";
 import { updateBriefDrafts, type BriefDraft, type BriefDraftUpdate } from "../lib/briefs";
@@ -69,7 +68,6 @@ import { OwnedSourceIntake } from "./owned-source-intake";
 import { EditorialAssetsPanel } from "./editorial-assets-panel";
 import { VersionHistoryPanel } from "./version-history-panel";
 import { ImprovementPanel } from "./improvement-panel";
-import { VideoPlatformsPanel } from "./video-platforms-panel";
 import { JobClipProfile } from "./job-clip-profile";
 import { productionNext } from "../lib/production-next";
 import { NewsletterPanel } from "./newsletter-panel";
@@ -1253,12 +1251,9 @@ function Studio({
   );
   const [approvalVersion, setApprovalVersion] = useState<string>();
   const [approvalError, setApprovalError] = useState("");
-  const [draftTargets, setDraftTargets] = useState<string[]>([]);
-  useEffect(() => { setDraftTargets([]); }, [job.id, job.source_hash]);
   const [draftStartOpen, setDraftStartOpen] = useState(false);
   // Same default as the settings page: draft + review + production can take longer than 30 minutes.
   const [draftWindowMinutes, setDraftWindowMinutes] = useState("120");
-  const [platformsDirty, setPlatformsDirty] = useState(false);
   const packagingPanel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const target = document.getElementById(`studio-blog-${job.id}`);
@@ -1300,7 +1295,7 @@ function Studio({
     quality?.status === "unverified" && !job.source_packet?.audience?.language;
   const evidenceItems =
     job.source_packet?.evidence ?? job.article?.evidence ?? [];
-  const passed = canApproveSource(job, dirty || stale || (selections.video && platformsDirty));
+  const passed = canApproveSource(job, dirty || stale);
   const selectionCount = Object.values(selections).filter(Boolean).length;
 
   function edit(nextTitle: string, nextBody: string) {
@@ -1571,10 +1566,10 @@ function Studio({
             <div className="section-heading">
               <div>
                 <p className="eyebrow">MAKE IT YOURS</p>
-                <h3>어디에 전할까요?</h3>
+                <h3>무엇을 만들까요?</h3>
               </div>
               <span className="muted">
-                원고 승인과 함께 제작 항목이 저장돼요
+                제작물 종류만 고릅니다. 채널은 제작·출고함에서 선택하세요.
               </span>
             </div>
             <div className="channel-options">
@@ -1639,7 +1634,6 @@ function Studio({
                 </label>
               ))}
             </div>
-            <VideoPlatformsPanel key={`video-platforms-${job.source_hash}`} job={job} enabled={selections.video} busy={locked || dirty || stale} action={action} onSaved={onSaved} onDirtyChange={setPlatformsDirty}/>
           </section>
           <div className="approval-panel">
             <div>
@@ -1653,9 +1647,7 @@ function Studio({
               <p>
                 {dirty
                   ? "변경 내용을 먼저 저장하고 재검수를 기다려 주세요."
-                  : selections.video && platformsDirty
-                    ? "선택한 영상 플랫폼을 먼저 저장해 주세요. 저장하지 않은 목적지로 승인·제작하지 않습니다."
-                    : quality?.status !== "passed" || quality.critical
+                  : quality?.status !== "passed" || quality.critical
                     ? "독립 검수 통과와 중대 오류 해소가 필요합니다."
                     : job.state === "source_approved"
                       ? "원고 승인이 끝났습니다. 선택 항목과 비용을 확인한 뒤 제작을 시작하세요."
@@ -1670,7 +1662,7 @@ function Studio({
                   key={`produce-${job.source_hash}-${job.clip_profile_override?.selected_at??'global'}`}
                   jobId={job.id}
                   className={job.state === "source_approved" ? "button primary" : "button secondary"}
-                  disabled={locked || dirty || stale || (selections.video && platformsDirty) || Boolean(requestBlockedReason)}
+                  disabled={locked || dirty || stale || Boolean(requestBlockedReason)}
                   onProduce={(confirmPaidClips) =>
                     void action(
                       "콘텐츠 제작",
@@ -1731,8 +1723,7 @@ function Studio({
             >
               <h3>현재 원고를 승인하고 선택한 항목을 제작할까요?</h3>
               {approvalError && <p className="critical-issue" role="alert">{approvalError}</p>}
-              <p>승인하면 현재 제작 프로필과 기존 작업별·전체 비용 상한으로 자동 제작합니다. 실행 시간이 열려 있어야 합니다. 아래에서 선택한 채널만 비공개·임시저장으로 전달하며, 공개 발행은 하지 않습니다.</p>
-              <OwnerDraftOptions language={job.source_packet?.audience?.language} selected={draftTargets} onChange={setDraftTargets}/>
+              <p>승인하면 현재 제작 프로필과 기존 작업별·전체 비용 상한으로 선택한 제작물을 만듭니다. 실행 시간이 열려 있어야 합니다. 전달할 계정과 요청은 완성본 승인② 후 제작·출고함의 ‘채널 전달’에서 정합니다. 기존에 허용한 전달 정책과 대기 기록은 그대로 유지합니다.</p>
               <p>
                 원고 {approvalVersion.slice(0, 12)} ·{" "}
                 {Object.entries(selections)
@@ -1784,7 +1775,6 @@ function Studio({
                           selections,
                           true,
                           confirmPaid,
-                          draftTargets,
                         );
                         setApprovalVersion(undefined);
                         onDelivery();
@@ -1799,7 +1789,6 @@ function Studio({
               </div>
             </div>
           )}
-          <OwnerDraftStatus key={job.id} jobId={job.id} revision={job.updated_at}/>
           {["blocked", "source_rejected", "failed"].includes(job.state) && (
             <div className="recovery-actions">
               <button
@@ -1864,7 +1853,7 @@ function Studio({
       <section className="studio-section" aria-labelledby={`studio-history-${job.id}`}>
         <header className="studio-section-heading"><span className="studio-section-number">06</span><div><h2 id={`studio-history-${job.id}`} data-outline-title="버전·작업 기록">버전·작업 기록</h2><p>이전 원고와 새 편집본, 개선 요청 및 진행 상태를 확인하세요.</p></div></header>
       <VersionHistoryPanel key={`history-${job.id}`} job={job} />
-      <EditorialAssetsPanel job={job} editLocked={locked || dirty || (selections.video && platformsDirty)} onLoadDraft={(draft) => {
+      <EditorialAssetsPanel job={job} editLocked={locked || dirty} onLoadDraft={(draft) => {
         if (locked || dirty) return;
         edit(draft.title, draft.body);
         setEditorTab("write");
@@ -2158,7 +2147,6 @@ function Delivery({
 }) {
   const [preview, setPreview] = useState<string>();
   const [releaseVersion, setReleaseVersion] = useState<string>();
-  const [privateChannel,setPrivateChannel]=useState<""|"youtube_main_ko"|"youtube_english">("");
   const [mediaReviewed, setMediaReviewed] = useState(false);
   const [releaseOutputs, setReleaseOutputs] = useState<OutputKind[]>(() =>
     completedOutputs(job),
@@ -2216,13 +2204,16 @@ function Delivery({
         </div>
         <span className="count-pill">제작 {files.length}개 · 검토 {(job.drafts??[]).reduce((n,d)=>n+(d.assets?.length??0),0)}개</span>
       </div>
-      <WorkflowSteps state={job.state} />
+      <nav aria-label="제작·전달 3단계"><ol className="delivery-flow">
+        <li><button type="button" onClick={onSourceReview}>1 만들기</button></li>
+        <li><a href={`#delivery-release-${job.id}`} aria-current={files.length && job.state !== 'release_approved' ? 'step' : undefined}>2 완성본 승인②</a></li>
+        <li><a href={`#delivery-channels-${job.id}`} aria-current={job.state === 'release_approved' ? 'step' : undefined}>3 채널 전달</a></li>
+      </ol></nav>
       <section className={deliveryStyles.overview} aria-label="출고 준비 요약">
         <div><p className={deliveryStyles.kicker}>내 콘텐츠 출고 데스크</p><h2>완성본을 확인하고, 출고를 결정하세요</h2><p>{!files.length ? nextProduction?.title || statusInfo(job.state).next : job.state === "release_approved" ? "승인된 패키지를 내려받고 채널별 전달 상태를 확인하세요." : "현재 제작물과 미승인 편집본을 구분해 살핀 뒤, 출고할 항목을 선택하세요."}</p></div>
         <dl className={deliveryStyles.metrics}><div><dt>현재 제작 파일</dt><dd>{files.length}<small>개</small></dd></div><div><dt>제작 완료 항목</dt><dd>{completedOutputs(job).length}<small>종</small></dd></div><div><dt>출고 승인②</dt><dd className={deliveryStyles.state}>{job.state === "release_approved" ? "승인 완료" : "확인 필요"}</dd></div></dl>
         <div className={deliveryStyles.quickActions}><a href={`#delivery-preview-${job.id}`} className="button primary">제작물 확인 <Icon name="arrow" size={16}/></a><a href={`#delivery-release-${job.id}`} className="button secondary">출고 단계로 이동</a><Link href={`/scripts/${encodeURIComponent(job.id)}`} className="button text">원고 수정</Link></div>
       </section>
-      <OwnerDraftStatus key={job.id} jobId={job.id} revision={job.updated_at}/>
       {requestBlockedReason && <p className="notice" role="status">{requestBlockedReason} 제작물 검토와 다운로드는 계속할 수 있습니다.</p>}
       {job.error && (
         <div className="notice error" role="alert">
@@ -2377,7 +2368,7 @@ function Delivery({
       )}
       </section>
       <section className={deliveryStyles.section} aria-labelledby={`delivery-release-${job.id}`}>
-      <header className={deliveryStyles.sectionHeading}><span>02</span><div><h2 id={`delivery-release-${job.id}`} data-outline-title="출고 승인">출고 승인</h2><p>전달할 완료 항목을 고른 뒤 현재 파일 버전을 확인하세요.</p></div></header>
+      <header className={deliveryStyles.sectionHeading}><span>02</span><div><h2 id={`delivery-release-${job.id}`} data-outline-title="완성본 승인②">완성본 승인②</h2><p>완성본과 승인할 파일 범위를 확인하세요. 계정 선택과 전송 요청은 다음 ‘채널 전달’에서 진행합니다.</p></div></header>
       {files.length === 0 ? <p className={deliveryStyles.empty}>제작물이 준비되면 이곳에서 출고 항목을 선택할 수 있어요.</p> : <>
           {requiresThumbnail && !job.manifest?.selected_thumbnail_id && <div className={deliveryStyles.attention} role="status">
             <strong>{thumbnailReady ? "추천 썸네일로 출고돼요." : "썸네일 후보가 아직 없어요."}</strong>
@@ -2401,12 +2392,12 @@ function Delivery({
             <div>
               <h3>
                 {job.state === "release_approved"
-                  ? "출고를 승인한 패키지입니다"
-                  : "마지막 확인, 출고 승인"}
+                  ? "완성본 승인②를 마쳤습니다"
+                  : "완성본을 확인하고 승인하세요"}
               </h3>
               <p>
-                파일을 내려받아 직접 게시하는 패키지입니다. 이 화면은 외부
-                채널에 자동 게시하지 않습니다.
+                이 승인은 현재 파일 판본과 사용 범위를 확인합니다. 외부 전달은
+                아래 ‘채널 전달’에서 별도로 요청하세요. 기존에 허용한 자동 준비 정책과 대기 요청은 유지됩니다.
               </p>
               {job.state === "release_approved" &&
                 job.release_approval?.outputs && (
@@ -2463,10 +2454,11 @@ function Delivery({
                 <>
                   <span className="badge green">
                     <Icon name="check" size={14} />
-                    수동 게시 준비
+                    완성본 승인 완료
                   </span>
+                  <a className="button primary" href={`#delivery-channels-${job.id}`}>채널 전달로 이동 <Icon name="arrow" size={16}/></a>
                   <a
-                    className="button primary"
+                    className="button secondary"
                     href={`/api/jobs/${encodeURIComponent(job.id)}/package`}
                     download
                   >
@@ -2486,18 +2478,10 @@ function Delivery({
               <h3>현재 파일 버전을 출고 승인할까요?</h3>
               <p>
                 파일 목록과 버전 {releaseVersion.slice(0, 12)}에 대한
-                승인입니다. 아래에서 연결된 YouTube 채널의 비공개 전송을 함께 선택할 수 있습니다. 출고
+                승인입니다. 이 화면에서 새 계정은 지정하지 않습니다. 기존 허용 정책과 대기 요청은 유지되며, 새 계정의 전달은 승인 후 ‘채널 전달’에서 진행합니다. 출고
                 항목:{" "}
                 {confirmedOutputs.map((key) => outputNames[key]).join(", ")}
               </p>
-              <label>승인 뒤 전달 방식
-                <select value={privateChannel} onChange={e=>setPrivateChannel(e.target.value as typeof privateChannel)} disabled={busy}>
-                  <option value="">오피스 안에 준비 · 외부 전송 안 함</option>
-                  <option value="youtube_main_ko">YouTube 메인 · 비공개 업로드</option>
-                  <option value="youtube_english">YouTube 영어 · 비공개 업로드</option>
-                </select>
-              </label>
-              <p className="muted">YouTube는 계정 연결·채널 전송 허용·영상 검토가 필요합니다. 티스토리·Instagram의 오피스 준비 기록은 외부 플랫폼 임시저장과 다릅니다. 자동 공개 게시를 하지 않습니다.</p>
               {!approvalIsCurrent(releaseVersion, job.manifest?.hash) && (
                 <p className="critical-issue">
                   파일 버전이 변경됐습니다. 새 파일을 확인한 뒤 다시 승인하세요.
@@ -2546,11 +2530,10 @@ function Delivery({
                           "approved",
                           mediaReviewed,
                           confirmedOutputs,
-                          privateChannel||undefined,
                         );
                         setReleaseVersion(undefined);
                       },
-                      privateChannel?"출고 승인과 비공개 전송 요청을 저장했습니다. 전송 기록에서 외부 ID와 실제 상태를 확인하세요.":"현재 파일의 출고를 승인하고 채널별 준비 기록을 저장했습니다. 외부 플랫폼 저장 상태와는 별개입니다.",
+                      "완성본 승인②를 저장했습니다. ‘채널 전달’에서 계정과 전달 방식을 확인하세요. 이 화면에서 새 계정은 지정하지 않았습니다. 기존 허용 정책과 대기 요청은 유지됩니다.",
                     )
                   }
                 >

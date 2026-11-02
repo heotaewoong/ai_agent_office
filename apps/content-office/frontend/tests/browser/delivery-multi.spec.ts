@@ -13,6 +13,7 @@ async function harness(page:Page,closed=false){
   else if(path==='/api/jobs/summaries')body={jobs:[job]};else if(path==='/api/jobs/'+id)body=job;
   else if(path==='/api/channels')body={channels};else if(path.endsWith('/staging'))body=staging;
   else if(path.endsWith('/owner-drafts/request')){items.push({id:'draft-'+req.postDataJSON().channel_key,channel_key:req.postDataJSON().channel_key,state:'pending'});body={items};}
+  else if(path.endsWith('/reviews/release')){job.release_approval={decision:'approved',version:job.manifest.hash,outputs:req.postDataJSON().outputs};job.state='release_approved';body=job;}
   else if(path.endsWith('/owner-drafts'))body={items};else if(path.endsWith('/deliveries'))body={deliveries:[],youtube_configured:true};
   else if(path.endsWith('/production-estimate'))body={clips:{paid:false},thumbnail_artwork:false};
   await route.fulfill({status:body===undefined?404:200,contentType:'application/json',body:JSON.stringify(body??{detail:'Synthetic endpoint not implemented'})});
@@ -38,4 +39,34 @@ for(const width of [1440,375])test(`복수 대상 ${width}px 영상·글·미연
 test('종료된 작업 시간에는 선택과 비교만 허용하고 전송을 막는다',async({page})=>{
  const f=await harness(page,true);await page.goto('/publish?job='+f.id);const panel=page.getByRole('region',{name:'멀티플랫폼 전달 선택'});
  await panel.getByRole('checkbox',{name:'티스토리 · 한국어',exact:true}).check();await expect(panel.getByRole('button',{name:'티스토리에 원고 임시저장 요청'})).toBeDisabled();expect(f.writes).toEqual([]);
+});
+
+for(const width of [1440,375])test(`완성본 승인 ${width}px 요약·부분 승인만 처리하고 전송을 섞지 않는다`,async({page})=>{
+ const f=await harness(page);f.job.state='partial_release_review';f.job.release_approval=null;
+ f.job.manifest.completed_outputs=['blog'];f.job.manifest.output_status={blog:{state:'completed'},video:{state:'failed',error:'합성 실패; 기존 파일 보존'}};
+ await page.setViewportSize({width,height:1000});await page.goto('/publish?job='+f.id);
+ const scope=page.getByRole('region',{name:'제작물 승인 범위'});
+ await expect(scope).toContainText('블로그·소셜 검토 초안');await expect(scope).toContainText('제작 실패');
+ await expect(scope.getByRole('checkbox')).toHaveCount(0);
+ await scope.locator('summary').click();
+ await expect(scope.getByRole('checkbox',{name:'세로 영상 출고',exact:true})).toBeDisabled();
+ await expect(scope.getByRole('checkbox',{name:'블로그·소셜 검토 초안 출고',exact:true})).toBeChecked();
+ await page.getByRole('button',{name:'출고 승인',exact:true}).click();
+ const confirm=page.getByRole('region',{name:'출고 승인 확인'});
+ await expect(confirm.getByRole('combobox')).toHaveCount(0);await expect(confirm).toContainText('채널 전달');
+ expect(f.writes).toEqual([]);await confirm.getByRole('button',{name:'이 파일 버전 승인하기'}).click();
+ await expect.poll(()=>f.writes.length).toBe(1);expect(f.writes[0]).toEqual({path:`/api/jobs/${f.id}/reviews/release`,body:{version:f.job.manifest.hash,decision:'approved',media_reviewed:false,outputs:['blog']}});
+ expect(f.job.selections).toEqual({blog:true,video:true,cards:false,pdf:false});
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+});
+
+test('이전 Reels 전용 판본은 기존 목적지 수정·재승인 경로를 채널 전달에서 제공한다',async({page})=>{
+ const f=await harness(page);f.job.source_packet.video_platforms=['instagram_reels'];await page.goto('/publish?job='+f.id);
+ const panel=page.getByRole('region',{name:'멀티플랫폼 전달 선택'});
+ await panel.getByRole('checkbox',{name:'YouTube 메인 · 한국어',exact:true}).check();
+ await expect(panel.getByRole('button',{name:'비공개로 올리기'})).toBeDisabled();
+ await panel.locator('summary').filter({hasText:'이전 영상 목적지 수정'}).click();
+ await expect(panel.getByRole('group',{name:'영상 플랫폼 선택'})).toBeVisible();
+ await expect(panel).toContainText('새 원고 판본에서 승인①·②');
+ expect(f.writes).toEqual([]);expect(f.job.source_packet.video_platforms).toEqual(['instagram_reels']);
 });

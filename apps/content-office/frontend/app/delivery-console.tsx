@@ -5,6 +5,8 @@ import type {Channel,ChannelStagingSnapshot,Job} from '../lib/types';
 import {choiceReadiness,destinationFormat,platformChoices,platformNames} from '../lib/delivery-console';
 import {requireStagingSnapshot,stagingExternalLabel,stagingLocalLabel} from '../lib/delivery-readiness';
 import {ChannelHandoffPanel,YoutubePanel} from './youtube-panel';
+import {OwnerDraftStatus} from './owner-draft-options';
+import {VideoPlatformsPanel} from './video-platforms-panel';
 
 type ConsoleAction=Parameters<typeof YoutubePanel>[0]["action"];
 type DraftItem={id:string;channel_key:string;state:string;reason?:string};
@@ -58,6 +60,8 @@ export function DeliveryConsole({job,busy,action,youtubeConfigured,requestBlocke
     </section>;
    })}
   </>}
+  {job.selections?.video && job.source_packet?.video_platforms && !job.source_packet.video_platforms.includes('youtube_shorts') && <details><summary>이전 영상 목적지 수정 · 재승인 필요</summary><p>기존 Reels 전용 판본의 호환 설정입니다. 변경하면 새 원고 판본에서 승인①·②를 다시 확인해야 합니다. 현재 원고·승인·파일은 저장을 누르기 전까지 그대로 유지됩니다.</p><VideoPlatformsPanel key={revision} job={job} enabled={true} busy={busy} action={action} onSaved={()=>{}}/></details>}
+  <details><summary>기존 전달 요청·저장 결과</summary><OwnerDraftStatus jobId={job.id} revision={job.updated_at}/></details>
   <details><summary>전체 채널의 파일 준비·전송 이력</summary><ChannelHandoffPanel job={job} busy={busy} action={action}/></details>
  </section>;
 }

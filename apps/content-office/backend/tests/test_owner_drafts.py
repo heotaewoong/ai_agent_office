@@ -358,3 +358,13 @@ def test_queue_preparation_failure_does_not_turn_committed_release_into_retry_pr
     assert store.setting(owner_drafts.SETTING) == previous
     with store.connection() as db:
         assert db.execute("SELECT count(*) FROM approvals WHERE job_id=? AND kind='release'", (jid,)).fetchone()[0] == 1
+
+
+def test_content_only_source_review_preserves_existing_delivery_policy_and_pending_receipt(tmp_path):
+    store, jid = ready(tmp_path)
+    rows = owner_drafts.prepare(store, jid)
+    before = store.job(jid)
+    saved = store.review_source(jid, before['source_hash'], 'approved', 'fixture', before['selections'])
+    assert saved['owner_draft_policy'] == before['owner_draft_policy']
+    assert saved['source_hash'] == before['source_hash']
+    assert owner_drafts.prepare(store, jid) == rows

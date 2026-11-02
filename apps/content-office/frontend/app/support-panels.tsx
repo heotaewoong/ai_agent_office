@@ -590,66 +590,27 @@ export function OutputChoices({
   const outputs = (Object.keys(outputNames) as OutputKind[]).filter(
     (key) => job.selections?.[key],
   );
+  const approved = job.release_approval?.decision === 'approved' && job.release_approval.version === job.manifest?.hash ? job.release_approval.outputs : undefined;
+  const scope = approved ?? selected;
   return (
-    <section className="output-choices">
-      <div className="section-heading">
-        <div>
-          <p className="eyebrow">RELEASE BY OUTPUT</p>
-          <h3>완료된 항목부터 출고하세요</h3>
-        </div>
-        <span className="count-pill">
-          {complete.length} / {outputs.length} 완료
-        </span>
-      </div>
-      <p className="output-note">
-        원고 승인 범위를 유지하면서 이번에 전달할 완료 항목만 고릅니다. 다른
-        항목의 실패가 완료된 블로그의 출고를 막지 않습니다.
-      </p>
+    <section className="output-choices" aria-label="제작물 승인 범위">
+      <div className="section-heading"><div><h3>완성본 준비 상태</h3></div><span className="count-pill">{complete.length} / {outputs.length} 완료</span></div>
+      <p className="output-note">제작 완료와 승인②는 별개입니다. 완료된 항목부터 승인할 수 있으며, 다른 항목의 실패가 완료된 글의 승인을 막지 않습니다.</p>
       <div className="output-grid">
-        {outputs.map((key) => {
-          const status = job.manifest?.output_status?.[key];
-          const ready = complete.includes(key);
-          return (
-            <label
-              className={`output-choice ${selected.includes(key) ? "selected" : ""}`}
-              key={key}
-            >
-              <div>
-                <input
-                  type="checkbox"
-                  aria-label={`${outputNames[key]} 출고`}
-                  checked={selected.includes(key)}
-                  disabled={busy || !ready}
-                  onChange={(event) =>
-                    onChange(
-                      event.target.checked
-                        ? [...selected, key]
-                        : selected.filter((item) => item !== key),
-                    )
-                  }
-                />
-                <strong>{outputNames[key]}</strong>
-                <span
-                  className={`badge ${ready ? "green" : status?.state === "failed" ? "red" : "neutral"}`}
-                >
-                  {ready
-                    ? "완료"
-                    : status?.state === "failed"
-                      ? "제작 실패"
-                      : status?.state === "running"
-                        ? "제작 중"
-                        : "미완료"}
-                </span>
-              </div>
-              {status?.files != null && <p>{status.files}개 파일</p>}
-              {status?.error && <p className="output-error">{status.error}</p>}
-              {status?.successful_assets_preserved && (
-                <p>성공한 자산은 보존되어 있습니다.</p>
-              )}
-            </label>
-          );
+        {outputs.map(key => {
+          const status=job.manifest?.output_status?.[key], ready=complete.includes(key);
+          return <div className="output-choice" key={key}><div><strong>{outputNames[key]}</strong><span className={`badge ${ready?'green':status?.state==='failed'?'red':'neutral'}`}>{ready?'완료':status?.state==='failed'?'제작 실패':status?.state==='running'?'제작 중':'미완료'}</span></div>
+            {status?.files != null && <p>{status.files}개 파일</p>}
+            {status?.error && <p className="output-error">{status.error}</p>}
+            {status?.successful_assets_preserved && <p>성공한 자산은 보존되어 있습니다.</p>}
+          </div>;
         })}
       </div>
+      <p role="status"><strong>{approved?'승인된 항목':'승인할 항목'}:</strong> {scope.length ? scope.map(key=>outputNames[key]).join(', ') : '선택 없음'}</p>
+      <details><summary>{approved?'승인 범위 확인':'승인할 항목 바꾸기'}</summary>
+        <p className="output-note">일부만 승인하려면 완료 항목을 고르세요. 이 선택은 제작 설정이나 전달할 채널을 바꾸지 않습니다.</p>
+        <div className="output-grid">{outputs.map(key=><label className={`output-choice ${scope.includes(key)?'selected':''}`} key={key}><div><input type="checkbox" aria-label={`${outputNames[key]} 출고`} checked={scope.includes(key)} disabled={busy||!complete.includes(key)} onChange={event=>onChange(event.target.checked?[...selected,key]:selected.filter(item=>item!==key))}/><strong>{outputNames[key]}</strong></div></label>)}</div>
+      </details>
     </section>
   );
 }

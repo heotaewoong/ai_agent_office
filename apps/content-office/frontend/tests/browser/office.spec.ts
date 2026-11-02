@@ -952,9 +952,10 @@ test("영상 실패와 무관하게 완료된 블로그만 출고할 수 있다"
   });
   await page.goto("/");
   await page.goto("/publish?job=contract-test-job");
+  await page.getByRole("region", {name:"제작물 승인 범위"}).locator("summary").click();
   const blog = page.getByRole("checkbox", { name: "블로그·소셜 검토 초안 출고", exact: true });
   const video = page.getByRole("checkbox", {
-    name: "YouTube Shorts 출고",
+    name: "세로 영상 출고",
     exact: true,
   });
   await expect(blog).toBeChecked({ timeout: 15000 });
@@ -994,8 +995,9 @@ test("출고 확인 중 항목을 바꾸면 이전 출력 선택으로 승인하
   await page.goto("/");
   await page.goto("/publish?job=contract-test-job");
   await page.getByRole("button", { name: "출고 승인", exact: true }).click();
+  await page.getByRole("region", {name:"제작물 승인 범위"}).locator("summary").click();
   await page
-    .getByRole("checkbox", { name: "YouTube Shorts 출고", exact: true })
+    .getByRole("checkbox", { name: "세로 영상 출고", exact: true })
     .uncheck();
   await expect(
     page.getByRole("button", { name: "이 파일 버전 승인하기" }),

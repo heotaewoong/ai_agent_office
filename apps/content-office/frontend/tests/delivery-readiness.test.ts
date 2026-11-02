@@ -94,3 +94,10 @@ test("출고 묶음은 현재 승인된 실제 파일만 준비로 표시하고 
   assert.match(channelHandoffStatus(withSocial as never, "instagram"), /캡션만/);
   assert.match(channelHandoffStatus(withSocial as never, "instagram", "instagram_english"), /초안 없음/);
 });
+
+test('기존 Reels 전용 판본은 YouTube 대상 체크만으로 전송 가능해지지 않는다',()=>{
+ const legacy={...job,source_packet:{...job.source_packet,video_platforms:['instagram_reels']}};
+ assert.equal(youtubePreflight(legacy as never,channel as never).ok,false);
+ assert.match(youtubePreflight(legacy as never,channel as never).reason,/재승인/);
+ assert.equal(youtubePreflight({...legacy,source_packet:{...legacy.source_packet,video_platforms:['youtube_shorts','instagram_reels']}} as never,channel as never).ok,true);
+});

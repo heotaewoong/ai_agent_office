@@ -18,6 +18,8 @@ export function sourceChannelMismatch(job: Pick<Job, "source_packet">, channel: 
 export function youtubePreflight(job: Job, channel: Channel | undefined, requestBlockedReason?: string) {
   if (requestBlockedReason) return { ok: false, reason: requestBlockedReason };
   if (!channel) return { ok: false, reason: "선택한 채널 설정을 읽지 못했습니다. 제작 설정의 채널 정보를 확인하세요." };
+  if (job.source_packet?.video_platforms && !job.source_packet.video_platforms.includes('youtube_shorts'))
+    return {ok:false,reason:'기존 승인 판본은 Reels 전용입니다. 아래 이전 영상 목적지 수정에서 YouTube를 포함하고 원고·완성본을 재승인해 주세요. 선택만으로 기존 승인을 확대하지 않습니다.'};
   const readiness = uploadReadiness(job, channel.credentials_configured);
   if (!readiness.ok) return readiness;
   if (!job.source_hash || job.manifest?.source_hash !== job.source_hash)

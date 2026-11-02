@@ -226,7 +226,7 @@ export const states: Record<
   release_approved: {
     label: "출고 승인",
     tone: "green",
-    next: "파일을 내려받아 각 채널에 직접 게시하세요",
+    next: "승인된 파일을 확인하고 채널 전달에서 계정과 전달 방식을 선택하세요",
   },
   blocked: {
     label: "확인 필요",

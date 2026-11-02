@@ -4531,3 +4531,10 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .delivery-account span { min-width:0; }
 .delivery-target { min-width:0; margin:16px 0; padding:16px; border:1px solid var(--line,#d8dfd2); border-radius:10px; overflow-wrap:anywhere; }
 .delivery-target .button { max-width:100%; white-space:normal; }
+
+.delivery-flow { display:flex; flex-wrap:wrap; gap:8px; list-style:none; margin:20px 0; padding:0; }
+.delivery-flow li { flex:1 1 160px; min-width:0; }
+.delivery-flow a,.delivery-flow button { display:flex; align-items:center; justify-content:center; width:100%; min-height:44px; padding:10px 14px; border:1px solid var(--line); border-radius:8px; background:var(--surface,#fff); color:inherit; font:inherit; font-size:14px; text-align:center; text-decoration:none; cursor:pointer; }
+.delivery-flow [aria-current="step"] { background:#edf2e7; border-color:#668268; font-weight:700; }
+.output-choices details { margin-top:12px; }
+.output-choices summary { min-height:44px; padding:10px 0; cursor:pointer; }
