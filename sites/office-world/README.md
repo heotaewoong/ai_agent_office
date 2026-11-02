@@ -227,3 +227,8 @@ Blender4.5.15에서 자체 제작한 원본 GLB(SHA256 4eb3370839e30e33c637f01ef
 ### 변경되는 JS/CSS 전송 후보 · 2026-11-02
 
 `readWorldFile`의 JS/CSS 분기만 추가하며 원본을 매 요청 다시 읽습니다. 영구 압축 캐시나 변경 누락 위험이 있는 JS sidecar를 만들지 않습니다. 인증, `no-store`, `nosniff`, 기존 `Vary: Accept-Encoding`과 압축 거부 시 원본 반환을 유지합니다. gzip을 풀어 원본 바이트와 대조하는 검사가 있습니다. 제거는 `world-files.ts`의 JS/CSS 비동기 gzip 분기와 해당 표준 라이브러리 import만 되돌리면 됩니다. 로컬 크기/회귀·운영 전송·실제 체감 속도는 별도 검증 단계이며, 아직 이 절만으로 배포 완료를 뜻하지 않습니다.
+
+
+### 고정 엔진 Brotli 전송 후보 · 2026-11-02
+
+기존6,704,193바이트 엔진의 동일 원문을 미리 Brotli로 압축한1,023,544바이트 표현을 추가합니다. 기존gzip1,471,995바이트보다 약30.5% 작습니다. 클라이언트의 `Accept-Encoding`에서br을 허용하고gzip보다 선호도가 낮지 않을 때만 선택하며, br명시거부·gzip우선·압축미지원·br파일누락은 기존gzip/원문경로로 돌아갑니다. 런타임Brotli 압축이나새의존성·캐시·인증변경은 없습니다. 원본/SRI/Apache-2.0라이선스를 유지하며, 생성법/해시는 ASSET_LICENSE_MANIFEST.md에 기록했습니다. 제거는readWorldFile의br파일선택과vendor/babylon.min.js.br만 되돌리며gzip/원본은 보존합니다. 파일크기 절감은 전체로딩/FPS보장과 다르며 실제 전송 검증 후 채택합니다.

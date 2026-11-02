@@ -7,7 +7,7 @@ export function summarizeTimings(samples) {
 }
 
 export function assertComparableRuns(a,b) {
-  for(const key of ['layer','quality','qualityFeatures','css','canvas','dpr','renderer','meshes','vertices','cameraPath','warmupFrames','sampleFrames']) {
+  for(const key of ['measurementVersion','layer','quality','qualityFeatures','css','canvas','dpr','renderer','meshes','vertices','cameraPath','warmupFrames','sampleFrames']) {
     if(a[key]===undefined||b[key]===undefined||JSON.stringify(a[key])!==JSON.stringify(b[key])) {
       throw Error(`A/B conditions differ: ${key}`);
     }
@@ -43,15 +43,27 @@ export async function measureCameraScenario(office,{layer='office',warmupFrames=
     si.captureFrameTime=si.captureRenderTime=si.captureActiveMeshesEvaluationTime=true;
     ei.captureGPUFrameTime=true;
     const frame=[],cpu=[],render=[],activeEval=[],gpu=[];
-    let last;
+    const gpuCounter=ei.gpuFrameTimeCounter;
+    const pendingCount=Number.isInteger(gpuCounter.count)&&gpuCounter.count>=0?gpuCounter.count:null;
+    // Drain the first completion, which may belong to a previous capture interval.
+    let primingFrames=0;
+    while(pendingCount!==null&&gpuCounter.count===pendingCount&&primingFrames<60) {
+      await nextFrame();primingFrames++;
+    }
+    const gpuStartCount=pendingCount===null?null:gpuCounter.count;
+    let gpuCount=gpuStartCount,last;
     for(let i=0;i<sampleFrames;i++) {
       camera.alpha=alpha+Math.sin(i/cameraPath.period)*cameraPath.amplitude;
       const t=await nextFrame();
       if(last!==undefined)frame.push(t-last);last=t;
       cpu.push(si.frameTimeCounter.current);render.push(si.renderTimeCounter.current);
       activeEval.push(si.activeMeshesEvaluationTimeCounter.current);
-      const gpuNs=ei.gpuFrameTimeCounter.current;
-      if(Number.isFinite(gpuNs)&&gpuNs>0)gpu.push(gpuNs/1e6);
+      // The engine retains current while asynchronous GPU queries are pending.
+      const completed=gpuCounter.count,gpuNs=gpuCounter.current;
+      if(gpuCount!==null&&Number.isInteger(completed)&&completed>gpuCount) {
+        gpuCount=completed;
+        if(Number.isFinite(gpuNs)&&gpuNs>0)gpu.push(gpuNs/1e6);
+      }
     }
     // Transient work-flow dots are counted separately from the unchanged world geometry.
     const structural=scene.meshes.filter(m=>m.name!=='flow');
@@ -65,13 +77,15 @@ export async function measureCameraScenario(office,{layer='office',warmupFrames=
         imageProcessing:post.imageProcessingEnabled,exposure:post.imageProcessing?.exposure??null,contrast:post.imageProcessing?.contrast??null,
         toneMapping:post.imageProcessing?.toneMappingEnabled??null,toneMappingType:post.imageProcessing?.toneMappingType??null,
         vignette:post.imageProcessing?.vignetteEnabled??null,vignetteWeight:post.imageProcessing?.vignetteWeight??null}:null};
-    return {at:new Date().toISOString(),layer,quality:office.quality,qualityFeatures,
+    return {measurementVersion:2,at:new Date().toISOString(),layer,quality:office.quality,qualityFeatures,
       css:[env.innerWidth,env.innerHeight],canvas:[world.engine.getRenderWidth(),world.engine.getRenderHeight()],
       dpr:env.devicePixelRatio,renderer:world.engine.getGlInfo().renderer,
       meshes:structural.length,vertices:structural.reduce((n,m)=>n+m.getTotalVertices(),0),
       transientFlows:scene.meshes.length-structural.length,cameraPath,warmupFrames,sampleFrames,
       frame:summarizeTimings(frame),cpu:summarizeTimings(cpu),render:summarizeTimings(render),
       activeEval:summarizeTimings(activeEval),gpu:summarizeTimings(gpu),
+      gpuCoverage:{counterSupported:gpuStartCount!==null,primingFrames,
+        completedQueries:gpuCount===null?null:gpuCount-gpuStartCount,sampledFrames:sampleFrames,collectedSamples:gpu.length},
       heap:env.performance.memory?.usedJSHeapSize??null};
   } finally {
     si?.dispose();ei?.dispose();

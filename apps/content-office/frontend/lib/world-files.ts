@@ -31,17 +31,29 @@ export function resolveWorldFile(
   return type ? { path, type } : null;
 }
 
-export function acceptsWorldGzip(header: string | null): boolean {
+function encodingQuality(header: string | null, name: "gzip" | "br"): number {
   const choices = new Map<string, number>();
   for (const entry of (header ?? "").split(",")) {
-    const match = entry.trim().match(/^(gzip|\*)(?:\s*;\s*q\s*=\s*(0(?:\.\d{0,3})?|1(?:\.0{0,3})?))?$/i);
+    const match = entry.trim().match(/^(gzip|br|\*)(?:\s*;\s*q\s*=\s*(0(?:\.\d{0,3})?|1(?:\.0{0,3})?))?$/i);
     if (match) choices.set(match[1].toLowerCase(), Number(match[2] ?? 1));
   }
-  return (choices.get("gzip") ?? choices.get("*") ?? 0) > 0;
+  return choices.get(name) ?? choices.get("*") ?? 0;
+}
+
+export function acceptsWorldGzip(header: string | null): boolean {
+  return encodingQuality(header, "gzip") > 0;
 }
 
 /** Keep existing sidecars; compress changing JS/CSS asynchronously without a stale cache. */
 export async function readWorldFile(file: { path: string; type: string }, encoding: string | null) {
+  const brQuality = encodingQuality(encoding, "br");
+  if (file.path.endsWith("/vendor/babylon.min.js") && brQuality > 0 && brQuality >= encodingQuality(encoding, "gzip")) {
+    try {
+      return { body: await readFile(file.path + ".br"), encoding: "br" };
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code !== "ENOENT") throw cause;
+    }
+  }
   if ((file.path.endsWith(".json") || file.path.endsWith("/vendor/babylon.min.js")) && acceptsWorldGzip(encoding)) {
     try {
       return { body: await readFile(file.path + ".gz"), encoding: "gzip" };
