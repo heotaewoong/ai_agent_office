@@ -201,6 +201,12 @@ if (typeof document !== 'undefined') {
       const target = (paused ? '잠시 멈춤 · ' : '') + '다음 ' + (tour.next + 1) + '/4 ' + stop.title + ' · ' + distance + 'm · ' + direction;
       if (tourTarget.textContent !== target) tourTarget.textContent = target;
     }
+    mobileActions.classList.toggle('tour-guidance', mounted && !!tour);
+    if (mounted && tour) {
+      const hint = done ? '관광 완주! 4/4 · 자유 시승을 이어가세요.' : tourTarget.textContent;
+      const label = mobileActions.querySelector('span');
+      if (label.textContent !== hint) label.textContent = hint;
+    }
     tourPanel.querySelectorAll('li').forEach((item, i) => {
       item.classList.toggle('visited', !!tour && i < tour.next);
       if (tour && i === tour.next) item.setAttribute('aria-current', 'step'); else item.removeAttribute('aria-current');
@@ -349,7 +355,7 @@ if (typeof document !== 'undefined') {
     catchButton.disabled = !walking || mounted || !target || target.distance > 7 || !o.controls.player.grounded;
     rideButton.disabled = !mounted && !canRide(profile, profile.selected, context());
     rideButton.textContent = mounted ? '하차 · V' : '탑승 · V';
-    mobileActions.querySelector('span').textContent = target ? `${target.name} ${Math.round(target.distance)}m` : '도감 완성!';
+    if (!mounted || !tour) mobileActions.querySelector('span').textContent = target ? `${target.name} ${Math.round(target.distance)}m` : '도감 완성!';
     mobileActions.querySelector('.mobile-catch').disabled = catchButton.disabled;
     mobileActions.querySelector('.mobile-ride').disabled = rideButton.disabled;
     mobileActions.querySelector('.mobile-ride').textContent = mounted ? '하차하기 · V' : '탑승';
