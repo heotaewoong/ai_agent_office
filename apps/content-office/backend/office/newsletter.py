@@ -73,9 +73,12 @@ def build_markdown(job, subject):
     return text + "---\n\n" + UNSUBSCRIBE_LINE + "\n"
 
 
-def _content(job, release, subject):
+def _content(job, release, subject, *, editorial=None, store=None, db=None):
     markdown = build_markdown(job, subject)
     content = {"subject": subject, "markdown": markdown, "source_hash": job["source_hash"], "release_version": release["version"], "release_outputs": sorted(release["outputs"])}
+    if editorial is not None:
+        from .newsletter_formats import package_content
+        content.update(package_content(store, db, job, release, subject, editorial))
     return {**content, "hash": digest(content)}
 
 
@@ -95,7 +98,7 @@ def _load(db, issue_id):
 
 def _require_current_issue(db, store, current):
     job, release = _released_job(db, store, current["job_id"])
-    if any(current.get(key) != value for key, value in _content(job, release, current["subject"]).items()):
+    if any(current.get(key) != value for key, value in _content(job, release, current["subject"], editorial=current.get('editorial'), store=store, db=db).items()):
         raise WorkflowError("회차의 원고·오퍼 또는 출고 판본이 변경되었습니다. 다시 만든(rebuild) 뒤 승인③을 받으세요")
     if any(current.get(key) != value for key, value in consent_snapshot(store, db=db).items()):
         raise WorkflowError("수신자 또는 동의 내용이 변경되었습니다. 다시 만든(rebuild) 뒤 승인③을 받으세요")
@@ -116,12 +119,12 @@ def _write(db, issue):
 
 def _subject(job, subject):
     value = str(subject or "").strip() or str(job.get("source_packet", {}).get("title") or job.get("title") or "").strip()
-    if not value or len(value) > MAX_SUBJECT:
+    if not value or len(value) > MAX_SUBJECT or re.search(r'[\r\n]', value):
         raise WorkflowError(f"회차 제목은 1~{MAX_SUBJECT}자여야 합니다")
     return value
 
 
-def build_issue(store, job_id, *, issue_key, subject, actor, auto=False):
+def build_issue(store, job_id, *, issue_key, subject, actor, auto=False, editorial=None):
     key = str(issue_key or "").strip()
     if not ISSUE_KEY_PATTERN.match(key):
         raise WorkflowError("회차 키는 영문·숫자·점·밑줄·하이픈 64자 이내여야 합니다 (예: 2026-11-w1)")
@@ -131,7 +134,7 @@ def build_issue(store, job_id, *, issue_key, subject, actor, auto=False):
             raise WorkflowError(f"회차 키 '{key}'는 이미 있습니다. 다른 회차 키를 쓰거나 기존 회차를 다시 만드세요")
         job, release = _released_job(db, store, job_id)
         recipients = consent_snapshot(store, db=db)
-        content = _content(job, release, _subject(job, subject))
+        content = _content(job, release, _subject(job, subject), editorial=editorial, store=store, db=db)
         issue_id = identifier("issue")
         data = {**content, **recipients, "built_at": now(), "approval": None, "sent_at": None}
         db.execute("INSERT INTO newsletter_issues VALUES(?,?,?,?,?,?,?)", (issue_id, key, job_id, "draft", canonical(data), now(), now()))
@@ -214,7 +217,7 @@ def rebuild_issue(store, issue_id, *, actor):
             raise WorkflowError("발송 기록이 남은 회차는 다시 만들지 않습니다. 새 회차 키로 만드세요")
         job, release = _released_job(db, store, current["job_id"])
         recipients = consent_snapshot(store, db=db)
-        content = _content(job, release, current["subject"])
+        content = _content(job, release, current["subject"], editorial=current.get('editorial'), store=store, db=db)
         changed = content["hash"] != current["hash"]
         recipients_changed = any(current.get(key) != value for key, value in recipients.items())
         approval = current.get("approval") or {}

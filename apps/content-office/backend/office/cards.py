@@ -22,7 +22,9 @@ SLIDE_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}, "b
 CARDS_SCHEMA = {"type": "object", "properties": {"slides": {"type": "array", "minItems": 6, "maxItems": 8, "items": SLIDE_SCHEMA}}, "required": ["slides"], "additionalProperties": False}
 REVIEW_SCHEMA = {"type": "object", "properties": {"cards": {"type": "array", "items": {"type": "object", "properties": {
     "index": {"type": "integer"}, "ok": {"type": "boolean"}, "problems": {"type": "array", "items": {"type": "string"}}},
-    "required": ["index", "ok", "problems"], "additionalProperties": False}}}, "required": ["cards"], "additionalProperties": False}
+    "required": ["index", "ok", "problems"], "additionalProperties": False}},
+    "topic_matches": {"type": "boolean"}, "topic_reason": {"type": "string"}},
+    "required": ["cards", "topic_matches", "topic_reason"], "additionalProperties": False}
 MIN_SLIDES, MAX_SLIDES = 6, 8
 TITLE_LIMIT, BODY_LIMIT = 18, 60
 SIZE = (1080, 1080)
@@ -37,17 +39,20 @@ CTA_PALETTE = ("#f6f1e7", "#efe4cf", "#d64541")
 STROKE = (8, 12, 24)
 
 INSTRUCTIONS = f"""승인된 원고로 인스타그램 카드뉴스 {MIN_SLIDES}~{MAX_SLIDES}장을 쓴다. 독자 한 명에게 말하듯 해요체로 쓴다.
+원고의 주제 우선: 제목·도입·본문·마무리·이미지는 승인 원고의 주체, 대상, 사건과 근거를 유지한다.
+독자 설정은 설명 난이도·문체에만 적용하고, 원문의 연구·발표를 일반적인 AI 뉴스 읽기 고민이나 내 업무 자동화로 바꾸지 않는다.
+사실과 독자 적용 제안을 구분한다. 원고에 없는 실행 사례나 효과를 만들지 않는다.
 
 가장 중요한 규칙: 각 카드는 그 카드만 읽어도 뜻이 통해야 한다. 앞 카드를 봐야 아는 대명사·생략(이것, 그 기능, 비용)을 쓰지 않고
 '무엇이 무엇을' 주어와 대상을 매번 적는다. 숫자는 무엇의 값인지 함께 쓴다. 전문용어·영어 약어는 쉬운 말로 바꾸거나 짧게 풀어 쓴다.
 전보문처럼 조사를 빼거나 명사만 나열하지 않는다. 카드는 휴대폰에서 큰 글씨로 보이므로 짧고 쉽게 쓴다.
 
 카드 구성
-- 1장: 독자가 지금 겪는 상황을 짚는 후크. 제목은 독자의 말이나 질문처럼.
+- 1장: 승인 원고의 주체·사건·핵심 질문을 알아볼 수 있는 후크. 독자 질문을 써도 원문의 주제를 바꾸지 않는다.
 - 2장: 그 문제가 왜 생기는지, 또는 이 소식이 왜 독자에게 중요한지.
 - 3장: 핵심 개념이나 발표 내용을 쉬운 말 한 문장으로.
 - 4~{MAX_SLIDES - 1}장: 어떻게 쓰는지·판단 기준·구체 예시를 한 장에 하나씩. 앞 장과 자연스럽게 이어지되 혼자서도 읽히게.
-- 마지막 장: '오늘 할 일' 하나(독자가 10분 안에 할 수 있는 행동). CTA 문구는 이미지에 따로 들어가므로 body에 쓰지 않는다.
+- 마지막 장: 원고 주제에 맞는 핵심 정리나 원문에서 확인할 질문 하나. 직접 실행할 수 없는 연구 장비를 독자에게 실행하라고 하지 않는다. CTA 문구는 이미지에 따로 들어가므로 body에 쓰지 않는다.
 
 형식: title은 {TITLE_LIMIT}자 이하(마침표 없음), body는 {BODY_LIMIT}자 이하 1~2문장이며 각 문장은 끝까지 완결한다. 제목은 서로 다르게.
 visual: 그 카드 내용을 그대로 보여 주는 배경 이미지 장면을 한국어 한 문장으로 구체적으로 쓴다(사물·도구·행동·장소). 화면·종이에 숫자나 글자가 보이는 장면은 쓰지 않는다. 예) "책상 위 노트북 화면에서
@@ -58,7 +63,18 @@ REVIEW_INSTRUCTIONS = """너는 한국어 카드뉴스 편집자다. 각 카드�
 ok=false로 표시할 기준: (1) 이 카드만 읽으면 무슨 말인지 모른다(주어·대상이 빠졌거나 앞 카드를 전제한다), (2) 숫자나 용어가 무엇에 대한 것인지 없다,
 (3) 전보문·명사 나열·조사 생략·번역투로 어색하다, (4) 두 문장이 서로 안 이어진다, (5) 앞뒤 카드와 순서가 맞지 않아 흐름이 끊긴다,
 (6) visual이 카드 내용과 관계없거나 글자를 넣으라고 한다.
-problems에는 무엇이 왜 문제인지와 어떻게 고치면 되는지를 한 줄씩 한국어로 적는다. 사실 여부는 판단하지 않는다."""
+problems에는 무엇이 왜 문제인지와 어떻게 고치면 되는지를 한 줄씩 한국어로 적는다.
+제공된 packet은 승인 원고이고 source는 원기사 정보다. 카드를 packet의 제목·본문·근거와 대조한다.
+topic_matches는 전체 카드가 원고의 주체·사건·핵심 질문·사실 범위를 보존할 때만 true다.
+원고의 전파망원경 연구를 AI 뉴스 읽기 고민·회사 업무 자동화로 대체하는 식의 주제 이탈은 false다.
+표지·마무리·visual도 검사한다. 독자 설정·CTA는 원고 주제를 대체할 수 없다. topic_reason에 대조한 원고 주제와 일치/불일치 이유를 한국어로 적는다.
+독립적인 외부 사실 검증을 수행했다고 주장하지 않는다."""
+
+
+def topic_issues(review):
+    if (review or {}).get('topic_matches') is True and isinstance(review.get('topic_reason'), str) and review['topic_reason'].strip():
+        return []
+    return ['카드 주제 검수 미통과: ' + str((review or {}).get('topic_reason') or '승인 원고와의 주제 일치 판단이 없습니다')]
 
 
 def glossary_issues(text, brand):
@@ -279,7 +295,7 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
     brief = brief_for_job(job)
     provider = provider or Provider(store, job_id=job_id)
     system = brand_system_prompt(BASE, brand)
-    context = {"packet": packet_context(packet), "audience": brief, "campaign_offer": offer_snapshot(job.get("offer")), "instructions": INSTRUCTIONS}
+    context = {"packet": packet_context(packet), "source": {key: job.get('article', {}).get(key) for key in ('title', 'url')}, "audience": brief, "campaign_offer": offer_snapshot(job.get("offer")), "instructions": INSTRUCTIONS}
     if brief.get('axis') == 'A':
         context['instructions'] += ' 학습 카드에는 원고 근거로 구별 기준·구체 예시·틀리지 않은 연상 고리·먼저 풀어 볼 질문을 배치하고 다음 장에서 정답과 이유를 설명한다. 질문 장에 정답을 먼저 노출하지 않는다. 장 수와 글자 한도는 유지한다.'
         quiz = job.get('quiz') or {}
@@ -289,8 +305,10 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
     options = {"max_tokens": 12000, "temperature": 0.5, "reasoning_effort": "low"}
     plan = provider.generate("cards", [{"role": "system", "content": system}, {"role": "user", "content": canonical(context)}], CARDS_SCHEMA, options)
     checks = card_checks(plan, brand)
-    review = provider.generate("cards_review", [{"role": "system", "content": system}, {"role": "user", "content": canonical({"cards": plan.get("slides"), "audience": brief, "instructions": REVIEW_INSTRUCTIONS})}], REVIEW_SCHEMA, {"max_tokens": 6000, "temperature": 0.2, "reasoning_effort": "low"})
-    issues = [*checks["issues"], *review_issues(review)]
+    def review_plan(candidate):
+        return provider.generate("cards_review", [{"role": "system", "content": system}, {"role": "user", "content": canonical({**context, "cards": candidate.get("slides"), "instructions": REVIEW_INSTRUCTIONS})}], REVIEW_SCHEMA, {"max_tokens": 6000, "temperature": 0.2, "reasoning_effort": "low"})
+    review = review_plan(plan)
+    issues = [*checks["issues"], *review_issues(review), *topic_issues(review)]
     refined = False
     notes = []
     if issues:
@@ -298,14 +316,20 @@ def plan_cards(store: Store, job_id, provider=None, background_renderer=None, im
         try:
             revised = provider.generate("cards", [{"role": "system", "content": system}, {"role": "user", "content": canonical(refine_context)}], CARDS_SCHEMA, {**options, "temperature": 0.3})
             plan, checks, refined = revised, card_checks(revised, brand), True
+            review = {}  # 이전 문구의 주제 판정을 수정 문구에 재사용하지 않는다.
+            review = review_plan(plan)
         except WorkflowError as error:
             # 수정 단계가 실패해도 이미 비용을 낸 첫 결과로 카드를 만든다. 검토 지적은 이슈로 남긴다.
             notes.append(f"수정 단계 실패로 첫 결과를 썼어요: {error}")
             checks = {"passed": False, "issues": issues}
+    topic_errors = topic_issues(review)
+    if topic_errors:
+        checks = {**checks, 'passed': False, 'blocking': [*checks.get('blocking', []), *topic_errors],
+                  'issues': [*checks['issues'], *topic_errors]}
     version = int((job.get("cards") or {}).get("version", 0)) + 1
     root, folder = output_folder(store, job, f"cards-v{version}")
     # Production never buys six background images for a text plan that still fails checks.
-    renderer = None if require_passed and not checks['passed'] else _card_renderer(store, job_id, images, background_renderer, notes)
+    renderer = None if topic_errors or (require_passed and not checks['passed']) else _card_renderer(store, job_id, images, background_renderer, notes)
     raw = [s for s in (plan.get("slides") or []) if isinstance(s, dict)]
     slides, image_meta = [], []
     for index, slide in enumerate(raw, 1):

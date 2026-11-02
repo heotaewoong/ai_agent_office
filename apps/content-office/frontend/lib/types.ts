@@ -612,6 +612,16 @@ export type LeadSummary = {
   by_source: Record<string, number>;
 };
 export type NewsletterState = "draft" | "approved" | "rejected" | "sent_manual";
+export type NewsletterDestination = "email" | "slack" | "website";
+export type NewsletterEditorial = { kind: "briefing" | "analysis" | "updates"; related_job_ids: string[]; destinations: NewsletterDestination[] };
+export type NewsletterConnection = { key: NewsletterDestination; label: string; configured: boolean; verified: boolean; missing: string[]; note: string };
+export type NewsletterInputs = { sources: { id: string; name: string; segment: string; language: string }[]; released_jobs: { id: string; title: string; source_hash?: string }[] };
+export type NewsletterPrepared = { id: string; review_hash: string; state: "prepared" | "connection_required"; external_requests: number; destinations: (NewsletterConnection & { external_sent: boolean })[]; note: string };
+export type NewsletterPackage = {
+  version: number; article_count: number; publisher_count: number; source_note: string;
+  sources: { job_id: string; title: string; url: string; publisher: string }[];
+  outputs: { email?: { html: string; text: string }; slack?: { text: string }; website?: { title: string; markdown: string; state: string } };
+};
 export type NewsletterIssue = {
   id: string;
   issue_key: string;
@@ -626,6 +636,8 @@ export type NewsletterIssue = {
   review_hash: string;
   approval: null | { stage: string; decision: string; actor: string; at: string; note: string };
   sent_at: string | null;
+  editorial?: NewsletterEditorial;
+  package?: NewsletterPackage;
 };
 export type CouponSnapshot = { code: string | null; discount_percent: number | null; expires_at: string | null; terms: string | null; verified: boolean; usage_limit?: number; user_usage_limit?: number };
 export type FreePdf = { title: string; url: string; verified: boolean };
