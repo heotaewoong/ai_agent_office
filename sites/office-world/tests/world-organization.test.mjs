@@ -193,3 +193,30 @@ test('dev team becomes a connected team from /api/space dev status with an auto-
   assert.equal(without.connection, 'planned');
   assert.equal(without.items.length, 0);
 });
+
+test('stocks team becomes connected from /api/space stocks status and only exposes the free quote refresh action', () => {
+  const stocksTeam = method('organization', 'stocksTeam');
+  const project = method('organization', 'project', { organization: { stocksTeam } });
+  const stocks = { version: 1, configured: true, approval: '포트폴리오 점검 · 직접 확인할 것 2개', items: [
+    { id: 'stocks-summary', title: '36종목 · 원금 대비 -14.3%', stateLabel: '보유 수량·원금은 2026-10-09 내 시트 기준', state: 'info', needsHuman: false, actions: [] },
+    { id: 'stocks-quotes', title: '시세·환율 새로 확인', stateLabel: '아직 새 시세를 확인하지 않았어요', state: 'info', needsHuman: false,
+      actions: [{ id: 'stocks-refresh', label: '시세 새로 확인' }, { id: 'stocks-sell', label: '팔기' }, { id: 'produce', label: '제작 시작' }] },
+    { id: 'stocks-type-crypto', title: '암호화폐 24.5% · 목표 10%', stateLabel: '목표보다 14.5%p 많아요 · 조정할지는 직접 판단', state: 'drift', needsHuman: true, actions: [] },
+  ] };
+  const team = project({ ...fixture(), stocks }).stages.find(st => st.teamId === 'stocks');
+  assert.equal(team.id, 'ops');
+  assert.equal(team.connection, 'stocks');
+  assert.equal(team.approval, '포트폴리오 점검 · 직접 확인할 것 2개');
+  assert.deepEqual(team.items.map(it => it.id), ['stocks-summary', 'stocks-quotes', 'stocks-type-crypto']);
+  assert.deepEqual(team.items.find(it => it.id === 'stocks-quotes').actions, [{ id: 'stocks-refresh', label: '시세 새로 확인' }]);
+  assert.equal(team.items.find(it => it.id === 'stocks-type-crypto').needsHuman, true);
+  assert(team.goals.some(goal => /매매 판단은 직접/.test(goal)));
+  const content = project({ ...fixture(), stocks }).stages.find(st => st.teamId === 'content');
+  assert.equal(content.items.length, 5, 'stocks status must not leak into the content workflow');
+  const empty = project({ ...fixture(), stocks: { version: 1, configured: false, error: null, items: [] } }).stages.find(st => st.teamId === 'stocks');
+  assert.equal(empty.connection, 'stocks');
+  assert.deepEqual(empty.items.map(it => it.id), ['stocks-setup']);
+  assert.deepEqual(empty.items[0].actions, []);
+  const without = method('organization', 'project')(fixture()).stages.find(st => st.teamId === 'stocks');
+  assert.equal(without.connection, 'undecided');
+});

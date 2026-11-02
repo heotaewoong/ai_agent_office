@@ -314,6 +314,16 @@ apps/content-office/backend/.venv/bin/python -m unittest discover \
 */10 * * * * cd /home/ubuntu/ai_agent_office/apps/content-office && OFFICE_ENV_FILE=$HOME/office.env backend/.venv/bin/python scripts/auto_deploy.py >> $HOME/.local/state/heobrain-content-office/runtime/auto-deploy.log 2>&1
 ```
 
+### 주식 팀 (포트폴리오 점검 · 2026-11-03)
+
+3D 오피스 5번 주식 팀 방은 서버 상태 폴더의 포트폴리오 파일을 읽어 사용자 원칙대로 점검합니다. 콘텐츠 승인 ⓪①②③과는 별개입니다.
+
+- **데이터는 저장소에 넣지 않습니다.** 보유 종목은 `$OFFICE_STATE_DIR/stocks/`에만 둡니다(`holdings.json`, `targets.json`, 선택 `settings.json`·`history.json`). 형식은 주식 폴더 인계 문서 7-2의 대시보드 데이터와 같습니다. 이 저장소는 공개 저장소입니다.
+- **가져오기:** `cd backend && .venv/bin/python -m office.stocks import <dashboard_*.json이 있는 폴더>`. 형식(유형 6개, 목표 합계 100%, 금액·수량)을 검사하고 그대로 복사합니다. 서버에 이미 쌓인 `history.json`은 덮어쓰지 않습니다.
+- **화면에 보이는 것:** 유형 비중과 목표 차이(5%p 넘으면 사람 확인), 한 종목 쏠림(20% 기준, 레버리지 상품 표시), 이번 달 적립금 나누기(목표 비중대로·부족한 유형부터, 유형별 금액만), 52주 고점 대비 하락과 감내 범위(20~30%), 직전 거래일 움직임, 시장 한 줄(QQQ·VOO·SCHD·이더리움·비트코인·원달러), 데이터 한계. 3D 화면에는 비중·수익률(%)만 넣고 보유 평가금액(원)은 넣지 않습니다. 원화 상세는 `GET /api/stocks`에서만 돌려줍니다.
+- **시세 확인:** 방의 "시세 새로 확인" 버튼 또는 `POST /api/stocks/refresh`(운영자 세션 필요, 202). 누를 때만 Yahoo Finance 공개 시세(한국 종목은 .KS→.KQ, 실패하면 네이버 증권)를 읽고 출처·기준일을 붙입니다. 자동 반복·유료 호출·매매·주문은 없습니다. `holdings.json`·`targets.json`은 고치지 않고 `quotes.json`과 오늘 날짜 `history.json` 행만 씁니다. 못 읽은 종목은 파일 값을 유지하고 "확인 못 함"으로 셉니다.
+- 명령줄: `python -m office.stocks status`(화면 항목 출력), `python -m office.stocks refresh`(시세 한 번 확인).
+
 ## 의존성과 설정
 
 이 작업공간에는 Python 가상환경·Node 의존성과 FFmpeg가 준비됐습니다. 새 환경에 설치할 때는 Python3.12+, Node22+, FFmpeg/ffprobe, 한국어 TTF 폰트를 준비합니다. Windows 기본 음성 경로에는 PowerShell과 `Microsoft Heami Desktop` ko-KR 음성이 필요합니다.

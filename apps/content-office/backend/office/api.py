@@ -463,7 +463,30 @@ def create_app(store: Store | None = None):
         from .devteam import dev_status
         payload = project_space(store, office_url=os.environ.get("OFFICE_URL", "http://localhost:3110"), agents=AGENTS)
         payload["dev"] = dev_status(store.root)
+        from .stocks import stocks_status
+        payload["stocks"] = stocks_status(store.root)
         return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/stocks")
+    def stocks_team():
+        from .stocks import StocksError, stocks_detail
+        try:
+            detail = stocks_detail(store.root)
+        except StocksError as error:
+            raise WorkflowError(str(error)) from error
+        return JSONResponse(detail, headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/stocks/refresh", status_code=202)
+    def stocks_refresh():
+        # 주식 팀: 사람이 누를 때만 무료 공개 시세를 읽는다. 매매·보유 내역 변경·유료 호출은 없다.
+        from .stocks import StocksError, start_refresh
+        try:
+            result = start_refresh(store.root)
+        except StocksError as error:
+            raise WorkflowError(str(error)) from error
+        if result["started"]:
+            store.event("stocks_refresh_requested", {"role": "주식 팀", "actor": "local-operator"})
+        return result
 
     @app.get("/api/dev")
     def dev_team():
