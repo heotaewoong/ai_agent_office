@@ -27,9 +27,16 @@ class LeadInput(BaseModel):
     consent_purpose: Literal["newsletter", "lead_magnet_delivery"] | None = None
 
 
+class NewsletterEditorial(BaseModel):
+    kind: Literal['briefing', 'analysis', 'updates']
+    related_job_ids: list[str] = Field(default_factory=list, max_length=7)
+    destinations: list[Literal['email', 'slack', 'website']] = Field(min_length=1, max_length=3)
+
+
 class NewsletterInput(BaseModel):
     issue_key: str = Field(min_length=1, max_length=64)
     subject: str | None = Field(default=None, max_length=150)
+    editorial: NewsletterEditorial | None = None
 
 
 class NewsletterReview(BaseModel):
@@ -99,7 +106,36 @@ def register(app, store):
 
     @app.post("/api/jobs/{job_id}/newsletter", status_code=201)
     def build_newsletter(job_id: str, body: NewsletterInput):
-        return newsletter.build_issue(store, job_id, issue_key=body.issue_key, subject=body.subject, actor=ACTOR)
+        return newsletter.build_issue(store, job_id, issue_key=body.issue_key, subject=body.subject, actor=ACTOR,
+                                      editorial=body.editorial.model_dump() if body.editorial is not None else None)
+
+    @app.get('/api/newsletter-connections')
+    def newsletter_connections():
+        from .newsletter_distribution import connection_status
+        return connection_status()
+
+    @app.get('/api/newsletter-inputs')
+    def newsletter_inputs():
+        from .source_registry import load_sources
+        candidates = []
+        for job in store.jobs():
+            release, manifest = job.get('release_approval') or {}, job.get('manifest') or {}
+            if (release.get('decision') == 'approved' and 'blog' in release.get('outputs', [])
+                    and release.get('version') == manifest.get('hash') and manifest.get('source_hash') == job.get('source_hash')):
+                candidates.append({'id': job['id'], 'title': job['title'], 'source_hash': job['source_hash']})
+        return {'sources': [{'id': row['id'], 'name': row['name'], 'segment': row['segment'], 'language': row['language']}
+                            for row in load_sources()], 'released_jobs': candidates,
+                'note': '출고 승인 기록이 있는 원고입니다. 회차 생성 시 현재 원고·승인·파일을 다시 검증합니다.'}
+
+    @app.get('/api/newsletters/{issue_id}/prepared')
+    def prepared_newsletter(issue_id: str):
+        from .newsletter_distribution import prepared_delivery
+        return {'prepared': prepared_delivery(store, issue_id)}
+
+    @app.post('/api/newsletters/{issue_id}/prepare')
+    def prepare_newsletter(issue_id: str, body: NewsletterSent):
+        from .newsletter_distribution import prepare_delivery
+        return prepare_delivery(store, issue_id, expected_hash=body.expected_hash, actor=ACTOR)
 
     @app.get("/api/newsletters")
     def list_newsletters():

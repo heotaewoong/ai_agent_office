@@ -40,6 +40,10 @@ import type {
   LeadInput,
   LeadSummary,
   NewsletterIssue,
+  NewsletterEditorial,
+  NewsletterInputs,
+  NewsletterConnection,
+  NewsletterPrepared,
   OfferInput,
   ChannelStagingSnapshot,
 } from "./types";
@@ -297,9 +301,13 @@ export const api = {
   // 공개 신청 링크 재료(공개 주소·공개 자료·출처). 건수·이메일은 없음
   publicLeadForm: () => request<PublicLeadFormInfo>("/leads/public-form"),
   // 뉴스레터 ③: 승인은 발송이 아니며 발송은 오너 메일러에서 수동
-  buildNewsletter: (jobId: string, body: { issue_key: string; subject: string }) =>
+  buildNewsletter: (jobId: string, body: { issue_key: string; subject: string; editorial?: NewsletterEditorial }) =>
     request<NewsletterIssue>(`/jobs/${encodeURIComponent(jobId)}/newsletter`, "POST", body),
   newsletters: () => request<{ issues: NewsletterIssue[] }>("/newsletters"),
+  newsletterInputs: () => request<NewsletterInputs>("/newsletter-inputs"),
+  newsletterConnections: () => request<{ mode: string; destinations: NewsletterConnection[] }>("/newsletter-connections"),
+  newsletterPrepared: (id: string) => request<{ prepared: NewsletterPrepared | null }>(`/newsletters/${encodeURIComponent(id)}/prepared`),
+  prepareNewsletter: (id: string, expectedHash: string) => request<NewsletterPrepared>(`/newsletters/${encodeURIComponent(id)}/prepare`, "POST", { expected_hash: expectedHash }),
   newsletterExportUrl: (id: string) =>
     `/api/newsletters/${encodeURIComponent(id)}/export`,
   reviewNewsletter: (id: string, decision: "approve" | "reject", note: string, expectedHash: string) =>
