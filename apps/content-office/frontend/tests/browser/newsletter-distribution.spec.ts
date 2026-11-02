@@ -53,6 +53,7 @@ for(const width of [1440,375])test(`뉴스레터 ${width}px 여러 원고·3목�
   await panel.getByRole('button',{name:'이 작업으로 회차 만들기',exact:true}).click();
   await expect(panel.getByTitle('이메일 미리보기')).toBeVisible();
   await expect(panel.getByTitle('이메일 미리보기')).toHaveAttribute('sandbox','');
+  await expect(page.frameLocator('iframe[title="이메일 미리보기"]').getByRole('heading',{name:'검토한 이메일 원고'})).toBeVisible();
   if(process.env.NEWSLETTER_UI_EVIDENCE_DIR)await panel.screenshot({path:`${process.env.NEWSLETTER_UI_EVIDENCE_DIR}/2026-11-02_뉴스레터_후보_${width}_미리보기_PRIVATE.png`});
   const prepare=panel.getByRole('button',{name:'선택한 목적지 전달 준비',exact:true});await expect(prepare).toBeDisabled();
   await panel.getByRole('button',{name:'Slack 원문',exact:true}).click();await expect(panel.getByText('Slack용 검토한 뉴스 요약',{exact:true})).toBeVisible();
@@ -100,3 +101,4 @@ test('변경된 목적지로 준비가 거절되면 이전 준비 기록 표시�
   await expect(page.getByRole('alert',{name:'작업 처리 상태'})).toContainText('목적지 설정이 변경되었습니다');
   await expect(panel.getByText('전달 준비 기록 · 연결 설정 필요',{exact:true})).toHaveCount(0);
 });
+
