@@ -1750,6 +1750,7 @@
       const dt = Math.min(0.1, this.engine.getDeltaTime() / 1000);
       this.time += dt;
       this.stepTraffic(dt);
+      this.assistantNative?.tick(dt);
       if (!REDUCED) {
         this.hub.rings.forEach((r, i) => { r.rotation.y += dt * (0.08 + i * 0.05) * (i % 2 ? -1 : 1); });
         if (this.sky) this.sky.rotation.y += dt * 0.001;
@@ -2125,6 +2126,10 @@
       $('panel-close').addEventListener('click', () => this.closePanel());
       $('btn-command')?.addEventListener('click', () => this.openBrain());
       $('panel-body').addEventListener('click', (e) => {
+        if (e.target.closest('[data-assistant-open]')) {
+          if (embed.enabled && data.source === 'live' && !data.error) { controls.keys.clear(); embed.post({ type: 'assistant-open' }); }
+          return;
+        }
         const team = e.target.closest('[data-team]');
         if (team) { this.openStage(team.dataset.team); return; }
         if (!embed.enabled) return;
@@ -2317,8 +2322,13 @@
       if (space.data.organizationVersion === 1) {
         $('panel-title').textContent = '오비서 중앙 관제';
         $('panel-sub').textContent = '중앙 접수와 팀별 직접 지시를 위한 5팀 구성';
-        $('panel-body').innerHTML = '<p class="panel-note">먼저 팀을 선택해 맡길 업무와 연결 상태를 확인하세요. 실제 비서 배정·업무 전달은 EC2 이전 후 연결할 예정입니다.</p>' + space.stages.map(st => `<button type="button" class="team-choice" data-team="${esc(st.id)}"><strong>${esc(st.name)}</strong><span>${esc(st.description)}</span><small>${esc(st.approval)}</small></button>`).join('') + `<details class="team-memory"><summary>현재 콘텐츠 앱의 참고 기억</summary><p class="panel-note">${esc(b.name)} · ${fmt(b.notes)}절 · 원본 ${fmt(b.sources)}편. ${esc(b.label)}. 전 팀 공용 위키·전체 대화 자동 보존과는 별개입니다.</p></details>`;
+        $('panel-body').innerHTML = '<p class="panel-note">팀별 업무와 연결 상태를 확인하세요. 루미에게 실제 업무를 맡기면 별도 대화창에서 접수·협업·결과를 확인합니다.</p>' + space.stages.map(st => `<button type="button" class="team-choice" data-team="${esc(st.id)}"><strong>${esc(st.name)}</strong><span>${esc(st.description)}</span><small>${esc(st.approval)}</small></button>`).join('') + `<details class="team-memory"><summary>현재 콘텐츠 앱의 참고 기억</summary><p class="panel-note">${esc(b.name)} · ${fmt(b.notes)}절 · 원본 ${fmt(b.sources)}편. ${esc(b.label)}. 전 팀 공용 위키·전체 대화 자동 보존과는 별개입니다.</p></details>`;
         $('panel-foot').innerHTML = '<span class="panel-note">팀 구성을 바꿔도 기존 콘텐츠 작업·승인·결과 ID와 지리 탐험 기록은 보존합니다.</span>';
+      }
+      if (embed.enabled && data.source === 'live' && !data.error) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'item-link'; button.dataset.assistantOpen = 'true';
+        button.textContent = '루미에게 실제 업무 맡기기'; $('panel-body').prepend(button);
       }
       panel.hidden = false;
       this.cards.forEach((el) => el.classList.remove('active'));
@@ -2938,6 +2948,66 @@
   const faceColor = (a) => a.av.body.material.diffuseColor.toHexString();
 
   // ======================================================================
+  // Native Hermes actors stay separate from the nine content-workflow roles.
+  const assistantNative = {
+    actors: new Map(), seen: new Set(), requestId: null, reported: null,
+    names: { lumi:'루미', ada:'에이다', ethan:'이든', mia:'미아', noah:'노아', oliver:'올리버', sam:'샘', 'mybots-sage':'세이지', default:'Hermes' },
+    sync(request) {
+      if (!embed.enabled || data.source !== 'live' || data.error || !request || request.board !== 'heobrain-office' || typeof request.request_id !== 'string' || !Array.isArray(request.events) || request.events.length > 200) return;
+      if (this.requestId !== request.request_id) { this.requestId = request.request_id; this.seen.clear(); this.reported = null; }
+      const station = space.stages.find(stage => stage.id === 'inbox');
+      if (!station) return;
+      request.events.slice().sort((a,b) => a.id-b.id).forEach(event => {
+        if (!Number.isSafeInteger(event.id) || event.id <= 0 || !Object.hasOwn(this.names,event.assignee) || !/^t_[a-zA-Z0-9_-]+$/.test(event.task_id) || !['claimed','spawned','worker_bound','blocked','crashed','completed'].includes(event.kind)) return;
+        const key = event.task_id + ':' + event.id;
+        if (this.seen.has(key)) return; this.seen.add(key);
+        let actor = this.actors.get(event.assignee);
+        if (!actor) {
+          const index = Object.keys(this.names).indexOf(event.assignee), angle = index * Math.PI * 2 / Object.keys(this.names).length;
+          const av = world.buildAvatar('native-'+event.assignee,'#f1c9a5','#53cfcd','#24394c');
+          const home = new B.Vector3(Math.cos(angle)*4,0,Math.sin(angle)*4);
+          actor = { av, index, pos:home.clone(), home, phase:'waiting', path:[], walkT:0 };
+          av.root.position.copyFrom(home); world.setPose(av,'stand'); this.actors.set(event.assignee,actor);
+        }
+        actor.taskId = event.task_id; actor.eventId = event.id;
+        if (['claimed','spawned','worker_bound'].includes(event.kind)) {
+          if (actor.phase !== 'working') { actor.phase = 'working'; this.route(actor,station,false); }
+        } else { actor.phase = event.kind === 'crashed' ? 'failed' : 'waiting'; actor.path = []; world.setPose(actor.av,'stand'); }
+        actor.av.marker.material = world.mat('native-marker', actor.phase === 'working' ? '#4ad994' : actor.phase === 'failed' ? '#ff6b7a' : '#f5c451', {emissive:1,unlit:true});
+      });
+      const report = request.report;
+      if (request.status === 'completed' && request.native_status === 'done' && report?.verified === true && request.events.some(event => event.id === report.event_id && event.task_id === report.task_id && event.run_id === report.run_id && event.kind === 'completed' && event.assignee === 'lumi') && this.reported !== report.event_id) {
+        const coordinator = this.actors.get(request.assignee);
+        if (coordinator && coordinator.taskId === report.task_id) { coordinator.phase = 'returning'; this.route(coordinator,station,true); this.reported = report.event_id; }
+      }
+    },
+    route(actor,station,returning) {
+      const magnitude = Math.hypot(station.pos.x,station.pos.z) || 1, nx = station.pos.x/magnitude, nz = station.pos.z/magnitude;
+      const hub = new B.Vector3(nx*3.6,0,nz*3.6);
+      const bridge = new B.Vector3(station.bridge.start.x+nx*.6,0,station.bridge.start.z+nz*.6);
+      const entrance = world.local(station,0,0,7.2);
+      const work = world.local(station,-3+(actor.index%3)*3,0,4.5+Math.floor(actor.index/3)*1.1);
+      const owner = controls.player?.pos;
+      const destination = returning && space.layer === 'office' && owner && Math.hypot(owner.x,owner.z)<6 ? new B.Vector3(owner.x+1,0,owner.z+1) : actor.home.clone();
+      actor.path = returning ? [entrance,bridge,hub,destination] : [hub,bridge,entrance,work];
+      if (REDUCED) { actor.pos.copyFrom(actor.path.at(-1)); actor.av.root.position.copyFrom(actor.pos); actor.path=[]; }
+    },
+    tick(dt) {
+      if (data.source !== 'live' || data.error) return;
+      this.actors.forEach(actor => {
+        actor.av.root.setEnabled?.(space.layer === 'office');
+        if (document.hidden || space.layer !== 'office' || !actor.path.length) return;
+        const target = actor.path[0], dx = target.x-actor.pos.x, dz = target.z-actor.pos.z, distance = Math.hypot(dx,dz);
+        if (distance<.12) { actor.path.shift(); if (!actor.path.length) { world.setPose(actor.av,'stand'); if (actor.phase==='returning') actor.phase='reported'; } return; }
+        const scale = Math.min(distance,dt*2.6)/distance;
+        actor.pos.x += dx*scale; actor.pos.z += dz*scale; actor.av.root.position.copyFrom(actor.pos);
+        actor.av.root.rotation.y = Math.atan2(dx,dz); actor.walkT+=dt; world.animateWalk(actor.av,actor.walkT,2.6);
+      });
+    },
+  };
+  world.assistantNative = assistantNative;
+
+  // ======================================================================
   // embed — 오피스 앱 iframe 안에서의 postMessage 연동 (설계 12장)
   // ======================================================================
   const embed = {
@@ -2960,7 +3030,9 @@
         if (this.handler) this.handler(m);
       });
       this.onMessage((m) => {
-        if (m.type === 'focus') {
+        if (m.type === 'assistant-observation') {
+          assistantNative.sync(m.request);
+        } else if (m.type === 'focus') {
           const st = space.stages.find((s) => s.items.some((it) => it.id === m.itemId));
           if (!st) return;
           space.embedFocus = m.itemId;
@@ -3054,7 +3126,7 @@
   }
 
   // 디버그·검사용 접근 (비밀값 없음)
-  window.__officeWorld = { space, world, controls, hud, data, embed, workbench, quality: QUALITY };
+  window.__officeWorld = { space, world, controls, hud, data, embed, workbench, assistantNative, quality: QUALITY };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
   else start();

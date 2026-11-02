@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ts from 'typescript';
 import { api } from '../lib/api.ts';
 import * as bridge from '../lib/world-bridge.ts';
+await import('../lib/assistant-requests.ts');
 
 function compile(relative: string, replacements: Record<string, unknown> = {}) {
   const url = new URL(relative, import.meta.url);
@@ -24,6 +25,7 @@ test('world embeds the real collapsed report panel using the existing GET adapte
   const passed: Array<{ connected: boolean; loadReports: unknown }> = [];
   const world = compile('../app/world-view.tsx', {
     '../lib/api': { api }, '../lib/world-bridge': bridge,
+    './assistant-chat': { AssistantChat: compile('../app/assistant-chat.tsx').AssistantChat },
     './assistant-reports': { AssistantReports: (props: { connected: boolean; loadReports: () => Promise<unknown> }) => {
       passed.push(props); return createElement(realPanel, props);
     } },

@@ -1115,6 +1115,8 @@ def create_app(store: Store | None = None):
     register_world_music(app, store)
     from .api_assistant_reports import register as register_assistant_reports
     register_assistant_reports(app, store)
+    from .api_assistant_requests import register as register_assistant_requests
+    register_assistant_requests(app, store)
     return app
 
 

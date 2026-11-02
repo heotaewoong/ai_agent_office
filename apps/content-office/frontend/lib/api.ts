@@ -51,10 +51,12 @@ import type {
 
 export class OfficeApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code?: string;
+  constructor(message: string, status: number, code?: unknown) {
     super(message);
     this.name = "OfficeApiError";
     this.status = status;
+    if (typeof code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(code)) this.code = code;
   }
 }
 
@@ -115,6 +117,7 @@ async function request<T>(
           ? JSON.stringify(detail)
           : `요청 실패 (${response.status})`,
       response.status,
+      (result as { code?: unknown }).code,
     );
   }
   return result as T;
@@ -125,6 +128,8 @@ export const api = {
   trashJob: (id:string,updatedAt:string) => request<Job>(`/jobs/${encodeURIComponent(id)}/trash`,'POST',{expected_updated_at:updatedAt}),
   restoreJob: (id:string,updatedAt:string) => request<Job>(`/jobs/${encodeURIComponent(id)}/restore`,'POST',{expected_updated_at:updatedAt}),
   assistantReports: () => request<unknown>("/assistant/reports"),
+  createAssistantRequest: (body: import('./assistant-requests').AssistantSubmission) => request<unknown>('/assistant/requests', 'POST', body),
+  assistantRequest: (id: string) => request<unknown>(`/assistant/requests/${encodeURIComponent(id)}`),
   thumbnailStudio:(id:string)=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio`),
   generateThumbnails:(id:string,body:{source_hash:string;revision:string;confirm_paid:boolean;edit_id?:string;instruction?:string})=>request(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/generate`,"POST",body),
   chooseStudioThumbnail:(id:string,candidate_id:string,revision:string,finalize:boolean,format:"landscape"|"shorts"="landscape")=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/choose`,"POST",{candidate_id,revision,finalize,format}),
