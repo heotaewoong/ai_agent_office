@@ -393,10 +393,26 @@ def test_admission_directory_is_fsynced_before_any_native_post(tmp_path, monkeyp
 
 
 @pytest.mark.parametrize('author,bot,expected', [('ULUMI123456', 'BLUMI123456', True), ('UOTHER12345', 'BLUMI123456', False), ('ULUMI123456', 'BOTHER12345', False), ('UOTHER12345', 'BOTHER12345', False), ('ULUMI123456', None, False)])
-def test_actual_slack_readback_checks_the_authenticated_lumi_author(monkeypatch, tmp_path, capsys, author, bot, expected):
+@pytest.mark.parametrize('text_form,text_allowed', [('raw', True), ('angle', True), ('label', False), ('other_host', False), ('other_path', False), ('other_event', False), ('extra_text', False)])
+def test_actual_slack_readback_checks_the_authenticated_lumi_author(monkeypatch, tmp_path, capsys, author, bot, expected, text_form, text_allowed):
     notice = {'request_id': RID, 'task_id': ROOT, 'run_id': 12, 'event_id': 12, 'participants': ['lumi', 'ada', 'ethan'], 'terminal_state': 'completed'}
     client_id = str(uuid.uuid5(uuid.UUID(RID), '12:completed'))
-    message = {'text': relay.status_message(notice), 'ts': '1793624400.000001', 'client_msg_id': client_id, 'user': author, 'bot_id': bot}
+    origin = 'https://office.example.test'
+    url = origin + '/office3d'
+    text = relay.status_message(notice, origin)
+    if text_form == 'angle':
+        text = text.replace(url, '<' + url + '>')
+    elif text_form == 'label':
+        text = text.replace(url, '<' + url + '|사무실>')
+    elif text_form == 'other_host':
+        text = text.replace(url, '<https://other.example.test/office3d>')
+    elif text_form == 'other_path':
+        text = text.replace(url, '<' + url + '/other>')
+    elif text_form == 'other_event':
+        text = text.replace('기록 12', '기록 13')
+    elif text_form == 'extra_text':
+        text += '\n다른 본문'
+    message = {'text': text, 'ts': '1793624400.000001', 'client_msg_id': client_id, 'user': author, 'bot_id': bot}
     calls = []
     class FakeClient:
         def __init__(self, **kwargs):
@@ -420,10 +436,10 @@ def test_actual_slack_readback_checks_the_authenticated_lumi_author(monkeypatch,
     modules['plugins.platforms.slack.adapter']._standalone_post_text = never_post
     modules['slack_sdk.web.async_client'].AsyncWebClient = FakeClient
     monkeypatch.setattr(sys, 'path', list(sys.path))
-    monkeypatch.setattr(sys, 'stdin', types.SimpleNamespace(buffer=io.BytesIO(json.dumps({'target': 'G1234567890', 'notice': notice, 'message_id': message['ts']}).encode())))
+    monkeypatch.setattr(sys, 'stdin', types.SimpleNamespace(buffer=io.BytesIO(json.dumps({'target': 'G1234567890', 'notice': notice, 'message_id': message['ts'], 'office_origin': origin}).encode())))
     monkeypatch.setattr(relay.logging, 'disable', lambda _: None)
     relay.slack_child('readback', {'native_python': sys.executable, 'native_repo': str(tmp_path), 'pythonpath': [str(tmp_path)]})
-    assert json.loads(capsys.readouterr().out)['confirmed'] is expected
+    assert json.loads(capsys.readouterr().out)['confirmed'] is (expected and text_allowed)
     assert calls == ['identity', 'history']
 
 
