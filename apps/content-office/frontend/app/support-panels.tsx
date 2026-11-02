@@ -537,6 +537,7 @@ export function KnowledgeDrawer() {
                   <span className="knowledge-hash">
                     SHA256 {result.sha256.slice(0, 12)} · 과거 참고 자료
                   </span>
+                  {result.match_mode==='spacing' && <p className="muted">띄어쓰기 보완 결과 · 모든 검색어를 포함합니다.</p>}
                   <pre tabIndex={0} aria-label={`${result.section} 발췌`}>{result.excerpt}</pre>
                   {result.duplicate_paths?.length ? (
                     <p className="muted">

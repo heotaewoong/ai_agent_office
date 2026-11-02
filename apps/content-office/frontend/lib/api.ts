@@ -12,6 +12,7 @@ import type {
   SourcePacket,
   Selections,
   KnowledgeSearch,
+  ContentDiagnostics,
   OutputKind,
   Idea,
   Lesson,
@@ -179,6 +180,7 @@ export const api = {
     request<Delivery>(`/jobs/${encodeURIComponent(id)}/deliveries/${encodeURIComponent(deliveryId)}/reconcile`, "POST", {}),
   knowledge: (query = "") =>
     request<KnowledgeSearch>(`/knowledge?query=${encodeURIComponent(query)}`),
+  contentDiagnostics: (jobId:string) => request<ContentDiagnostics>(`/jobs/${encodeURIComponent(jobId)}/content-diagnostics`),
   registerEvidence: (id: string, sourceText: string, version: string | null, preserveOriginal = false) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/evidence`, "POST", {
       source_text: sourceText,
