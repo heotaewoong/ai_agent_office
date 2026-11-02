@@ -325,7 +325,7 @@ if (typeof document !== 'undefined') {
   window.addEventListener('keydown', event => {
     if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input,textarea,select,button,summary,a[href],[contenteditable="true"]')) return;
     if (!active || office()?.space.view !== 'walk' || office()?.space.playHubOpen) return;
-    if (event.key.toLowerCase() === 'f') { event.preventDefault(); catchNearest(); }
+    if (event.code === 'KeyF' || event.key.toLowerCase() === 'f') { event.preventDefault(); catchNearest(); }
     if (event.code === 'KeyV' || event.key.toLowerCase() === 'v') { event.preventDefault(); toggleRide(); }
   });
   const clearTouch = () => { for (const button of pad.querySelectorAll('button')) { office()?.controls.keys.delete(button.dataset.key); button.classList.remove('pressed'); } };

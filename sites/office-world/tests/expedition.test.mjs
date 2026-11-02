@@ -7,6 +7,19 @@ const { ALIENS, VEHICLES, credits, readProfile, capture, purchase, canRide, sele
   await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
 const profile = () => readProfile(null);
 
+test('physical F captures on Korean layouts without repeating or intercepting form input', () => {
+  const start = source.indexOf("  window.addEventListener('keydown', event => {");
+  const end = source.indexOf('\n  });', start);
+  const body = source.slice(source.indexOf('{', start) + 1, end);
+  let captures = 0;
+  const handler = Function('active', 'office', 'toggleRide', 'catchNearest', 'return event => {' + body + '}')(
+    true, () => ({ space: { view: 'walk', playHubOpen: false } }), () => {}, () => captures++);
+  for (const [repeat, editing] of [[false,false],[true,false],[false,true]]) {
+    handler({ key: 'ㄹ', code: 'KeyF', repeat, target: { closest: () => editing }, preventDefault() {} });
+  }
+  assert.equal(captures, 1);
+});
+
 test('the physical V key dismounts on Korean layouts without intercepting form input', () => {
   const start = source.indexOf("  window.addEventListener('keydown', event => {");
   const end = source.indexOf('\n  });', start);

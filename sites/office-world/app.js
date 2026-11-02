@@ -2010,7 +2010,7 @@
     },
 
     onKey(e, down) {
-      const k = /^Key[WASD]$/.test(e.code) ? e.code.slice(3).toLowerCase() : e.key.toLowerCase();
+      const k = /^Key[WASDMER]$/.test(e.code) ? e.code.slice(3).toLowerCase() : e.key.toLowerCase();
       if (!down) this.keys.delete(k);
       if (space.rosterOpen || space.buildingOpen || space.resultsOpen || space.playHubOpen) return;
       if (e.target?.closest?.('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
