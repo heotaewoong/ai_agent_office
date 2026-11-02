@@ -23,6 +23,10 @@ export function WorldView({
   onAction: (action: "draft" | "produce", itemId: string) => Promise<void>;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const resizeFrame = (change: number) => {
+    const shell = frame.current?.parentElement;
+    if (shell) shell.style.height = `${Math.max(480, Math.min(1600, shell.getBoundingClientRect().height + change))}px`;
+  };
   const [chatSignal, setChatSignal] = useState(0);
   const lastAssistant = useRef<AssistantRequest | null>(null);
   const post = useCallback((message: Record<string, unknown>) => {
@@ -112,12 +116,19 @@ export function WorldView({
       </div>
       <AssistantReports connected={connected} loadReports={api.assistantReports} />
       <AssistantChat connected={connected} openSignal={chatSignal} createRequest={api.createAssistantRequest} loadRequest={api.assistantRequest} onObservation={observeAssistant} />
+      <div className="world-frame-controls" role="group" aria-label="3D 화면 높이 조절">
+        <span>화면이 짧으면 높이를 늘려 보세요.</span>
+        <button type="button" onClick={() => resizeFrame(160)}>화면 길게</button>
+        <button type="button" onClick={() => resizeFrame(-160)}>화면 짧게</button>
+      </div>
+      <div className="world-frame-resizer">
       <iframe
         ref={frame}
         className="world-frame"
         title="오피스 월드"
         src="/world/index.html?api=/api/space&embed=1"
       />
+      </div>
     </section>
   );
 }

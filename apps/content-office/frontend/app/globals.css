@@ -3867,6 +3867,11 @@ td a {
   border-radius: 12px;
   background: transparent;
 }
+.world-frame-controls { display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;color:var(--muted); }
+.world-frame-controls button { min-height:40px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card,#fff);color:inherit;font:inherit;cursor:pointer; }
+.world-frame-controls button:focus-visible { outline:3px solid #4f8df7;outline-offset:2px; }
+.world-frame-resizer { height:calc(100vh - 220px);min-height:480px;max-height:1600px;resize:vertical;overflow:hidden;border:1px solid var(--line,rgba(128,128,128,.25));border-radius:12px;padding-bottom:16px;box-sizing:border-box; }
+.world-frame-resizer .world-frame { height:100%;min-height:0;border:0;border-radius:0; }
 .v6-packaging .editor-fields textarea{min-height:64px;border:1px solid var(--line);padding:8px}.v6-packaging-row{display:grid;gap:6px;margin-bottom:14px}.v6-packaging .editor-fields input:not([type=radio]){width:100%}.v6-packaging .editor-fields label>input[type=radio]{margin-right:6px}
 
 /* 제작 설정 · YouTube 비공개 업로드 */
