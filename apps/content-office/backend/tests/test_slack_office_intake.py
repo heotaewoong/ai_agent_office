@@ -3,7 +3,10 @@ import asyncio
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -33,6 +36,20 @@ def verified():
 def shared_protocol(monkeypatch):
     from office import assistant_request_protocol
     monkeypatch.setattr(intake, 'protocol_module', lambda: assistant_request_protocol)
+
+
+@pytest.mark.parametrize('module', ['argparse', 'hashlib'])
+def test_unisolated_script_refuses_before_pythonpath_code_import(tmp_path, module):
+    marker = 'UNTRUSTED_IMPORT_REACHED'
+    (tmp_path / (module + '.py')).write_text("print('" + marker + "'); raise RuntimeError('AUDIT_ONLY')", encoding='utf-8')
+    env = {**os.environ, 'PYTHONPATH':str(tmp_path)}
+    rejected = subprocess.run([sys.executable,str(SCRIPT),'inspect'],cwd=tmp_path,env=env,capture_output=True,text=True,timeout=10)
+    assert rejected.returncode == 1
+    assert marker not in rejected.stdout + rejected.stderr
+    assert json.loads(rejected.stdout) == {'ok':False,'error':{'code':'isolated_runtime_required'}}
+    # -I ignores the injected search path before importing any helper dependencies.
+    isolated = subprocess.run([sys.executable,'-I','-B',str(SCRIPT),'--help'],cwd=tmp_path,env=env,capture_output=True,text=True,timeout=10)
+    assert isolated.returncode == 0 and marker not in isolated.stdout + isolated.stderr
 
 
 def test_verified_current_owner_uses_stable_event_uuid_and_original_text():

@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 """Lumi-only verified Slack intake candidate. No Slack writes or native SQL."""
+import sys
+
+if __name__ == '__main__' and not sys.flags.isolated:
+    print('{"ok":false,"error":{"code":"isolated_runtime_required"}}')
+    sys.exit(1)
+
 import argparse
 import asyncio
 from decimal import Decimal
@@ -12,7 +18,6 @@ import os
 from pathlib import Path
 import re
 import stat
-import sys
 import time
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
