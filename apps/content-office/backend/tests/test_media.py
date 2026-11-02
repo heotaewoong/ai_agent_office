@@ -22,6 +22,9 @@ def approved_job(tmp_path, *, blog=True, video=True, cards=False, pdf=False):
             {"narration": "승인한 원고로 제작합니다.", "caption": "승인 후 제작", "visual": "comparison"},
         ]},
     }
+    packet['video']['subtitle_layout']='en-main-ko-sub'
+    for scene,en in zip(packet['video']['scenes'],['First, check the evidence.','Create content from the approved script.']):
+        scene.update(subtitle_en=en,subtitle_ko=scene['narration'])
     job = store.save_source(job["id"], packet)
     selections = {"blog": blog, "video": video, "pdf": pdf, "cards": cards}
     store.review_source(job["id"], job["source_hash"], "approved", "검증 운영자", selections)
@@ -33,7 +36,8 @@ def cache_social_cards(store, job_id):
     from office.quiz import artifact_record
     root=store.artifacts; job=store.job(job_id); slides=[]
     for n in range(7):
-        path=root/f'card-{n+1:02}.png'
+        path=root/job_id/job['source_hash']/'cards'/f'card-{n+1:02}.png'
+        path.parent.mkdir(parents=True,exist_ok=True)
         Image.new('RGB',(1080,1350),(n*30,60,90)).save(path)
         slides.append({'artifact':artifact_record(root,path),'index':n+1})
     store.update_job(job_id,cards={'source_hash':job['source_hash'],'slides':slides,'checks':{'passed':True,'issues':[]},'images':[]})

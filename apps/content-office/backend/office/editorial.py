@@ -21,7 +21,13 @@ AUDIENCE = {field: PRESETS[DEFAULT_PRESET][field] for field in ("topic", "reader
 RUBRIC = {"version": "heobrain-2026-11-01-v3-topic-bound", "critical": ["출처 없는 핵심 주장·숫자", "공급사 주장과 독립 검증 혼동", "합성·표본 결과의 일반화", "국가 지원·가격·상품 조건 조작", "원문에 없는 개인 경험·매출 보장", "영상이 원고보다 강한 주장"], "dimensions": ["주장과 근거 일치", "숫자·기간·단위", "독자 질문에 대한 구체적인 답", "선택한 독자·주제에 맞는 설명 구조", "필요한 비교표와 읽기 구조", "관련 한계와 반증", "한 질문을 끝까지 설명하는 영상", "말하기와 화면 문구의 분리"], "pass_score": 80, "refine_limit": 2}
 
 SCENE_SCHEMA = {"type": "object", "properties": {"narration": {"type": "string"}, "caption": {"type": "string"}, "visual": {"type": "string"}, "footage": {"type": "string"}}, "required": ["narration", "caption", "visual"], "additionalProperties": False}
+for key in ('subtitle_en', 'subtitle_ko'):
+    SCENE_SCHEMA['properties'][key] = {'type': 'string'}
+    SCENE_SCHEMA['required'].append(key)
 DRAFT_SCHEMA = {"type": "object", "properties": {"title": {"type": "string"}, "body": {"type": "string"}, "video": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "tags": {"type": "array", "items": {"type": "string"}}, "scenes": {"type": "array", "items": SCENE_SCHEMA}}, "required": ["title", "description", "tags", "scenes"], "additionalProperties": False}}, "required": ["title", "body", "video"], "additionalProperties": False}
+from .bilingual_captions import LAYOUT as SUBTITLE_LAYOUT, INSTRUCTIONS as BILINGUAL_INSTRUCTIONS
+DRAFT_SCHEMA['properties']['video']['properties']['subtitle_layout'] = {'type': 'string', 'enum': [SUBTITLE_LAYOUT]}
+DRAFT_SCHEMA['properties']['video']['required'].append('subtitle_layout')
 for key, count in (("titles", 3), ("hashtags", 5)):
     DRAFT_SCHEMA["properties"][key] = {"type": "array", "minItems": count, "maxItems": count, "items": {"type": "string"}}
     DRAFT_SCHEMA["required"].append(key)
@@ -46,6 +52,9 @@ CITATION_GROUP = re.compile(r"[\(（\[【]\s*([A-Z]{1,3}\d{1,3}(?:\s*[,，、]\s
 FORMAT_CONTRACT = ("본문 형식(코드로 확인함): 공백 포함 1,350~1,650자. '## '로 시작하는 소제목 줄 3~5개로 나눈다. "
                    "근거는 해당 문장 끝에 [E1]처럼 대괄호 하나에 ID 하나로 표기하고(여러 개면 [E1][E2]), 제공된 근거 ID를 모두 최소 한 번 인용한다. "
                    "괄호 (E1)나 쉼표 묶음 [E1, E2]는 쓰지 않는다. 줄표(—)는 쓰지 않고 해요체를 기본으로 한다.")
+
+
+BASE += '\n' + BILINGUAL_INSTRUCTIONS
 
 
 def normalize_citations(text, known):
@@ -173,7 +182,7 @@ def packet_texts(packet):
     video = packet.get("video", {}) or {}
     texts.extend([video.get("title", ""), video.get("description", "")])
     for scene in video.get("scenes", []) or []:
-        texts.extend(str(scene.get(key, "")) for key in ("narration", "caption"))
+        texts.extend(str(scene.get(key, "")) for key in ("narration", "caption", "subtitle_ko"))
     for thumb in video.get("thumbnails", []) or []:
         texts.extend(str(thumb.get(key, "")) for key in ("title", "subtitle"))
     if isinstance(packet.get("channel_posts"), dict):
@@ -276,6 +285,10 @@ def deterministic_checks(packet):
                 issues.append(f"{number}번 장면 제목이 한국어가 아니에요: '{caption}'. 한국어로 바꿔요(용어는 괄호로 병기)")
     issues.extend(check_texts(packet_texts(packet)))
     blocking = [issue for issue in issues if issue in INTEGRITY_ISSUES]
+    if (packet.get('video') or {}).get('subtitle_layout') is not None:
+        from .bilingual_captions import validate_plan
+        try:validate_plan(packet['video'], require=True)
+        except WorkflowError as error:blocking.append(str(error))
     warnings = [issue for issue in issues if issue not in INTEGRITY_ISSUES]
     return {"passed": not blocking, "issues": blocking + warnings, "blocking": blocking, "warnings": warnings, "checks": ["원문 해시·보존" if preserve_original else "본문 길이·구조", "한국어 문장", "출처 URL", "별도 참고 근거 ID 연결" if preserve_original else "근거 ID 연결", "지표·단위 경고 규칙", "장면 수", "내레이션 길이", "문체 규칙", "장면 제목 한국어", "국어 규칙(조사 받침·이중 피동·번역투·반복·긴 문장)"]}
 

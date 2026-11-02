@@ -96,12 +96,15 @@ export type SourcePacket = {
     };
   };
   video?: {
+    subtitle_layout?: string;
     title?: string;
     description?: string;
     tags?: string[];
     scenes?: {
       caption?: string;
       narration?: string;
+      subtitle_en?: string;
+      subtitle_ko?: string;
       visual?: string;
       direction?: string;
       [key: string]: unknown;

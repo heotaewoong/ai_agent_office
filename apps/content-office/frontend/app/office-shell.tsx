@@ -62,6 +62,7 @@ import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
 import { QuizPanel } from "./quiz-panel";
 import { CardsPanel } from "./cards-panel";
+import { InstagramPreview } from './instagram-preview';
 import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
 import { OwnedSourceIntake } from "./owned-source-intake";
@@ -1887,6 +1888,7 @@ function VideoPlan({ packet }: { packet?: SourcePacket | null }) {
     <div className="video-plan">
       <p className="eyebrow">세로 영상 · 제작 계획</p>
       <h3>{video.title || packet?.title}</h3>
+      <p className="muted">새 영상은 영어 주 자막·한국어 보조 자막을 같은 음성 시간에 표시합니다. 기존 영상은 자동으로 바뀌지 않습니다.</p>
       {video.description && (
         <p className="video-description">{video.description}</p>
       )}
@@ -1897,6 +1899,7 @@ function VideoPlan({ packet }: { packet?: SourcePacket | null }) {
               SCENE {(index + 1).toString().padStart(2, "0")}
             </span>
             <h4>{scene.caption || `장면 ${index + 1}`}</h4>
+            {scene.subtitle_en && scene.subtitle_ko ? <div><span>영어 주 자막 / 한국어 보조 자막</span><p lang="en">{scene.subtitle_en}</p><p lang="ko">{scene.subtitle_ko}</p></div> : <p className="notice">영한 자막 문장이 아직 없습니다. 새 영상 제작 전에 양언어 대본을 준비·검수해야 합니다.</p>}
             <div>
               <span>말하기</span>
               <p>{scene.narration || "말하기 대본 없음"}</p>
@@ -2213,6 +2216,7 @@ function Delivery({
   const isVideo =
     selected && (selected.kind === "video" || /\.mp4$/i.test(selected.name));
   const isImage = selected && /\.(png|jpg|jpeg|webp)$/i.test(selected.name);
+  const instagramPreview = preview === 'instagram-cards-preview';
   return (
     <div className={deliveryStyles.root}>
       <div className="job-heading">
@@ -2285,14 +2289,16 @@ function Delivery({
           <section className="preview-toolbar" aria-label="제작물 읽기">
             <h3>현재 제작물 미리보기</h3>
             <div className="preview-output-buttons" role="group" aria-label="제작물 보기">
-              {socialFormats.map(format => <button key={format.file.id} type="button"
-                className={`button ${socialFormat?.file.id === format.file.id ? 'primary' : 'secondary'}`}
-                aria-pressed={socialFormat?.file.id === format.file.id}
+              {socialFormats.filter(format => format.format !== 'instagram').map(format => <button key={format.file.id} type="button"
+                className={`button ${!instagramPreview && socialFormat?.file.id === format.file.id ? 'primary' : 'secondary'}`}
+                aria-pressed={!instagramPreview && socialFormat?.file.id === format.file.id}
                 onClick={() => setPreview(format.file.id)}>{format.label} 글 읽기</button>)}
+              <button type="button" className={`button ${instagramPreview ? 'primary' : 'secondary'}`} aria-pressed={instagramPreview}
+                onClick={() => setPreview('instagram-cards-preview')}>Instagram 카드뉴스</button>
               {blogFormats.length > 0 && (
                 <button
-                  className={`button ${blogFormat ? "primary" : "secondary"}`}
-                  aria-pressed={Boolean(blogFormat)}
+                  className={`button ${!instagramPreview && blogFormat ? "primary" : "secondary"}`}
+                  aria-pressed={!instagramPreview && Boolean(blogFormat)}
                   onClick={() => setPreview(blogFormats[0].file.id)}
                 >
                   <Icon name="file" size={18} />블로그 읽기
@@ -2300,15 +2306,15 @@ function Delivery({
               )}
               {videoFile && (
                 <button
-                  className={`button ${isVideo ? "primary" : "secondary"}`}
-                  aria-pressed={Boolean(isVideo)}
+                  className={`button ${!instagramPreview && isVideo ? "primary" : "secondary"}`}
+                  aria-pressed={!instagramPreview && Boolean(isVideo)}
                   onClick={() => setPreview(videoFile.id)}
                 >
                   <Icon name="play" size={18} />영상 보기
                 </button>
               )}
             </div>
-            {blogFormat && (
+            {!instagramPreview && blogFormat && (
               <div className="preview-formats" role="group" aria-label="블로그 파일 형식">
                 {blogFormats.map(({ file, label }) => (
                   <button
@@ -2321,7 +2327,7 @@ function Delivery({
                 ))}
               </div>
             )}
-            <div className="preview-heading">
+            {!instagramPreview && <div className="preview-heading">
               <div>
                 <strong>{socialFormat ? `${socialFormat.label}에 전달할 원고` : blogFormat ? "제작된 블로그 본문" : selected?.name}</strong>
                 <p>출고 승인 전에도 읽고 내려받을 수 있습니다.</p>
@@ -2336,7 +2342,7 @@ function Delivery({
                   </a>
                 </div>
               )}
-            </div>
+            </div>}
           </section>
           <div className="delivery-note">
             <Icon name="source" size={16} />
@@ -2345,7 +2351,7 @@ function Delivery({
               미리보기로 내용을 확인한 후 출고를 승인하세요.
             </span>
           </div>
-          <div className={`artifact-preview ${textFormat ? "blog-preview" : ""}`}>
+          {instagramPreview ? <InstagramPreview key={`${job.id}-${job.manifest?.hash}`} job={job}/> : <div className={`artifact-preview ${textFormat ? "blog-preview" : ""}`}>
             {!current ? (
               <p>허용된 로컬 파일 주소를 확인할 수 없습니다.</p>
             ) : isVideo ? (
@@ -2364,8 +2370,8 @@ function Delivery({
                 src={previewUrl ?? undefined}
               />
             )}
-          </div>
-          {!textFormat && (
+          </div>}
+          {!instagramPreview && !textFormat && (
             <ThumbnailChoices
               job={job}
               busy={busy}

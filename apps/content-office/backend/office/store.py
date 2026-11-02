@@ -374,6 +374,8 @@ class Store:
                 raise WorkflowError("현재 원고 승인①이 필요합니다")
             if manifest.get("source_hash") != source_hash:
                 raise WorkflowError("제작물의 부모 원고 버전이 다릅니다")
+            from .blog_assets import verify_manifest
+            verify_manifest(self, job, manifest)
             partial = any(status.get('state') != 'completed' for status in manifest.get('output_status', {}).values())
             job.update(manifest=manifest, state="partial_release_review" if partial else "release_review", release_approval=None, error=None)
             self._event(db, "production_partial" if partial else "production_completed", {"source_hash": source_hash, "role": "영상·제작", 'completed_outputs': manifest.get('completed_outputs')}, job_id)
@@ -419,6 +421,9 @@ class Store:
             selected = requested if outputs is None else set(outputs)
             if not selected or not selected.issubset(requested) or not selected.issubset(completed):
                 raise WorkflowError('완료된 제작물만 출고할 수 있습니다. 미완료 항목을 제외하고 선택하세요')
+            if decision == 'approved' and 'blog' in selected:
+                from .blog_assets import verify_manifest
+                verify_manifest(self, job, manifest)
             if decision == "approved" and 'video' in selected:
                 candidates = [candidate["id"] for candidate in manifest.get("thumbnail_candidates", [])]
                 if not media_reviewed:

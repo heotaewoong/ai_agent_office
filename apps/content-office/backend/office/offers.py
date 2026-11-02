@@ -222,6 +222,11 @@ def campaign_packet(packet, offer):
         narration += " 무료 PDF 자료는 프로필 링크에서 받으세요."
         caption = " · ".join(part for part in (caption, "무료 PDF · 프로필 링크") if part)
     scenes.append({"narration": narration, "caption": caption, "visual": "상품 안내 · 코드와 조건은 설명란 · 실제 상품 화면을 복제하지 않은 자체 도형"})
+    if video.get('subtitle_layout') == 'en-main-ko-sub':
+        english = f"Find {offer['product']} at the product link in the description." if offer.get('product') else ''
+        if coupon:english += f" The verified coupon offers {coupon['discount_percent']}% off. Check the code, dates and terms in the description."
+        if offer.get('free_pdf'):english += ' Get the free PDF through the profile link.'
+        scenes[-1].update(subtitle_en=english, subtitle_ko=narration.replace('허브레인 점 케이알에서','heobrain.kr에서'))
     video["scenes"] = scenes
     result["campaign_cta_scene"] = narration
     result["campaign_offer_hash"] = offer_hash(offer)

@@ -163,6 +163,9 @@ def photo_bytes(kind="PNG", *, animated=False):
 
 def photo_packet(urls):
     source = packet()
+    source['video']['subtitle_layout']='en-main-ko-sub'
+    for scene in source['video']['scenes']:
+        scene.update(subtitle_en='This is a synthetic export test.',subtitle_ko=scene['narration'])
     source.update(preserve_original=True, body="## 직접 제공한 글\r\n\r\n" + "\r\n\r\n".join(f"![사진 {index}]({url})" for index, url in enumerate(urls, 1)) + "  \r\n")
     return source
 
