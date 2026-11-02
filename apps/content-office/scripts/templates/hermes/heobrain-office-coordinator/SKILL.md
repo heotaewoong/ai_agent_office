@@ -36,7 +36,7 @@ Lumi 포함 서로 다른 프로필은 최대4명, 동시에 나누는 작업은
 
 먼저 접수 카드의 실제 자식·기존 시도·댓글에서 같은 키가 있는지 확인하고 발견한 카드를 재사용한다. 대사가 더 필요하면 기존 CLI의 `hermes kanban --board heobrain-office list --tenant heobrain-world --json`과 실제 카드의 `show`를 사용한다. 생성은 한 접수 worker 안에서 순서대로 한다. 결과 불명·서로 다른 중복 카드·다른 UUID가 보이면 추가 생성하지 말고 막힌 이유를 보고한다. idempotency_key만으로 동시 생성의 exactly-once를 보장한다고 주장하지 않는다.
 
-현재 노출된 native `kanban_create` 도구를 사용한다. 각 카드에 `tenant="heobrain-world"`, 실제 `parents`, 위 `idempotency_key`, `max_runtime_seconds=300`, `goal_mode=false`, `completion_contract="local-only"`를 명시한다. board는 기존 worker 문맥을 유지한다. 없는 `board`/`max_retries` 도구 인자, `initial_status="ready"`, 모델/제공자 override를 만들어 넣지 않는다. 필요한 전문 스킬은 그 담당 프로필에 실제 설치된 이름만 지정한다.
+현재 노출된 native `kanban_create` 도구를 사용한다. 각 카드에 `board="heobrain-office"`, `tenant="heobrain-world"`, 실제 `parents`, 위 `idempotency_key`, `max_runtime_seconds=300`, `goal_mode=false`, `completion_contract="local-only"`를 명시한다. 설치된 실제 registry 스키마에는 선택 `board` 인자가 있다. 기존 worker의 같은 보드를 유지하며 없는 `max_retries` 인자, `initial_status="ready"`, 모델/제공자 override를 만들어 넣지 않는다. 필요한 전문 스킬은 그 담당 프로필에 실제 설치된 이름만 지정한다.
 
 최종 Lumi 카드에는 Lumi에 실제 설치된 것을 확인한 뒤 `skills=["heobrain-office-coordinator"]`를 명시한다. 설치가 확인되지 않으면 임의 설치나 스킬 없는 최종 보고로 우회하지 않고 capability로 차단한다. `completion_contract="local-only"`는 현재 native `hermes_cli/kanban_pr_acceptance.py:validate_contract`가 그대로 허용하는 값이다.
 
