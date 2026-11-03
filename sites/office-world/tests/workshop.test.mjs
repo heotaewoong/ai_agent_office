@@ -8,7 +8,8 @@ function method(object, name, globals = {}) {
   const start = source.indexOf('    ' + name + '(', source.indexOf('  const ' + object + ' = {'));
   const end = source.indexOf('\n    },', start);
   assert(start >= 0 && end > start, object + '.' + name + ' must exist');
-  return Function(...Object.keys(globals), 'return ({' + source.slice(start, end + 6) + '}).' + name)(...Object.values(globals));
+  const focusHelper = source.slice(source.indexOf('  function focusWorldAction'), source.indexOf('  const SYSTEM_REDUCED'));
+  return Function(...Object.keys(globals), focusHelper + 'return ({' + source.slice(start, end + 6) + '}).' + name)(...Object.values(globals));
 }
 function fixture(raw = null, geometry = false) {
   const entries = new Map([['heobrain.expedition.v1', '{"credits":240,"selectedVehicle":"nova"}'], ['heobrain.city-visits.v1', '["arrival"]']]);
@@ -165,7 +166,7 @@ test('unchanged selection stays solid, a pending rotation shows one ghost, and c
     const ghost=w.preview;assert(ghost);assert.equal(w.draftMatchesSelection(),false);assert.equal(solid.isEnabled(),false);
     assert.equal(ghost.getChildMeshes().length,4);assert.equal(f.scene.meshes.length,meshCount+4);
     assert.deepEqual(w.items,[item]);
-    const elements={'build-panel':{hidden:false},'btn-build':{pressed:null,setAttribute(k,v){assert.equal(k,'aria-pressed');this.pressed=v;},focus(){this.focused=true;}}};
+    const elements={'build-panel':{hidden:false},'btn-build':{pressed:null,closest(){return null;},setAttribute(k,v){assert.equal(k,'aria-pressed');this.pressed=v;},focus(){this.focused=true;}}};
     const classes=new Set(['building-view']);let attached=0;
     f.world.canvas={};f.controls.keys=new Set(['w']);f.controls.dragging=true;
     f.controls.overview={attachControl(canvas,pointer){assert.equal(canvas,f.world.canvas);assert.equal(pointer,true);attached++;}};
