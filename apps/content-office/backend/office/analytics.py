@@ -58,15 +58,17 @@ def parse_studio_text(text):
 
 
 def baseline(snapshots):
-    ctr = [s["metrics"]["ctr"] for s in snapshots if s["metrics"].get("ctr")]
-    avp = [s["metrics"]["avp"] for s in snapshots if s["metrics"].get("avp")]
+    ctr = [s["metrics"]["ctr"] for s in snapshots if s["metrics"].get("ctr") is not None]
+    avp = [s["metrics"]["avp"] for s in snapshots if s["metrics"].get("avp") is not None]
     return {"ctr": statistics.median(ctr) if ctr else None, "avp": statistics.median(avp) if avp else None}
 
 
 def propose_lessons(snapshot, base):
     m, lessons = snapshot["metrics"], []
     evidence = {"snapshot_id": snapshot["id"], "external_id": snapshot["external_id"], "period": snapshot["period"]}
-    if m.get("ctr") and m.get("avp") and base.get("ctr") and base.get("avp"):
+    if (m.get("ctr") is not None and m.get("avp") is not None
+            and base.get("ctr") is not None and base.get("avp") is not None
+            and base["ctr"] > 0 and base["avp"] > 0):
         if m["ctr"] < 0.8 * base["ctr"] and m["avp"] >= base["avp"]:
             lessons.append({"kind": "packaging", "hypothesis": "본 사람은 끝까지 봤지만 클릭이 적다: 다음 기획에서 제목·썸네일 3안 비교를 강화한다", "weight_change": {"factor": "outlier", "delta": 5}, "evidence": evidence})
         if m["ctr"] >= 1.2 * base["ctr"] and m["avp"] < 0.8 * base["avp"]:

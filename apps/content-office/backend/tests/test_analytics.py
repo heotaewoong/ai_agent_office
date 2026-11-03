@@ -77,3 +77,23 @@ def test_parse_studio_text_skips_total_and_blank_rows():
     rows = parse_studio_text(text)
     assert [r["external_id"] for r in rows] == ["abc123"]
     assert rows[0]["views"] == 1200 and rows[0]["ctr"] == 4.5
+
+
+def test_baseline_keeps_observed_zero_separate_from_missing_metrics():
+    assert baseline([{"metrics": {"ctr": 0, "avp": 0}}, {"metrics": {"ctr": 10, "avp": 80}},
+                     {"metrics": {"ctr": None}}]) == {"ctr": 5, "avp": 40}
+    assert baseline([{"metrics": {"ctr": 0, "avp": 0}}]) == {"ctr": 0, "avp": 0}
+
+
+@pytest.mark.parametrize("metrics,expected", [({"ctr": 0, "avp": 55}, "packaging"),
+                                              ({"ctr": 8, "avp": 0}, "promise_mismatch")])
+def test_zero_observation_can_propose_a_review_against_positive_baselines(metrics, expected):
+    snapshot = {"id": "zero-snapshot", "external_id": "zero-video", "period": "7d", "channel": "youtube_long", "metrics": metrics}
+    assert [lesson["kind"] for lesson in propose_lessons(snapshot, {"ctr": 5, "avp": 40})] == [expected]
+
+
+@pytest.mark.parametrize("base", [{"ctr": 0, "avp": 40}, {"ctr": 5, "avp": 0},
+                                  {"ctr": None, "avp": 40}])
+def test_missing_or_zero_baselines_do_not_make_relative_performance_claims(base):
+    snapshot = {"id": "zero-baseline", "external_id": "zero-video", "period": "7d", "channel": "youtube_long", "metrics": {"ctr": 0, "avp": 0}}
+    assert propose_lessons(snapshot, base) == []
