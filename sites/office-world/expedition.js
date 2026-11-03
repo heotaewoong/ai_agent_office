@@ -7,7 +7,19 @@ export const ALIENS = [
   { id: 'coral', name: '산호 탐사자', x: 104, z: -46 },
   { id: 'lime', name: '라임 탐사자', x: -104, z: -46 },
   { id: 'nova', name: '별빛 탐사자', x: 0, z: -175 },
+  { id: 'rose', name: '민트 길잡이', x: 18, z: -60 },
+  { id: 'teal', name: '보랏빛 길잡이', x: -18, z: -60 },
+  { id: 'gold', name: '호박빛 길잡이', x: 32, z: -46 },
+  { id: 'silver', name: '푸른 길잡이', x: -32, z: -46 },
+  { id: 'indigo', name: '진주 길잡이', x: 0, z: -92 },
+  { id: 'copper', name: '산호 길잡이', x: 0, z: -132 },
+  { id: 'aqua', name: '라임 길잡이', x: 40, z: -23 },
+  { id: 'orchid', name: '별빛 길잡이', x: -40, z: -23 },
 ];
+
+export function alienVisible(layer, capturedAt, now) {
+  return layer === 'meadow' && (capturedAt === undefined || now - capturedAt >= 10000);
+}
 export const VEHICLES = [
   { id: 'scout', name: '스카우트 호버카', cost: 80, speed: 24, color: '#76e2dd' },
   { id: 'nova', name: '노바 GT', cost: 160, speed: 32, color: '#e7b66f' },
@@ -117,12 +129,13 @@ if (typeof document !== 'undefined') {
   // shortcut: this is a local game save; use a server ledger before adding shared rewards.
   const key = 'heobrain.expedition.v1';
   let profile = empty(), mounted = false, active = false, storageAvailable = true, ready = false, tour = null;
+  const capturedAt = new Map();
   try { profile = readProfile(localStorage.getItem(key)); } catch { storageAvailable = false; }
   const root = document.createElement('section');
   root.className = 'alien-game'; root.setAttribute('aria-label', '외계 생명체 탐사와 차고');
   root.innerHTML = `<button type="button" class="alien-game-launch">✦ 생명체 탐사 · 선택 놀이 <span class="alien-wallet">0 C</span></button>
     <div class="alien-game-panel" hidden><div class="alien-game-heading"><strong>탐사 · 보유차 컬렉션</strong><button type="button" class="alien-game-close" aria-label="탐사 패널 닫기">×</button></div>
-    <p class="alien-game-note">두 차량 모두 무료로 시승할 수 있어요. 포획 크레딧은 보유차 컬렉션을 모을 때 사용합니다.</p>
+    <p class="alien-game-note">빛 고리가 있는 생명체를 찾아보세요. 포획한 친구는 10초 뒤 고리 없이 돌아오며, 크레딧은 첫 포획에만 지급됩니다.</p>
     <p class="alien-game-progress"></p><p class="alien-game-target"></p>
     <button type="button" class="alien-game-start">지상에서 탐사 시작</button>
     <div class="alien-game-actions"><button type="button" class="alien-game-catch" disabled>포획 · F</button><button type="button" class="alien-game-ride" disabled>탑승 · V</button></div>
@@ -264,7 +277,7 @@ if (typeof document !== 'undefined') {
     syncDrivePanel();
     renderTour();
     root.querySelector('.alien-wallet').textContent = `${credits(profile)} C`;
-    root.querySelector('.alien-game-progress').textContent = `포획 도감 ${profile.captured.length}/8 · 보유 차량 ${profile.owned.length}/2`;
+    root.querySelector('.alien-game-progress').textContent = `포획 도감 ${profile.captured.length}/${ALIENS.length} · 보유 차량 ${profile.owned.length}/2`;
     root.querySelector('.alien-game-garage').replaceChildren(...VEHICLES.map(vehicle => {
       const item = document.createElement('div'); item.className = 'alien-game-vehicle';
       const owned = profile.owned.includes(vehicle.id);
@@ -305,6 +318,7 @@ if (typeof document !== 'undefined') {
   function catchNearest() {
     const target = nearest();
     if (target && capture(profile, target.id, context())) {
+      capturedAt.set(target.id, performance.now());
       save(); say(`${target.name} 포획! +40 C${credits(profile) >= 80 && !profile.owned.length ? ' · 이제 첫 차를 구매할 수 있습니다.' : ''}`);
       clearCaptureFeedback(); captureFeedback.textContent = status.textContent; captureFeedback.hidden = false;
       feedbackTimer = setTimeout(clearCaptureFeedback, 4500); render();
@@ -358,7 +372,7 @@ if (typeof document !== 'undefined') {
     const walking = active && o.space.layer === 'meadow' && o.space.view === 'walk';
     document.body.classList.toggle('alien-game-active', walking);
     const target = nearest();
-    const targetText = profile.captured.length === 8 ? '모든 생명체를 발견했습니다. 두 차량으로 도시를 탐험하세요.' : walking && target ? `${target.name}까지 ${Math.round(target.distance)}m · ${mounted ? '하차 후 포획' : '7m 안에서 포획'}` : '지상 탐사를 시작하면 가까운 목표를 안내합니다.';
+    const targetText = profile.captured.length === ALIENS.length ? '도감 완성! 돌아온 친구들과 도시를 탐험하세요.' : walking && target ? `${target.name}까지 ${Math.round(target.distance)}m · ${mounted ? '하차 후 포획' : '7m 안에서 포획'}` : '지상 탐사를 시작하면 가까운 목표를 안내합니다.';
     root.querySelector('.alien-game-target').textContent = targetText;
     catchButton.disabled = !walking || mounted || !target || target.distance > 7 || !o.controls.player.grounded;
     rideButton.disabled = !mounted && !canRide(profile, profile.selected, context());
@@ -384,12 +398,13 @@ if (typeof document !== 'undefined') {
     };
     const colors = ['#71e6b9','#b8a1ff','#f3c473','#81c9ff','#d3f5ed','#f5a395','#b9d978','#a8bfff'];
     const dark = material('alien-game-eyes', '#132536'), glow = material('alien-game-signal', '#97eedc', true);
+    const skins = colors.map((color, i) => material(`alien-game-skin-${i}`, color));
     const box = (name, size, pos, mat, parent) => {
       const mesh = B.MeshBuilder.CreateBox(name, { width: size[0], height: size[1], depth: size[2] }, scene);
       mesh.position.set(...pos); mesh.material = mat; mesh.parent = parent; mesh.isPickable = false; return mesh;
     };
     const aliens = ALIENS.map((a, i) => {
-      const node = new B.TransformNode(`alien-game-${a.id}`, scene), skin = material(`alien-game-skin-${i}`, colors[i]);
+      const node = new B.TransformNode(`alien-game-${a.id}`, scene), skin = skins[i % skins.length];
       const ground = Math.max(o.world.meadowHeight(a.x, a.z), o.world.groundRoadHeight(a.x, a.z) ?? -Infinity);
       node.position.set(a.x, ground, a.z);
       box('alien-body', [1.6, 1.6, 1], [0, 1.5, 0], skin, node);
@@ -426,9 +441,10 @@ if (typeof document !== 'undefined') {
       const showTour = !!stop && o.space.layer === 'meadow' && !o.space.rosterOpen && !o.space.buildingOpen && !o.space.resultsOpen;
       tourBeacon.setEnabled(showTour);
       if (showTour) tourBeacon.position.set(stop.x, o.world.heightAt(stop.x, stop.z), stop.z);
+      const now = performance.now();
       for (const alien of aliens) {
-        alien.node.setEnabled(o.space.layer === 'meadow' && !profile.captured.includes(alien.id));
-        alien.ring.setEnabled(active);
+        alien.node.setEnabled(alienVisible(o.space.layer, capturedAt.get(alien.id), now));
+        alien.ring.setEnabled(active && !profile.captured.includes(alien.id));
         const opacity=o.space.layer==='meadow' && o.space.view==='walk' && creatureObstructsCamera(o.controls.walk.position,o.controls.player.pos,alien.node.position) ? .18 : 1;
         if(alien.opacity!==opacity){for (const part of alien.parts)part.visibility=opacity;alien.opacity=opacity;}
       }

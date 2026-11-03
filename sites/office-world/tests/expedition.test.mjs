@@ -165,7 +165,7 @@ test('a full collection can buy both vehicles and survives a normal save round t
   const p = profile();
   for (const alien of ALIENS) assert.equal(capture(p, alien.id, context(alien)), true);
   for (const vehicle of VEHICLES) assert.equal(purchase(p, vehicle.id), true);
-  assert.equal(credits(p), 80);
+  assert.equal(credits(p), ALIENS.length * 40 - VEHICLES.reduce((sum, v) => sum + v.cost, 0));
   const restored = readProfile(JSON.stringify(p));
   assert.deepEqual(restored, p);
   assert.equal(credits(restored), credits(p));
