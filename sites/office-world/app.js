@@ -2253,7 +2253,6 @@
       });
       const b = d.brain;
       this.brainCard.innerHTML = d.organizationVersion === 1 ? '<span class="card-title">오비서 중앙 관제</span><span class="card-meta">5팀 업무 보기 · 팀별 직접 진입</span>' : `<span class="card-title">${esc(b.name)}</span><span class="card-meta"><span>${fmt(b.notes)} 절</span><span>원본 ${fmt(b.sources)}편</span></span><span class="card-meta"><span>${esc(b.label)}</span></span>`;
-      $('tags').innerHTML = [...new Set(space.agents.map((a) => `${a.engine} · ${a.model}`.trim()))].filter((t) => t !== '·').map((t) => `<span class="tag">${esc(t)}</span>`).join('');
       const pill = $('source-pill');
       pill.className = `source-pill ${data.source === 'live' ? 'live' : ''} ${data.error ? 'error' : ''}`.trim();
       pill.textContent = workbench.sourceLabel(data.source, Boolean(data.error));
