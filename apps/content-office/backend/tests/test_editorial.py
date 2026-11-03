@@ -23,7 +23,7 @@ class ReviewingProvider:
         self.calls.append((role, messages))
         if role == "refine":
             return {"title": "수정 원고", "body": "수정된 본문", "video": {"scenes": []}}
-        return {"role": role, "score": 60 if self.always_block else 90, "passed": not self.always_block, "critical_issues": ["근거 오류"] if self.always_block else [], "minor_issues": [], "summary": "검토"}
+        return {"role": role, "score": 60 if self.always_block else 90, "passed": not self.always_block, "critical_issues": ["근거 오류"] if self.always_block else [], "minor_issues": [], "summary": "검토", 'content_checks': {'source_sufficient': True, 'topic_matches': True, 'reason': '합성 시험의 원문과 주제가 일치함'}}
 
 
 def test_critique_and_eval_never_receive_each_others_answers():

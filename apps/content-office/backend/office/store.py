@@ -245,6 +245,10 @@ class Store:
             if decision == "approved":
                 require_offer_ready(job.get("offer"))
                 require_campaign_packet(job.get("source_packet"), job.get("offer"))
+                from .evidence import metadata_only_evidence
+                packet_evidence = {**job['article'], 'evidence': (job.get('source_packet') or {}).get('evidence', [])}
+                if not job['article'].get('preserve_original') and (metadata_only_evidence(job['article']) or metadata_only_evidence(packet_evidence)):
+                    raise WorkflowError('뉴스 본문 대신 제목·첨부파일명만 확인된 원고입니다. 실제 본문을 확보하고 다시 검수해 주세요')
             quality = (job["source_packet"] or {}).get("quality", {})
             manual_external = quality.get("status") == "external_review_required"
             if decision == "approved" and manual_external:

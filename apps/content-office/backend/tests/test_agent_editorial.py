@@ -17,7 +17,7 @@ class FakeProvider:
         self.users.append(messages[1]["content"])
         if role in ("gen", "refine"):
             return {"title": self.title, "body": "도구 3가지를 실제 화면으로 비교한다", "video": {"title": "AI 도구 비교", "description": "", "tags": [], "scenes": [{"narration": "세 도구를 직접 비교한다", "caption": "비교", "visual": "화면"}]}}
-        return {"role": role, "score": 90, "passed": True, "critical_issues": [], "minor_issues": [], "summary": "검토"}
+        return {"role": role, "score": 90, "passed": True, "critical_issues": [], "minor_issues": [], "summary": "검토", 'content_checks': {'source_sufficient': True, 'topic_matches': True, 'reason': '합성 원문과 주제 일치'}}
 
 
 def idea_job(store, origin="idea"):
@@ -85,8 +85,8 @@ class FullProvider:
         if role in ("gen", "refine"):
             return self._packet()
         if role == "critique" and self.fail_critique_once and self.roles.count("critique") == 1:
-            return {"role": role, "score": 60, "passed": False, "critical_issues": [], "minor_issues": ["보완"], "summary": "보완 필요"}
-        return {"role": role, "score": 90, "passed": True, "critical_issues": [], "minor_issues": [], "summary": "검토"}
+            return {"role": role, "score": 60, "passed": False, "critical_issues": [], "minor_issues": ["보완"], "summary": "보완 필요", 'content_checks': {'source_sufficient': True, 'topic_matches': True, 'reason': '합성 원문과 주제 일치'}}
+        return {"role": role, "score": 90, "passed": True, "critical_issues": [], "minor_issues": [], "summary": "검토", 'content_checks': {'source_sufficient': True, 'topic_matches': True, 'reason': '합성 원문과 주제 일치'}}
 
 
 def evidence_job(store):

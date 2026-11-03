@@ -36,7 +36,7 @@ class ExtractingProvider:
     def __init__(self, paragraph=1):
         self.paragraph = paragraph
     def generate(self, role, messages, schema, options=None):
-        return {"claims": [{"claim": "독립 질문을 처리하는 합성 예제입니다", "paragraph": self.paragraph, "scope": "합성 시험 자료", "numbers": []}, {"claim": "후속 요청이 필요하다는 합성 예제입니다", "paragraph": 2, "scope": "합성 시험 자료", "numbers": []}], "limitations": ["테스트용 문서"], "hook": "질문을 구분하세요"}
+        return {"claims": [{"claim": "독립 질문을 처리하는 합성 예제입니다", "paragraph": self.paragraph, "scope": "합성 시험 자료", "numbers": []}, {"claim": "후속 요청이 필요하다는 합성 예제입니다", "paragraph": 2, "scope": "합성 시험 자료", "numbers": []}], "limitations": ["테스트용 문서"], "hook": "질문을 구분하세요", "source_sufficient": True, "source_reason": "합성 본문과 구체적 조건 확보"}
 
 
 TEXT = '첫번째 문단은 독립 질문과 조건을 설명하는 합성 시험 자료입니다. ' * 6 + '\n\n' + '두번째 문단은 후속 요청이 필요하다는 점을 설명하는 합성 시험 자료입니다. ' * 6
