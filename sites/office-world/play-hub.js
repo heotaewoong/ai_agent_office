@@ -62,7 +62,7 @@ export function installPlayHub(doc = document, office = () => window.__officeWor
     if (!opened || event.key !== 'Escape') return;
     event.preventDefault(); event.stopPropagation(); setOpen(false, true);
   }, true);
-  toolbar.addEventListener('click', event => {
+  (toolbar.closest('.topbar') || toolbar).addEventListener('click', event => {
     if (opened && event.target.closest('button,summary') && !event.target.closest('#btn-play-hub')) setOpen(false);
   }, true);
   doc.addEventListener('click', event => {
@@ -79,7 +79,7 @@ export function installPlayHub(doc = document, office = () => window.__officeWor
   const tools = doc.getElementById('world-tools');
   tools?.addEventListener('toggle', () => { if (opened && tools.open) setOpen(false); });
   // Keep the entry within the first mobile toolbar screen, in DOM reading order.
-  doc.body.append(hub); toolbar.insertBefore(trigger, doc.getElementById('btn-attention'));
+  doc.body.append(hub); toolbar.insertBefore(trigger, tools?.parentNode === toolbar ? tools : null);
   doc.body.classList.add('play-hub-ready'); select(selected);
   return { open: () => setOpen(true), close: () => setOpen(false), trigger, hub };
 }
