@@ -95,4 +95,4 @@ jobs:
             if curl --fail --silent http://127.0.0.1:3110/news > /dev/null; then break; fi
             sleep 0.5
           done
-          npx playwright test tests/browser/discovery.spec.ts tests/browser/thumbnail-studio.spec.ts tests/browser/job-trash.spec.ts tests/browser/delivery-multi.spec.ts tests/browser/newsletter-distribution.spec.ts tests/browser/cards-topic.spec.ts tests/browser/content-diagnostics.spec.ts --workers=1
+          npx playwright test tests/browser/discovery.spec.ts tests/browser/thumbnail-studio.spec.ts tests/browser/job-trash.spec.ts tests/browser/delivery-multi.spec.ts tests/browser/newsletter-distribution.spec.ts tests/browser/cards-topic.spec.ts tests/browser/content-diagnostics.spec.ts tests/browser/assistant-content.spec.ts --workers=1

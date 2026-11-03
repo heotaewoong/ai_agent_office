@@ -294,28 +294,31 @@ class Store:
             return self._write_job(db, job)
 
     def register_source_input(self, job_id, text, expected_hash, preserve_original=False):
+        with self.connection(transaction=True) as db:
+            return self._register_source_input(db, job_id, text, expected_hash, preserve_original)
+
+    def _register_source_input(self, db, job_id, text, expected_hash, preserve_original=False):
         from .offers import offer_snapshot, source_version
         if type(preserve_original) is not bool:
             raise WorkflowError("원문 보존 여부는 true 또는 false여야 합니다")
         if preserve_original and (not isinstance(text, str) or not text.strip()):
             raise WorkflowError("원문 보존 모드에는 직접 제공한 Markdown 본문이 필요합니다")
-        with self.connection(transaction=True) as db:
-            job = self._job(db, job_id)
-            if job["source_hash"] != expected_hash:
-                raise WorkflowError("원문을 등록하는 동안 원고 버전이 변경되었습니다")
-            packet = {**(job.get("source_packet") or {"title": job["title"], "body": "공개 원문을 등록했습니다. 근거 정리와 새 원고 생성을 기다리고 있습니다."}), "evidence": [], "source_input_hash": digest(text), "quality": {"status": "unverified", "critical": True, "reviews": []}}
-            if preserve_original:
-                packet.update(body=text, preserve_original=True)
-            else:
-                packet.pop("preserve_original", None)
-            packet.pop("reference_evidence_ids", None)
-            article = {**job["article"], "operator_source_text": text, "preserve_original": preserve_original, "evidence": [], "evidence_source_kind": "operator_supplied_text_pending_extraction"}
-            version = source_version(packet, job.get("offer"))
-            recorded = {**packet, "offer_snapshot": offer_snapshot(job["offer"])} if job.get("offer") else packet
-            db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job_id, version, canonical(recorded), now()))
-            job.update(article=article, source_hash=version, source_packet=packet, source_approval=None, release_approval=None, manifest=None, state="research_ready", error=None)
-            self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "preserve_original": preserve_original, "role": "연구"}, job_id)
-            return self._write_job(db, job)
+        job = self._job(db, job_id)
+        if job["source_hash"] != expected_hash:
+            raise WorkflowError("원문을 등록하는 동안 원고 버전이 변경되었습니다")
+        packet = {**(job.get("source_packet") or {"title": job["title"], "body": "공개 원문을 등록했습니다. 근거 정리와 새 원고 생성을 기다리고 있습니다."}), "evidence": [], "source_input_hash": digest(text), "quality": {"status": "unverified", "critical": True, "reviews": []}}
+        if preserve_original:
+            packet.update(body=text, preserve_original=True)
+        else:
+            packet.pop("preserve_original", None)
+        packet.pop("reference_evidence_ids", None)
+        article = {**job["article"], "operator_source_text": text, "preserve_original": preserve_original, "evidence": [], "evidence_source_kind": "operator_supplied_text_pending_extraction"}
+        version = source_version(packet, job.get("offer"))
+        recorded = {**packet, "offer_snapshot": offer_snapshot(job["offer"])} if job.get("offer") else packet
+        db.execute("INSERT OR IGNORE INTO versions VALUES(?,?,?,?)", (job_id, version, canonical(recorded), now()))
+        job.update(article=article, source_hash=version, source_packet=packet, source_approval=None, release_approval=None, manifest=None, state="research_ready", error=None)
+        self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "preserve_original": preserve_original, "role": "연구"}, job_id)
+        return self._write_job(db, job)
 
     def add_draft(self, job_id, draft, *, expected_source_hash=_UNSET):
         """Keep an editorial draft beside the job. It never changes source, approvals or outputs."""

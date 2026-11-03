@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from . import assistant_requests as bridge
+from . import assistant_content_jobs as content_jobs
 
 
 class AssistantRequest(BaseModel):
@@ -21,6 +22,15 @@ class AssistantRequest(BaseModel):
         if not text.strip() or len(text.encode("utf-8")) > 24000:
             raise ValueError("업무 내용을 입력해 주세요")
         return text.strip()
+
+
+class ContentJobRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task_id: str = Field(strict=True, pattern=r"^t_[a-zA-Z0-9_-]{1,80}$")
+    run_id: int = Field(strict=True, gt=0, le=9007199254740991)
+    event_id: int = Field(strict=True, gt=0, le=9007199254740991)
+    report_sha256: str = Field(strict=True, pattern=r"^[0-9a-f]{64}$")
+    body_sha256: str = Field(strict=True, pattern=r"^[0-9a-f]{64}$")
 
 
 def register(app: FastAPI, store):
@@ -44,8 +54,20 @@ def register(app: FastAPI, store):
     @app.get("/api/assistant/requests/{request_id}")
     def read_request(request_id: UUID):
         try:
-            return bridge.read_request(store, native(), str(request_id))
+            request = bridge.read_request(store, native(), str(request_id))
+            return {**request, "content": content_jobs.content_for_request(store, request)}
         except bridge.BridgeError as error:
             return error_response(error)
         except (KeyError, TypeError, ValueError, OSError, AttributeError):
             return error_response(bridge.BridgeError("native_invalid_response", "비서 응답을 확인할 수 없습니다"))
+
+
+    @app.post("/api/assistant/requests/{request_id}/content-job")
+    def connect_content(request_id: UUID, body: ContentJobRequest):
+        try:
+            request = bridge.read_request(store, native(), str(request_id))
+            return {"content": content_jobs.connect_content_job(store, request, body.model_dump())}
+        except bridge.BridgeError as error:
+            return error_response(error)
+        except (KeyError, TypeError, ValueError, OSError, AttributeError):
+            return error_response(bridge.BridgeError("assistant_content_unavailable", "원고 연결을 확인할 수 없습니다. 기존 원고는 보존했습니다"))

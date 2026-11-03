@@ -3,11 +3,18 @@ export type AssistantEvent = { id: number; task_id: string; run_id: number | nul
 export type AssistantNoticeRef = { request_id: string; task_id: string; run_id: number; event_id: number; terminal_state: 'completed' | 'blocked' };
 export type AssistantDelivery = { slack: 'watching' | 'pending' | 'sent_unverified' | 'confirmed' | 'unknown' | 'not_attached' | 'failed' | 'privacy_review_required'; external_delivery_verified: boolean; error_code?: string | null; notice_ref?: AssistantNoticeRef | null };
 export type AssistantAccepted = { request_id: string; native_task_id: string | null; board: 'heobrain-office'; status: 'queued' | 'running' | 'blocked' | 'completed' | 'failed'; delivery?: AssistantDelivery };
+export type AssistantContent = {
+  request_id: string; task_id: string; run_id: number; event_id: number;
+  title: string; body_length: number; report_sha256: string; body_sha256: string;
+  job: null | { id: string; source_hash: string; current_source_hash: string; state: string };
+};
+export type AssistantContentSubmission = Pick<AssistantContent, 'task_id' | 'run_id' | 'event_id' | 'report_sha256' | 'body_sha256'>;
 export type AssistantRequest = AssistantAccepted & {
   native_status: string | null; assignee: AssistantProfile; title: string; updated_at: string | number; current_run_id: number | null;
   events: AssistantEvent[];
   report: null | { summary: string; verified: boolean; task_id: string; run_id: number; event_id: number };
   error: null | { code: string; message: string };
+  content?: AssistantContent;
 };
 export const assistantNames = { lumi: '루미', ada: '에이다', ethan: '이든', mia: '미아', noah: '노아', oliver: '올리버', sam: '샘', 'mybots-sage': '세이지', default: 'Hermes' } as const;
 export type AssistantProfile = keyof typeof assistantNames;
@@ -67,6 +74,29 @@ function accepted(value: unknown, expected: string): AssistantAccepted {
   return { request_id: expected, native_task_id: row.native_task_id === null ? null : id(row.native_task_id), board: 'heobrain-office', status: row.status as AssistantAccepted['status'],
     ...(safeDelivery ? { delivery: safeDelivery } : {}) };
 }
+export function parseAssistantContent(value: unknown, request: AssistantRequest): AssistantContent {
+  const row = object(value), report = request.report;
+  const keys = ['request_id', 'task_id', 'run_id', 'event_id', 'title', 'body_length', 'report_sha256', 'body_sha256', 'job'];
+  if (Object.keys(row).length !== keys.length || keys.some(key => !Object.hasOwn(row, key))
+    || !uuidPattern.test(request.request_id) || row.request_id !== request.request_id || request.board !== 'heobrain-office'
+    || request.status !== 'completed' || request.native_status !== 'done' || !report?.verified
+    || row.task_id !== report.task_id || row.run_id !== report.run_id || row.event_id !== report.event_id
+    || !/^t_[a-zA-Z0-9_-]{1,80}$/.test(String(row.task_id))
+    || !request.events.some(event => event.task_id === row.task_id && event.run_id === row.run_id && event.id === row.event_id && event.kind === 'completed' && event.assignee === 'lumi')) return invalid();
+  const hash = (value: unknown): string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value) ? value : invalid();
+  const title = text(row.title, 200), length = integer(row.body_length);
+  if (/[\r\n]/.test(title) || length < 100 || length > 50000) return invalid();
+  let job: AssistantContent['job'] = null;
+  if (row.job !== null) {
+    const item = object(row.job);
+    if (Object.keys(item).length !== 4 || !['id', 'source_hash', 'current_source_hash', 'state'].every(key => Object.hasOwn(item, key))
+      || typeof item.id !== 'string' || !/^job_[a-f0-9]{16}$/.test(item.id)
+      || typeof item.state !== 'string' || !/^[a-z][a-z0-9_]{0,79}$/.test(item.state)) return invalid();
+    job = { id: item.id, source_hash: hash(item.source_hash), current_source_hash: hash(item.current_source_hash), state: item.state };
+  }
+  return { request_id: request.request_id, task_id: report.task_id, run_id: integer(row.run_id), event_id: integer(row.event_id),
+    title, body_length: length, report_sha256: hash(row.report_sha256), body_sha256: hash(row.body_sha256), job };
+}
 export function parseAssistantRequest(value: unknown, expected: string): AssistantRequest {
   const row = object(value), receipt = accepted(row, expected);
   if (!Array.isArray(row.events) || row.events.length > 200) return invalid();
@@ -95,8 +125,12 @@ export function parseAssistantRequest(value: unknown, expected: string): Assista
       : receipt.status === 'blocked' && row.native_status === 'blocked' && notice.terminal_state === 'blocked';
     if (!match || !current) return invalid();
   }
-  return { ...receipt, native_status: row.native_status === null ? null : id(row.native_status), assignee: profile(row.assignee), title: text(row.title, 160), updated_at: typeof row.updated_at === 'number' ? integer(row.updated_at) : text(row.updated_at, 50), current_run_id: row.current_run_id === null ? null : integer(row.current_run_id), events, report,
+  const request: AssistantRequest = { ...receipt, native_status: row.native_status === null ? null : id(row.native_status), assignee: profile(row.assignee), title: text(row.title, 160), updated_at: typeof row.updated_at === 'number' ? integer(row.updated_at) : text(row.updated_at, 50), current_run_id: row.current_run_id === null ? null : integer(row.current_run_id), events, report,
     error: error ? { code: id(error.code), message: text(error.message, 400) } : null };
+  if (row.content !== undefined) {
+    try { request.content = parseAssistantContent(row.content, request); } catch { /* Invalid optional links never hide the original report. */ }
+  }
+  return request;
 }
 
 type NoAdmissionCode = 'native_preflight_failed' | 'assistant_not_configured' | 'unsafe_request_body';
@@ -104,10 +138,10 @@ const noAdmissionCode = (error: unknown): NoAdmissionCode | null => {
   const code = (error as { code?: unknown })?.code;
   return code === 'native_preflight_failed' || code === 'assistant_not_configured' || code === 'unsafe_request_body' ? code : null;
 };
-type State = { draft: string; selectedAssistant: AssistantProfile; submission: AssistantSubmission | null; receipt: AssistantAccepted | null; request: AssistantRequest | null; pending: boolean; error: string | null; noAdmissionCode: NoAdmissionCode | null };
+type State = { draft: string; selectedAssistant: AssistantProfile; submission: AssistantSubmission | null; receipt: AssistantAccepted | null; request: AssistantRequest | null; pending: boolean; error: string | null; noAdmissionCode: NoAdmissionCode | null; contentPending: boolean; contentError: string | null };
 export function createAssistantRequestsController() {
-  let state: State = { draft: '', selectedAssistant: 'lumi', submission: null, receipt: null, request: null, pending: false, error: null, noAdmissionCode: null };
-  let connected = false, open = false, generation = 0, busy = false;
+  let state: State = { draft: '', selectedAssistant: 'lumi', submission: null, receipt: null, request: null, pending: false, error: null, noAdmissionCode: null, contentPending: false, contentError: null };
+  let connected = false, open = false, generation = 0, busy = false, contentGeneration = 0, contentBusy = false;
   const listeners = new Set<() => void>();
   const publish = (patch: Partial<State>) => { state = { ...state, ...patch }; listeners.forEach(fn => fn()); };
   const failure = (error: unknown) => (error as { status?: number })?.status === 503 ? '비서 연결 설정이 필요합니다. 입력은 보존했습니다. 연결 후 같은 요청의 접수 여부를 확인하세요.' : '요청의 접수 여부를 확인하지 못했습니다. 입력을 보존했으며 같은 요청 번호로 확인합니다.';
@@ -127,11 +161,16 @@ export function createAssistantRequestsController() {
       publish({ selectedAssistant: assistant });
       return true;
     },
-    setAvailability(nextConnected: boolean, nextOpen: boolean) { if (connected !== nextConnected) generation++; connected = nextConnected; open = nextOpen; },
+    setAvailability(nextConnected: boolean, nextOpen: boolean) {
+      if (connected !== nextConnected) generation++;
+      if (connected !== nextConnected || open !== nextOpen) contentGeneration++;
+      connected = nextConnected; open = nextOpen;
+    },
     restore(requestId: string) { if (!uuidPattern.test(requestId)) return invalid(); if (!state.submission && !state.draft) publish({ submission: { request_id: requestId, text: '', assignee: 'lumi' } }); },
     newRequest() {
       if (busy || (state.submission && !state.noAdmissionCode && !['blocked', 'failed', 'completed'].includes(state.request?.status || ''))) return false;
-      publish({ draft: '', selectedAssistant: 'lumi', submission: null, receipt: null, request: null, error: null, noAdmissionCode: null });
+      contentGeneration++;
+      publish({ draft: '', selectedAssistant: 'lumi', submission: null, receipt: null, request: null, error: null, noAdmissionCode: null, contentError: null });
       return true;
     },
     editRejectedRequest() {
@@ -154,11 +193,41 @@ export function createAssistantRequestsController() {
       publish({ pending: true });
       try {
         const request = parseAssistantRequest(await read(requestId), requestId);
-        if (generation === currentGeneration) publish({ request, error: null,
+        if (generation === currentGeneration) publish({ request, error: null, contentError: null,
           noAdmissionCode: request.native_status === 'not_submitted' ? noAdmissionCode(request.error) : null });
       }
       catch (error) { if (generation === currentGeneration) publish({ error: failure(error) }); }
       finally { busy = false; publish({ pending: false }); }
+    },
+    async saveContent(create: (requestId: string, body: AssistantContentSubmission) => Promise<unknown>): Promise<AssistantContent | null> {
+      const request = state.request, candidate = request?.content;
+      if (!connected || !open || contentBusy || busy || !request?.report || !candidate || candidate.job) return null;
+      const currentGeneration = contentGeneration;
+      const current = () => state.request?.request_id === request.request_id && state.request.report?.summary === request.report?.summary
+        && state.request.report?.verified === true && state.request.content?.task_id === candidate.task_id
+        && state.request.content?.run_id === candidate.run_id && state.request.content?.event_id === candidate.event_id
+        && state.request.content?.report_sha256 === candidate.report_sha256 && state.request.content?.body_sha256 === candidate.body_sha256;
+      contentBusy = true; publish({ contentPending: true, contentError: null });
+      try {
+        parseAssistantContent(candidate, request);
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(request.report.summary));
+        if ([...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('') !== candidate.report_sha256) return invalid();
+        if (!current() || contentGeneration !== currentGeneration || !connected || !open) return null;
+        const { task_id, run_id, event_id, report_sha256, body_sha256 } = candidate;
+        const saved = parseAssistantContent(await create(request.request_id, { task_id, run_id, event_id, report_sha256, body_sha256 }), request);
+        if (!saved.job || saved.report_sha256 !== report_sha256 || saved.body_sha256 !== body_sha256
+          || saved.title !== candidate.title || saved.body_length !== candidate.body_length) return invalid();
+        if (!current()) return null;
+        publish({ request: { ...state.request!, content: saved } });
+        return saved.job.state !== 'deleted' && connected && open && contentGeneration === currentGeneration ? saved : null;
+      } catch (cause) {
+        let detail = '';
+        if (cause instanceof Error && cause.name === 'OfficeApiError') {
+          try { detail = text(cause.message, 400) + ' '; } catch { /* Unsafe server details stay out of the report. */ }
+        }
+        if (current()) publish({ contentError: detail + '원고 저장 결과를 확인하지 못했습니다. 기존 보고와 입력은 보존했습니다. 같은 요청 상태를 확인해 주세요.' });
+        return null;
+      } finally { contentBusy = false; publish({ contentPending: false }); }
     },
   };
 }
