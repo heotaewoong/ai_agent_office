@@ -25,6 +25,59 @@ export function WorldView({
   onAction: (action: "draft" | "produce", itemId: string) => Promise<void>;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
+  const fullscreenButton = useRef<HTMLButtonElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [screenBusy, setScreenBusy] = useState(false);
+  const [screenNotice, setScreenNotice] = useState('');
+  const closeScreen = useCallback(() => {
+    setExpanded(false);
+    setScreenNotice('');
+    fullscreenButton.current?.focus({ preventScroll: true });
+  }, []);
+  const toggleScreen = async () => {
+    const shell = frame.current?.parentElement;
+    if (!shell || screenBusy) return;
+    setScreenBusy(true);
+    try {
+      if (expanded) {
+        if (document.fullscreenElement === shell) await document.exitFullscreen();
+        closeScreen();
+      } else {
+        setExpanded(true);
+        if (!shell.requestFullscreen) throw new Error('fullscreen unavailable');
+        await shell.requestFullscreen();
+      }
+    } catch {
+      setScreenNotice(expanded ? 'Esc로 전체화면에서 나가 주세요.' : '페이지 안에서 화면을 가득 채웠습니다. 원래 크기로 돌아갈 수 있어요.');
+    } finally {
+      setScreenBusy(false);
+      if (expanded) requestAnimationFrame(() => fullscreenButton.current?.focus({ preventScroll: true }));
+    }
+  };
+  useEffect(() => {
+    if (!expanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !document.fullscreenElement) { event.preventDefault(); closeScreen(); }
+    };
+    const exited = () => { if (!document.fullscreenElement) closeScreen(); };
+    const inner = frame.current?.contentWindow;
+    const listenInside = () => frame.current?.contentWindow?.addEventListener('keydown', escape, true);
+    window.addEventListener('keydown', escape, true);
+    document.addEventListener('fullscreenchange', exited);
+    inner?.addEventListener('keydown', escape, true);
+    const iframe = frame.current;
+    iframe?.addEventListener('load', listenInside);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', escape, true);
+      document.removeEventListener('fullscreenchange', exited);
+      inner?.removeEventListener('keydown', escape, true);
+      iframe?.contentWindow?.removeEventListener('keydown', escape, true);
+      iframe?.removeEventListener('load', listenInside);
+    };
+  }, [expanded, closeScreen]);
   const resizeFrame = (change: number) => {
     const shell = frame.current?.parentElement;
     if (shell) shell.style.height = `${Math.max(480, Math.min(1600, shell.getBoundingClientRect().height + change))}px`;
@@ -163,12 +216,13 @@ export function WorldView({
       </div>
       <AssistantReports connected={connected} loadReports={api.assistantReports} />
       <AssistantChat connected={connected} openSignal={chatSignal} requestedAssistant={chatAssistant} createRequest={api.createAssistantRequest} loadRequest={api.assistantRequest} onObservation={observeAssistant} onReportAction={openAssistantReport} onReportOpened={focusAssistantWorld} />
-      <div className="world-frame-controls" role="group" aria-label="3D 화면 높이 조절">
-        <span>화면이 짧으면 높이를 늘려 보세요.</span>
-        <button type="button" onClick={() => resizeFrame(160)}>화면 길게</button>
-        <button type="button" onClick={() => resizeFrame(-160)}>화면 짧게</button>
+      <div className={`world-frame-resizer${expanded ? ' world-frame-expanded' : ''}`}>
+      <div className="world-frame-controls" role="group" aria-label="3D 화면 크기 조절">
+        <button ref={fullscreenButton} type="button" onClick={toggleScreen} disabled={screenBusy} aria-pressed={expanded}>{expanded ? '원래 크기' : '전체화면'}</button>
+        {!expanded && <><button type="button" onClick={() => resizeFrame(160)}>화면 길게</button>
+        <button type="button" onClick={() => resizeFrame(-160)}>화면 짧게</button></>}
+        <span role="status">{screenNotice || (expanded ? 'Esc로 돌아가기' : '모서리를 끌어 높이를 조절할 수도 있어요.')}</span>
       </div>
-      <div className="world-frame-resizer">
       <iframe
         ref={frame}
         className="world-frame"

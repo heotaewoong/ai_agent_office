@@ -22,6 +22,7 @@ for (const mobile of [false, true]) test(`3D viewer height controls preserve the
   const body = frame.locator('#panel-body');
   await expect(body).toBeVisible();
   const height = await shell.evaluate(el => el.getBoundingClientRect().height);
+  expect(height).toBeGreaterThanOrEqual((mobile ? 844 : 900) - 64);
   const contentHeight = await body.evaluate(el => el.getBoundingClientRect().height);
   await page.getByRole('button', { name: '화면 길게', exact: true }).click();
   await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height)).toBe(height + 160);
@@ -29,5 +30,11 @@ for (const mobile of [false, true]) test(`3D viewer height controls preserve the
   await page.getByRole('button', { name: '화면 짧게', exact: true }).click();
   await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height)).toBe(height);
   await expect(frame.locator('#panel-close')).toBeVisible();
+  await page.getByRole('button', { name: '전체화면', exact: true }).click();
+  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(mobile ? 844 : 900);
+  await expect(frame.locator('#panel-body')).toBeVisible();
+  await page.getByRole('button', { name: '원래 크기', exact: true }).click();
+  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height)).toBe(height);
+  await expect(frame.locator('#panel-body')).toBeVisible();
   expect(writes).toEqual([]);
 });
