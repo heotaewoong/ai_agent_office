@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "profiles": ["lumi"],
+  "native_detection_sha256": "cba0adbbd592661729f7d3865f8c834d57a8b5e6fb5763539695190820a094a3",
+  "deny": [
+    "rm -r*",
+    "rm -fr*",
+    "rm --recursive*",
+    "rm * -r*",
+    "rm * -fr*",
+    "rm * --recursive*",
+    "find * -delete",
+    "find * -delete *",
+    "find * -exec rm *",
+    "find * -execdir rm *",
+    "xargs rm *",
+    "xargs * rm *",
+    "git *push -f",
+    "git *push -f *",
+    "git *push * -f",
+    "git *push * -f *",
+    "git *push --forc*",
+    "git *push * --forc*",
+    "git *push +*",
+    "git *push * +*"
+  ],
+  "native_deny_classes": [
+    "pipe remote content to shell",
+    "execute remote script via process substitution",
+    "execute remote content via command substitution",
+    "pipe remote content to PowerShell (iwr | iex)",
+    "execute remote content via Invoke-Expression",
+    "upload a secret or credential file via curl/wget (possible exfiltration)",
+    "pipe a credential file into a curl/wget upload (possible exfiltration)",
+    "cloud metadata endpoint access (instance credentials)"
+  ]
+}
