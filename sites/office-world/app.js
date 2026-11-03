@@ -4,6 +4,10 @@
   'use strict';
 
   const $ = (id) => document.getElementById(id);
+  function focusWorldAction(id) {
+    const button = $(id), tools = button?.closest('details');
+    (tools && !tools.open ? tools.querySelector('summary') : button)?.focus();
+  }
   const SYSTEM_REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let REDUCED = SYSTEM_REDUCED;
   try { REDUCED ||= localStorage.getItem('heobrain.reduced-motion.v1') === 'true'; } catch (_) { /* 세션 설정 사용 */ }
@@ -2663,7 +2667,7 @@
       }else{
         this.opened=false;space.buildingOpen=false;this.preview?.dispose();this.preview=null;controls.keys.clear();controls.dragging=false;
         document.body.classList.remove('building-view');$('build-panel').hidden=true;$('btn-build').setAttribute('aria-pressed','false');
-        controls.overview.attachControl(world.canvas,true);this.updatePreview();$('btn-build').focus();
+        controls.overview.attachControl(world.canvas,true);this.updatePreview();focusWorldAction('btn-build');
       }
     },
 
@@ -2891,7 +2895,7 @@
       document.body.classList.toggle('roster-view', space.rosterOpen);
       world.syncRendering();
       if (space.rosterOpen) { $('world-tools').open = false; $('roster-search').focus(); }
-      else $('btn-roster').focus();
+      else focusWorldAction('btn-roster');
     },
 
     focusAttention() {

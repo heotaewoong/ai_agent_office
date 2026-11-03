@@ -57,7 +57,7 @@ export function WorldView({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.fullscreenElement) { event.preventDefault(); closeScreen(); }
+      if (event.key === 'Escape' && !document.fullscreenElement) { event.preventDefault(); event.stopPropagation(); closeScreen(); }
     };
     const exited = () => { if (!document.fullscreenElement) closeScreen(); };
     const inner = frame.current?.contentWindow;
