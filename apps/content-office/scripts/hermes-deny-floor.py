@@ -41,6 +41,88 @@ def merge_deny(existing, additions):
     return list(dict.fromkeys(existing + additions))
 
 
+def dangerous_options(tokens):
+    """Inspect only rm/Git argv already bounded and tokenized from original source by native code."""
+    if not tokens:
+        return False
+    executable = tokens[0].rsplit("/", 1)[-1]
+    if executable == "rm":
+        for token in tokens[1:]:
+            if token == "--":
+                break
+            if token == "--recursive":
+                return True
+            if (token.startswith("-") and not token.startswith("--")
+                    and set(token[1:]) <= set("fiIrRdv") and set(token[1:]) & {"r", "R"}):
+                return True
+        return False
+    if executable != "git":
+        return False
+    index = 1
+    while index < len(tokens) and tokens[index].startswith("-"):
+        token = tokens[index]
+        if token in {"-C", "-c"}:
+            index += 2
+        elif token.startswith(("-C", "-c")) or token in {
+                "-p", "-P", "--paginate", "--no-pager", "--bare", "--no-replace-objects",
+                "--no-lazy-fetch", "--no-optional-locks", "--no-advice"}:
+            index += 1
+        else:
+            return False  # Unknown global grammar is outside this bounded check.
+    if index >= len(tokens) or tokens[index] != "push":
+        return False
+    index += 1
+    options = True
+    while index < len(tokens):
+        token = tokens[index]
+        if options and token == "--":
+            options = False
+        elif token.startswith("+"):
+            return True  # Positive refspecs keep their meaning after the option separator.
+        elif options and token.startswith("--"):
+            option, equals, _ = token.partition("=")
+            if option in {"--repo", "--receive-pack", "--exec", "--push-option"}:
+                index += not bool(equals)
+            elif option in {"--force", "--force-with-lease", "--force-if-includes"}:
+                return True
+        elif options and token.startswith("-"):
+            for offset, letter in enumerate(token[1:], 1):
+                if letter == "o":
+                    index += offset == len(token) - 1
+                    break  # Remaining characters, or the next argv, are the push-option value.
+                if letter == "f":
+                    return True
+                if letter not in "vqndu46":
+                    break
+        index += 1
+    return False
+
+
+def original_option_block(command, detector):
+    pending, seen = [command], set()
+    while pending:
+        source = pending.pop()
+        if source in seen:
+            continue
+        seen.add(source)
+        for start, _, word in detector._iter_shell_command_word_spans(source):
+            executable = detector._deobfuscate_shell_word_for_detection(word).rsplit("/", 1)[-1]
+            if executable not in {"rm", "git"}:
+                continue
+            segment = detector._shell_command_segment(source, start)
+            # shortcut: original redirections require argv provenance beyond this small option check.
+            if any(kind == "char" and quote is None and segment[i] in "<>"
+                   for kind, i, _, quote in detector._scan_shell(segment, comments=True)):
+                continue
+            tokens = detector._shell_segment_tokens(segment, 0)
+            if tokens and dangerous_options(tokens):
+                return True
+        for description, payload in detector._execution_flag_findings(source):
+            if description == "shell command via -c/-lc flag" and isinstance(payload, str):
+                pending.append(payload)
+    return False
+
+
 def evaluate(payload, policy, detector):
     if not isinstance(payload, dict) or payload.get("hook_event_name") != "pre_tool_call":
         return block("invalid_event")
@@ -55,6 +137,8 @@ def evaluate(payload, policy, detector):
         return block("invalid_command")
     if detector.detect_hardline_command(command)[0]:
         return block("native_hardline")
+    if original_option_block(command, detector):
+        return block("original_command_options")
     # shortcut: native text classification is bounded, not a shell sandbox. Re-test on native upgrades.
     for variant in detector._deny_command_variants(command):
         for pattern in policy["deny"]:
