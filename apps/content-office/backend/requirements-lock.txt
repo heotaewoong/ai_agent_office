@@ -25,6 +25,7 @@ pluggy==1.7.0
 pydantic==2.14.1
 pydantic_core==2.50.1
 Pygments==2.21.0
+PyYAML==6.0.3
 pytest==9.1.1
 referencing==0.37.0
 reportlab==4.5.1
