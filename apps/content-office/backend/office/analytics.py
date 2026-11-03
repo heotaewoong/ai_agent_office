@@ -9,6 +9,7 @@ import csv
 import io
 import math
 import statistics
+from copy import deepcopy
 from pathlib import Path
 
 COLUMNS = {
@@ -22,6 +23,13 @@ COLUMNS = {
 }
 
 
+def _usable_metric(value):
+    try:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 and math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def _number(value):
     value = (value or "").strip().replace(",", "").rstrip("%").strip()
     try:
@@ -29,11 +37,12 @@ def _number(value):
             seconds = 0
             for part in value.split(":"):
                 seconds = seconds * 60 + int(part)
-            return float(seconds)
-        number = float(value) if value else None
+            number = float(seconds)
+        else:
+            number = float(value) if value else None
     except (ValueError, OverflowError):
         return None
-    return number if number is None or math.isfinite(number) else None
+    return number if number is None or _usable_metric(number) else None
 
 
 def _parse_rows(reader):
@@ -58,21 +67,23 @@ def parse_studio_text(text):
 
 
 def baseline(snapshots):
-    ctr = [s["metrics"]["ctr"] for s in snapshots if s["metrics"].get("ctr") is not None]
-    avp = [s["metrics"]["avp"] for s in snapshots if s["metrics"].get("avp") is not None]
+    ctr = [s["metrics"]["ctr"] for s in snapshots if _usable_metric(s["metrics"].get("ctr"))]
+    avp = [s["metrics"]["avp"] for s in snapshots if _usable_metric(s["metrics"].get("avp"))]
     return {"ctr": statistics.median(ctr) if ctr else None, "avp": statistics.median(avp) if avp else None}
 
 
 def propose_lessons(snapshot, base):
     m, lessons = snapshot["metrics"], []
-    evidence = {"snapshot_id": snapshot["id"], "external_id": snapshot["external_id"], "period": snapshot["period"]}
-    if (m.get("ctr") is not None and m.get("avp") is not None
-            and base.get("ctr") is not None and base.get("avp") is not None
+    evidence = {"snapshot_id": snapshot["id"], "external_id": snapshot["external_id"], "period": snapshot["period"],
+                "channel": snapshot["channel"], "metrics": deepcopy(m), "baseline": deepcopy(base)}
+    if (_usable_metric(m.get("ctr")) and _usable_metric(m.get("avp"))
+            and _usable_metric(base.get("ctr")) and _usable_metric(base.get("avp"))
             and base["ctr"] > 0 and base["avp"] > 0):
         if m["ctr"] < 0.8 * base["ctr"] and m["avp"] >= base["avp"]:
             lessons.append({"kind": "packaging", "hypothesis": "본 사람은 끝까지 봤지만 클릭이 적다: 다음 기획에서 제목·썸네일 3안 비교를 강화한다", "weight_change": {"factor": "outlier", "delta": 5}, "evidence": evidence})
         if m["ctr"] >= 1.2 * base["ctr"] and m["avp"] < 0.8 * base["avp"]:
             lessons.append({"kind": "promise_mismatch", "hypothesis": "클릭은 많고 유지가 낮다: 첫 1분이 제목의 약속을 이행하는지 점검한다", "weight_change": None, "evidence": evidence})
-    if snapshot["channel"] == "shorts" and m.get("views") and m.get("engaged_views") is not None and m["engaged_views"] / m["views"] < 0.5:
+    if (snapshot["channel"] == "shorts" and _usable_metric(m.get("views")) and m["views"] > 0
+            and _usable_metric(m.get("engaged_views")) and m["engaged_views"] / m["views"] < 0.5):
         lessons.append({"kind": "hook", "hypothesis": "쇼츠 참여 조회 비율이 50% 미만: 3초 안 훅과 반복 연결을 바꾼다", "weight_change": None, "evidence": evidence})
     return lessons

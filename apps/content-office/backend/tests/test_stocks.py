@@ -371,3 +371,41 @@ def test_new_cache_and_history_writes_are_private_on_posix(tmp_path):
     stocks.refresh_quotes(state, fake_fetch({"VOO": chart(700, 710), "KRW%3DX": chart(1400, 1390, ccy="KRW")}))
     for name in ("quotes.json", "history.json"):
         assert stat.S_IMODE((state / "stocks" / name).stat().st_mode) == 0o600
+
+
+@pytest.mark.parametrize("second_high,expected", [(None, "partial"), (720.0, "current"), (1000.0, "partial_drift")])
+def test_drawdown_reports_coverage_and_never_clears_unchecked_holdings(tmp_path, monkeypatch, second_high, expected):
+    data = quality_portfolio(quote_changes={"high52": None if expected == "partial_drift" else 720.0})
+    data["holdings"].append({**data["holdings"][0], "id": "second-position", "ticker": "QQQ"})
+    data["quotes"]["quotes"]["QQQ"] = {**data["quotes"]["quotes"]["VOO"], "high52": second_high}
+    assert stocks.evaluate(data)["data_quality"]["status"] == "current"
+    before = json.dumps(data, sort_keys=True)
+    monkeypatch.setattr(stocks, "load", lambda _root: data)
+    client = TestClient(create_app(Store(tmp_path)), base_url="http://localhost:8510")
+    response = client.get("/api/space")
+    assert response.status_code == 200
+    card = by_id(response.json()["stocks"], "stocks-drawdown")
+    if expected == "current":
+        assert "보유 종목 없음" in card["title"]
+        assert card["needsHuman"] is False
+        assert "2/2" in card["stateLabel"]
+    else:
+        assert "미확인 1종목" in card["stateLabel"]
+        assert "1/2" in card["stateLabel"]
+        assert card["needsHuman"] is True
+        assert "보유 종목 없음" not in card["title"]
+        assert card["state"] == ("drift" if expected == "partial_drift" else "info")
+    assert json.dumps(data, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("quote_changes", [{"high52": None}, {"as_of": "2024-07-20", "at": "2024-07-20T05:00:00+09:00"}])
+def test_drawdown_missing_all_data_is_unknown_not_absent(tmp_path, monkeypatch, quote_changes):
+    data = quality_portfolio(quote_changes=quote_changes)
+    before = json.dumps(data, sort_keys=True)
+    monkeypatch.setattr(stocks, "load", lambda _root: data)
+    card = by_id(stocks.stocks_status(tmp_path), "stocks-drawdown")
+    assert "확인 못 함" in card["title"]
+    assert "미확인 1종목" in card["stateLabel"]
+    assert "0/1" in card["stateLabel"]
+    assert card["needsHuman"] is True
+    assert json.dumps(data, sort_keys=True) == before

@@ -618,15 +618,25 @@ def stocks_status(root):
             continue
         seen.add(r["ticker"])
         falls.append((r, round((q["price"] / q["high52"] - 1) * 100, 1)))
+    comparison_count = len({r["ticker"] or r["id"] for r in rows})
+    unchecked = comparison_count - len(falls)
+    coverage = f"52주 고점 비교 확인 {len(falls)}/{comparison_count}종목"
+    if unchecked:
+        coverage += f" · 미확인 {unchecked}종목은 하락 여부 확인 못 함"
     if falls:
         deep = [(r, f) for r, f in falls if f <= -low]
-        source = f"{falls[0][0]['quote']['source']} 52주 고가 · {falls[0][0]['quote']['as_of']} 기준"
+        source = f"{falls[0][0]['quote']['source']} 52주 고가 · {falls[0][0]['quote']['as_of']} 기준 · {coverage}"
         if deep:
             text = " · ".join(f"{r['name']} {f:.0f}%" for r, f in deep[:4])
             item("stocks-drawdown", f"52주 고점보다 {low}% 넘게 내려간 종목 {len(deep)}개: {text}",
-                 f"내 감내 범위 {low}~{high}%와 비교 · {source}", state="drift", needs=any(f <= -high for _, f in deep))
+                 f"내 감내 범위 {low}~{high}%와 비교 · {source}", state="drift", needs=bool(unchecked) or any(f <= -high for _, f in deep))
         else:
-            item("stocks-drawdown", f"52주 고점보다 {low}% 넘게 내려간 보유 종목 없음", f"내 감내 범위 {low}~{high}%와 비교 · {source}")
+            scope = "확인한 종목 중 " if unchecked else ""
+            noun = "종목" if unchecked else "보유 종목"
+            item("stocks-drawdown", f"{scope}52주 고점보다 {low}% 넘게 내려간 {noun} 없음",
+                 f"내 감내 범위 {low}~{high}%와 비교 · {source}", needs=bool(unchecked))
+    elif unchecked:
+        item("stocks-drawdown", "52주 고점 대비 하락 여부 확인 못 함", coverage, needs=True)
 
     # 7) 직전 거래일 움직임
     shown, uniq = [], set()
