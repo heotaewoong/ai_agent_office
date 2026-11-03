@@ -559,10 +559,13 @@ def project(record, data):
         summary = str(latest["summary"])
         unsafe_report = bool(UNSAFE_DISPLAY.search(summary))
         if not unsafe_report:
-            if len(summary) > 6000:
+            summary_truncated = len(summary) > 6000
+            if summary_truncated:
                 summary = summary[:5900] + "\n[화면 표시를 줄였습니다. 전체 결과는 기존 비서 업무에서 확인하세요.]"
             report = {"summary": summary, "verified": True, "task_id": task_id,
                       "run_id": latest["id"], "event_id": event["id"]}
+            if summary_truncated:
+                report["summary_truncated"] = True
     status = {"running": "running", "blocked": "blocked", "review": "blocked",
               "archived": "failed"}.get(native_status, "queued")
     error = None

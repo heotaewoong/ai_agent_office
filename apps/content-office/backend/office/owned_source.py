@@ -88,16 +88,26 @@ def preview_tistory(url):
     except Exception:raise WorkflowError('티스토리 공개 글을 가져오지 못했습니다. 원문을 직접 붙여 넣어 주세요') from None
 
 
+def owned_article_id(title,body,url=''):
+    return 'owned_'+digest({'title':title,'body':body,'url':url})[:24]
+
+
 def create_owned_job(store,title,body,url='',brief=None):
+    with store.connection(transaction=True) as db:
+        return _create_owned_job(store,db,title,body,url,brief)
+
+
+def _create_owned_job(store,db,title,body,url='',brief=None):
     # The operator supplies original text; none of its instructions are executed here.
     if brief is None:
         from .briefs import build_brief
         brief = build_brief('source-faithful', {'topic': title})
-    article={'id':'owned_'+digest({'title':title,'body':body,'url':url})[:24], 'title':title,'url':url,'summary':'사용자가 등록한 원문 · 사실 검수 전','evidence':[],'published_at':None,'operator_source_text':body,'preserve_original':True,'source_kind':'owner_supplied','evidence_source_kind':'operator_supplied_text_pending_extraction'}
-    job=store.create_job(article,brief)
+    article={'id':owned_article_id(title,body,url), 'title':title,'url':url,'summary':'사용자가 등록한 원문 · 사실 검수 전','evidence':[],'published_at':None,'operator_source_text':body,'preserve_original':True,'source_kind':'owner_supplied','evidence_source_kind':'operator_supplied_text_pending_extraction'}
+    job=store._create_job(db,article,brief)
     if digest(job.get('brief')) != digest(store._validated_brief(brief)):
         raise WorkflowError('같은 원문의 기존 작업에 다른 주제 설정이 있습니다. 작업실에서 현재 주제·독자를 확인하고 수정하세요')
     if job.get('source_hash') is None:
-        store.update_job(job['id'],selections={'blog':True,'video':True,'cards':True,'pdf':False})
-        job=store.register_source_input(job['id'],body,None,preserve_original=True)
+        job['selections']={'blog':True,'video':True,'cards':True,'pdf':False}
+        store._write_job(db,job)
+        job=store._register_source_input(db,job['id'],body,None,preserve_original=True)
     return job

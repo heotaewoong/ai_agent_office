@@ -130,6 +130,8 @@ export const api = {
   assistantReports: () => request<unknown>("/assistant/reports"),
   createAssistantRequest: (body: import('./assistant-requests').AssistantSubmission) => request<unknown>('/assistant/requests', 'POST', body),
   assistantRequest: (id: string) => request<unknown>(`/assistant/requests/${encodeURIComponent(id)}`),
+  saveAssistantContentJob: async (id: string, body: import('./assistant-requests').AssistantContentSubmission) =>
+    (await request<{content: unknown}>(`/assistant/requests/${encodeURIComponent(id)}/content-job`, 'POST', body)).content,
   thumbnailStudio:(id:string)=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio`),
   generateThumbnails:(id:string,body:{source_hash:string;revision:string;confirm_paid:boolean;edit_id?:string;instruction?:string})=>request(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/generate`,"POST",body),
   chooseStudioThumbnail:(id:string,candidate_id:string,revision:string,finalize:boolean,format:"landscape"|"shorts"="landscape")=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/choose`,"POST",{candidate_id,revision,finalize,format}),
