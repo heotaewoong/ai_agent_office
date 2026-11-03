@@ -576,11 +576,6 @@ a { color: var(--accent); }
   .world-status { display:none; }
 }
 
-/* Leave the body room to scroll; the top-left grip resizes away from this fixed corner. */
-.panel:not([hidden]) { top:calc(var(--world-header-bottom) + 12px);bottom:12px;max-height:calc(100dvh - var(--world-header-bottom) - 24px); }
-.panel-head,.panel-foot { flex-shrink:0; }
-.panel-body { flex:1 1 auto; }
-.panel.user-sized { top:auto;left:auto;right:max(16px,env(safe-area-inset-right,0px));bottom:12px;width:var(--panel-width);height:var(--panel-height);max-width:calc(100vw - 32px);max-height:calc(100dvh - var(--world-header-bottom) - 24px); }
 /* Keep camera recovery visible; occasional tools stay in one disclosure. */
 .topbar { flex-wrap: wrap; }
 .topbar > .view-switch { flex: 0 0 auto; margin-left: auto; }
@@ -605,3 +600,8 @@ button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); 
 
 .meadow-layer .rooms-menu { display: none; }
 .roster-view .view-switch, .building-view .view-switch, .results-view .view-switch { display: flex !important; }
+/* Leave the body room to scroll; the top-left grip resizes away from this fixed corner. */
+.panel:not([hidden]) { top:calc(var(--world-header-bottom) + 12px);bottom:12px;max-height:calc(100dvh - var(--world-header-bottom) - 24px); }
+.panel-head,.panel-foot { flex-shrink:0; }
+.panel-body { flex:1 1 auto; }
+.panel.user-sized { top:auto;left:auto;right:max(16px,env(safe-area-inset-right,0px));bottom:12px;width:var(--panel-width);height:var(--panel-height);max-width:calc(100vw - 32px);max-height:calc(100dvh - var(--world-header-bottom) - 24px); }
