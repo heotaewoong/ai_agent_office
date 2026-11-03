@@ -97,3 +97,51 @@ def test_zero_observation_can_propose_a_review_against_positive_baselines(metric
 def test_missing_or_zero_baselines_do_not_make_relative_performance_claims(base):
     snapshot = {"id": "zero-baseline", "external_id": "zero-video", "period": "7d", "channel": "youtube_long", "metrics": {"ctr": 0, "avp": 0}}
     assert propose_lessons(snapshot, base) == []
+
+
+def test_approved_lesson_keeps_original_observation_when_snapshot_is_replaced(store):
+    original = {"ctr": 0, "avp": 55}
+    comparison = {"ctr": 5, "avp": 40}
+    snapshot = store.save_snapshot("youtube_long", "vid-a", "7d", original)
+    lesson = store.add_lesson(propose_lessons(snapshot, comparison)[0])
+    reviewed = store.review_lesson(lesson["id"], "approved", "local-operator")
+    updated = store.save_snapshot("youtube_long", "vid-a", "7d", {"ctr": 8, "avp": 10})
+    assert updated["id"] == snapshot["id"]
+    kept = store.lessons("approved")[0]
+    assert kept["id"] == reviewed["id"]
+    assert kept["reviewed_at"] == reviewed["reviewed_at"]
+    assert kept["evidence"]["metrics"] == original
+    assert kept["evidence"]["baseline"] == comparison
+    assert kept["evidence"]["channel"] == "youtube_long"
+    assert kept["state"] == "approved"
+
+
+def test_lesson_evidence_does_not_alias_caller_metric_or_baseline_objects():
+    snapshot = {"id": "snap-source", "external_id": "vid-a", "period": "7d", "channel": "youtube_long",
+                "metrics": {"ctr": 0, "avp": 55}}
+    comparison = {"ctr": 5, "avp": 40}
+    lesson = propose_lessons(snapshot, comparison)[0]
+    snapshot["metrics"]["ctr"] = 8
+    comparison["avp"] = 99
+    assert lesson["evidence"]["metrics"] == {"ctr": 0, "avp": 55}
+    assert lesson["evidence"]["baseline"] == {"ctr": 5, "avp": 40}
+
+
+@pytest.mark.parametrize("metrics", [{"views": 100, "engaged_views": -1}, {"views": -100, "engaged_views": 1},
+                                     {"ctr": -1, "avp": 55}, {"ctr": 8, "avp": -1}])
+def test_impossible_negative_observations_cannot_generate_lessons(metrics):
+    snapshot = {"id": "snap-source", "external_id": "vid-a", "period": "7d", "channel": "shorts", "metrics": metrics}
+    assert propose_lessons(snapshot, {"ctr": 5, "avp": 40}) == []
+
+
+def test_negative_baselines_are_missing_while_observed_zero_remains_valid():
+    snapshots = [{"metrics": {"ctr": -1, "avp": -10}}, {"metrics": {"ctr": 5, "avp": 40}},
+                 {"metrics": {"ctr": 0, "avp": 0}}]
+    assert baseline(snapshots) == {"ctr": 2.5, "avp": 20}
+
+
+def test_negative_csv_counts_are_missing_without_erasing_zero():
+    from office.analytics import parse_studio_text
+    rows = parse_studio_text("Content,Views,Engaged views\nvid-a,100,-1\nvid-b,0,0\n")
+    assert rows[0]["engaged_views"] is None
+    assert rows[1]["views"] == 0 and rows[1]["engaged_views"] == 0
