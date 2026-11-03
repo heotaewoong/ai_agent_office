@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
-for (const mobile of [false, true]) test(`3D viewer height controls preserve the panel and do not write data (${mobile ? 'mobile' : 'PC'})`, async ({ page }) => {
+for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel, fullscreen chat and drafts without writes (${mobile ? 'mobile' : 'PC'})`, async ({ page }) => {
   // This loads the full Babylon world on software-rendered CI, beyond the UI-only default.
   test.setTimeout(90_000);
+  // Use the real supported low-quality mode on runners without a physical GPU.
+  await page.addInitScript(() => localStorage.setItem('heobrain.world-quality.v1', 'low'));
   await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 });
   const writes: string[] = [];
   const space = JSON.parse(readFileSync(new URL('../../../../../sites/office-world/data/space.json', import.meta.url), 'utf8'));
@@ -30,14 +32,14 @@ for (const mobile of [false, true]) test(`3D viewer height controls preserve the
   expect(height).toBeGreaterThanOrEqual((mobile ? 844 : 900) - 64);
   const contentHeight = await body.evaluate(el => el.getBoundingClientRect().height);
   await page.getByRole('button', { name: '화면 길게', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height)).toBe(height + 160);
+  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height + 160);
   // Wrapped headers reserve different space at each width; usable body space must still grow.
-  await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThan(contentHeight);
+  await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBeGreaterThan(contentHeight);
   await page.getByRole('button', { name: '화면 짧게', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height)).toBe(height);
+  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
   await expect(frame.locator('#panel-close')).toBeVisible();
   await page.getByRole('button', { name: '전체화면', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().height))).toBe(mobile ? 844 : 900);
+  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().height)), { timeout: 15_000 }).toBe(mobile ? 844 : 900);
   await expect(frame.locator('#panel-body')).toBeVisible();
   // Exercise the real modal above the Fullscreen top layer, preserving unsent input.
   await frame.locator('body').evaluate(() => parent.postMessage({ source: 'office-world', type: 'assistant-open', assistant: 'ada' }, location.origin));
@@ -47,7 +49,7 @@ for (const mobile of [false, true]) test(`3D viewer height controls preserve the
   await dialog.getByRole('textbox').fill('전체화면 대화 입력 보존 확인');
   await dialog.getByRole('button', { name: '닫기', exact: true }).click();
   await page.getByRole('button', { name: '원래 크기', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height)).toBe(height);
+  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
   await expect(frame.locator('#panel-body')).toBeVisible();
   await page.getByRole('button', { name: '루미와 대화하기', exact: true }).click();
   await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('전체화면 대화 입력 보존 확인');
