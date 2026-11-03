@@ -1,4 +1,5 @@
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -115,6 +116,25 @@ else:
         self.config.rename(original)
         self.config.symlink_to(original)
         self.assertNotEqual(self.run_cli('current-state').returncode, 0)
+
+    def test_fifo_config_is_rejected_without_waiting_for_a_writer(self):
+        self.config.unlink()
+        os.mkfifo(self.config, 0o600)
+        try:
+            result = subprocess.run([sys.executable, '-I', '-B', str(SCRIPT), '--config', str(self.config), 'current-state'], capture_output=True, text=True, timeout=2)
+        except subprocess.TimeoutExpired:
+            self.fail('FIFO configuration blocked before validation')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('Traceback', result.stdout + result.stderr)
+
+    def test_fetch_document_returns_verified_full_bytes_without_printing(self):
+        spec = importlib.util.spec_from_file_location('shared_context_candidate', SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertTrue(callable(getattr(module, 'fetch_document', None)), 'verified bytes API is missing')
+        metadata, data = module.fetch_document(module.load_config(self.config), 'work-log', timeout=5)
+        self.assertEqual(metadata['name'], '작업일지.md')
+        self.assertEqual(data, self.body)
 
     def test_download_symlink_is_rejected(self):
         self.scenario['download_symlink'] = True

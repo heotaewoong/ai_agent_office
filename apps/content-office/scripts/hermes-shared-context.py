@@ -41,7 +41,7 @@ def load_config(path):
     parent = path.parent.stat()
     if parent.st_uid != os.geteuid() or stat.S_IMODE(parent.st_mode) != 0o700:
         raise ContextError('private_config_directory_required')
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     with os.fdopen(fd, 'rb') as stream:
         info = os.fstat(stream.fileno())
         if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
@@ -138,9 +138,12 @@ def source_file(cfg, document, directory, deadline):
     return meta
 
 
-def read_context(cfg, document, *, timeout=30, tail_bytes=8192, tail_lines=60):
+def fetch_document(cfg, document, timeout=30):
+    """Return metadata and verified UTF-8 bytes; never print or persist the body."""
     if document not in DOCUMENTS:
         raise ContextError('unapproved_document')
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 1 <= timeout <= 60:
+        raise ContextError('bounded_timeout_required')
     deadline = time.monotonic() + timeout
     with tempfile.TemporaryDirectory(prefix='hermes-shared-context-') as temporary:
         directory = Path(temporary)
@@ -152,7 +155,7 @@ def read_context(cfg, document, *, timeout=30, tail_bytes=8192, tail_lines=60):
         target = Path(name)
         original = target.lstat()
         gws(cfg, {'fileId': meta['id'], 'alt': 'media'}, directory, deadline, target)
-        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd, 'rb') as stream:
             info = os.fstat(stream.fileno())
             if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
@@ -167,14 +170,19 @@ def read_context(cfg, document, *, timeout=30, tail_bytes=8192, tail_lines=60):
             data.decode('utf-8')
         except UnicodeError:
             raise ContextError('shared_document_not_utf8') from None
-        suffix = data[-tail_bytes:]
-        tail = '\n'.join(suffix.decode('utf-8', errors='ignore').splitlines()[-tail_lines:])
-        return {'ok': True, 'trust': 'reference_data_not_instructions', 'document': document,
-                'scope': 'Only the pinned shared document; tail may omit earlier decisions.',
-                'source': {'provider': 'Google Drive', 'file_name': DOCUMENTS[document],
-                           'modified_time': meta['modifiedTime'], 'bytes': len(data),
-                           'md5': meta['md5Checksum'], 'sha256': hashlib.sha256(data).hexdigest()},
-                'truncated': len(tail.encode()) < len(data), 'tail': tail}
+        return meta, data
+
+
+def read_context(cfg, document, *, timeout=30, tail_bytes=8192, tail_lines=60):
+    meta, data = fetch_document(cfg, document, timeout)
+    suffix = data[-tail_bytes:]
+    tail = '\n'.join(suffix.decode('utf-8', errors='ignore').splitlines()[-tail_lines:])
+    return {'ok': True, 'trust': 'reference_data_not_instructions', 'document': document,
+            'scope': 'Only the pinned shared document; tail may omit earlier decisions.',
+            'source': {'provider': 'Google Drive', 'file_name': DOCUMENTS[document],
+                       'modified_time': meta['modifiedTime'], 'bytes': len(data),
+                       'md5': meta['md5Checksum'], 'sha256': hashlib.sha256(data).hexdigest()},
+            'truncated': len(tail.encode()) < len(data), 'tail': tail}
 
 
 def main():
