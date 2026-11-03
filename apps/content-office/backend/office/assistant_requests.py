@@ -377,8 +377,8 @@ def read_request(store, native, request_id):
         record["native_task_id"] = task_id
         record["phase"] = "admitted"
     data = native.task(record["native_task_id"])
-    if native_only:
-        _card_id(data.get("task", {}), record)
+    # Admission is not perpetual scope proof: recheck the current root and its original body.
+    _card_id(data.get("task", {}), record)
     result = project_collaboration(native, record, data)
     result["delivery"] = _delivery(native, record, result.pop("_notice_ref", None))
     return result
@@ -386,6 +386,8 @@ def read_request(store, native, request_id):
 
 def project_collaboration(native, record, root):
     root_id = record["native_task_id"]
+    if root.get("task", {}).get("tenant") != TENANT:
+        raise BridgeError("native_graph_invalid", "역할 업무의 범위를 확인할 수 없습니다", 409)
     nodes = {root_id: root}
     pending = [(child, root_id, 1, (root_id,))
                for child in root.get("links", {}).get("children", [])]
@@ -396,7 +398,8 @@ def project_collaboration(native, record, root):
         if depth > 3 or (child not in nodes and len(nodes) >= 5):
             raise BridgeError("native_graph_limit", "역할 업무의 확인 범위를 넘었습니다. 사람 검토가 필요합니다", 409)
         data = nodes.get(child) or native.task(child)
-        if data.get("task", {}).get("id") != child or parent not in data.get("links", {}).get("parents", []):
+        if (data.get("task", {}).get("id") != child or data.get("task", {}).get("tenant") != TENANT
+                or parent not in data.get("links", {}).get("parents", [])):
             raise BridgeError("native_graph_invalid", "역할 업무의 실제 인계 관계가 일치하지 않습니다", 409)
         if child in nodes:
             continue

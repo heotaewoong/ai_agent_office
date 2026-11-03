@@ -3,13 +3,14 @@ import copy
 import pytest
 
 from office.assistant_requests import BridgeError, project_collaboration
+from office.assistant_request_protocol import TENANT
 
 RID = "aa3a151d-72e8-4abf-b09d-10d416279c41"
 KEY = "office-world:" + RID
 
 
 def node(ident, suffix, actor, run_id, base_key=KEY):
-    return {"task": {"id": ident, "idempotency_key": base_key + suffix, "status": "done",
+    return {"task": {"id": ident, "idempotency_key": base_key + suffix, "status": "done", "tenant": TENANT,
                      "assignee": actor, "title": "내부 단계", "created_at": 1, "current_run_id": None},
             "runs": [{"id": run_id, "task_id": ident, "profile": actor, "status": "done",
                       "outcome": "completed", "ended_at": run_id * 10, "summary": actor + " 실행 결과"}],

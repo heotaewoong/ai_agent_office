@@ -285,3 +285,43 @@ def test_existing_original_job_with_changed_brief_is_reused_without_mutation(bri
     assert result.json()['content']['job']['source_hash'] == original_hash
     assert result.json()['content']['job']['current_source_hash'] == edited['source_hash']
     assert store.job(original['id']) == before and len(store.jobs()) == 1
+
+
+@pytest.mark.parametrize('transport', ['scoped_fixture', 'http_fallback'])
+@pytest.mark.parametrize('changed', ['root_tenant', 'missing_root_tenant', 'worker_tenant',
+                                     'reviewer_tenant', 'final_tenant', 'missing_final_tenant', 'root_body'])
+def test_stored_receipt_rechecks_current_graph_scope_before_read_or_import(bridge, monkeypatch, tmp_path, transport, changed):
+    import io
+    import json
+    from urllib.parse import urlsplit
+    from office import assistant_requests
+
+    nodes = complete(bridge)
+    if changed == 'root_body':
+        nodes['t_fixture']['task']['body'] += '\nchanged after admission'
+    else:
+        ident = {'root': 't_fixture', 'worker': 't_work', 'reviewer': 't_verify', 'final': 't_final'}[
+            changed.removeprefix('missing_').split('_', 1)[0]]
+        if changed.startswith('missing_'):
+            nodes[ident]['task'].pop('tenant', None)
+        else:
+            nodes[ident]['task']['tenant'] = 'different-tenant'
+    if transport == 'http_fallback':
+        # Exercise the supported HTTP adapter, which does not have the Unix relay's scope filter.
+        token = tmp_path / 'synthetic-native-token'
+        token.write_text('A' * 40, encoding='utf-8')
+        token.chmod(0o600)
+        class Opener:
+            def open(self, request, timeout):
+                ident = urlsplit(request.full_url).path.rsplit('/', 1)[-1]
+                return io.BytesIO(json.dumps(bridge[2].task(ident)).encode())
+        monkeypatch.setattr(assistant_requests, 'build_opener', lambda *_: Opener())
+        monkeypatch.setenv('OFFICE_HERMES_BASE_URL', 'http://127.0.0.1:9119')
+        monkeypatch.setenv('OFFICE_HERMES_TOKEN_FILE', str(token))
+        bridge[1].state.assistant_native = None
+    before_posts = len(bridge[2].posts)
+    observed = bridge[3].get('/api/assistant/requests/' + RID)
+    assert observed.status_code == 409
+    assert connect(bridge).status_code == 409
+    assert bridge[0].jobs() == [] and bridge[0].tasks() == []
+    assert len(bridge[2].posts) == before_posts

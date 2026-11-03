@@ -29,7 +29,12 @@ class NativeFixture:
         return {"task": card}
 
     def task(self, task_id):
-        return copy.deepcopy(self.details[task_id])
+        data = copy.deepcopy(self.details[task_id])
+        # Lifecycle-only fixture updates keep the admitted root's immutable request body.
+        admitted = next((card for card in self.cards if card['id'] == task_id), None)
+        if admitted is not None:
+            data['task'].setdefault('body', admitted['body'])
+        return data
 
 
 @pytest.fixture
@@ -443,7 +448,7 @@ def test_foreign_child_link_cannot_supply_completion_evidence(bridge):
     rid = str(uuid.uuid4())
     assert submit(bridge, rid).status_code == 202
     native.details["t_fixture"]["links"] = {"parents": [], "children": ["t_foreign"]}
-    native.details["t_foreign"] = {"task": {"id": "t_foreign", "status": "done"},
+    native.details["t_foreign"] = {"task": {"id": "t_foreign", "status": "done", "tenant": native.cards[0]['tenant']},
                                      "links": {"parents": ["t_unrelated"], "children": []}}
     response = client.get("/api/assistant/requests/" + rid)
     assert response.status_code == 409
@@ -458,7 +463,7 @@ def test_native_dependency_reads_have_depth_and_total_caps(bridge):
     for index in range(5):
         task_id = f"t_depth{index}"
         native.details[previous].setdefault("links", {})["children"] = [task_id]
-        native.details[task_id] = {"task": {"id": task_id, "status": "ready"},
+        native.details[task_id] = {"task": {"id": task_id, "status": "ready", "tenant": native.cards[0]['tenant']},
                                    "links": {"parents": [previous], "children": []}}
         previous = task_id
     calls = []
@@ -475,7 +480,7 @@ def test_native_dependency_reads_have_depth_and_total_caps(bridge):
     root = native.details["t_fixture"]
     root["links"] = {"parents": [], "children": [f"t_wide{index}" for index in range(12)]}
     for task_id in root["links"]["children"]:
-        native.details[task_id] = {"task": {"id": task_id, "status": "ready"},
+        native.details[task_id] = {"task": {"id": task_id, "status": "ready", "tenant": native.cards[0]['tenant']},
                                   "links": {"parents": ["t_fixture"], "children": []}}
     response = client.get("/api/assistant/requests/" + rid)
     assert response.status_code == 409
