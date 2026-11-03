@@ -200,7 +200,21 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
-  const [showAll, setShowAll] = useState(false);
+  const [articleLimit, setArticleLimit] = useState(9);
+  const newsGrid = useRef<HTMLDivElement>(null);
+  const newsFocusIndex = useRef<number | null>(null);
+  const showNews = (limit: number, focusIndex: number) => {
+    newsFocusIndex.current = focusIndex;
+    setArticleLimit(limit);
+  };
+  useEffect(() => {
+    const index = newsFocusIndex.current;
+    if (index === null) return;
+    newsFocusIndex.current = null;
+    const target = index < 0 ? document.getElementById('news-heading') : newsGrid.current?.children[index] as HTMLElement | undefined;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+  }, [articleLimit]);
   const [jobQuery, setJobQuery] = useState("");
   const [jobStateFilter, setJobStateFilter] = useState("all");
   const [jobOutputFilter, setJobOutputFilter] = useState("all");
@@ -709,27 +723,28 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
                   </section>
+                  <div className="news-workflow">
                   <section
                     className="news-section"
                     aria-labelledby="news-heading"
                   >
                     <div className="section-heading">
                       <div className="section-title">
-                        <h2 id="news-heading">오늘 주목할 뉴스</h2>
+                        <h2 id="news-heading" tabIndex={-1}>오늘 주목할 뉴스</h2>
                         <span className="count-pill">{visibleArticles.length}</span>
                       </div>
                       <span className="section-meta">
                         최대 3개 선택 · 점수는 편집 기준
                       </span>
                     </div>
-                    <div className="news-toolbar"><nav className="news-segments" aria-label="뉴스 분류">{newsSegments.map(item => <Link key={item.id} href={newsHref(item.id, articleSort)} scroll={false} prefetch={false} aria-current={segment === item.id ? "page" : undefined} onClick={() => setShowAll(false)}>{item.label} <span>{filterNews(articles, item.id).length}</span></Link>)}</nav><label className="news-order">정렬<select aria-label="뉴스 정렬" value={articleSort} onChange={event => { setShowAll(false); router.push(newsHref(segment, newsSort(event.target.value)), { scroll: false }); }}>{newsSorts.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label></div>
+                    <div className="news-toolbar"><nav className="news-segments" aria-label="뉴스 분류">{newsSegments.map(item => <Link key={item.id} href={newsHref(item.id, articleSort)} scroll={false} prefetch={false} aria-current={segment === item.id ? "page" : undefined} onClick={() => setArticleLimit(9)}>{item.label} <span>{filterNews(articles, item.id).length}</span></Link>)}</nav><label className="news-order">정렬<select aria-label="뉴스 정렬" value={articleSort} onChange={event => { setArticleLimit(9); router.push(newsHref(segment, newsSort(event.target.value)), { scroll: false }); }}>{newsSorts.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label></div>
                     <p className="news-scope">최근 7일의 선정 후보 · 분류별 전체 후보 수이며 오늘 새 기사 수가 아닙니다. 분류를 바꿔도 선택한 기사 {selected.length}건은 유지됩니다.{draftable.hidden > 0 ? ` 원문을 자동으로 열 수 없는 기사 ${draftable.hidden}건(구글 뉴스 중계·영상·접근 차단)은 원고를 만들 수 없어 목록에서 뺐어요.` : ""}</p>
                     {dashboard.feed_report?.partial_failure && <p className="notice" role="status">일부 출처 수집에 실패했어요. 보이는 기사는 보존했습니다. 운영 기록에서 출처별 결과를 확인하세요.</p>}
                     {visibleArticles.length === 0 ? (
                       <Empty title={emptyNews.title}>{emptyNews.text} <Link href={emptyNews.kind === "failure" ? "/runs" : "/plans"}>{emptyNews.kind === "failure" ? "운영 기록 확인" : "기획·독자 질문 열기"}</Link></Empty>
                     ) : (
-                      <div className="article-grid">
-                        {(showAll ? visibleArticles : visibleArticles.slice(0, 6)).map(
+                      <div className="article-grid" ref={newsGrid} id="news-candidates">
+                        {visibleArticles.slice(0, articleLimit).map(
                           (article) => (
                             <ArticleCard
                               key={article.id}
@@ -751,19 +766,16 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         )}
                       </div>
                     )}
-                    {visibleArticles.length > 6 && (
-                      <button
-                        className="show-more"
-                        onClick={() => setShowAll(!showAll)}
-                      >
-                        {showAll
-                          ? "주요 뉴스만 보기"
-                          : `후보 ${visibleArticles.length - 6}건 더 살펴보기`}
-                        <Icon name="chevron" size={16} />
-                      </button>
-                    )}
+                    <div className="news-browse-actions" role="group" aria-label="뉴스 후보 더 보기">
+                      <p role="status">후보 {visibleArticles.length}건 중 {Math.min(articleLimit, visibleArticles.length)}건 표시</p>
+                      {articleLimit < visibleArticles.length && <>
+                        <button type="button" className="button secondary" aria-controls="news-candidates" onClick={() => showNews(articleLimit + 9, articleLimit)}>후보 {Math.min(9, visibleArticles.length - articleLimit)}건 더 살펴보기<Icon name="chevron" size={16} /></button>
+                        <button type="button" className="inline-button" aria-controls="news-candidates" onClick={() => showNews(visibleArticles.length, articleLimit)}>남은 {visibleArticles.length - articleLimit}건 모두 보기</button>
+                      </>}
+                      {articleLimit > 9 && <button type="button" className="inline-button" aria-controls="news-candidates" onClick={() => showNews(9, -1)}>주요 뉴스 9건만 보기</button>}
+                    </div>
                   </section>
-                  <div className="selection-bar">
+                  <section className="selection-bar news-selection-dock" aria-label="뉴스 선택과 작업 만들기">
                     <div>
                       <span className="selection-icon">
                         <Icon name="check" size={18} />
@@ -790,6 +802,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       {autoDraftNews && requestBlockedReason ? `작업 시간 ${NEWS_WINDOW_MINUTES}분 열고 작업 만들기` : "콘텐츠 작업 만들기"}
                       <Icon name="arrow" size={18} />
                     </button>
+                  </section>
                   </div>
                   <BudgetStrip budget={dashboard.budget} />
                 </>
@@ -1047,7 +1060,7 @@ function ArticleCard({
   const headline = article.editorial_title || card?.headline || article.title;
   const issues = card?.check?.issues ?? [];
   return (
-    <article className={`article-card ${checked ? "selected" : ""}`}>
+    <article tabIndex={-1} className={`article-card ${checked ? "selected" : ""}`}>
       <div className="card-top">
         <span className="article-source">
           <span className="source-letter source-0">

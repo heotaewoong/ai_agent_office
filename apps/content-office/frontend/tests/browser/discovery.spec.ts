@@ -25,6 +25,30 @@ async function researchHarness(page: Page, articles: Record<string, unknown>[] =
   return writes;
 }
 
+for(const width of [1440,390])test(`뉴스 후보를 9건씩 늘려도 선택과 작업 버튼에 바로 접근한다 ${width}px`,async({page})=>{
+ const rows=Array.from({length:31},(_,i)=>({id:'browse-'+i,title:`뉴스 후보 ${String(i+1).padStart(2,'0')}`,summary:'공식 원문 설명입니다. '.repeat(12),url:`https://example.org/news/${i}`,feed_name:'공식 피드',published_at:new Date().toISOString(),segment:'ai',source_readable:true,score:100-i,score_reasons:['공식 출처']}));
+ const writes=await researchHarness(page,rows);
+ await page.setViewportSize({width,height:900});await page.goto('/news?seg=ai');
+ const cards=page.locator('.article-grid .article-card');await expect(cards).toHaveCount(9);
+ await page.getByRole('button',{name:'후보 9건 더 살펴보기',exact:true}).focus();await page.keyboard.press('Enter');await expect(cards).toHaveCount(18);await expect(cards.nth(9)).toBeFocused();
+ await page.getByRole('checkbox',{name:'뉴스 후보 10 선택',exact:true}).check();
+ const dock=page.getByRole('region',{name:'뉴스 선택과 작업 만들기'});
+ await dock.getByRole('checkbox',{name:'뉴스 원고 자동 생성'}).uncheck();
+ const create=dock.getByRole('button',{name:'콘텐츠 작업 만들기',exact:true});await expect(create).toBeEnabled();
+ await cards.nth(10).scrollIntoViewIfNeeded();
+ const box=await create.boundingBox();expect(box!.y).toBeGreaterThanOrEqual(0);expect(box!.y+box!.height).toBeLessThanOrEqual(900);
+ if(process.env.OFFICE_UI_CAPTURE_PREFIX)await page.screenshot({path:`${process.env.OFFICE_UI_CAPTURE_PREFIX}_${width}_PRIVATE.png`});
+ await page.getByRole('button',{name:/남은 13건 모두 보기/}).click();await expect(cards).toHaveCount(31);
+ await expect(dock).toContainText('1개의 뉴스를 골랐어요');await expect(dock.getByRole('checkbox',{name:'뉴스 원고 자동 생성'})).not.toBeChecked();
+ await page.getByRole('button',{name:'주요 뉴스 9건만 보기',exact:true}).click();await expect(cards).toHaveCount(9);await expect(dock).toContainText('1개의 뉴스를 골랐어요');
+ await page.getByRole('button',{name:'후보 9건 더 살펴보기',exact:true}).click();await expect(page.getByRole('checkbox',{name:'뉴스 후보 10 선택',exact:true})).toBeChecked();
+ await page.getByRole('button',{name:'후보 9건 더 살펴보기',exact:true}).click();await expect(cards).toHaveCount(27);
+ await page.getByRole('button',{name:'후보 4건 더 살펴보기',exact:true}).click();await expect(cards).toHaveCount(31);
+ await page.getByRole('navigation',{name:'뉴스 분류'}).getByRole('link',{name:/자격증/}).click();await expect(cards).toHaveCount(0);await expect(dock).toContainText('1개의 뉴스를 골랐어요');
+ await page.getByRole('navigation',{name:'뉴스 분류'}).getByRole('link',{name:/AI·자동화/}).click();await expect(cards).toHaveCount(9);
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(writes).toEqual([]);
+});
+
 test('게시 대상 저장은 조사만 요청하고 시간·원고·승인을 쓰지 않는다',async({page})=>{
   const writes=await researchHarness(page);
   await page.setViewportSize({width:390,height:844});await page.goto('/news?seg=ai');
