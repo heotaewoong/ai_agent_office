@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 
 for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel, fullscreen chat and drafts without writes (${mobile ? 'mobile' : 'PC'})`, async ({ page }) => {
   // This loads the full Babylon world on software-rendered CI, beyond the UI-only default.
-  test.setTimeout(90_000);
+  test.setTimeout(240_000);
   // Use the real supported low-quality mode on runners without a physical GPU.
   await page.addInitScript(() => localStorage.setItem('heobrain.world-quality.v1', 'low'));
   await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 });
