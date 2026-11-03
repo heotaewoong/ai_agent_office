@@ -1,5 +1,6 @@
 import json
 import time
+from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -7,6 +8,11 @@ from fastapi.testclient import TestClient
 from office import stocks
 from office.api import create_app
 from office.store import Store
+
+
+@pytest.fixture(autouse=True)
+def fixed_clock(monkeypatch):
+    monkeypatch.setattr(stocks, "_now", lambda: datetime.fromisoformat("2026-11-03T09:00:00+09:00"))
 
 TARGETS = [{"type": "core", "label": "코어 지수", "target_pct": 50}, {"type": "dividend", "label": "배당·안전", "target_pct": 10},
            {"type": "sector", "label": "섹터·테마", "target_pct": 15}, {"type": "option", "label": "옵션 인컴", "target_pct": 5},
@@ -36,10 +42,10 @@ def portfolio(tmp_path, history=None):
     return state
 
 
-def chart(price, prev, high=None, offset=0, stamp=1793390400):
+def chart(price, prev, high=None, offset=0, stamp=1793390400, ccy="USD"):
     day = 86400
     return {"chart": {"result": [{"meta": {"regularMarketPrice": price, "regularMarketTime": stamp, "gmtoffset": offset,
-                                            "currency": "USD", "fiftyTwoWeekHigh": high},
+                                            "currency": ccy, "fiftyTwoWeekHigh": high},
                                    "timestamp": [stamp - 2 * day, stamp - day, stamp],
                                    "indicators": {"quote": [{"close": [prev * 0.99, prev, price]}]}}]}}
 
@@ -117,12 +123,12 @@ def test_refresh_reprices_with_sources_dates_and_never_edits_holdings(tmp_path):
     state = portfolio(tmp_path)
     before = (state / "stocks" / "holdings.json").read_bytes()
     fetch = fake_fetch({
-        "KRW%3DX": chart(1400.0, 1390.0),
+        "KRW%3DX": chart(1400.0, 1390.0, ccy="KRW"),
         "VOO": chart(700.0, 710.0, high=720.0),
         "ETHU": chart(30.0, 33.0, high=100.0),
-        "035720.KS": chart(40_000.0, 39_000.0, high=60_000.0, offset=32400),
+        "035720.KS": chart(40_000.0, 39_000.0, high=60_000.0, offset=32400, ccy="KRW"),
         "328130.KS": OSError("wrong exchange"),
-        "328130.KQ": chart(20_000.0, 19_000.0, offset=32400),
+        "328130.KQ": chart(20_000.0, 19_000.0, offset=32400, ccy="KRW"),
         "QQQ": chart(600.0, 606.0), "SCHD": chart(30.0, 29.7), "ETH-USD": chart(4000.0, 3900.0), "BTC-USD": chart(100_000.0, 99_000.0),
     })
     record = stocks.refresh_quotes(state, fetch)
@@ -183,3 +189,185 @@ def test_refresh_api_without_portfolio_is_a_clear_conflict(tmp_path):
     response = client.post("/api/stocks/refresh", headers={"Origin": "http://localhost:3110", "X-Office-CSRF": token})
     assert response.status_code == 409 and "포트폴리오" in response.json()["detail"]
     assert client.get("/api/space").json()["stocks"]["configured"] is False
+
+
+def quality_portfolio(*, quote_changes=None, fx_changes=None):
+    quote = {"price": 700.0, "ccy": "USD", "as_of": "2026-11-02", "at": "2026-11-03T06:00:00+09:00",
+             "source": "synthetic public quote", "change_pct": -1.0, "high52": 720.0}
+    fx = {"rate": 1400.0, "ccy": "KRW", "as_of": "2026-11-03T06:00:00+09:00", "source": "synthetic FX"}
+    return {"holdings": [HOLDINGS[0]], "targets": TARGETS, "history": [{"date": "2026-10-09", "fx": 1300}],
+            "meta": {"holdings_date": "2026-10-09"}, "settings": dict(stocks.DEFAULT_SETTINGS),
+            "quotes": {"status": "done", "refreshed_at": "2026-11-03T08:29:34+09:00",
+                       "fx": {**fx, **(fx_changes or {})}, "quotes": {"VOO": {**quote, **(quote_changes or {})}}, "failed": []}}
+
+
+@pytest.mark.parametrize("changes, reason", [
+    ({"as_of": "2024-07-20", "at": "2024-07-20T05:00:00+09:00"}, "stale"),
+    ({"at": "2026-11-03T09:03:00+09:00"}, "future"),
+    ({"at": None}, "timestamp_missing"),
+    ({"at": "2026-11-03T06:00:00"}, "timestamp_invalid"),
+    ({"as_of": None}, "date_invalid"),
+    ({"as_of": "2026-11-04"}, "future"),
+    ({"as_of": "2026-10-01"}, "date_mismatch"),
+    ({"ccy": "KRW"}, "currency_mismatch"),
+    ({"ccy": ""}, "currency_mismatch"),
+    ({"price": 0}, "price_invalid"),
+    ({"price": float("nan")}, "price_invalid"),
+    ({"price": "700"}, "price_invalid"),
+    ({"source": ""}, "source_missing"),
+])
+def test_untrusted_quote_keeps_file_value_and_reports_reason(changes, reason):
+    data = quality_portfolio(quote_changes=changes)
+    before = json.dumps(data, sort_keys=True)
+    view = stocks.evaluate(data)
+    assert view["rows"][0]["basis"] == "file"
+    assert view["rows"][0]["value_krw"] == 1_000_000
+    assert reason in view["rows"][0]["valuation_reasons"]
+    assert view["data_quality"]["status"] == "invalid"
+    assert view["data_quality"]["current_count"] == 0
+    assert json.dumps(data, sort_keys=True) == before
+
+
+def test_fresh_quote_uses_cross_day_us_date_and_exact_fx_without_mutation():
+    data = quality_portfolio()
+    before = json.dumps(data, sort_keys=True)
+    view = stocks.evaluate(data)
+    assert view["rows"][0]["value_krw"] == 980_000
+    assert view["data_quality"]["status"] == "current"
+    assert view["data_quality"]["current_count"] == 1
+    assert view["data_quality"]["fallback_count"] == 0
+    assert view["rows"][0]["quote_quality"]["as_of"] == "2026-11-02"
+    assert view["rows"][0]["quote_quality"]["available_at"] == "2026-11-03T08:29:34+09:00"
+    assert json.dumps(data, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("changes, reason", [
+    ({"as_of": "2024-07-20T05:00:00+09:00"}, "fx_stale"),
+    ({"as_of": "2026-11-03T09:03:00+09:00"}, "fx_future"),
+    ({"as_of": None}, "fx_timestamp_missing"),
+    ({"ccy": "USD"}, "fx_currency_mismatch"),
+    ({"ccy": None}, "fx_currency_mismatch"),
+    ({"rate": -1400}, "fx_price_invalid"),
+])
+def test_invalid_fx_never_reprices_us_holding(changes, reason):
+    view = stocks.evaluate(quality_portfolio(fx_changes=changes))
+    assert view["total_krw"] == 1_000_000
+    assert view["rows"][0]["basis"] == "file"
+    assert reason in view["rows"][0]["valuation_reasons"]
+
+
+def test_weekend_quote_within_seven_day_policy_is_usable():
+    data = quality_portfolio(quote_changes={"as_of": "2026-10-30", "at": "2026-10-31T05:00:00+09:00"})
+    assert stocks.evaluate(data)["data_quality"]["status"] == "current"
+
+
+def test_clock_skew_allows_two_minutes_but_not_three():
+    data = quality_portfolio(quote_changes={"as_of": "2026-11-03", "at": "2026-11-03T09:02:00+09:00"})
+    data["quotes"]["refreshed_at"] = "2026-11-03T09:00:00+09:00"
+    assert stocks.evaluate(data)["rows"][0]["basis"] == "quote"
+
+
+def test_two_minute_clock_skew_also_allows_crossing_midnight(monkeypatch):
+    monkeypatch.setattr(stocks, "_now", lambda: datetime.fromisoformat("2026-11-03T23:59:00+09:00"))
+    data = quality_portfolio(quote_changes={"as_of": "2026-11-04", "at": "2026-11-04T00:00:00+09:00"})
+    data["quotes"]["refreshed_at"] = "2026-11-03T23:59:00+09:00"
+    assert stocks.evaluate(data)["rows"][0]["basis"] == "quote"
+
+
+@pytest.mark.parametrize("available_at, reason", [
+    (None, "availability_missing"),
+    ("not-a-time", "availability_invalid"),
+    ("2026-11-03T08:29:34", "availability_invalid"),
+    ("2026-11-04T08:29:34+09:00", "availability_future"),
+    ("2026-11-03T05:00:00+09:00", "availability_before_quote"),
+])
+def test_contradictory_or_unverifiable_availability_never_claims_current(available_at, reason):
+    data = quality_portfolio()
+    data["quotes"]["refreshed_at"] = available_at
+    before = json.dumps(data, sort_keys=True)
+    view = stocks.evaluate(data)
+    assert view["rows"][0]["basis"] == "file"
+    assert reason in view["rows"][0]["valuation_reasons"]
+    assert "fx_" + reason in view["rows"][0]["valuation_reasons"]
+    assert view["data_quality"]["status"] == "invalid"
+    assert json.dumps(data, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("stamp, basis", [("2026-10-27T09:00:00+09:00", "quote"), ("2026-10-27T08:59:59+09:00", "file")])
+def test_seven_day_age_boundary_is_not_silently_extended(stamp, basis):
+    data = quality_portfolio(quote_changes={"as_of": "2026-10-27", "at": stamp})
+    assert stocks.evaluate(data)["rows"][0]["basis"] == basis
+
+
+def test_mixed_total_and_monthly_plan_are_explicit_estimates_and_gets_preserve_files(tmp_path):
+    state = portfolio(tmp_path)
+    data = quality_portfolio()
+    data["quotes"]["quotes"]["ETHU"] = {**data["quotes"]["quotes"]["VOO"], "as_of": "2024-07-20", "at": "2024-07-20T05:00:00+09:00"}
+    (state / "stocks" / "quotes.json").write_text(json.dumps(data["quotes"]), encoding="utf-8")
+    before = {p.name: p.read_bytes() for p in (state / "stocks").glob("*.json")}
+    detail = stocks.stocks_detail(state)
+    assert detail["data_quality"]["status"] == "partial"
+    assert detail["data_quality"]["current_count"] == 1
+    assert detail["data_quality"]["fallback_count"] == 4
+    assert detail["total_krw"] == 1_980_000
+    status = stocks.stocks_status(state)
+    summary = by_id(status, "stocks-summary")
+    assert "혼합 기준 추정" in summary["stateLabel"] and "최신 평가액 미확인" in summary["stateLabel"]
+    assert "추정" in by_id(status, "stocks-monthly")["stateLabel"]
+    quality = by_id(status, "stocks-data-quality")
+    assert "오래된 시세" in quality["stateLabel"]
+    assert "1,980,000" not in json.dumps(status, ensure_ascii=False)
+    client = TestClient(create_app(Store(state)), base_url="http://localhost:8510")
+    assert client.get("/api/stocks").json()["data_quality"]["status"] == "partial"
+    assert any(i["id"] == "stocks-data-quality" for i in client.get("/api/space").json()["stocks"]["items"])
+    assert {p.name: p.read_bytes() for p in (state / "stocks").glob("*.json")} == before
+
+
+def test_old_watchlist_quote_is_not_presented_as_current_market_summary(tmp_path):
+    state = portfolio(tmp_path)
+    data = quality_portfolio()
+    data["quotes"]["quotes"]["BTC-USD"] = {**data["quotes"]["quotes"]["VOO"], "as_of": "2024-07-20", "at": "2024-07-20T05:00:00+09:00"}
+    (state / "stocks" / "quotes.json").write_text(json.dumps(data["quotes"]), encoding="utf-8")
+    assert "비트코인" not in by_id(stocks.stocks_status(state), "stocks-market")["title"]
+
+
+def test_nontext_collection_time_is_a_warning_in_status_and_space_api(tmp_path):
+    state = portfolio(tmp_path)
+    data = quality_portfolio()
+    data["quotes"]["refreshed_at"] = 42
+    (state / "stocks" / "quotes.json").write_text(json.dumps(data["quotes"]), encoding="utf-8")
+    before = (state / "stocks" / "quotes.json").read_bytes()
+    assert "수집 시각 미확인" in by_id(stocks.stocks_status(state), "stocks-quotes")["stateLabel"]
+    client = TestClient(create_app(Store(state)), base_url="http://localhost:8510")
+    response = client.get("/api/space")
+    assert response.status_code == 200
+    assert "수집 시각 미확인" in by_id(response.json()["stocks"], "stocks-quotes")["stateLabel"]
+    assert (state / "stocks" / "quotes.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("malformed_fx", [[1], "invalid", 42, True, None])
+def test_nondict_fx_keeps_file_value_and_status_available(tmp_path, malformed_fx):
+    state = portfolio(tmp_path)
+    data = quality_portfolio()
+    data["quotes"]["fx"] = malformed_fx
+    (state / "stocks" / "quotes.json").write_text(json.dumps(data["quotes"]), encoding="utf-8")
+    before = (state / "stocks" / "quotes.json").read_bytes()
+    view = stocks.evaluate(stocks.load(state))
+    assert view["rows"][0]["basis"] == "file"
+    assert view["rows"][0]["value_krw"] == 1_000_000
+    assert "fx_missing" in view["rows"][0]["valuation_reasons"]
+    assert stocks.stocks_status(state)["configured"] is True
+    client = TestClient(create_app(Store(state)), base_url="http://localhost:8510")
+    assert client.get("/api/space").status_code == 200
+    assert (state / "stocks" / "quotes.json").read_bytes() == before
+
+
+def test_new_cache_and_history_writes_are_private_on_posix(tmp_path):
+    import os
+    import stat
+    if os.name != "posix":
+        pytest.skip("POSIX file mode is verified on Linux")
+    state = portfolio(tmp_path)
+    stocks.refresh_quotes(state, fake_fetch({"VOO": chart(700, 710), "KRW%3DX": chart(1400, 1390, ccy="KRW")}))
+    for name in ("quotes.json", "history.json"):
+        assert stat.S_IMODE((state / "stocks" / name).stat().st_mode) == 0o600
