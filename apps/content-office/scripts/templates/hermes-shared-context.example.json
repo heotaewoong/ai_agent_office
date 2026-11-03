@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "gws_command": ["/ABSOLUTE/EXISTING/node", "/ABSOLUTE/EXISTING/gws"],
+  "gws_config_dir": "/ABSOLUTE/EXISTING/lumi/gws",
+  "source_folder": {
+    "id": "REPLACE_WITH_VERIFIED_SHARED_MEMORY_FOLDER_ID",
+    "parent_id": "REPLACE_WITH_VERIFIED_OFFICE_FOLDER_ID"
+  },
+  "documents": {
+    "current-state": "REPLACE_WITH_VERIFIED_CURRENT_STATE_FILE_ID",
+    "work-log": "REPLACE_WITH_VERIFIED_WORK_LOG_FILE_ID"
+  }
+}
