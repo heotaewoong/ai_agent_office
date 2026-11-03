@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 for (const mobile of [false, true]) test(`3D viewer height controls preserve the panel and do not write data (${mobile ? 'mobile' : 'PC'})`, async ({ page }) => {
+  // This loads the full Babylon world on software-rendered CI, beyond the UI-only default.
+  test.setTimeout(90_000);
   await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 });
   const writes: string[] = [];
   const space = JSON.parse(readFileSync(new URL('../../../../../sites/office-world/data/space.json', import.meta.url), 'utf8'));
