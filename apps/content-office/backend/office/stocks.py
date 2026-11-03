@@ -24,7 +24,8 @@ import shutil
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from collections import Counter
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -45,6 +46,9 @@ QUOTE_SOURCE = "Yahoo Finance 공개 시세"
 NAVER_SOURCE = "네이버 증권 공개 시세"
 LEVERAGED = {"ETHU": 2}
 REFRESH_STALE_SECONDS = 180
+# 대시보드 신뢰 정책이며 거래소 달력이나 매매 규칙이 아니다. 긴 휴장도 보수적으로 표시한다.
+QUOTE_MAX_AGE_DAYS = 7
+QUOTE_CLOCK_SKEW_SECONDS = 120
 _LOCK = threading.Lock()
 
 
@@ -68,6 +72,7 @@ def _write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(path.name + ".tmp")
     temp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.chmod(0o600)
     os.replace(temp, path)
 
 
@@ -287,7 +292,7 @@ def refresh_quotes(root, fetch=None, workers=6):
     record = {
         "status": "done", "started_at": started.isoformat(timespec="seconds"),
         "refreshed_at": _now().isoformat(timespec="seconds"),
-        "fx": {"rate": fx["price"], "as_of": fx["at"], "source": fx["source"]} if fx else None,
+        "fx": {"rate": fx["price"], "ccy": fx["ccy"], "as_of": fx["at"], "source": fx["source"]} if fx else None,
         "quotes": quotes, "failed": failed,
     }
     _write(folder(root) / "quotes.json", record)
@@ -301,7 +306,8 @@ def _record_history(root):
     view = evaluate(portfolio)
     row = {"date": _now().date().isoformat(), "fx": view["fx"]["rate"], "total_krw": view["total_krw"],
            "cost_krw": view["cost_krw"], "pnl_krw": view["total_krw"] - view["cost_krw"],
-           **{t["type"]: t["value_krw"] for t in view["types"]}, "source": "시세 확인(앱)"}
+           **{t["type"]: t["value_krw"] for t in view["types"]}, "source": "시세 확인(앱)",
+           "data_quality": view["data_quality"]}
     history = [r for r in portfolio["history"] if r.get("date") != row["date"]] + [row]
     history.sort(key=lambda r: r["date"])
     _write(folder(root) / "history.json", history)
@@ -337,30 +343,100 @@ def start_refresh(root, fetch=None):
 
 # ---------------------------------------------------------------- 계산
 
+def _aware_stamp(value):
+    try:
+        stamp = datetime.fromisoformat(value)
+        return stamp if stamp.utcoffset() is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _quote_reasons(q, expected_ccy, now, *, available_at, fx=False):
+    """원본은 보존하고 현재 평가에 쓸 수 없는 이유만 반환한다."""
+    if not isinstance(q, dict) or not q:
+        return ["missing"]
+    reasons = []
+    raw_price = q.get("rate" if fx else "price")
+    price = _num(raw_price)
+    if not isinstance(raw_price, (int, float)) or price is None or price <= 0:
+        reasons.append("price_invalid")
+    if q.get("ccy") != expected_ccy:
+        reasons.append("currency_mismatch")
+    if not isinstance(q.get("source"), str) or not q["source"].strip():
+        reasons.append("source_missing")
+    raw_at = q.get("as_of" if fx else "at")
+    stamp = _aware_stamp(raw_at)
+    if not raw_at:
+        reasons.append("timestamp_missing")
+    elif stamp is None:
+        reasons.append("timestamp_invalid")
+    try:
+        raw_day = str(q.get("as_of") or "")
+        day = date.fromisoformat(raw_day[:10] if fx else raw_day)
+    except ValueError:
+        reasons.append("date_invalid")
+        day = None
+    if day and day > (now + timedelta(seconds=QUOTE_CLOCK_SKEW_SECONDS)).date():
+        reasons.append("future")
+    if stamp:
+        age = (now - stamp).total_seconds()
+        if age < -QUOTE_CLOCK_SKEW_SECONDS:
+            reasons.append("future")
+        if age > QUOTE_MAX_AGE_DAYS * 86400:
+            reasons.append("stale")
+        # 미국 거래일은 같은 시각의 한국 날짜보다 하루 앞설 수 있다.
+        if day and (stamp.astimezone(KST).date() - day).days not in (0, 1):
+            reasons.append("date_mismatch")
+    available = _aware_stamp(available_at)
+    if not available_at:
+        reasons.append("availability_missing")
+    elif available is None:
+        reasons.append("availability_invalid")
+    if available:
+        if (available - now).total_seconds() > QUOTE_CLOCK_SKEW_SECONDS:
+            reasons.append("availability_future")
+        if stamp and (stamp - available).total_seconds() > QUOTE_CLOCK_SKEW_SECONDS:
+            reasons.append("availability_before_quote")
+    return list(dict.fromkeys(reasons))
+
+
 def evaluate(portfolio):
     """현재 평가: 새 시세가 있으면 수량×시세(×환율), 없으면 사용자 파일의 평가금액을 그대로 쓴다."""
     holdings, quotes = portfolio["holdings"], portfolio["quotes"] or {}
     live = quotes.get("quotes") or {}
+    now = _now()
     fx_q = quotes.get("fx") or None
+    fx_q = fx_q if isinstance(fx_q, dict) else None
+    available_at = quotes.get("refreshed_at")
+    fx_reasons = _quote_reasons(fx_q, "KRW", now, available_at=available_at, fx=True)
+    valid_fx = fx_q if not fx_reasons else None
     last = portfolio["history"][-1] if portfolio["history"] else {}
-    base_fx = _num(last.get("fx")) if not fx_q else None
-    fx = {"rate": fx_q["rate"], "as_of": fx_q["as_of"], "source": fx_q["source"]} if fx_q else \
+    base_fx = _num(last.get("fx")) if not valid_fx else None
+    fx = {"rate": valid_fx["rate"], "as_of": valid_fx["as_of"], "source": valid_fx["source"]} if valid_fx else \
          {"rate": base_fx, "as_of": last.get("date"), "source": "보유 파일 기록"}
     rows = []
     for h in holdings:
         qty, cost = _num(h.get("qty")), _num(h.get("cost_krw")) or 0
         symbol = _yahoo_symbol(h)
         q = live.get(symbol) if symbol else None
+        reasons = _quote_reasons(q, "USD" if h["market"] == "US" else "KRW", now, available_at=available_at)
+        if qty is None:
+            reasons.append("quantity_missing")
+        if h["market"] == "US":
+            reasons.extend("fx_" + reason for reason in fx_reasons)
         value, basis = _num(h.get("value_krw")) or 0, "file"
-        if q and qty is not None:
-            if h.get("market") == "US" and fx_q:
-                value, basis = qty * q["price"] * fx_q["rate"], "quote"
+        if not reasons:
+            if h.get("market") == "US":
+                value, basis = qty * q["price"] * valid_fx["rate"], "quote"
             elif h.get("market") == "KR":
                 value, basis = qty * q["price"], "quote"
         rows.append({
             "id": h["id"], "name": h.get("name") or h["id"], "ticker": str(h.get("ticker") or ""), "market": h["market"],
             "account": h.get("account") or "", "type": h["type"], "value_krw": round(value), "cost_krw": round(cost),
             "basis": basis, "quote": q if basis == "quote" else None,
+            "valuation_reasons": reasons,
+            "quote_quality": {**{key: q.get(key) if isinstance(q, dict) else None for key in ("source", "as_of", "at")},
+                              "available_at": quotes.get("refreshed_at")},
             "estimated_qty": "추정" in str(h.get("qty_note") or ""),
             "file_price_date": h.get("price_date"),
         })
@@ -382,7 +458,19 @@ def evaluate(portfolio):
     ranked = sorted(groups.values(), key=lambda g: g["value_krw"], reverse=True)
     for g in ranked:
         g["pct"] = round(g["value_krw"] / total * 100, 1) if total else 0.0
+    current_count = sum(r["basis"] == "quote" for r in rows)
+    quality = {
+        "status": "current" if current_count == len(rows) else "partial" if current_count else "invalid",
+        "current_count": current_count, "fallback_count": len(rows) - current_count,
+        "reason_counts": dict(Counter(reason for r in rows for reason in r["valuation_reasons"])),
+        "available_at": quotes.get("refreshed_at"), "max_age_days": QUOTE_MAX_AGE_DAYS,
+        "clock_skew_seconds": QUOTE_CLOCK_SKEW_SECONDS,
+        "sources": sorted({r["quote_quality"]["source"] for r in rows if isinstance(r["quote_quality"]["source"], str)}),
+        "as_of_dates": sorted({r["quote_quality"]["as_of"] for r in rows if isinstance(r["quote_quality"]["as_of"], str)}),
+        "fx": {"reasons": fx_reasons, "source": (fx_q or {}).get("source"), "as_of": (fx_q or {}).get("as_of")},
+    }
     return {"rows": rows, "total_krw": total, "cost_krw": cost_total, "types": types, "ranked": ranked, "fx": fx,
+            "data_quality": quality,
             "return_pct": round((total / cost_total - 1) * 100, 1) if cost_total else None}
 
 
@@ -437,8 +525,14 @@ def stocks_status(root):
     if portfolio is None:
         return {"version": 1, "configured": False, "error": None, "items": [], "approval": "포트폴리오 파일 연결 전"}
     view = evaluate(portfolio)
+    quality = view["data_quality"]
+    quality_label = {"current": "시세 기준 추정", "partial": "혼합 기준 추정 · 최신 평가액 미확인",
+                     "invalid": "파일 기준 추정 · 최신 평가액 미확인"}[quality["status"]]
     settings = portfolio["settings"]
     quotes = portfolio["quotes"] or {}
+    refreshed_stamp = _aware_stamp(quotes.get("refreshed_at"))
+    refreshed_label = refreshed_stamp.isoformat(timespec="minutes")[5:16].replace("T", " ") \
+        if refreshed_stamp and (refreshed_stamp - _now()).total_seconds() <= QUOTE_CLOCK_SKEW_SECONDS else None
     rows = view["rows"]
     priced = [r for r in rows if r["basis"] == "quote"]
     kept = [r for r in rows if r["basis"] == "file"]
@@ -454,12 +548,25 @@ def stocks_status(root):
     drift = sorted((t for t in view["types"] if abs(t["diff_pp"]) > settings["drift_pp"]), key=lambda t: -abs(t["diff_pp"]))
     summary = f"{len(rows)}종목 · 원금 대비 {_sign(ret)}%" if ret is not None else f"{len(rows)}종목 · 수익률 확인 못 함"
     summary += f" · 목표와 {settings['drift_pp']:g}%p 넘게 다른 유형 {len(drift)}개" if drift else " · 유형 비중 모두 허용 범위 안"
-    basis = f"보유 수량·원금은 {holdings_day} 내 시트 기준"
-    if priced and quotes.get("refreshed_at"):
-        basis += f" · {len(priced)}종목은 {quotes['refreshed_at'][5:16].replace('T', ' ')} 확인한 시세로 다시 계산"
+    basis = f"{quality_label} · 보유 수량·원금은 {holdings_day} 내 시트 기준"
+    if priced and refreshed_label:
+        basis += f" · {len(priced)}종목은 {refreshed_label} 확인한 시세로 다시 계산"
     else:
         basis += " · 시세는 파일에 적힌 값"
     item("stocks-summary", summary, basis)
+    reason_labels = {"missing": "시세 없음", "price_invalid": "가격 미확인", "currency_mismatch": "통화 미확인",
+                     "source_missing": "출처 미확인", "timestamp_missing": "시각 없음", "timestamp_invalid": "시각 미확인",
+                     "date_invalid": "기준일 미확인", "date_mismatch": "기준일·시각 불일치", "future": "미래 시각",
+                     "availability_missing": "수집 시각 없음", "availability_invalid": "수집 시각 미확인",
+                     "availability_future": "미래 수집 시각", "availability_before_quote": "가격·수집 시각 불일치",
+                     "stale": "오래된 시세", "quantity_missing": "수량 미확인"}
+    reason_text = " · ".join(f"{'환율 ' if reason.startswith('fx_') else ''}{reason_labels.get(reason.removeprefix('fx_'), reason)} {count}종목"
+                             for reason, count in quality["reason_counts"].items())
+    item("stocks-data-quality", f"데이터 품질: {quality_label}",
+         f"시세 적용 {quality['current_count']}종목 · 파일 값 유지 {quality['fallback_count']}종목"
+         + (f" · {reason_text}" if reason_text else "")
+         + f" · 최근 {QUOTE_MAX_AGE_DAYS}일 신뢰 정책(거래소 달력 아님)",
+         state="info" if quality["status"] == "current" else "drift", needs=quality["status"] != "current")
 
     # 2) 시세 확인 버튼(사람이 누를 때만 무료 공개 시세를 읽는다)
     if status == "running":
@@ -468,7 +575,8 @@ def stocks_status(root):
         label = "마지막 시세 확인 실패 · 이전 값 유지 · 다시 눌러 보세요"
     elif quotes.get("refreshed_at"):
         miss = len(quotes.get("failed") or [])
-        label = f"마지막 확인 {quotes['refreshed_at'][5:16].replace('T', ' ')} · {QUOTE_SOURCE}" + (f" · {miss}개 확인 못 함" if miss else "")
+        label = (f"마지막 확인 {refreshed_label} · {QUOTE_SOURCE}" if refreshed_label else "수집 시각 미확인 · 시세 새로 확인 필요") \
+            + (f" · {miss}개 확인 못 함" if miss else "")
     else:
         label = "아직 새 시세를 확인하지 않았어요 · 버튼을 누를 때만 무료 공개 시세를 읽고 비용은 없어요"
     item("stocks-quotes", "시세·환율 새로 확인", label, state="research" if status == "running" else "info",
@@ -498,7 +606,7 @@ def stocks_status(root):
     plan = monthly_plan(view["types"], view["total_krw"], settings["monthly_krw"])
     fill = " · ".join(f"{p['label']} {_won(p['krw'])}" for p in plan["fill_gap"]) or "배분할 금액 없음"
     item("stocks-monthly", f"이번 달 {_won(plan['amount_krw'])} 나누기, 부족한 유형부터: {fill}",
-         "목표 비중대로면 " + " · ".join(f"{p['label']} {_won(p['krw'])}" for p in plan["by_target"])
+         quality_label + " · 목표 비중대로면 " + " · ".join(f"{p['label']} {_won(p['krw'])}" for p in plan["by_target"])
          + f" · {settings['monthly_note']} · 종목 선택은 직접")
 
     # 6) 하락 감내 범위(52주 고점 대비)
@@ -534,8 +642,8 @@ def stocks_status(root):
     # 8) 시장 한 줄(아침 브리핑 대상)
     live = quotes.get("quotes") or {}
     market = [(name, live.get(symbol)) for symbol, name in WATCHLIST]
-    market = [(name, q) for name, q in market if q and q.get("change_pct") is not None]
-    fx = quotes.get("fx")
+    market = [(name, q) for name, q in market if not _quote_reasons(q, "USD", _now(), available_at=quotes.get("refreshed_at")) and q.get("change_pct") is not None]
+    fx = quotes.get("fx") if not quality["fx"]["reasons"] else None
     if market or fx:
         parts = [f"{name} {_sign(q['change_pct'], 2)}%" for name, q in market]
         if fx:
@@ -573,6 +681,7 @@ def stocks_detail(root):
     view = evaluate(portfolio)
     plan = monthly_plan(view["types"], view["total_krw"], portfolio["settings"]["monthly_krw"])
     return {"version": 1, "configured": True, "total_krw": view["total_krw"], "cost_krw": view["cost_krw"],
+            "data_quality": view["data_quality"],
             "return_pct": view["return_pct"], "fx": view["fx"], "types": view["types"], "top": view["ranked"][:5],
             "monthly": plan, "rows": view["rows"],
             "quotes": {k: portfolio["quotes"].get(k) for k in ("status", "refreshed_at", "failed")}}
