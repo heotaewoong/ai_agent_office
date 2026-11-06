@@ -5,15 +5,23 @@ import { useEffect, useId, useRef, useState } from "react";
 type Entry = { id: string; title: string };
 
 /** Navigation follows the rendered panels, including asynchronously loaded ones. */
-export function PageOutline({ scope, curated = false }: { scope: string; curated?: boolean }) {
+export function PageOutline({ scope, curated = false, arrivalTarget }: { scope: string; curated?: boolean; arrivalTarget?: string }) {
   const nav = useRef<HTMLElement>(null);
   const selectId = useId();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [active, setActive] = useState("");
+  const arrival = useRef<{ target?: string; following: boolean }>({ following: false });
 
   useEffect(() => {
     const root = nav.current?.closest("main");
     if (!root) return;
+    if (arrival.current.target !== arrivalTarget) {
+      // Next may apply the redirect fragment after this effect; check it when positioning.
+      arrival.current = { target: arrivalTarget, following: Boolean(arrivalTarget) };
+    }
+    const cancelArrival = () => { arrival.current.following = false; };
+    const intentEvents = arrivalTarget ? ["pointerdown", "keydown", "wheel", "touchstart"] : [];
+    for (const name of intentEvents) window.addEventListener(name, cancelArrival, { passive: true });
     let nodes: HTMLElement[] = [];
     let frame = 0;
     let sequence = 0;
@@ -21,6 +29,13 @@ export function PageOutline({ scope, curated = false }: { scope: string; curated
     const panels = new Set<HTMLElement>();
     const updatePosition = () => {
       frame = 0;
+      const focused = document.activeElement;
+      if (arrival.current.following && root.contains(focused) && focused?.matches('input, textarea, select, button, a[href], [contenteditable]:not([contenteditable="false"])')) cancelArrival();
+      if (arrival.current.following && window.location.hash === `#${arrival.current.target}`) {
+        const panel = document.getElementById(arrival.current.target!);
+        const target = panel?.querySelector<HTMLElement>("h2") ?? panel;
+        if (target && root.contains(target) && target.getClientRects().length) target.scrollIntoView({ block: "start", behavior: "instant" });
+      }
       const edge = Math.max(
         (nav.current?.getBoundingClientRect().bottom ?? 0) + 48,
         (nodes[0] ? parseFloat(getComputedStyle(nodes[0]).scrollMarginTop) || 0 : 0) + 8,
@@ -61,16 +76,19 @@ export function PageOutline({ scope, curated = false }: { scope: string; curated
     observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["hidden", "open"] });
     window.addEventListener("scroll", schedulePosition, { passive: true });
     window.addEventListener("resize", collect);
+    window.addEventListener("hashchange", schedulePosition);
     return () => {
       observer.disconnect();
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedulePosition);
       window.removeEventListener("resize", collect);
+      window.removeEventListener("hashchange", schedulePosition);
+      for (const name of intentEvents) window.removeEventListener(name, cancelArrival);
       for (const [node, id] of assigned) { if (node.id === id) node.removeAttribute("id"); }
       for (const node of nodes) node.classList.remove("outline-target");
       for (const panel of panels) panel.classList.remove("outline-panel");
     };
-  }, [scope, curated]);
+  }, [scope, curated, arrivalTarget]);
 
   function moveTo(id: string) {
     const target = document.getElementById(id);

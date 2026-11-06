@@ -28,7 +28,7 @@ function initialOverview(): BenchmarkOverview {
 }
 
 // All API calls terminate in this fixture; no external sources, accounts or operating data are used.
-async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: boolean; many?: boolean } = {}) {
+async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: boolean; many?: boolean; dashboardGate?: Promise<void> } = {}) {
   let overview = initialOverview();
   overview.items.push({ ...overview.items[0], id: 'official-fallback', source_id: '', source_name: '공식 피드', platform: 'website', title: officialArticle.title, url: officialArticle.url });
   overview.items.push({ ...overview.items[0], id: 'registered-duplicate', title: officialArticle.title, url: officialArticle.url + '#section' });
@@ -62,7 +62,10 @@ async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: 
       response = idea;
     } else if (path === '/api/benchmarks/research-packet' && method === 'POST') response = { text: preparedText, registry_hash: overview.registry_hash };
     else if (path === '/api/session') response = { csrf: 'benchmark-contract-token' };
-    else if (path === '/api/dashboard') response = { articles: [officialArticle], jobs: [], feeds: [], agents: [], events: [], tasks: [], budget: { cap_krw: 10000, spent_krw: 0, reserved_krw: 0, remaining_krw: 10000 }, window: { status: 'closed', authorized_end: '2026-10-01T00:00:00Z' }, provider: { model: 'synthetic', configured: false }, knowledge: {} };
+    else if (path === '/api/dashboard') {
+      await options.dashboardGate;
+      response = { articles: [officialArticle], jobs: [], feeds: [], agents: [], events: [], tasks: [], budget: { cap_krw: 10000, spent_krw: 0, reserved_krw: 0, remaining_krw: 10000 }, window: { status: 'closed', authorized_end: '2026-10-01T00:00:00Z' }, provider: { model: 'synthetic', configured: false }, knowledge: {} };
+    }
     else if (path === '/api/ideas') response = { ideas: overview.ideas };
     else if (path === '/api/questions') response = { questions: [], groups: [] };
     else if (path === '/api/channels') response = { channels: [] };
@@ -77,6 +80,35 @@ async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: 
   });
   return writes;
 }
+
+for (const width of [1440, 390]) test(`늦게 연결된 기획 화면도 예전 경쟁사 주소의 도착 위치를 맞춘다 ${width}px`, async ({ page }) => {
+  let release!: () => void;
+  const dashboardGate = new Promise<void>(resolve => { release = resolve; });
+  const writes = await boardHarness(page, { dashboardGate });
+  await page.setViewportSize({ width, height: 900 });
+  await page.goto('/benchmarks');
+  await expect(page).toHaveURL(/\/plans#competitors$/);
+  await expect(page.getByRole('heading', { name: '오늘의 오피스를 불러오고 있어요', exact: true })).toBeVisible();
+  release();
+  await expect(page.getByRole('heading', { name: '경쟁사 분석·기획', exact: true })).toBeInViewport();
+  expect(writes).toEqual([]);
+});
+
+test('도착 보정은 데이터를 기다리는 동안 사용자가 직접 이동하면 멈춘다', async ({ page }) => {
+  let release!: () => void;
+  const dashboardGate = new Promise<void>(resolve => { release = resolve; });
+  const writes = await boardHarness(page, { dashboardGate });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/benchmarks');
+  await expect(page.getByRole('heading', { name: '오늘의 오피스를 불러오고 있어요', exact: true })).toBeVisible();
+  await page.keyboard.press('Home');
+  release();
+  const heading = page.getByRole('heading', { name: '경쟁사 분석·기획', exact: true });
+  await expect(heading).toBeVisible();
+  await expect(heading).not.toBeInViewport();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(writes).toEqual([]);
+});
 
 async function prepareResearch(page: Page) {
   const research = page.getByRole('region', { name: '세이지에게 조사 맡기기', exact: true });
@@ -206,6 +238,8 @@ for (const width of [1440, 390]) test(`공식 뉴스 중복은 한 번만 보이
   await expect(page).toHaveURL(/\/plans#competitors$/);
   const editor = page.getByRole('region', { name: '내 콘텐츠의 관점으로 다듬기', exact: true });
   await expect(editor.getByLabel('후보 제목', { exact: true })).toHaveValue('회의록 프롬프트 실험');
+  await expect(editor.getByLabel('후보 제목', { exact: true })).toBeFocused();
+  await expect(editor.getByLabel('후보 제목', { exact: true })).toBeInViewport();
   await editor.getByRole('textbox', { name: '내가 더할 관점', exact: true }).fill('내 입력으로 직접 재현하고 원문과 비교');
   await editor.getByRole('checkbox', { name: 'YouTube', exact: true }).check();
   await editor.getByRole('button', { name: '후보 아이디어 저장', exact: true }).click();

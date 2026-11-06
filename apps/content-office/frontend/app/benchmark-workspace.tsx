@@ -15,9 +15,9 @@ export function BenchmarkWorkspace({ connected, active, mode, officialUrls, onId
   const [openSignal, setOpenSignal] = useState(0);
   const [closeSignal, setCloseSignal] = useState(0);
   useEffect(() => { if (!active || mode !== 'planning') setCloseSignal(value => value + 1); }, [active, mode]);
-  return <div id="competitors" hidden={!active}>
+  return <div id="competitors" className="outline-target" hidden={!active}>
     <BenchmarkPanel active={active} mode={mode} officialUrls={officialUrls} onIdeaSaved={onIdeaSaved}
-      onOpenPlanning={() => router.push('/plans#competitors')}
+      onOpenPlanning={() => router.push('/plans#competitors', { scroll: false })}
       onSendResearch={async text => {
       if (!active || mode !== 'planning') return '기획 화면에서 조사 요청문을 검토하세요. 아직 접수하지 않았습니다.';
       setPreparedDraft(text);
