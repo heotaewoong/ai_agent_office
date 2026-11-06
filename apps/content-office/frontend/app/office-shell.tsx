@@ -614,7 +614,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {view !== "world" && <PageOutline scope={`${view}-${activeId}-${creatorNews}`} curated={view === "studio" || view === "delivery"} />}
+          {view !== "world" && !(view === 'news' && creatorNews) && <PageOutline scope={`${view}-${activeId}-${creatorNews}`} curated={view === "studio" || view === "delivery"} />}
 
           <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (

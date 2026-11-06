@@ -93,7 +93,9 @@ for (const width of [1440, 390]) test(`분야·출처·검색 필터는 쓰기 �
   const board = page.locator('section[aria-labelledby="benchmark-heading"]');
   await expect(board.getByRole('heading', { name: '회의록 프롬프트 실험', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath(`benchmark-${width}.png`) });
-  expect((await board.getByRole('button', { name: 'AI 활용', exact: true }).boundingBox())!.y).toBeLessThan(900);
+  const fieldBox = await board.getByRole('button', { name: 'AI 활용', exact: true }).boundingBox();
+  console.info('benchmark-filter-position', JSON.stringify({ width, y: fieldBox?.y, viewport: page.viewportSize() }));
+  expect(fieldBox!.y).toBeLessThan(900);
   await expect(board.getByRole('heading', { name: '미래 날짜가 있는 자료', exact: true })).not.toBeVisible();
   await board.getByRole('button', { name: 'AI 활용', exact: true }).focus();
   await page.keyboard.press('Enter');
@@ -188,6 +190,7 @@ for (const width of [1440, 390]) test(`공식 뉴스 중복은 한 번만 보이
   const menu = page.getByRole('navigation', { name: '오피스 메뉴' });
   await expect(menu.getByRole('link', { name: '경쟁사·아이디어', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: '경쟁사 분석·기획', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '경쟁사 분석·기획', exact: true })).toBeInViewport();
   await expect(page.locator('#benchmark-news-candidates')).toHaveCount(0);
   await menu.getByRole('link', { name: '오늘의 뉴스', exact: true }).click();
   await expect(page.getByRole('heading', { name: officialArticle.title, exact: true })).toHaveCount(1);
