@@ -21,39 +21,57 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
     else if (path === '/api/jobs/summaries') body = { jobs: [] };
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   });
-  await page.goto('/office3d');
+  const started = Date.now();
+  async function phase(name: string, operation: () => Promise<void>) {
+    console.info(JSON.stringify({ test: 'world-resize', viewport: mobile ? 'mobile' : 'PC', phase: name, state: 'start', elapsed_ms: Date.now() - started }));
+    await test.step(name, operation);
+    console.info(JSON.stringify({ test: 'world-resize', viewport: mobile ? 'mobile' : 'PC', phase: name, state: 'end', elapsed_ms: Date.now() - started }));
+  }
+  await phase('load real 3D iframe', async () => { await page.goto('/office3d'); });
   const shell = page.locator('.world-frame-resizer');
   const frame = page.frameLocator('iframe[title="오피스 월드"]');
-  // Mobile uses a horizontal department strip; keyboard navigation must reveal its next item.
-  await frame.locator('#department-nav button').first().focus();
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Enter');
   const body = frame.locator('#panel-body');
-  await expect(body).toBeVisible();
+  // Mobile uses a horizontal department strip; keyboard navigation must reveal its next item.
+  await phase('open team panel with keyboard', async () => {
+    await frame.locator('#department-nav button').first().focus();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Enter');
+    await expect(body).toBeVisible();
+  });
   const height = await shell.evaluate(el => el.getBoundingClientRect().height);
   expect(height).toBeGreaterThanOrEqual((mobile ? 844 : 900) - 64);
   const contentHeight = await body.evaluate(el => el.getBoundingClientRect().height);
-  await page.getByRole('button', { name: '화면 길게', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height + 160);
-  // Wrapped headers reserve different space at each width; usable body space must still grow.
-  await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBeGreaterThan(contentHeight);
-  await page.getByRole('button', { name: '화면 짧게', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
-  await expect(frame.locator('#panel-close')).toBeVisible();
-  await page.getByRole('button', { name: '전체화면', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().height)), { timeout: 15_000 }).toBe(mobile ? 844 : 900);
-  await expect(frame.locator('#panel-body')).toBeVisible();
-  // Exercise the real modal above the Fullscreen top layer, preserving unsent input.
-  await frame.locator('body').evaluate(() => parent.postMessage({ source: 'office-world', type: 'assistant-open', assistant: 'ada' }, location.origin));
-  const dialog = page.getByRole('dialog', { name: '에이다에게 업무 요청' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveJSProperty('open', true);
-  await dialog.getByRole('textbox').fill('전체화면 대화 입력 보존 확인');
-  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
-  await page.getByRole('button', { name: '원래 크기', exact: true }).click();
-  await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
-  await expect(frame.locator('#panel-body')).toBeVisible();
-  await page.getByRole('button', { name: '루미와 대화하기', exact: true }).click();
-  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('전체화면 대화 입력 보존 확인');
+  await phase('grow viewer and panel body', async () => {
+    await page.getByRole('button', { name: '화면 길게', exact: true }).click();
+    await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height + 160);
+    // Wrapped headers reserve different space at each width; usable body space must still grow.
+    await expect.poll(() => body.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBeGreaterThan(contentHeight);
+  });
+  await phase('restore viewer height', async () => {
+    await page.getByRole('button', { name: '화면 짧게', exact: true }).click();
+    await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
+    await expect(frame.locator('#panel-close')).toBeVisible();
+  });
+  await phase('enter native fullscreen', async () => {
+    await page.getByRole('button', { name: '전체화면', exact: true }).click();
+    await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().height)), { timeout: 15_000 }).toBe(mobile ? 844 : 900);
+    await expect(frame.locator('#panel-body')).toBeVisible();
+  });
+  await phase('preserve assistant draft above fullscreen', async () => {
+    // Exercise the real modal above the Fullscreen top layer, preserving unsent input.
+    await frame.locator('body').evaluate(() => parent.postMessage({ source: 'office-world', type: 'assistant-open', assistant: 'ada' }, location.origin));
+    const dialog = page.getByRole('dialog', { name: '에이다에게 업무 요청' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toHaveJSProperty('open', true);
+    await dialog.getByRole('textbox').fill('전체화면 대화 입력 보존 확인');
+    await dialog.getByRole('button', { name: '닫기', exact: true }).click();
+  });
+  await phase('exit fullscreen and reopen unsent draft', async () => {
+    await page.getByRole('button', { name: '원래 크기', exact: true }).click();
+    await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
+    await expect(frame.locator('#panel-body')).toBeVisible();
+    await page.getByRole('button', { name: '루미와 대화하기', exact: true }).click();
+    await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('전체화면 대화 입력 보존 확인');
+  });
   expect(writes).toEqual([]);
 });
