@@ -156,6 +156,12 @@ export function createAssistantRequestsController() {
     getSnapshot: () => state,
     subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
     setDraft(draft: string) { if (!state.submission) publish({ draft }); },
+    prepareDraft(assistant: AssistantProfile, draft: string) {
+      if (!isAssistantProfile(assistant) || busy || state.pending || state.submission || state.draft.trim()
+        || !draft.trim() || [...draft].length > assistantDraftLimit(assistant)) return false;
+      publish({ selectedAssistant: assistant, draft });
+      return true;
+    },
     selectAssistant(assistant: unknown) {
       if (!isAssistantProfile(assistant) || busy || state.pending || state.submission) return false;
       publish({ selectedAssistant: assistant });

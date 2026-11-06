@@ -10,6 +10,7 @@ import { officeHref, officeRoute, type View } from "../lib/navigation";
 import { draftableNews, filterNews, newsSegment, newsSegments, newsEmptyState, newsSort, newsSorts, sortNews, newsHref } from "../lib/news";
 import { DecisionHome } from "./decision-home";
 import { DiscoveryPanel } from './discovery-panel';
+import { BenchmarkWorkspace } from './benchmark-workspace';
 import { api, OfficeApiError } from "../lib/api";
 import { createDashboardRefreshGuard } from "../lib/dashboard-refresh";
 import type {
@@ -92,6 +93,7 @@ const views: { id: View; title: string; icon: string; en: string }[] = [
   { id: "home", title: "내 결정 대기", icon: "check", en: "DECISIONS" },
   { id: "plans", title: "기획·독자 질문", icon: "pen", en: "PLANNING" },
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
+  { id: "benchmarks", title: "경쟁사·아이디어", icon: "grid", en: "BENCHMARKS" },
   { id: "studio", title: "콘텐츠 작업실", icon: "pen", en: "CONTENT STUDIO" },
   {
     id: "delivery",
@@ -562,6 +564,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
                   ? "내 검토가 필요한 작업과 다음 행동을 확인하세요."
                   : view === "plans"
                     ? "독자 질문과 출처에서 다음 기획을 고르세요."
+                    : view === "benchmarks"
+                  ? "분야와 플랫폼별 새 소식을 비교하고, 근거가 있는 아이디어를 모으세요."
                     : view === "news"
                   ? "독자의 질문과 확인한 근거에서 콘텐츠를 시작하세요."
                   : view === "studio"
@@ -603,7 +607,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {view !== "world" && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
+          {view !== "world" && view !== "benchmarks" && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
 
           <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (
@@ -664,6 +668,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               {view === "home" && <DecisionHome dashboard={dashboard} />}
+              {view === "benchmarks" && <BenchmarkWorkspace connected={connected} />}
               <div hidden={view!=="plans"}><OwnedSourceIntake onCreated={(j)=>{openCreatedJobs([j]);void loadDashboard(true);}} /></div>
               {view === "plans" && <>
                   <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />

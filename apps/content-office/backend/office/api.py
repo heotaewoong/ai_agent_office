@@ -1140,6 +1140,8 @@ def create_app(store: Store | None = None):
     register_assistant_reports(app, store)
     from .api_assistant_requests import register as register_assistant_requests
     register_assistant_requests(app, store)
+    from .api_benchmarks import register as register_benchmarks
+    register_benchmarks(app, store)
     return app
 
 

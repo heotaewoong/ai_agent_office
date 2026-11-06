@@ -1,5 +1,5 @@
-export type View = "home" | "news" | "plans" | "studio" | "delivery" | "world" | "settings" | "activity" | "architecture";
-const paths: Record<View, string> = { home: "/", news: "/news", plans: "/plans", studio: "/scripts", delivery: "/publish", world: "/office3d", settings: "/settings", activity: "/runs", architecture: "/pipeline" };
+export type View = "home" | "news" | "benchmarks" | "plans" | "studio" | "delivery" | "world" | "settings" | "activity" | "architecture";
+const paths: Record<View, string> = { home: "/", news: "/news", benchmarks: "/benchmarks", plans: "/plans", studio: "/scripts", delivery: "/publish", world: "/office3d", settings: "/settings", activity: "/runs", architecture: "/pipeline" };
 export function officeHref(view: View, jobId = "") {
   return paths[view] + (view === "studio" && jobId ? "/" + encodeURIComponent(jobId) : view === "delivery" && jobId ? "?job=" + encodeURIComponent(jobId) : "");
 }

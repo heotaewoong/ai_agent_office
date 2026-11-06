@@ -1,0 +1,321 @@
+"""Competitor metadata stays separate from evidence, approvals and paid work."""
+import copy
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+from threading import Barrier
+
+import pytest
+from fastapi.testclient import TestClient
+
+from office import benchmarks, feeds
+from office.store import Store, WorkflowError, digest
+
+
+@pytest.fixture
+def store(tmp_path, monkeypatch):
+    real_dns = feeds.socket.getaddrinfo
+    def public_dns(host, *args, **kwargs):
+        if host in ('localhost', '127.0.0.1', '::1'):
+            return real_dns(host, *args, **kwargs)
+        return [(2, 1, 6, '', ('93.184.216.34', 443))]
+    monkeypatch.setattr(feeds.socket, 'getaddrinfo', public_dns)
+    return Store(tmp_path)
+
+
+def database(store):
+    with store.connection() as db:
+        return list(db.iterdump())
+
+
+def protected(store):
+    with store.connection() as db:
+        return {table: [tuple(row) for row in db.execute('SELECT * FROM ' + table)]
+                for table in ('jobs', 'approvals', 'costs', 'versions', 'drafts')}
+
+
+def open_window(store):
+    store.set_setting('work_window', {'authorized_end': (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(), 'user_confirmed': True})
+
+
+def registry(store):
+    return benchmarks.status(store)['registry']
+
+
+def save(store, sources):
+    return benchmarks.save(store, {'sources': sources}, digest(registry(store)))
+
+
+def rss(title='AI 공부 자료 비교'):
+    stamp = datetime.now(timezone.utc).isoformat()
+    return f'''<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>{title}</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=valid"/><published>{stamp}</published></entry>
+    <entry><title>Unknown date</title><link href="https://www.youtube.com/watch?v=unknown"/></entry>
+    <entry><title>Future</title><link href="https://www.youtube.com/watch?v=future"/>
+    <published>2099-01-01T00:00:00Z</published></entry></feed>'''.encode()
+
+
+def test_get_defaults_is_pure_and_never_fetches_or_resolves(store, monkeypatch):
+    before = database(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **k: pytest.fail('GET fetched'))
+    monkeypatch.setattr(feeds.socket, 'getaddrinfo', lambda *a, **k: pytest.fail('GET resolved DNS'))
+    result = benchmarks.status(store)
+    assert database(store) == before and result['registry_hash'] == digest(result['registry'])
+    sources = result['registry']['sources']
+    assert any(s['url'] == 'https://www.instagram.com/every._ai/' for s in sources)
+    assert any(s.get('channel_id') == 'UC-SyuGFlZXpGdR7WszgYBhw' for s in sources)
+    assert {s['state'] for s in result['sources_status']} == {'ready', 'manual'}
+    assert result['items'] == result['ideas'] == [] and not result['window_open']
+
+
+def test_registry_save_has_optimistic_lock_and_does_not_queue_or_collect(store, monkeypatch):
+    value = registry(store)
+    before = protected(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **k: pytest.fail('save fetched'))
+    changed = copy.deepcopy(value)
+    changed['sources'][0]['fields'] = ['공부법', '콘텐츠 제작']
+    result = benchmarks.save(store, changed, digest(value))
+    assert result['registry'] == changed and store.tasks() == [] and protected(store) == before
+    saved = database(store)
+    with pytest.raises(WorkflowError, match='바뀌'):
+        benchmarks.save(store, value, digest(value))
+    assert database(store) == saved
+
+
+@pytest.mark.parametrize('patch', [
+    {'url': 'https://127.0.0.1/private'}, {'url': 'https://instagram.com.evil.example/every._ai/'},
+    {'url': 'http://www.instagram.com/every._ai/'}, {'url': 'https://user:password@www.instagram.com/every._ai/'},
+    {'id': '../private'}, {'name': 'name\nInjected'}, {'fields': ['x'] * 7}, {'platform': 'unknown'},
+])
+def test_invalid_registry_does_not_change_state(store, patch):
+    value = registry(store)
+    value['sources'][0].update(patch)
+    before = database(store)
+    with pytest.raises(WorkflowError):
+        benchmarks.save(store, value, digest(registry(store)))
+    assert database(store) == before
+
+
+def test_private_dns_and_duplicate_ids_are_rejected(store, monkeypatch):
+    value = registry(store)
+    monkeypatch.setattr(feeds.socket, 'getaddrinfo', lambda *a, **k: [(2, 1, 6, '', ('10.0.0.1', 443))])
+    before = database(store)
+    with pytest.raises(WorkflowError):
+        benchmarks.save(store, value, digest(value))
+    assert database(store) == before
+    value['sources'].append(copy.deepcopy(value['sources'][0]))
+    with pytest.raises(WorkflowError):
+        benchmarks.save(store, value, digest(registry(store)))
+
+
+def test_refresh_is_deduplicated_and_worker_checks_window_and_registry(store, monkeypatch):
+    value_hash = digest(registry(store))
+    monkeypatch.setattr(benchmarks, 'collect_feeds', lambda *a, **k: pytest.fail('closed window collected'))
+    with pytest.raises(WorkflowError, match='작업 시간'):
+        benchmarks.queue(store, value_hash)
+    assert store.tasks() == []
+    open_window(store)
+    first = benchmarks.queue(store, value_hash)
+    assert first == benchmarks.queue(store, value_hash) and len(store.tasks()) == 1
+    assert first['task']['kind'] == 'benchmark_refresh'
+    assert first['task']['payload'] == {'registry_hash': value_hash}
+    store.set_setting('work_window', {'status': 'closed'})
+    with pytest.raises(WorkflowError, match='작업 시간'):
+        benchmarks.run(store, value_hash)
+    open_window(store)
+    with pytest.raises(WorkflowError, match='바뀌'):
+        benchmarks.run(store, '0' * 64)
+
+
+def test_real_feed_parser_collects_only_known_youtube_and_distinguishes_failure_and_zero(store, monkeypatch):
+    sources = registry(store)['sources']
+    youtube = next(s for s in sources if s['platform'] == 'youtube')
+    sources += [{**youtube, 'id': 'yt-failed', 'creator_id': 'failed', 'channel_id': 'UC' + 'x' * 22, 'url': 'https://www.youtube.com/@failed'},
+                {**youtube, 'id': 'yt-empty', 'creator_id': 'empty', 'channel_id': 'UC' + 'z' * 22, 'url': 'https://www.youtube.com/@empty'},
+                {**youtube, 'id': 'yt-unready', 'creator_id': 'unready', 'channel_id': '', 'url': 'https://www.youtube.com/@unready'}]
+    save(store, sources)
+    open_window(store)
+    calls = []
+    def fetch(url, **kwargs):
+        calls.append(url)
+        if 'UC' + 'x' * 22 in url:
+            raise ValueError('unavailable')
+        return (b'<feed/>' if 'UC' + 'z' * 22 in url else rss()), url, 'application/atom+xml'
+    monkeypatch.setattr(feeds, 'fetch_public', fetch)
+    before = protected(store)
+    result = benchmarks.run(store, digest(registry(store)))
+    status = benchmarks.status(store)
+    assert len(calls) == 3 and all(url.startswith('https://www.youtube.com/feeds/videos.xml?channel_id=UC') for url in calls)
+    assert len(status['items']) == 1 and status['items'][0]['source_id'] == youtube['id']
+    item = status['items'][0]
+    assert item['fields'] == youtube['fields'] and item['verification_state'] == 'metadata_only'
+    assert item['published_at'] != '2099-01-01T00:00:00Z' and item['checked_at']
+    states = {row['source_id']: row for row in status['sources_status']}
+    assert states['yt-failed']['state'] == 'failed' and states['yt-failed']['count'] is None
+    assert states['yt-empty']['state'] == 'ok' and states['yt-empty']['count'] == 0
+    assert states['yt-unready']['state'] == 'channel_id_required'
+    assert result['paid_calls'] == 0 and result['partial_failure'] and protected(store) == before
+
+
+def test_failure_preserves_old_items_with_their_original_observation_time(store, monkeypatch):
+    open_window(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda url, **kw: (rss(), url, 'application/atom+xml'))
+    benchmarks.run(store, digest(registry(store)))
+    original = benchmarks.status(store)['items'][0]
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **k: (_ for _ in ()).throw(ValueError('failed')))
+    benchmarks.run(store, digest(registry(store)))
+    result = benchmarks.status(store)
+    assert result['items'][0]['checked_at'] == original['checked_at']
+    assert result['items'][0]['verification_state'] == 'stale_metadata'
+    assert any(s['state'] == 'failed' for s in result['sources_status'])
+
+
+def test_manual_only_registry_never_falls_back_to_default_feeds(store, monkeypatch):
+    save(store, [s for s in registry(store)['sources'] if s['platform'] == 'instagram'])
+    open_window(store)
+    monkeypatch.setattr(benchmarks, 'collect_feeds', lambda *a, **k: pytest.fail('empty feeds fell back'))
+    result = benchmarks.run(store, digest(registry(store)))
+    assert result['paid_calls'] == 0 and benchmarks.status(store)['items'] == []
+
+
+def test_registry_change_during_collection_cannot_publish_a_mismatched_snapshot(store, monkeypatch):
+    open_window(store)
+    expected = digest(registry(store))
+    def collect(root, feeds):
+        changed = registry(store)
+        changed['sources'][0]['name'] = 'Changed while collecting'
+        benchmarks.save(store, changed, expected)
+        return {'checked_at': datetime.now(timezone.utc).isoformat(), 'feeds': [], 'articles': [], 'partial_failure': False}
+    monkeypatch.setattr(benchmarks, 'collect_feeds', collect)
+    with pytest.raises(WorkflowError, match='바뀌'):
+        benchmarks.run(store, expected)
+    assert store.setting('benchmark_snapshot') is None
+
+
+def test_official_news_is_website_source_and_never_a_destination_platform_claim(store):
+    stamp = datetime.now(timezone.utc).isoformat()
+    store.save_articles([{'id': 'official', 'title': 'AI release', 'url': 'https://openai.com/news/example', 'feed_id': 'openai',
+                          'feed_name': 'OpenAI', 'segment': 'ai', 'published_at': stamp, 'retrieved_at': stamp}])
+    before = database(store)
+    item = benchmarks.status(store)['items'][0]
+    assert item['platform'] == 'website' and item['source_id'] == ''
+    assert '분류' in item['classification_note'] and database(store) == before
+
+
+def test_latest_items_compare_real_times_across_timezone_offsets(store):
+    current = datetime.now(timezone.utc)
+    newer = (current - timedelta(hours=1)).astimezone(timezone(-timedelta(hours=10))).isoformat()
+    older = (current - timedelta(hours=2)).astimezone(timezone(timedelta(hours=10))).isoformat()
+    store.save_articles([{'id': key, 'title': key, 'url': 'https://example.com/' + key, 'published_at': stamp}
+                         for key, stamp in [('newer', newer), ('older', older)]])
+    assert [item['title'] for item in benchmarks.status(store)['items']] == ['newer', 'older']
+
+
+def test_idea_candidate_keeps_unverified_evidence_and_never_selects_or_creates_job(store, monkeypatch):
+    source = next(s for s in registry(store)['sources'] if s['platform'] == 'instagram')
+    body = {'title': '직접 재현해 볼 공부 워크플로', 'source_url': source['url'], 'source_id': source['id'],
+            'fields': ['공부법'], 'target_platforms': ['instagram', 'youtube'], 'angle': '실제 자료로 성공·실패를 비교',
+            'expected_hash': digest(registry(store))}
+    before = protected(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **k: pytest.fail('idea fetched'))
+    first = benchmarks.save_idea(store, body)
+    assert first['state'] == 'candidate' and first['primary_sources'] == 0 and first['blocked']
+    assert first['fields'] == ['공부법'] and first['target_platforms'] == ['instagram', 'youtube']
+    assert benchmarks.save_idea(store, body)['id'] == first['id'] and len(store.ideas()) == 1
+    assert protected(store) == before and store.tasks() == []
+
+
+def test_idea_registry_race_is_rechecked_before_insert(store, monkeypatch):
+    source = registry(store)['sources'][0]
+    body = {'title': '경합 검증', 'source_url': source['url'], 'source_id': source['id'], 'fields': ['공부법'],
+            'target_platforms': ['youtube'], 'angle': '원출처 확인', 'expected_hash': digest(registry(store))}
+    score = benchmarks.score_idea
+    def changed_while_preparing(card):
+        scored = score(card)
+        changed = registry(store)
+        changed['sources'][0]['name'] = '새 이름'
+        store.set_setting('benchmark_registry', changed)
+        return scored
+    monkeypatch.setattr(benchmarks, 'score_idea', changed_while_preparing)
+    before = protected(store)
+    with pytest.raises(WorkflowError, match='바뀌'):
+        benchmarks.save_idea(store, body)
+    assert store.ideas() == [] and protected(store) == before
+
+
+def test_duplicate_save_cannot_rewrite_an_existing_human_selection(store):
+    source = registry(store)['sources'][0]
+    original = store.save_idea(benchmarks.score_idea({'title': '기존 인간 선택', 'source_url': source['url'],
+                                                    'primary_sources': 2, 'angle': '사람이 편집한 관점'}))
+    selected = store.select_idea(original['id'], actor='human-reviewer')
+    before = database(store)
+    result = benchmarks.save_idea(store, {'title': selected['title'], 'source_url': source['url'], 'source_id': source['id'],
+                                         'fields': ['공부법'], 'target_platforms': ['youtube'], 'angle': '새 관점',
+                                         'expected_hash': digest(registry(store))})
+    assert result == selected and result['primary_sources'] == 2 and database(store) == before
+
+
+def test_concurrent_idea_saves_return_the_same_original_card(store, monkeypatch):
+    source = registry(store)['sources'][0]
+    body = {'title': '동시 저장', 'source_url': source['url'], 'source_id': source['id'], 'fields': ['공부법'],
+            'target_platforms': ['youtube'], 'angle': '첫 관점', 'expected_hash': digest(registry(store))}
+    score, ideas = benchmarks.score_idea, store.ideas
+    preparing, old_precheck = Barrier(2), Barrier(2)
+    def prepared(card):
+        scored = score(card)
+        preparing.wait(timeout=10)
+        return scored
+    def racing_precheck():
+        rows = ideas()
+        old_precheck.wait(timeout=10)
+        return rows
+    monkeypatch.setattr(benchmarks, 'score_idea', prepared)
+    monkeypatch.setattr(store, 'ideas', racing_precheck)
+    before = protected(store)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        a = pool.submit(benchmarks.save_idea, store, body)
+        b = pool.submit(benchmarks.save_idea, store, {**body, 'angle': '두 번째 관점'})
+        first, second = a.result(timeout=15), b.result(timeout=15)
+    assert first == second and len(ideas()) == 1 and protected(store) == before
+
+
+def test_research_packet_is_read_only_bounded_and_does_not_claim_sage_execution(store, monkeypatch):
+    source_ids = [s['id'] for s in registry(store)['sources']]
+    body = {'source_ids': source_ids, 'fields': ['AI 활용'], 'platforms': ['youtube', 'instagram'], 'expected_hash': digest(registry(store))}
+    before = database(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **k: pytest.fail('packet fetched'))
+    result = benchmarks.research_packet(store, body)
+    assert 'mybots-sage' in result['text'] and '루미' in result['text'] and '유료' in result['text']
+    assert '외부 게시' in result['text'] and '⓪' in result['text'] and len(result['text']) <= 3600
+    assert result['registry_hash'] == body['expected_hash'] and database(store) == before
+    with pytest.raises(WorkflowError):
+        benchmarks.research_packet(store, {**body, 'source_ids': ['missing']})
+
+
+def test_research_empty_filters_mean_all_without_mutating_registry(store):
+    body = {'source_ids': [s['id'] for s in registry(store)['sources']], 'fields': [], 'platforms': [],
+            'expected_hash': digest(registry(store))}
+    before = database(store)
+    packet = benchmarks.research_packet(store, body)
+    assert '분야: 전체' in packet['text'] and '플랫폼: 전체' in packet['text']
+    assert database(store) == before
+
+
+def test_api_preserves_session_csrf_hash_and_exact_dto(store, monkeypatch):
+    monkeypatch.setenv('OFFICE_STATE_DIR', str(store.root / 'import-state'))
+    from office.api import create_app
+    client = TestClient(create_app(store), base_url='http://localhost:8510')
+    before = database(store)
+    read = client.get('/api/benchmarks')
+    assert read.status_code == 200 and database(store) == before
+    value = read.json()
+    body = {**value['registry'], 'expected_hash': value['registry_hash']}
+    assert client.put('/api/benchmarks', json=body).status_code == 403
+    headers = {'Origin': 'http://localhost:3110', 'X-Office-CSRF': client.get('/api/session').json()['csrf']}
+    assert client.put('/api/benchmarks', json=body, headers=headers).status_code == 200
+    assert client.post('/api/benchmarks/refresh', json={'expected_hash': '0' * 64}, headers=headers).status_code == 409
+    unchanged = database(store)
+    packet = client.post('/api/benchmarks/research-packet', json={'source_ids': [s['id'] for s in value['registry']['sources']],
+                          'fields': [], 'platforms': [], 'expected_hash': value['registry_hash']}, headers=headers)
+    assert packet.status_code == 200 and '플랫폼: 전체' in packet.json()['text'] and database(store) == unchanged
+    bad = {**body, 'unapproved': True}
+    assert client.put('/api/benchmarks', json=bad, headers=headers).status_code == 422

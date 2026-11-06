@@ -17,6 +17,9 @@ def process_task(store, task):
     if task['kind'] == 'discover':
         from .discovery import run
         return run(store, payload.get('config_hash'))
+    if task['kind'] == 'benchmark_refresh':
+        from .benchmarks import run
+        return run(store, payload.get('registry_hash'))
     job_id = payload.get("job_id")
     if task['kind'] == 'thumbnail_artwork':
         from .thumbnail_studio import generate

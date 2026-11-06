@@ -62,9 +62,10 @@ export function AssistantCompletion({ request, busy, onAction, onSaveContent, co
   </section>;
 }
 
-export function AssistantChat({ connected, openSignal, requestedAssistant = 'lumi', createRequest, loadRequest, onObservation, onReportAction, onReportOpened }: {
+export function AssistantChat({ connected, openSignal, requestedAssistant = 'lumi', preparedDraft = '', createRequest, loadRequest, onObservation, onReportAction, onReportOpened }: {
   connected: boolean; openSignal: number;
   requestedAssistant?: AssistantProfile;
+  preparedDraft?: string;
   createRequest: (body: AssistantSubmission) => Promise<unknown>;
   loadRequest: (id: string) => Promise<unknown>;
   onObservation: (request: AssistantRequest) => void;
@@ -112,8 +113,13 @@ export function AssistantChat({ connected, openSignal, requestedAssistant = 'lum
   useEffect(() => {
     if (openSignal <= lastSignal.current) return;
     lastSignal.current = openSignal;
-    requestChat(requestedAssistant);
-  }, [openSignal, requestedAssistant, requestChat]);
+    if (preparedDraft) {
+      desiredAssistant.current = requestedAssistant;
+      setTargetNotice(controller.prepareDraft(requestedAssistant, preparedDraft) ? null
+        : '기존 업무와 입력·배정 대상을 보존했습니다. 기존 업무를 확인한 뒤 새 업무를 작성하거나, 조사 화면에서 요청문을 복사해 주세요. 자동으로 접수하지 않습니다.');
+      if (!dialog.current?.open) show();
+    } else requestChat(requestedAssistant);
+  }, [openSignal, requestedAssistant, preparedDraft, controller, requestChat, show]);
   useEffect(() => { if (state.request && connected) latestObservation.current(state.request); }, [state.request, connected]);
   const requestId = state.submission?.request_id;
   const delivery = state.request?.delivery || state.receipt?.delivery;
@@ -205,7 +211,7 @@ export function AssistantChat({ connected, openSignal, requestedAssistant = 'lum
         </>}
       </div>
       {requestId && <button type="button" className="button secondary" disabled={!connected || state.pending} onClick={() => { void controller.refresh(loadRequest); }}>같은 요청 상태 확인</button>}
-      {settled && !state.noAdmissionCode && <button type="button" className="button secondary" disabled={state.pending || reportBusy} onClick={() => { if (controller.newRequest()) { controller.selectAssistant(desiredAssistant.current); setTargetNotice(null); setReportNotice(null); try { sessionStorage.removeItem(storageKey); } catch { /* 현재 화면은 새 요청을 작성한다. */ } input.current?.focus(); } }}>새 업무 작성</button>}
+      {settled && !state.noAdmissionCode && <button type="button" className="button secondary" disabled={state.pending || reportBusy} onClick={() => { if (controller.newRequest()) { controller.selectAssistant(desiredAssistant.current); if (preparedDraft) controller.prepareDraft(desiredAssistant.current, preparedDraft); setTargetNotice(null); setReportNotice(null); try { sessionStorage.removeItem(storageKey); } catch { /* 현재 화면은 새 요청을 작성한다. */ } input.current?.focus(); } }}>새 업무 작성</button>}
     </dialog>
   </section>;
 }
