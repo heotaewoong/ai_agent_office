@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { api } from '../lib/api';
 import { researchSourceLabels, signalLabels, type DiscoveryStatus, type ResearchConfig } from '../lib/discovery';
@@ -7,27 +7,31 @@ import { researchSourceLabels, signalLabels, type DiscoveryStatus, type Research
 const controlStyle: CSSProperties = { display: 'block', width: '100%', minHeight: 44, marginTop: 6,
   padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--white)', fontSize: 16 };
 
-export function DiscoveryPanel() {
+export function DiscoveryPanel({ active = true }: { active?: boolean } = {}) {
   const [data, setData] = useState<DiscoveryStatus | null>(null);
   const [draft, setDraft] = useState<ResearchConfig | null>(null);
   const [baseHash, setBaseHash] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const initialized = useRef(false);
   useEffect(() => {
+    if (!active) return;
     let live = true;
-    const read = async (first = false) => {
+    const read = async () => {
       try {
         const current = await api.discovery();
         if (!live) return;
         setData(current);
-        if (first) { setDraft(current.config); setBaseHash(current.config_hash); }
+        if (!initialized.current) {
+          setDraft(current.config); setBaseHash(current.config_hash); initialized.current = true;
+        }
       } catch (cause) { if (live) setError(cause instanceof Error ? cause.message : '조사 상태를 읽지 못했습니다.'); }
     };
-    void read(true);
+    void read();
     const timer = setInterval(() => void read(), 10000);
     return () => { live = false; clearInterval(timer); };
-  }, []);
+  }, [active]);
   async function save() {
     if (!draft || busy) return;
     setBusy(true); setError('');
@@ -40,7 +44,7 @@ export function DiscoveryPanel() {
   }
   async function reload() {
     setBusy(true);
-    try { const current = await api.discovery(); setData(current); setDraft(current.config); setBaseHash(current.config_hash); setError(''); }
+    try { const current = await api.discovery(); setData(current); setDraft(current.config); setBaseHash(current.config_hash); initialized.current = true; setError(''); }
     catch (cause) { setError(cause instanceof Error ? cause.message : '불러오지 못했습니다.'); }
     finally { setBusy(false); }
   }

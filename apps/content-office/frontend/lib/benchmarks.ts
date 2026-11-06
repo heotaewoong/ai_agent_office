@@ -26,6 +26,36 @@ function matches(fields: string[], platform: string, text: string, filters: Benc
 export function filterBenchmarkItems(items: BenchmarkItem[], filters: BenchmarkFilters): BenchmarkItem[] {
   return items.filter(item => matches(item.fields, item.platform, [item.title, item.summary, item.source_name, item.idea_angle].join(' '), filters));
 }
+export function filterBenchmarkSources(sources: BenchmarkSource[], filters: BenchmarkFilters): BenchmarkSource[] {
+  return sources.filter(source => matches(source.fields, source.platform, `${source.name} ${source.url}`, filters));
+}
+function benchmarkUrlKey(value: string): string | null {
+  try {
+    const url = new URL(value);
+    url.hostname = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (['youtube.com', 'm.youtube.com', 'youtu.be'].includes(url.hostname)) {
+      const video = url.hostname === 'youtu.be' ? url.pathname.split('/')[1]
+        : url.pathname === '/watch' ? url.searchParams.get('v')
+        : /^\/(?:shorts|embed)\//.test(url.pathname) ? url.pathname.split('/')[2] : null;
+      if (video) return `https://youtube.com/watch?v=${encodeURIComponent(video)}`;
+    }
+    for (const key of [...url.searchParams.keys()]) {
+      if (/^utm_/i.test(key) || /^(?:fbclid|gclid|igsh|igshid)$/i.test(key)) url.searchParams.delete(key);
+    }
+    url.searchParams.sort();
+    return url.origin + url.pathname.replace(/\/+$/, '') + (url.searchParams.size ? `?${url.searchParams}` : '');
+  } catch { return null; }
+}
+export function registeredBenchmarkItems(items: BenchmarkItem[], officialUrls: string[] = []): BenchmarkItem[] {
+  const seen = new Set(officialUrls.map(benchmarkUrlKey).filter((url): url is string => url !== null));
+  return items.filter(item => {
+    if (!item.source_id) return false;
+    const url = benchmarkUrlKey(item.url);
+    if (!url || seen.has(url)) return false;
+    seen.add(url);
+    return true;
+  });
+}
 export function filterBenchmarkIdeas(ideas: BenchmarkIdea[], sources: BenchmarkSource[], filters: BenchmarkFilters): BenchmarkIdea[] {
   return ideas.filter(idea => {
     const source = sources.find(row => row.id === idea.source_id);

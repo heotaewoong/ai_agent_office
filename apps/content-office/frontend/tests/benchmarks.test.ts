@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { filterBenchmarkItems, filterBenchmarkIdeas, groupBenchmarkSources, splitBenchmarkDates, parseBenchmarkFields, benchmarkPublicUrl, type BenchmarkItem, type BenchmarkSource } from '../lib/benchmarks.ts';
+import { filterBenchmarkItems, filterBenchmarkSources, filterBenchmarkIdeas, groupBenchmarkSources, splitBenchmarkDates, parseBenchmarkFields, benchmarkPublicUrl, registeredBenchmarkItems, type BenchmarkItem, type BenchmarkSource } from '../lib/benchmarks.ts';
 
 const sources: BenchmarkSource[] = [
   { id: 'ig-one', creator_id: 'one', name: '한 크리에이터', platform: 'instagram', url: 'https://www.instagram.com/one/', fields: ['AI 활용'] },
@@ -16,10 +16,29 @@ test('분야·출처 플랫폼·검색을 함께 적용하고 입력 목록을 �
   assert.deepEqual(rows.map(item => item.id), ['a', 'b', 'c']);
 });
 
+test('경쟁사 소식은 등록 출처만 남기고 공식 뉴스의 동일 원문을 정규화해 제외한다', () => {
+  const rows = [
+    { ...row('fallback', 'website', [], null), source_id: '', url: 'https://example.org/official' },
+    { ...row('duplicate', 'website', [], null), url: 'https://www.example.org/post/?utm_source=mail#summary' },
+    { ...row('youtube-copy', 'youtube', [], null), url: 'https://youtu.be/video-one?si=share' },
+    { ...row('different', 'website', [], null), url: 'https://example.org/post?id=2' },
+    { ...row('same-post', 'website', [], null), url: 'https://example.org/post?id=2#other' },
+  ];
+  const result = registeredBenchmarkItems(rows, ['https://example.org/post', 'https://www.youtube.com/watch?v=video-one&feature=share', 'https://example.org/post?id=1']);
+  assert.deepEqual(result.map(item => item.id), ['different']);
+  assert.equal(rows.length, 5);
+});
+
 test('같은 크리에이터의 여러 플랫폼을 하나로 묶고 원래 source를 보존한다', () => {
   const groups = groupBenchmarkSources(sources);
   assert.equal(groups.length, 2);
   assert.deepEqual(groups[0].sources.map(source => source.id), ['ig-one', 'yt-one']);
+  assert.equal(sources.length, 3);
+});
+
+test('기획 조사 조건은 출처의 분야·플랫폼·이름으로 좁히고 등록 원본을 보존한다', () => {
+  assert.deepEqual(filterBenchmarkSources(sources, { field: 'AI 활용', platform: 'instagram', query: '한 크리에이터' }).map(source => source.id), ['ig-one']);
+  assert.deepEqual(filterBenchmarkSources(sources, { field: 'all', platform: 'youtube', query: '두 번째' }), []);
   assert.equal(sources.length, 3);
 });
 

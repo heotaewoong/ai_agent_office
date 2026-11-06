@@ -1,1 +1,2 @@
-export default function BenchmarksPage() { return null; }
+import { redirect } from 'next/navigation';
+export default function BenchmarksPage() { redirect('/plans#competitors'); }

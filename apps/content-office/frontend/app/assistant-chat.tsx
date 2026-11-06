@@ -62,8 +62,9 @@ export function AssistantCompletion({ request, busy, onAction, onSaveContent, co
   </section>;
 }
 
-export function AssistantChat({ connected, openSignal, requestedAssistant = 'lumi', preparedDraft = '', createRequest, loadRequest, onObservation, onReportAction, onReportOpened }: {
+export function AssistantChat({ connected, openSignal, closeSignal = 0, requestedAssistant = 'lumi', preparedDraft = '', createRequest, loadRequest, onObservation, onReportAction, onReportOpened }: {
   connected: boolean; openSignal: number;
+  closeSignal?: number;
   requestedAssistant?: AssistantProfile;
   preparedDraft?: string;
   createRequest: (body: AssistantSubmission) => Promise<unknown>;
@@ -89,6 +90,7 @@ export function AssistantChat({ connected, openSignal, requestedAssistant = 'lum
     if (open && reportKey) readReport.current = reportKey;
   }, [controller, connected, open, onObservation, reportKey]);
   useEffect(() => () => { controller.setAvailability(false, false); }, [controller]);
+  useEffect(() => { if (closeSignal > 0) dialog.current?.close(); }, [closeSignal]);
   useEffect(() => {
     let saved: string | null = null;
     try { saved = sessionStorage.getItem(storageKey); } catch { /* 저장소 없이도 명시된 요청을 조회할 수 있다. */ }

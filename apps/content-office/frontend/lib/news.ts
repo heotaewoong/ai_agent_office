@@ -18,7 +18,7 @@ export function newsEmptyState(segment: NewsSegment, total: number, sources: num
 export type NewsSort = "score-desc" | "score-asc";
 export const newsSorts = [{ id: "score-desc", label: "점수 높은 순" }, { id: "score-asc", label: "점수 낮은 순" }] as const;
 export function newsSort(value: string | null): NewsSort { return value === "score-asc" ? value : "score-desc"; }
-export function newsHref(segment: NewsSegment, sort: NewsSort) { return `/news?seg=${segment}&sort=${sort}`; }
+export function newsHref(segment: NewsSegment, sort: NewsSort, tab: 'official' | 'creators' = 'official') { return `/news?seg=${segment}&sort=${sort}${tab === 'creators' ? '&tab=creators' : ''}`; }
 export function sortNews<T extends { score: number }>(articles: T[], sort: NewsSort): T[] {
   return [...articles].sort((a, b) => {
     const av = Number.isFinite(a.score), bv = Number.isFinite(b.score);

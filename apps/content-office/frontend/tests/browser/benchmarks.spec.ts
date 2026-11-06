@@ -5,6 +5,8 @@ import type { BenchmarkOverview, BenchmarkIdeaInput, BenchmarkRegistryInput } fr
 const initialHash = 'a'.repeat(64);
 const preparedText = '공개자료 조사 요청: every._ai의 AI 활용 콘텐츠를 조사해 주세요. 원문 URL·발행일·확인일과 주장/직접 관찰을 구분하고 새 콘텐츠 관점과 반례를 제안해 주세요. mybots-sage 작업자 조사와 독립 검토 후 루미가 최종 보고합니다. 외부 게시·DM·결제·새 예약·유료 호출은 하지 않습니다.';
 
+const officialArticle = { id: 'official-one', title: '공식 원문 소식', summary: '기존 공식 뉴스는 이 카드 하나에서 읽습니다.', url: 'https://example.org/news/official', feed_name: '공식 피드', published_at: new Date().toISOString(), segment: 'ai', source_readable: true, score: 88, score_reasons: ['공식 출처'] };
+
 function initialOverview(): BenchmarkOverview {
   const now = Date.now();
   const checked = new Date(now).toISOString();
@@ -28,6 +30,8 @@ function initialOverview(): BenchmarkOverview {
 // All API calls terminate in this fixture; no external sources, accounts or operating data are used.
 async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: boolean; many?: boolean } = {}) {
   let overview = initialOverview();
+  overview.items.push({ ...overview.items[0], id: 'official-fallback', source_id: '', source_name: '공식 피드', platform: 'website', title: officialArticle.title, url: officialArticle.url });
+  overview.items.push({ ...overview.items[0], id: 'registered-duplicate', title: officialArticle.title, url: officialArticle.url + '#section' });
   if (options.empty) overview.items = [];
   if (options.many) {
     overview.items = Array.from({ length: 31 }, (_, index) => ({
@@ -58,7 +62,12 @@ async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: 
       response = idea;
     } else if (path === '/api/benchmarks/research-packet' && method === 'POST') response = { text: preparedText, registry_hash: overview.registry_hash };
     else if (path === '/api/session') response = { csrf: 'benchmark-contract-token' };
-    else if (path === '/api/dashboard') response = { articles: [], jobs: [], feeds: [], agents: [], events: [], tasks: [], budget: { cap_krw: 10000, spent_krw: 0, reserved_krw: 0, remaining_krw: 10000 }, window: { status: 'closed', authorized_end: '2026-10-01T00:00:00Z' }, provider: { model: 'synthetic', configured: false }, knowledge: {} };
+    else if (path === '/api/dashboard') response = { articles: [officialArticle], jobs: [], feeds: [], agents: [], events: [], tasks: [], budget: { cap_krw: 10000, spent_krw: 0, reserved_krw: 0, remaining_krw: 10000 }, window: { status: 'closed', authorized_end: '2026-10-01T00:00:00Z' }, provider: { model: 'synthetic', configured: false }, knowledge: {} };
+    else if (path === '/api/ideas') response = { ideas: overview.ideas };
+    else if (path === '/api/questions') response = { questions: [], groups: [] };
+    else if (path === '/api/channels') response = { channels: [] };
+    else if (path === '/api/briefs') response = { default: '', presets: [] };
+    else if (path === '/api/discovery') response = { config: { topic: 'AI 자동화', region: 'KR', platforms: ['youtube'], youtube_channels: [] }, config_hash: initialHash, platforms: { youtube: 'YouTube' }, plan: {}, window_open: false, stale: false, unconnected: [], snapshot: null };
     else if (path === '/api/jobs/summaries') response = { jobs: [] };
     else if (method !== 'GET') {
       await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: 'Unexpected fixture write' }) });
@@ -80,7 +89,7 @@ async function prepareResearch(page: Page) {
 for (const width of [1440, 390]) test(`분야·출처·검색 필터는 쓰기 없이 동작하고 날짜와 접근성을 보존한다 ${width}px`, async ({ page }, testInfo) => {
   const writes = await boardHarness(page);
   await page.setViewportSize({ width, height: 950 });
-  await page.goto('/benchmarks');
+  await page.goto('/news?tab=creators');
   const board = page.locator('section[aria-labelledby="benchmark-heading"]');
   await expect(board.getByRole('heading', { name: '회의록 프롬프트 실험', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath(`benchmark-${width}.png`) });
@@ -104,30 +113,34 @@ for (const width of [1440, 390]) test(`분야·출처·검색 필터는 쓰기 �
   expect(writes).toEqual([]);
 });
 
-for (const width of [1440, 390]) test(`소식은 9건씩 읽고 분류·검색을 바꿔도 조사 선택과 등록 입력을 보존한다 ${width}px`, async ({ page }) => {
+for (const width of [1440, 390]) test(`소식은 9건씩 읽고 뉴스·기획 이동에도 미저장 입력과 선택을 보존한다 ${width}px`, async ({ page }) => {
   const writes = await boardHarness(page, { many: true });
   await page.setViewportSize({ width, height: 950 });
-  await page.goto('/benchmarks');
+  await page.goto('/plans#competitors');
+  const menu = page.getByRole('navigation', { name: '오피스 메뉴', exact: true });
   const board = page.locator('section[aria-labelledby="benchmark-heading"]');
-  const cards = board.locator('#benchmark-news-candidates article');
-  await expect(cards).toHaveCount(9);
-  await expect(board.getByText(/가용 자료 2,450건 중 31건/)).toBeVisible();
-  await expect(board.getByRole('link', { name: '오늘의 뉴스에서 전체 후보 보기', exact: true })).toHaveAttribute('href', '/news');
   await board.getByRole('button', { name: '+ 경쟁사 등록', exact: true }).click();
   const name = board.getByLabel('크리에이터 이름', { exact: true });
   await name.fill('아직 저장하지 않은 출처 입력');
   const research = board.getByRole('region', { name: '세이지에게 조사 맡기기', exact: true });
-  const source = research.getByRole('checkbox', { name: /every\._ai.*Instagram/ });
-  await source.check();
+  await research.getByRole('checkbox', { name: /every\._ai.*Instagram/ }).check();
+  const questionPanel = page.getByRole('region', { name: '독자 질문', exact: true });
+  await questionPanel.getByText('질문 등록', { exact: true }).click();
+  await questionPanel.getByLabel('질문', { exact: true }).fill('아직 저장하지 않은 독자 질문');
+  await menu.getByRole('link', { name: '오늘의 뉴스', exact: true }).click();
+  const topic = page.getByLabel('조사 주제', { exact: true });
+  await topic.fill('아직 저장하지 않은 공식 조사 조건');
+  await page.getByRole('checkbox', { name: '공식 원문 소식 선택', exact: true }).check();
+  await page.getByRole('navigation', { name: '소식 보기' }).getByRole('link', { name: '등록 크리에이터 소식', exact: true }).click();
+  const cards = board.locator('#benchmark-news-candidates article');
+  await expect(cards).toHaveCount(9);
+  await expect(board.getByText(/2,450건 중 31건/)).toBeVisible();
   const more = board.getByRole('button', { name: '후보 9건 더 보기', exact: true });
   expect((await more.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   await more.focus(); await page.keyboard.press('Enter');
-  await expect(cards).toHaveCount(18);
-  await expect(cards.nth(9)).toBeFocused();
-  await expect.poll(() => cards.nth(9).evaluate(element => element.getBoundingClientRect().top - (document.querySelector('.page-outline')?.getBoundingClientRect().bottom ?? 0))).toBeGreaterThanOrEqual(0);
+  await expect(cards).toHaveCount(18); await expect(cards.nth(9)).toBeFocused();
   await board.getByRole('button', { name: '주요 소식 9건만 보기', exact: true }).click();
-  await expect(cards).toHaveCount(9);
-  await expect(board.locator('#benchmark-news-heading')).toBeFocused();
+  await expect(cards).toHaveCount(9); await expect(board.locator('#benchmark-news-heading')).toBeFocused();
   await more.click(); await expect(cards).toHaveCount(18);
   await board.getByRole('button', { name: 'AI 활용', exact: true }).click();
   await expect(cards).toHaveCount(9);
@@ -139,15 +152,21 @@ for (const width of [1440, 390]) test(`소식은 9건씩 읽고 분류·검색�
   await expect(cards).toHaveCount(16);
   await board.getByLabel('소식·크리에이터 검색', { exact: true }).fill('기록');
   await expect(cards).toHaveCount(9);
+  await menu.getByRole('link', { name: '기획·독자 질문', exact: true }).click();
   await expect(name).toHaveValue('아직 저장하지 않은 출처 입력');
-  await expect(source).toBeChecked();
+  await board.getByRole('button', { name: '필터 초기화', exact: true }).click();
+  await expect(research.getByRole('checkbox', { name: /every\._ai.*Instagram/ })).toBeChecked();
+  await expect(questionPanel.getByLabel('질문', { exact: true })).toHaveValue('아직 저장하지 않은 독자 질문');
+  await menu.getByRole('link', { name: '오늘의 뉴스', exact: true }).click();
+  await expect(topic).toHaveValue('아직 저장하지 않은 공식 조사 조건');
+  await expect(page.getByRole('checkbox', { name: '공식 원문 소식 선택', exact: true })).toBeChecked();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(writes).toEqual([]);
 });
 
 test('출처 편집은 읽어 온 등록 해시로 PUT 한 번만 보내고 다른 출처를 보존한다', async ({ page }) => {
   const writes = await boardHarness(page);
-  await page.goto('/benchmarks');
+  await page.goto('/plans#competitors');
   await page.getByText('경쟁사 등록·수집 상태 관리', { exact: false }).click();
   await page.getByRole('button', { name: '등록 편집 · every._ai', exact: true }).click();
   await page.getByLabel('크리에이터 이름', { exact: true }).fill('every._ai 검토 목록');
@@ -160,10 +179,44 @@ test('출처 편집은 읽어 온 등록 해시로 PUT 한 번만 보내고 다�
   expect(saved.sources.find(source => source.id === 'success-yt')).toEqual(initialOverview().registry.sources[1]);
 });
 
+for (const width of [1440, 390]) test(`공식 뉴스 중복은 한 번만 보이고 크리에이터 소식은 기획으로 이어진다 ${width}px`, async ({ page }) => {
+  const writes = await boardHarness(page);
+  await page.setViewportSize({ width, height: 900 });
+  await page.addInitScript(() => localStorage.setItem('heobrain-news-segment-v1', 'ai'));
+  await page.goto('/benchmarks');
+  await expect(page).toHaveURL(/\/plans#competitors$/);
+  const menu = page.getByRole('navigation', { name: '오피스 메뉴' });
+  await expect(menu.getByRole('link', { name: '경쟁사·아이디어', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '경쟁사 분석·기획', exact: true })).toBeVisible();
+  await expect(page.locator('#benchmark-news-candidates')).toHaveCount(0);
+  await menu.getByRole('link', { name: '오늘의 뉴스', exact: true }).click();
+  await expect(page.getByRole('heading', { name: officialArticle.title, exact: true })).toHaveCount(1);
+  const selected = page.getByRole('checkbox', { name: '공식 원문 소식 선택', exact: true });
+  await selected.check();
+  await page.getByRole('navigation', { name: '소식 보기' }).getByRole('link', { name: '등록 크리에이터 소식', exact: true }).click();
+  await expect(page).toHaveURL(/tab=creators/);
+  const board = page.locator('section[aria-labelledby="benchmark-heading"]');
+  await expect(board.getByRole('heading', { name: '회의록 프롬프트 실험', exact: true })).toBeVisible();
+  await expect(board.getByRole('heading', { name: officialArticle.title, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: '뉴스 선택과 작업 만들기' })).not.toBeVisible();
+  await board.locator('article').filter({ has: page.getByRole('heading', { name: '회의록 프롬프트 실험', exact: true }) }).getByRole('button', { name: '아이디어로 다듬기', exact: true }).click();
+  await expect(page).toHaveURL(/\/plans#competitors$/);
+  const editor = page.getByRole('region', { name: '내 콘텐츠의 관점으로 다듬기', exact: true });
+  await expect(editor.getByLabel('후보 제목', { exact: true })).toHaveValue('회의록 프롬프트 실험');
+  await editor.getByRole('textbox', { name: '내가 더할 관점', exact: true }).fill('내 입력으로 직접 재현하고 원문과 비교');
+  await editor.getByRole('checkbox', { name: 'YouTube', exact: true }).check();
+  await editor.getByRole('button', { name: '후보 아이디어 저장', exact: true }).click();
+  const bank = page.locator('section[aria-labelledby="idea-bank-heading"]');
+  await expect(bank.getByText('회의록 프롬프트 실험', { exact: true })).toHaveCount(1);
+  await menu.getByRole('link', { name: '오늘의 뉴스', exact: true }).click();
+  await expect(selected).toBeChecked();
+  expect(writes.map(write => write.path)).toEqual(['/api/benchmarks/ideas']);
+});
+
 test('자동 수집 없는 Instagram도 실제 게시물 URL과 새 관점을 후보로 저장한다', async ({ page }) => {
   const writes = await boardHarness(page);
   await page.setViewportSize({ width: 390, height: 900 });
-  await page.goto('/benchmarks');
+  await page.goto('/plans#competitors');
   await page.getByText('경쟁사 등록·수집 상태 관리', { exact: false }).click();
   await page.getByRole('button', { name: '원문에서 아이디어 만들기 · every._ai', exact: true }).click();
   const editor = page.getByRole('region', { name: '내 콘텐츠의 관점으로 다듬기', exact: true });
@@ -181,15 +234,15 @@ test('자동 수집 없는 Instagram도 실제 게시물 URL과 새 관점을 �
   expect(writes[0]).toMatchObject({ path: '/api/benchmarks/ideas', method: 'POST', body: { title: '내 회의록으로 프롬프트 검증하기', source_url: 'https://www.instagram.com/p/manual-synthetic/', source_id: 'every-ig', fields: ['AI 활용', '업무 자동화'], target_platforms: ['youtube'], expected_hash: initialHash } });
   expect(writes[0].body).not.toHaveProperty('operator_verified');
   expect(writes[0].body).not.toHaveProperty('primary_sources');
-  await page.getByRole('button', { name: /^저장 아이디어/ }).click();
-  await expect(page.getByRole('heading', { name: '내 회의록으로 프롬프트 검증하기', exact: true })).toBeVisible();
-  await expect(page.getByText('Instagram 출처 · 후보 아이디어', { exact: true })).toBeVisible();
-  await expect(page.getByText('게시 대상: YouTube', { exact: true })).toBeVisible();
+  const bank = page.locator('section[aria-labelledby="idea-bank-heading"]');
+  await expect(bank.getByText('내 회의록으로 프롬프트 검증하기', { exact: true })).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^저장 아이디어/ })).toHaveCount(0);
+  expect(writes).toHaveLength(1);
 });
 
 test('전체 조건의 요청문은 준비 POST만 만들고 세이지 대화 검토가 자동 접수하지 않는다', async ({ page }) => {
   const writes = await boardHarness(page);
-  await page.goto('/benchmarks');
+  await page.goto('/plans#competitors');
   const research = await prepareResearch(page);
   expect(writes).toHaveLength(1);
   expect(writes[0]).toMatchObject({ path: '/api/benchmarks/research-packet', method: 'POST', body: { source_ids: ['every-ig'], fields: [], platforms: [], expected_hash: initialHash } });
@@ -203,14 +256,17 @@ test('전체 조건의 요청문은 준비 POST만 만들고 세이지 대화 �
 
 test('세이지 요청문 검토가 기존 루미 초안의 본문과 배정 대상을 덮어쓰지 않는다', async ({ page }) => {
   const writes = await boardHarness(page);
-  await page.goto('/benchmarks');
+  await page.goto('/news?tab=creators');
+  await page.locator('section[aria-labelledby="benchmark-heading"]').getByRole('link', { name: '경쟁사 관리·분석 →', exact: true }).click();
   const firstResearch = await prepareResearch(page);
   await firstResearch.getByRole('button', { name: '세이지 조사 요청문 검토', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
   await page.getByRole('button', { name: '루미와 대화하기', exact: true }).click();
   const lumi = page.getByRole('dialog', { name: '루미와 대화', exact: true });
   await lumi.getByLabel('맡길 업무', { exact: true }).fill('기존 루미에게 맡길 업무 초안');
-  await lumi.getByRole('button', { name: '닫기', exact: true }).click();
+  await page.goBack();
+  await expect(lumi).not.toBeVisible();
+  await page.goForward();
   const research = await prepareResearch(page);
   await research.getByRole('button', { name: '세이지 조사 요청문 검토', exact: true }).click();
   await expect(lumi).toBeVisible();
@@ -221,14 +277,30 @@ test('세이지 요청문 검토가 기존 루미 초안의 본문과 배정 대
 
 test('조회 실패는 재시도로 복구하고 빈 소식·수동 미연동·수집 실패를 구분한다', async ({ page }) => {
   const writes = await boardHarness(page, { failFirst: true, empty: true });
-  await page.goto('/benchmarks');
+  await page.goto('/news?tab=creators');
   await expect(page.getByRole('alert').filter({ hasText: '합성 보드 조회 실패' })).toBeVisible();
   const retry = page.getByRole('button', { name: '보드 다시 불러오기', exact: true });
   await retry.focus(); await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: '아직 수집한 소식이 없어요', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '아직 등록 크리에이터 소식이 없어요', exact: true })).toBeVisible();
+  await page.getByRole('navigation', { name: '오피스 메뉴' }).getByRole('link', { name: '기획·독자 질문', exact: true }).click();
   await page.getByText('경쟁사 등록·수집 상태 관리', { exact: false }).click();
   await expect(page.getByText('합성 RSS 연결 실패', { exact: true })).toBeVisible();
   await expect(page.getByText(/Instagram 자동 수집 미연동/)).toBeVisible();
+  await page.getByRole('navigation', { name: '오피스 메뉴' }).getByRole('link', { name: '오늘의 뉴스', exact: true }).click();
+  await page.getByRole('navigation', { name: '소식 보기' }).getByRole('link', { name: '등록 크리에이터 소식', exact: true }).click();
   await expect(page.getByRole('button', { name: '공개 소식 수집 요청', exact: true })).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
+
+test('기획에서 크리에이터 소식으로 바로 들어와도 저장된 공식 뉴스 분류를 보존한다', async ({ page }) => {
+  const writes = await boardHarness(page);
+  await page.addInitScript(() => localStorage.setItem('heobrain-news-segment-v1', 'exam'));
+  await page.goto('/plans#competitors');
+  await page.locator('section[aria-labelledby="benchmark-heading"]').getByRole('link', { name: '등록 크리에이터 소식 보기 →', exact: true }).click();
+  await expect(page).toHaveURL(/tab=creators/);
+  await page.getByRole('navigation', { name: '소식 보기' }).getByRole('link', { name: '공식 뉴스', exact: true }).click();
+  await expect(page).toHaveURL(/seg=exam/);
+  expect(await page.evaluate(() => localStorage.getItem('heobrain-news-segment-v1'))).toBe('exam');
   expect(writes).toEqual([]);
 });

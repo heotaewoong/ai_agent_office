@@ -93,7 +93,6 @@ const views: { id: View; title: string; icon: string; en: string }[] = [
   { id: "home", title: "내 결정 대기", icon: "check", en: "DECISIONS" },
   { id: "plans", title: "기획·독자 질문", icon: "pen", en: "PLANNING" },
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
-  { id: "benchmarks", title: "경쟁사·아이디어", icon: "grid", en: "BENCHMARKS" },
   { id: "studio", title: "콘텐츠 작업실", icon: "pen", en: "CONTENT STUDIO" },
   {
     id: "delivery",
@@ -154,6 +153,16 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const view = route.view;
   const segment = newsSegment(search.get("seg"));
   const articleSort = newsSort(search.get("sort"));
+  const creatorNews = search.get("tab") === "creators";
+  const benchmarkActive = view === "plans" || (view === "news" && creatorNews);
+  const [newsVisited, setNewsVisited] = useState(view === "news");
+  const [plansVisited, setPlansVisited] = useState(view === "plans");
+  const [benchmarkVisited, setBenchmarkVisited] = useState(benchmarkActive);
+  useEffect(() => {
+    if (view === "news") setNewsVisited(true);
+    if (view === "plans") setPlansVisited(true);
+    if (benchmarkActive) setBenchmarkVisited(true);
+  }, [view, benchmarkActive]);
   const [localDrafts, setLocalDrafts] = useState<Record<string, LocalDraft>>(
     {},
   );
@@ -239,7 +248,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const routeJob = route.jobId || (view === "delivery" ? search.get("job") : null);
   useEffect(() => { if (routeJob) selectJob(routeJob); }, [routeJob, selectJob]);
   useEffect(() => {
-    if (view !== "news") return;
+    if (view !== "news" || creatorNews) return;
     if (search.has("seg")) {
       try { localStorage.setItem("heobrain-news-segment-v1", segment); } catch { /* Storage can be disabled. */ }
     } else {
@@ -247,7 +256,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
       try { remembered = newsSegment(localStorage.getItem("heobrain-news-segment-v1")); } catch { /* URL still works. */ }
       if (remembered !== "all") router.replace(newsHref(remembered, articleSort), { scroll: false });
     }
-  }, [view, segment, articleSort, search, router]);
+  }, [view, creatorNews, segment, articleSort, search, router]);
   const loadDashboard = useCallback(async (force = false) => {
     const ticket = dashboardRefresh.current.begin(force);
     if (!ticket) return;
@@ -563,11 +572,9 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 {view === "home"
                   ? "내 검토가 필요한 작업과 다음 행동을 확인하세요."
                   : view === "plans"
-                    ? "독자 질문과 출처에서 다음 기획을 고르세요."
-                    : view === "benchmarks"
-                  ? "분야와 플랫폼별 새 소식을 비교하고, 근거가 있는 아이디어를 모으세요."
+                    ? "독자 질문·경쟁사 분석과 출처에서 다음 기획을 고르세요."
                     : view === "news"
-                  ? "독자의 질문과 확인한 근거에서 콘텐츠를 시작하세요."
+                  ? "공식 뉴스와 등록 크리에이터의 새 소식을 한곳에서 확인하세요."
                   : view === "studio"
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
                     : view === "delivery"
@@ -607,7 +614,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {view !== "world" && view !== "benchmarks" && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
+          {view !== "world" && <PageOutline scope={`${view}-${activeId}-${creatorNews}`} curated={view === "studio" || view === "delivery"} />}
 
           <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (
@@ -668,9 +675,10 @@ export default function Office({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               {view === "home" && <DecisionHome dashboard={dashboard} />}
-              {view === "benchmarks" && <BenchmarkWorkspace connected={connected} />}
-              <div hidden={view!=="plans"}><OwnedSourceIntake onCreated={(j)=>{openCreatedJobs([j]);void loadDashboard(true);}} /></div>
-              {view === "plans" && <>
+              <div hidden={view!=="plans"}>
+                <OwnedSourceIntake onCreated={(j)=>{openCreatedJobs([j]);void loadDashboard(true);}} />
+              {(view === "plans" || plansVisited) && <>
+                  <p className="muted">기획 후보와 독자 질문을 정리하세요. <a href="#competitors">경쟁사 분석·등록과 세이지 조사로 이동 ↓</a></p>
                   <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
                     drafts={ideaSourcesDrafts}
@@ -682,9 +690,15 @@ export default function Office({ children }: { children: React.ReactNode }) {
                     }}
                   />
               </>}
-              {view === "news" && (
+              </div>
+              {view === "news" && <nav className="news-segments" aria-label="소식 보기" style={{ marginBottom: 24 }}>
+                <Link href={search.has('seg') ? newsHref(segment, articleSort) : `/news?sort=${articleSort}`} scroll={false} prefetch={false} aria-current={!creatorNews ? 'page' : undefined}>공식 뉴스</Link>
+                <Link href={newsHref(segment, articleSort, 'creators')} scroll={false} prefetch={false} aria-current={creatorNews ? 'page' : undefined}>등록 크리에이터 소식</Link>
+              </nav>}
+              <div hidden={view !== "news" || creatorNews}>
+              {(view === "news" || newsVisited) && (
                 <>
-                  <DiscoveryPanel />
+                  <DiscoveryPanel active={view === 'news' && !creatorNews} />
                   <section className="brief-banner" aria-label="수집 현황">
                     <div className="brief-copy">
                       <span className="brief-label">
@@ -812,6 +826,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
                   <BudgetStrip budget={dashboard.budget} />
                 </>
               )}
+              </div>
+              {(benchmarkActive || benchmarkVisited) && <BenchmarkWorkspace connected={connected} active={benchmarkActive} mode={view === 'news' ? 'news' : 'planning'} officialUrls={articles.map(article => article.url)} onIdeaSaved={() => setIdeaRefresh(value => value + 1)} />}
 
               {(view === "studio" || view === "delivery") && (
                 <div className="studio-layout">
