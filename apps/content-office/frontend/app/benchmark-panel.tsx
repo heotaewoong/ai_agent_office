@@ -28,6 +28,7 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
   const [field, setField] = useState('all');
   const [platform, setPlatform] = useState('all');
   const [query, setQuery] = useState('');
+  const [newsLimit, setNewsLimit] = useState(9);
   const [view, setView] = useState<'news' | 'ideas'>('news');
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [manageOpen, setManageOpen] = useState(false);
@@ -39,6 +40,8 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
   const ideaTitle = useRef<HTMLInputElement>(null);
   const packetText = useRef<HTMLTextAreaElement>(null);
   const actionPending = useRef(false);
+  const newsGrid = useRef<HTMLDivElement>(null);
+  const newsFocusIndex = useRef<number | null>(null);
   useEffect(() => {
     let live = true;
     void api.benchmarks().then(current => { if (live) setData(current); }).catch(cause => { if (live) setError(cause instanceof Error ? cause.message : '보드를 불러오지 못했습니다.'); }).finally(() => { if (live) setBusy(''); });
@@ -46,6 +49,15 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
   }, []);
   useEffect(() => { if (sourceEditor) sourceName.current?.focus(); }, [sourceEditor?.id]);
   useEffect(() => { if (ideaEditor) ideaTitle.current?.focus(); }, [ideaEditor?.item.id]);
+  useEffect(() => { newsFocusIndex.current = null; setNewsLimit(9); }, [field, platform, query]);
+  useEffect(() => {
+    const index = newsFocusIndex.current;
+    if (index === null) return;
+    newsFocusIndex.current = null;
+    const target = index < 0 ? document.getElementById('benchmark-news-heading') : newsGrid.current?.children[index] as HTMLElement | undefined;
+    target?.focus({ preventScroll: true });
+    target?.scrollIntoView({ block: 'start' });
+  }, [newsLimit]);
 
   async function reload() {
     if (busy) return;
@@ -82,6 +94,10 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
   const selected = new Set(selectedSources);
   const sourceChanged = Boolean(sourceEditor && sourceEditor.baseHash !== data.registry_hash);
   const ideaChanged = Boolean(ideaEditor && ideaEditor.baseHash !== data.registry_hash);
+  function showNews(limit: number, focusIndex: number) {
+    newsFocusIndex.current = focusIndex;
+    setNewsLimit(limit);
+  }
 
   function editSource(source?: BenchmarkSource) {
     setManageOpen(true);
@@ -128,7 +144,7 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
   }
   function itemCard(item: BenchmarkItem, needsDate = false) {
     const saved = data!.ideas.some(idea => idea.source_url === item.url);
-    return <article className={styles.card} key={item.id}>
+    return <article className={styles.card} key={item.id} tabIndex={-1}>
       <div className={styles.cardTop}><span className={styles.platform}>{data!.platforms[item.platform] ?? item.platform}</span><span className={styles.muted}>{item.verification_state === 'stale_metadata' ? '이전 관측 · 재확인 필요' : '원문 내용 확인 필요'}</span></div>
       <p className={styles.source}>{item.source_name || '공식 소식'}{!item.source_id && <span> · 기존 공식 뉴스</span>}</p>
       <h3><OriginalLink url={item.url}>{item.title}</OriginalLink></h3>
@@ -143,7 +159,7 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
   return <section className={styles.panel} aria-labelledby="benchmark-heading">
     <header className={styles.hero}>
       <div><p className={styles.eyebrow}>내 분야의 소식에서 다음 콘텐츠까지</p><h2 id="benchmark-heading">흩어진 소식을<br /><span>나만의 아이디어로.</span></h2><p>분야·플랫폼별 소식을 살펴보고, 내 콘텐츠 아이디어로 정리하세요.</p></div>
-      <div className={styles.heroStats}><div><strong>{creators.length}</strong><span>등록 크리에이터</span></div><div><strong>{new Set(sources.map(source => source.platform)).size}</strong><span>등록 출처 플랫폼</span></div><div><strong>{data.items.length}</strong><span>보관된 소식</span></div></div>
+      <div className={styles.heroStats}><div><strong>{creators.length}</strong><span>등록 크리에이터</span></div><div><strong>{new Set(sources.map(source => source.platform)).size}</strong><span>등록 출처 플랫폼</span></div><div><strong>{data.items.length}</strong><span>불러온 후보</span></div></div>
     </header>
 
     <section className={styles.filters} aria-label="소식 필터">
@@ -156,6 +172,7 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
     <div className={styles.statusBar}><div><strong>최근 출처 확인 · {dateLabel(checked)}</strong><p>작업 시간 {data.window_open ? '열림' : '종료'}{data.activity ? ` · ${activityNames[data.activity.state] ?? '수집 상태 확인 필요'}` : ' · 수집 요청 기록 없음'}</p></div><div className={styles.actions}><button type="button" className="button secondary" disabled={Boolean(busy)} onClick={() => void reload()}>보드 다시 확인</button><button type="button" className="button primary" disabled={Boolean(busy) || !data.window_open} onClick={() => void perform('공개 소식 수집 요청', async () => { const result = await api.refreshBenchmarks({ expected_hash: data.registry_hash }); setNotice(result.window_open ? '공개 소식 수집을 요청했습니다. 완료 후 보드 다시 확인을 눌러 결과를 읽어 주세요.' : '작업 시간이 종료돼 수집을 시작하지 않았습니다.'); })}>공개 소식 수집 요청</button></div></div>
     {!data.window_open && <p className={styles.hint}>수집은 열린 작업 시간 안에서만 진행합니다. <Link href="/settings">제작 설정에서 작업 시간 확인</Link></p>}
     <p className={styles.hint}>YouTube 공개 RSS와 수동 원문 등록을 구분합니다. Instagram 등 자동 수집 미연동 출처의 실시간 소식·비공개 성과는 제공하지 않습니다.</p>
+    <p className={styles.coverage}>{data.coverage ? <>가용 자료 {data.coverage.available_items.toLocaleString('ko-KR')}건 중 {data.coverage.returned_items.toLocaleString('ko-KR')}건을 보드로 불러왔습니다. 보드는 최대 {data.coverage.limit}건이며 기존 공식 뉴스는 최대 {data.coverage.official_limit}건을 포함합니다. </> : <>보드로 불러온 후보 {data.items.length}건을 살펴보고 있습니다. </>}필터와 검색은 불러온 범위에만 적용되며, 모든 플랫폼의 과거 자료를 전수 검색하지 않습니다. <Link href="/news">오늘의 뉴스에서 전체 후보 보기</Link></p>
     {busy && <p role="status" className={styles.notice}>{busy} 중…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
     {notice && <p role="status" className={styles.notice}>{notice}</p>}
@@ -163,8 +180,9 @@ export function BenchmarkPanel({ onSendResearch }: Props) {
 
     <div className={styles.sectionHeading}><div className={styles.viewButtons} role="group" aria-label="보드 보기"><button type="button" aria-pressed={view === 'news'} onClick={() => setView('news')}>소식 <span>{matches.length}</span></button><button type="button" aria-pressed={view === 'ideas'} onClick={() => setView('ideas')}>저장 아이디어 <span>{ideas.length}</span></button></div><button type="button" className={styles.textButton} onClick={() => editSource()}>+ 경쟁사 등록</button></div>
     {view === 'news' ? <>
-      <div className={styles.sectionHeading}><h3>발행일을 확인한 소식</h3><span className={styles.muted}>최신 발행일 순 · 확인 시각과 구분</span></div>
-      {dates.dated.length ? <div className={styles.cards}>{dates.dated.map(item => itemCard(item))}</div> : <div className={styles.empty}><h4>{data.items.length ? '현재 필터에 맞는 소식이 없어요' : '아직 수집한 소식이 없어요'}</h4><p>{data.items.length ? '다른 분야나 플랫폼을 고르거나 검색어를 줄여보세요. 발행일 확인이 필요한 자료는 아래에 따로 모았습니다.' : '경쟁사를 등록하고 출처별 연결 상태를 확인하세요. 작업 시간이 열려 있다면 공개 소식 수집을 요청할 수 있어요.'}</p></div>}
+      <div className={styles.sectionHeading}><h3 id="benchmark-news-heading" tabIndex={-1}>발행일을 확인한 소식</h3><span className={styles.muted}>최신 발행일 순 · 확인 시각과 구분</span></div>
+      {dates.dated.length ? <div className={styles.cards} id="benchmark-news-candidates" ref={newsGrid}>{dates.dated.slice(0, newsLimit).map(item => itemCard(item))}</div> : <div className={styles.empty}><h4>{data.items.length ? '현재 필터에 맞는 소식이 없어요' : '아직 수집한 소식이 없어요'}</h4><p>{data.items.length ? '다른 분야나 플랫폼을 고르거나 검색어를 줄여보세요. 발행일 확인이 필요한 자료는 아래에 따로 모았습니다.' : '경쟁사를 등록하고 출처별 연결 상태를 확인하세요. 작업 시간이 열려 있다면 공개 소식 수집을 요청할 수 있어요.'}</p></div>}
+      {dates.dated.length > 0 && <div className={styles.browseActions} role="group" aria-label="소식 후보 더 보기"><p role="status">후보 {dates.dated.length}건 중 {Math.min(newsLimit, dates.dated.length)}건 표시</p>{newsLimit < dates.dated.length && <button type="button" className="button secondary" aria-controls="benchmark-news-candidates" onClick={() => showNews(newsLimit + 9, newsLimit)}>후보 {Math.min(9, dates.dated.length - newsLimit)}건 더 보기</button>}{newsLimit > 9 && <button type="button" className={styles.textButton} aria-controls="benchmark-news-candidates" onClick={() => showNews(9, -1)}>주요 소식 9건만 보기</button>}</div>}
       {dates.undated.length > 0 && <details className={styles.undated}><summary>발행일 확인이 필요한 자료 {dates.undated.length}건</summary><p className={styles.hint}>날짜 미상·미래 날짜·잘못된 날짜는 최신 소식에 섞지 않았습니다.</p><div className={styles.cards}>{dates.undated.map(item => itemCard(item, true))}</div></details>}
     </> : <section aria-label="저장한 후보 아이디어">
       <p className={styles.hint}>후보 저장은 원출처 확인이나 기획⓪ 승인이 아닙니다. 기획 은행에서 근거를 확인한 뒤 선택하세요.</p>

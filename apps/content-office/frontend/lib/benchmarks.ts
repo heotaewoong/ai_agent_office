@@ -8,6 +8,7 @@ export type BenchmarkOverview = {
   registry: { sources: BenchmarkSource[] }; registry_hash: string; fields: string[]; platforms: Record<string, string>;
   items: BenchmarkItem[]; sources_status: BenchmarkSourceStatus[]; activity: { state: string; updated_at?: string; error?: string | null } | null;
   window_open: boolean; ideas: BenchmarkIdea[];
+  coverage?: { available_items: number; returned_items: number; limit: number; official_limit: number };
 };
 export type BenchmarkRegistryInput = { sources: BenchmarkSource[]; expected_hash: string };
 export type BenchmarkIdeaInput = { title: string; source_url: string; source_id: string; fields: string[]; target_platforms: string[]; angle: string; expected_hash: string };

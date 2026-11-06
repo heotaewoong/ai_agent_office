@@ -13,6 +13,8 @@ from .store import WorkflowError, canonical, digest, identifier, now
 
 
 FIELDS = ['AI 활용', '업무 자동화', '공부법', '콘텐츠 제작', 'AI·기술', '자격증·시험·취업']
+ITEM_LIMIT = 240
+OFFICIAL_LIMIT = 48
 PLATFORMS = {'youtube': 'YouTube', 'instagram': 'Instagram', 'threads': 'Threads', 'x': 'X',
              'linkedin': 'LinkedIn', 'naver_blog': '네이버 블로그', 'tistory': '티스토리',
              'tiktok': 'TikTok', 'newsletter': '뉴스레터', 'website': '웹사이트', 'other': '기타'}
@@ -178,7 +180,11 @@ def status(store):
             row = {**row, 'state': 'stale', 'note': '등록 조건이 바뀌었습니다. 새 공개 피드 확인이 필요합니다'}
         statuses.append(row)
     items = [row for row in snapshot.get('items', []) if _recent(row)] if current else []
-    items += _official_items(store)
+    official = _official_items(store)
+    available = len(items) + len(official)
+    items.sort(key=lambda row: parse_date(row['published_at']), reverse=True)
+    official.sort(key=lambda row: parse_date(row['published_at']), reverse=True)
+    items = items[:ITEM_LIMIT - OFFICIAL_LIMIT] + official[:OFFICIAL_LIMIT]
     items.sort(key=lambda row: parse_date(row['published_at']), reverse=True)
     tasks = [task for task in store.tasks() if task['kind'] == 'benchmark_refresh'
              and task['payload'].get('registry_hash') == registry_hash]
@@ -186,6 +192,8 @@ def status(store):
     return {'registry': registry, 'registry_hash': registry_hash,
             'fields': list(dict.fromkeys(FIELDS + [field for source in registry['sources'] for field in source['fields']])),
             'platforms': PLATFORMS, 'items': items, 'sources_status': statuses,
+            'coverage': {'available_items': available, 'returned_items': len(items),
+                         'limit': ITEM_LIMIT, 'official_limit': OFFICIAL_LIMIT},
             'activity': {'state': task['state'], 'updated_at': task['updated_at'], 'error': (task.get('result') or {}).get('error')} if task else None,
             'window_open': can_collect(store),
             'ideas': [with_edit_hash(card) for card in store.ideas() if card.get('origin') == 'benchmark']}

@@ -210,6 +210,54 @@ def test_latest_items_compare_real_times_across_timezone_offsets(store):
     assert [item['title'] for item in benchmarks.status(store)['items']] == ['newer', 'older']
 
 
+@pytest.mark.parametrize('registered_count', [0, 210])
+def test_status_bounds_large_board_without_changing_sources_news_or_snapshots(store, registered_count):
+    current = datetime.now(timezone.utc)
+    sources = registry(store)['sources']
+    youtube = next(source for source in sources if source['platform'] == 'youtube')
+    articles = []
+    for i in range(2500):
+        published = (current - timedelta(seconds=10 * i)).astimezone(timezone(timedelta(hours=9 if i % 2 else -8)))
+        articles.append({'id': str(i), 'title': f'공식 뉴스 {i}', 'url': f'https://example.com/news/{i}',
+                         'feed_id': 'official-feed', 'feed_name': '공식 출처', 'segment': 'ai',
+                         'published_at': published.isoformat(), 'retrieved_at': current.isoformat(), 'summary': '가' * 700})
+    store.save_articles(list(reversed(articles)))
+    registered = [{'id': f'rss-{i}', 'title': f'등록 RSS {i}', 'url': f'https://www.youtube.com/watch?v=item{i}',
+                   'source_id': youtube['id'], 'creator_id': youtube['creator_id'], 'source_name': youtube['name'],
+                   'platform': 'youtube', 'fields': youtube['fields'], 'summary': '등록 채널 원문 요약',
+                   'published_at': (current - timedelta(seconds=10 * i + 5)).isoformat(),
+                   'checked_at': current.isoformat(), 'verification_state': 'metadata_only', 'idea_angle': '기획 제안'}
+                  for i in range(registered_count)]
+    snapshot = {'registry_hash': digest({'sources': sources}), 'checked_at': current.isoformat(),
+                'items': list(reversed(registered)), 'sources_status': [
+                    {'source_id': youtube['id'], 'state': 'ok', 'method': 'youtube_rss',
+                     'checked_at': current.isoformat(), 'count': registered_count, 'error': None, 'note': '메타데이터'}]}
+    store.set_setting('benchmark_snapshot', snapshot)
+    before = database(store)
+    result = benchmarks.status(store)
+    expected_registered = min(registered_count, 192)
+    assert result['coverage'] == {'available_items': 2500 + registered_count, 'returned_items': 48 + expected_registered,
+                                  'limit': 240, 'official_limit': 48}
+    assert len(result['items']) == 48 + expected_registered
+    official = [item for item in result['items'] if item['platform'] == 'website']
+    rss_items = [item for item in result['items'] if item['source_id'] == youtube['id']]
+    assert [item['id'] for item in official] == [f'official-{i}' for i in range(48)]
+    assert [item['id'] for item in rss_items] == [f'rss-{i}' for i in range(expected_registered)]
+    assert all(item['source_id'] == '' and len(item['summary']) == 700 for item in official)
+    published = [feeds.parse_date(item['published_at']) for item in result['items']]
+    assert published == sorted(published, reverse=True)
+    assert next(row for row in result['sources_status'] if row['source_id'] == youtube['id']) == snapshot['sources_status'][0]
+    assert registry(store)['sources'] == sources and store.setting('benchmark_snapshot') == snapshot
+    assert database(store) == before and len(store.articles_list()) == 2500
+    # A display cap must not narrow original-source validation for an existing manual proposal.
+    outside = articles[2000]
+    idea = benchmarks.save_idea(store, {'title': '표시 범위 밖 원문도 검토', 'source_url': outside['url'], 'source_id': '',
+                                        'fields': ['AI·기술'], 'target_platforms': ['youtube'], 'angle': '공식 원문 직접 확인',
+                                        'expected_hash': digest({'sources': sources})})
+    assert idea['state'] == 'candidate' and idea['primary_sources'] == 0 and idea['blocked']
+    assert store.setting('benchmark_snapshot') == snapshot and len(store.articles_list()) == 2500
+
+
 def test_idea_candidate_keeps_unverified_evidence_and_never_selects_or_creates_job(store, monkeypatch):
     source = next(s for s in registry(store)['sources'] if s['platform'] == 'instagram')
     body = {'title': '직접 재현해 볼 공부 워크플로', 'source_url': source['url'], 'source_id': source['id'],

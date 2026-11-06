@@ -26,9 +26,17 @@ function initialOverview(): BenchmarkOverview {
 }
 
 // All API calls terminate in this fixture; no external sources, accounts or operating data are used.
-async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: boolean } = {}) {
+async function boardHarness(page: Page, options: { failFirst?: boolean; empty?: boolean; many?: boolean } = {}) {
   let overview = initialOverview();
   if (options.empty) overview.items = [];
+  if (options.many) {
+    overview.items = Array.from({ length: 31 }, (_, index) => ({
+      ...overview.items[index % 2], id: `browse-${index}`, title: `기록 활용 ${String(index + 1).padStart(2, '0')}`,
+      url: index % 2 ? `https://www.youtube.com/watch?v=synthetic-${index}` : `https://www.instagram.com/p/synthetic-${index}/`,
+      published_at: new Date(Date.now() - (index + 1) * 60000).toISOString(),
+    }));
+    overview.coverage = { available_items: 2450, returned_items: 31, limit: 240, official_limit: 48 };
+  }
   let reads = 0;
   const writes: { path: string; method: string; csrf?: string; body: Record<string, unknown> }[] = [];
   await page.route('**/api/**', async route => {
@@ -93,6 +101,47 @@ for (const width of [1440, 390]) test(`분야·출처·검색 필터는 쓰기 �
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const audit = await new AxeBuilder({ page }).include('section[aria-labelledby="benchmark-heading"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(audit.violations.filter(row => row.impact === 'critical' || row.impact === 'serious')).toEqual([]);
+  expect(writes).toEqual([]);
+});
+
+for (const width of [1440, 390]) test(`소식은 9건씩 읽고 분류·검색을 바꿔도 조사 선택과 등록 입력을 보존한다 ${width}px`, async ({ page }) => {
+  const writes = await boardHarness(page, { many: true });
+  await page.setViewportSize({ width, height: 950 });
+  await page.goto('/benchmarks');
+  const board = page.locator('section[aria-labelledby="benchmark-heading"]');
+  const cards = board.locator('#benchmark-news-candidates article');
+  await expect(cards).toHaveCount(9);
+  await expect(board.getByText(/가용 자료 2,450건 중 31건/)).toBeVisible();
+  await expect(board.getByRole('link', { name: '오늘의 뉴스에서 전체 후보 보기', exact: true })).toHaveAttribute('href', '/news');
+  await board.getByRole('button', { name: '+ 경쟁사 등록', exact: true }).click();
+  const name = board.getByLabel('크리에이터 이름', { exact: true });
+  await name.fill('아직 저장하지 않은 출처 입력');
+  const research = board.getByRole('region', { name: '세이지에게 조사 맡기기', exact: true });
+  const source = research.getByRole('checkbox', { name: /every\._ai.*Instagram/ });
+  await source.check();
+  const more = board.getByRole('button', { name: '후보 9건 더 보기', exact: true });
+  expect((await more.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await more.focus(); await page.keyboard.press('Enter');
+  await expect(cards).toHaveCount(18);
+  await expect(cards.nth(9)).toBeFocused();
+  await expect.poll(() => cards.nth(9).evaluate(element => element.getBoundingClientRect().top - (document.querySelector('.page-outline')?.getBoundingClientRect().bottom ?? 0))).toBeGreaterThanOrEqual(0);
+  await board.getByRole('button', { name: '주요 소식 9건만 보기', exact: true }).click();
+  await expect(cards).toHaveCount(9);
+  await expect(board.locator('#benchmark-news-heading')).toBeFocused();
+  await more.click(); await expect(cards).toHaveCount(18);
+  await board.getByRole('button', { name: 'AI 활용', exact: true }).click();
+  await expect(cards).toHaveCount(9);
+  await board.getByRole('button', { name: '후보 7건 더 보기', exact: true }).click();
+  await expect(cards).toHaveCount(16);
+  await board.getByLabel('출처 플랫폼', { exact: true }).selectOption('instagram');
+  await expect(cards).toHaveCount(9);
+  await board.getByRole('button', { name: '후보 7건 더 보기', exact: true }).click();
+  await expect(cards).toHaveCount(16);
+  await board.getByLabel('소식·크리에이터 검색', { exact: true }).fill('기록');
+  await expect(cards).toHaveCount(9);
+  await expect(name).toHaveValue('아직 저장하지 않은 출처 입력');
+  await expect(source).toBeChecked();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(writes).toEqual([]);
 });
 
