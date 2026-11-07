@@ -244,7 +244,7 @@ def _card_id(card, record):
     return card["id"]
 
 
-def submit(store, native, request_id, text):
+def submit(store, native, request_id, text, *, attach_delivery=True, before_create=None):
     fingerprint = digest({"text": text, "assignee": "lumi"})
     payload = task_payload(request_id, text)
     body = payload["body"]
@@ -269,7 +269,8 @@ def submit(store, native, request_id, text):
             record.pop("rejection_code", None)
             db.execute("UPDATE settings SET value=? WHERE key=?", (canonical(record), key))
     if record["native_task_id"]:
-        return {**_ack(record), "delivery": _delivery(native, record)}
+        return {**_ack(record), "delivery": _delivery(native, record) if attach_delivery else
+                {"slack": "not_attached", "external_delivery_verified": False}}
     try:
         task_id = _adopt(native, record)
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
@@ -286,6 +287,13 @@ def submit(store, native, request_id, text):
     if not task_id and not fresh:
         raise BridgeError("native_admission_unknown", "접수 결과를 확인 중입니다. 같은 요청 번호를 유지해 주세요")
     if not task_id:
+        if before_create is not None:
+            try:
+                before_create()
+            except ValueError:
+                record.update(phase="preflight_failed", rejection_code="native_admission_blocked")
+                _save(store, record)
+                raise
         record["phase"] = "posting"
         _save(store, record)
         try:
@@ -309,7 +317,8 @@ def submit(store, native, request_id, text):
     record["native_task_id"] = task_id
     record["phase"] = "admitted"
     _save(store, record)
-    return {**_ack(record), "delivery": _delivery(native, record)}
+    return {**_ack(record), "delivery": _delivery(native, record) if attach_delivery else
+            {"slack": "not_attached", "external_delivery_verified": False}}
 
 
 def _ack(record):
@@ -357,7 +366,7 @@ def _validated_notice_ref(value, request_id):
     return dict(value)
 
 
-def read_request(store, native, request_id):
+def read_request(store, native, request_id, *, attach_delivery=True):
     record = _record(store, request_id)
     native_only = not record
     if native_only:
@@ -366,7 +375,9 @@ def read_request(store, native, request_id):
         return {**_ack(record), "status": "failed", "native_status": "not_submitted", "assignee": "lumi",
                 "title": "접수 전 검토 필요", "updated_at": record["created_at"], "current_run_id": None,
                 "events": [], "report": None, "error": {"code": record["rejection_code"],
-                "message": "요청은 접수되지 않았습니다. 인증정보나 허용되지 않는 입력을 검토해 주세요"}}
+                "message": ("접수 전 작업 시간·예산 조건이 바뀌어 접수하지 않았습니다. 같은 요청 번호를 보존했습니다"
+                    if record["rejection_code"] == "native_admission_blocked" else
+                    "요청은 접수되지 않았습니다. 인증정보나 허용되지 않는 입력을 검토해 주세요")}}
     if not record["native_task_id"]:
         task_id = _adopt(native, record)
         if not task_id:
@@ -380,7 +391,9 @@ def read_request(store, native, request_id):
     # Admission is not perpetual scope proof: recheck the current root and its original body.
     _card_id(data.get("task", {}), record)
     result = project_collaboration(native, record, data)
-    result["delivery"] = _delivery(native, record, result.pop("_notice_ref", None))
+    notice = result.pop("_notice_ref", None)
+    result["delivery"] = _delivery(native, record, notice) if attach_delivery else {
+        "slack": "not_attached", "external_delivery_verified": False}
     return result
 
 

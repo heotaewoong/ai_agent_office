@@ -61,6 +61,12 @@
 .dates > div { display:flex; gap:10px; }
 .dates dt { flex-shrink:0; }
 .dates dd { margin:0; overflow-wrap:anywhere; }
+.metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:0; }
+.metrics > div { padding:9px; background:#f2f5ec; border-radius:7px; min-width:0; }
+.metrics dt { color:#627057; font-size:11px; }
+.metrics dd { margin:3px 0 0; font-size:14px; font-weight:650; overflow-wrap:anywhere; }
+.angle code { overflow-wrap:anywhere; font-size:11px; }
+.cardActions label { display:flex; align-items:center; gap:8px; min-height:44px; font-size:12px; }
 .angle { border-top:1px solid #e0e6d8; padding-top:5px; color:#506947; }
 .angle summary { cursor:pointer; padding:8px 0; font-size:13px; font-weight:650; }
 .angle p { margin-top:9px; font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere; }

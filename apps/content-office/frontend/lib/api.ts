@@ -267,6 +267,9 @@ export const api = {
   refreshBenchmarks: (input: { expected_hash: string }) => request<import('./benchmarks').BenchmarkRefreshResult>('/benchmarks/refresh', 'POST', input),
   saveBenchmarkIdea: (input: import('./benchmarks').BenchmarkIdeaInput) => request<import('./benchmarks').BenchmarkIdea>('/benchmarks/ideas', 'POST', input),
   benchmarkResearchPacket: (input: import('./benchmarks').BenchmarkResearchInput) => request<import('./benchmarks').BenchmarkResearchPacket>('/benchmarks/research-packet', 'POST', input),
+  startBenchmarkResearch: (input: import('./benchmark-research').BenchmarkResearchInputRun) => request<unknown>('/benchmarks/research-runs', 'POST', input),
+  benchmarkResearch: (id: string) => request<unknown>(`/benchmarks/research-runs/${encodeURIComponent(id)}`),
+  benchmarkResearchIdea: (id: string, input: import('./benchmark-research').BenchmarkResearchIdea) => request<import('./benchmarks').BenchmarkIdea>(`/benchmarks/research-runs/${encodeURIComponent(id)}/ideas`, 'POST', input),
   addIdea: (input: IdeaInput) => request<Idea>("/ideas", "POST", input),
   updateIdeaSources: (id: string, input: IdeaSourcesInput) =>
     request<Idea>(`/ideas/${encodeURIComponent(id)}/sources`, "PUT", input),

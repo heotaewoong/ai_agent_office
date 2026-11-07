@@ -10,14 +10,18 @@
 
 공개 운영 주소를 바꿀 때는 기존 `OFFICE_PUBLIC_ORIGIN`도 같은 HTTPS 주소 한 값으로 맞춰야 합니다. Origin 검사·CSRF·Secure 쿠키를 없애거나 임의 출처를 추가하지 않습니다.
 
-YouTube·Instagram·Threads·X·LinkedIn·네이버 블로그·티스토리·TikTok·뉴스레터·웹사이트·기타 11종을 분류하고 같은 크리에이터의 여러 계정을 묶습니다. 필터는 화면 상태만 바꿉니다. 자동 수집은 검증된 UC ID의 YouTube 공개 RSS만 지원하며 Instagram 등은 미연동 상태와 수동 원문 등록을 표시합니다. 최근7일 메타데이터의 발행일·확인일, 실패·0건을 구분합니다. 기존 API 응답 상한은 등록 RSS192건+공식48건(최대240건) 그대로이며 화면에서 공식 항목을 다시 복제하지 않습니다. 원본 데이터와 기존 오늘의 뉴스 조회 정책은 바꾸지 않습니다. 크리에이터 소식은9개씩 펼쳐 읽습니다.
+YouTube·Instagram·Threads·X·LinkedIn·네이버 블로그·티스토리·TikTok·뉴스레터·웹사이트·기타 11종을 분류하고 같은 크리에이터의 여러 계정을 묶습니다. 필터는 화면 상태만 바꿉니다. 검증된 UC ID의 YouTube 공개 RSS는 기존 worker로 수집합니다. 연결된 브라우저에서 확인한 Instagram 공개 게시물은 `/api/benchmarks/observations`로 등록 출처·원문·발행/관측일·공개 반응·관측 기록 SHA를 함께 반입합니다. 이는 Instagram 공식 API나 무인 크롤러 연결이 아닙니다. 표시되지 않은 수치는 0으로 바꾸지 않으며 축약값은 근사로 보존합니다. 최근에 관측한 옛 게시물에도 실제 발행일과 과거 표시를 유지합니다. 기존 응답 상한과 원본 자료를 보존하며 소식은9개씩 펼쳐 읽습니다.
 
 
 경쟁사 등록은 기존 settings에 별도 레지스트리를 저장하고, 열린 작업 시간에서 사용자가 수집을 요청할 때만 기존 worker에 `benchmark_refresh`를 넣습니다. 기존 뉴스·작업·승인·예산은 바꾸지 않습니다. 후보 아이디어는 기존 ideas 장부에 `primary_sources=0`으로 저장하며 사람의 선택⓪이나 job 생성을 실행하지 않습니다. 레지스트리 CAS와 후보 중복 저장은 원자적으로 검사해 기존 사람 편집·선택 내용을 보존합니다.
 
-‘세이지 조사 요청문 준비’는 원문 URL·날짜·주장/관찰·반례를 포함한 초안만 반환합니다. ‘요청문 검토’는 기존 비서 대화창을 열고, 사용자가 ‘실제 비서에게 보내기’를 눌러야 동일한 Lumi 접수 계약으로 Sage 배정을 요청합니다. 접수·실행·독립 검토·최종 보고·Slack 수신은 서로 다른 상태입니다. 기존 요청·입력·배정 대상을 덮어쓰지 않으며 새 스킬 설치·모델 호출·예약을 자동 실행하지 않습니다. 보드 진입만으로 비서 조회나 알림 구독을 시작하지 않습니다.
+‘세이지 조사 요청문 준비’는 실제 보관된 관측을 최대6건 선택해 고정하며 아직 실행하지 않습니다. ‘선택한 근거로 세이지 조사 시작’은 정상 작업 시간 안에서 기존 Lumi→mybots-sage→독립 검토→Lumi 경로로 명시 접수합니다. 동일 UUID의 불확실 응답은 재대사하며 새 카드를 중복 생성하지 않습니다. 새 연구 경로는 Slack 구독·외부 메시지를 호출하지 않고 일반 비서 업무의 기존 전달 정책은 유지합니다. 원래 수동 요청문 검토 경로도 보존합니다.
 
-검사: backend `tests/test_benchmarks.py`, frontend `tests/benchmarks.test.ts`, `tests/assistant-prepared-draft.test.ts`, 실제 Next UI 합성 계약 `tests/browser/benchmarks.spec.ts`. 운영 데이터·실제 Sage 실행과 로컬 fixture 검증은 별도입니다.
+완료 뒤 실제 세이지 작업자·독립 검토·루미 완료 실행/이벤트가 확인돼야 분석 영수증을 제공합니다. 최종 보고에서 후보 아이디어를 저장하면 서버가 동결된 원문·관측값·분석 영수증을 복사하며 사람 승인⓪·원고·제작을 대신하지 않습니다. 새 접수 시 기존 제작 예산 잔액을 확인하되 비서 실행은 그 금액을 예약·정산하는 경로가 아닙니다. 모델 구독 사용량·금액 제한·실행 완료는 서로 구분하며 별도 유료 API·MCP·새 예약을 허용하지 않습니다.
+
+주제별 트렌드 근거는 기존 discovery의 공개 YouTube/HN/검색 자료를 별도로 표시합니다. 같은 플랫폼·같은 반응 단위의 관측 표본만 비교하며 전체 SNS 인기 순위·증가율·비공개 성과로 표현하지 않습니다. 출처/스냅샷 변경은 CAS로 거부하고 실패·옛 관측·최초 반입 영수증을 보존합니다.
+
+검사: backend `tests/test_benchmarks.py`, `tests/test_benchmark_research.py`, frontend `tests/benchmarks.test.ts`, `tests/benchmark-observations.test.ts`, `tests/benchmark-research.test.ts`, 실제 Next UI 합성 계약 `tests/browser/benchmarks.spec.ts`, `tests/browser/benchmark-research.spec.ts`. 운영 실수집·실 Sage 완료 검증은 로컬 fixture 성공과 별도로 기록합니다.
 
 ## 기존 EC2 루미 업무 연결
 

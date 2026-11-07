@@ -367,3 +367,295 @@ def test_api_preserves_session_csrf_hash_and_exact_dto(store, monkeypatch):
     assert packet.status_code == 200 and '플랫폼: 전체' in packet.json()['text'] and database(store) == unchanged
     bad = {**body, 'unapproved': True}
     assert client.put('/api/benchmarks', json=bad, headers=headers).status_code == 422
+
+
+def observation_body(store, **item_changes):
+    current = datetime.now(timezone.utc)
+    item = {'url': 'https://www.instagram.com/every._ai/p/De6OvlsFfaA/', 'author_username': 'every._ai',
+            'title': '실제 공개 게시물 관측', 'summary': '게시자의 도구 소개이며 성능 주장은 미검증입니다.',
+            'published_at': (current - timedelta(days=14)).isoformat(), 'observed_at': current.isoformat(),
+            'metrics': {'likes': {'value': 761, 'availability': 'observed', 'raw_text': '761', 'precision': 'exact'},
+                        'comments': {'value': 5800, 'availability': 'observed', 'raw_text': '5.8천', 'precision': 'approximate'},
+                        'views': {'value': None, 'availability': 'not_visible', 'raw_text': '', 'precision': 'unknown'}}}
+    item.update(item_changes)
+    board = benchmarks.status(store)
+    return {'source_id': 'every-ai-instagram', 'expected_hash': board['registry_hash'],
+            'snapshot_hash': board['snapshot_hash'], 'capture_sha256': 'a' * 64,
+            'collection_scope': '프로필에 표시된 게시물 1건의 공개 DOM만 관측. 전체 최신순·인기순위 미확인.', 'items': [item]}
+
+
+def test_observed_youtube_metrics_keep_original_feed_hash_without_model_or_other_state(store, monkeypatch):
+    open_window(store)
+    raw = rss().replace(b'<entry>', b'<entry xmlns:media="http://search.yahoo.com/mrss/">', 1).replace(
+        b'</published>', b'</published><media:group><media:community><media:statistics views="1234"/></media:community></media:group>', 1)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda url, **kw: (raw, url, 'application/atom+xml'))
+    before = protected(store)
+    benchmarks.run(store, digest(registry(store)))
+    board = benchmarks.status(store)
+    item = board['items'][0]
+    assert item['metrics']['views'] == {'value': 1234, 'availability': 'observed', 'raw_text': '1234', 'precision': 'exact'}
+    assert item['provenance']['method'] == 'youtube_rss'
+    import hashlib
+    assert item['provenance']['capture_sha256'] == hashlib.sha256(raw).hexdigest()
+    assert board['snapshot_hash'] == benchmarks._snapshot_hash(store.setting('benchmark_snapshot'), store=store)
+    assert protected(store) == before
+
+
+def test_browser_import_preserves_historical_dates_missing_metrics_and_immutable_receipt(store, monkeypatch):
+    body = observation_body(store)
+    before = protected(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **kw: pytest.fail('import must not fetch'))
+    first = benchmarks.import_observations(store, body)
+    item = first['items'][0]
+    assert item['freshness'] == 'historical' and item['published_at'] == body['items'][0]['published_at']
+    assert item['metrics']['views']['value'] is None and item['metrics']['comments']['precision'] == 'approximate'
+    assert item['provenance']['method'] == 'browser_public_observation'
+    assert item['provenance']['source_hash'] == digest(registry(store)['sources'][0])
+    assert item['provenance']['capture_sha256'] == body['capture_sha256']
+    assert first['sources_status'][0]['state'] == 'observed'
+    before_replay = database(store)
+    replay = benchmarks.import_observations(store, body)
+    assert replay['import_receipt']['replayed'] and replay['items'] == first['items']
+    assert database(store) == before_replay and protected(store) == before and store.tasks() == []
+    assert not feeds.rank_articles([{'url': item['url'], 'published_at': item['published_at'], 'title': item['title']}])
+
+
+def test_undated_browser_observation_keeps_null_and_get_is_pure(store, monkeypatch):
+    benchmarks.import_observations(store, observation_body(store, published_at=None))
+    before = database(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **kw: pytest.fail('GET fetched'))
+    board = benchmarks.status(store)
+    assert board['items'][0]['published_at'] is None and board['items'][0]['freshness'] == 'unknown'
+    assert database(store) == before
+
+
+@pytest.mark.parametrize('change', [
+    {'url': 'https://www.instagram.com/accounts/login/'},
+    {'url': 'https://www.instagram.com/someone_else/p/De6OvlsFfaA/'},
+    {'url': 'https://www.instagram.com.evil.example/p/De6OvlsFfaA/'},
+    {'url': 'https://user:secret@www.instagram.com/p/De6OvlsFfaA/'},
+    {'author_username': 'someone_else'}, {'observed_at': '2020-01-01T00:00:00Z'},
+    {'published_at': '2099-01-01T00:00:00Z'},
+    {'metrics': {'likes': {'value': True, 'availability': 'observed', 'raw_text': '1', 'precision': 'exact'}}},
+    {'metrics': {'likes': {'value': 0, 'availability': 'not_visible', 'raw_text': '', 'precision': 'unknown'}}},
+    {'metrics': {'likes': {'value': 5800, 'availability': 'observed', 'raw_text': '5.8천', 'precision': 'exact'}}},
+    {'metrics': {'likes': {'value': 700, 'availability': 'observed', 'raw_text': '761', 'precision': 'exact'}}},
+])
+def test_invalid_browser_observations_never_write_or_fetch(store, change, monkeypatch):
+    body = observation_body(store, **change)
+    before = database(store)
+    monkeypatch.setattr(feeds, 'fetch_public', lambda *a, **kw: pytest.fail('invalid import fetched'))
+    with pytest.raises(WorkflowError):
+        benchmarks.import_observations(store, body)
+    assert database(store) == before
+
+
+def test_import_rejects_stale_snapshot_conflicting_capture_and_older_observation(store):
+    body = observation_body(store)
+    first = benchmarks.import_observations(store, body)
+    changed = copy.deepcopy(body)
+    changed['items'][0]['metrics']['likes']['value'] += 1
+    before = database(store)
+    with pytest.raises(WorkflowError):
+        benchmarks.import_observations(store, changed)
+    stale = {**body, 'capture_sha256': 'b' * 64}
+    with pytest.raises(WorkflowError):
+        benchmarks.import_observations(store, stale)
+    older = {**stale, 'snapshot_hash': first['snapshot_hash'], 'items': [{**body['items'][0],
+             'observed_at': (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()}]}
+    with pytest.raises(WorkflowError):
+        benchmarks.import_observations(store, older)
+    assert database(store) == before
+
+
+def test_rss_collection_merges_an_import_that_arrives_while_fetching(store, monkeypatch):
+    open_window(store)
+    body = observation_body(store)
+    def collect(root, feeds):
+        benchmarks.import_observations(store, body)
+        return {'checked_at': datetime.now(timezone.utc).isoformat(), 'feeds': [], 'articles': [], 'partial_failure': False}
+    monkeypatch.setattr(benchmarks, 'collect_feeds', collect)
+    benchmarks.run(store, digest(registry(store)))
+    board = benchmarks.status(store)
+    assert len(board['items']) == 1 and board['items'][0]['platform'] == 'instagram'
+    assert board['sources_status'][0]['method'] == 'browser_public_observation'
+
+
+def test_snapshot_bound_idea_copies_server_observation_and_preserves_existing_selection(store):
+    board = benchmarks.import_observations(store, observation_body(store))
+    item = board['items'][0]
+    body = {'title': '관측 근거가 붙은 후보', 'source_url': item['url'], 'source_id': item['source_id'],
+            'fields': ['공부법'], 'target_platforms': ['youtube'], 'angle': '직접 비교 실험',
+            'expected_hash': board['registry_hash'], 'snapshot_hash': board['snapshot_hash'], 'item_id': item['id']}
+    card = benchmarks.save_idea(store, body)
+    assert card['observed_metrics'] == item['metrics'] and card['provenance'] == item['provenance']
+    assert card['primary_sources'] == 0 and card['blocked'] and card['verification_state'] == 'unverified'
+    before = database(store)
+    assert benchmarks.save_idea(store, body) == card and database(store) == before
+    with pytest.raises(WorkflowError):
+        benchmarks.save_idea(store, {**body, 'source_url': 'https://www.instagram.com/p/anotherPost/'})
+    with pytest.raises(WorkflowError):
+        benchmarks.save_idea(store, {**body, 'snapshot_hash': '0' * 64})
+
+
+def test_research_packet_carries_bounded_actual_observations_and_separate_public_trends(store):
+    board = benchmarks.import_observations(store, observation_body(store))
+    stamp = datetime.now(timezone.utc).isoformat()
+    store.set_setting('discovery_report', {'checked_at': stamp, 'recommendations': {'youtube': [
+        {'id': 'trend', 'title': 'AI 공개 반응 참고', 'url': 'https://news.ycombinator.com/item?id=1', 'kind': 'community',
+         'published_at': stamp, 'observed_at': stamp, 'signals': {'hn_points': 123}, 'feed_name': 'HN'},
+        {'id': 'fake', 'title': '미지원 성과', 'url': 'https://example.com/fake', 'kind': 'instagram', 'observed_at': stamp}]}})
+    before = database(store)
+    overview = benchmarks.status(store)
+    assert len(overview['trend_refs']) == 1 and overview['trend_refs'][0]['source_id'] == ''
+    packet = benchmarks.research_packet(store, {'source_ids': ['every-ai-instagram'], 'fields': [], 'platforms': [],
+        'expected_hash': board['registry_hash'], 'snapshot_hash': overview['snapshot_hash'],
+        'item_ids': [board['items'][0]['id'], overview['trend_refs'][0]['id']]})
+    assert '5.8천' in packet['text'] and 'historical' in packet['text'] and '누적' in packet['text']
+    assert 'https://news.ycombinator.com/item?id=1' in packet['text'] and len(packet['text']) <= 3600
+    assert packet['coverage']['included_items'] == 1 and packet['coverage']['available_items'] == 1
+    assert packet['coverage']['included_trend_refs'] == 1
+    assert database(store) == before
+
+
+def test_observation_api_keeps_csrf_and_rejects_forged_metrics_or_verification(store, monkeypatch):
+    monkeypatch.setenv('OFFICE_STATE_DIR', str(store.root / 'import-state'))
+    from office.api import create_app
+    client = TestClient(create_app(store), base_url='http://localhost:8510')
+    body = observation_body(store)
+    assert client.post('/api/benchmarks/observations', json=body).status_code == 403
+    headers = {'Origin': 'http://localhost:3110', 'X-Office-CSRF': client.get('/api/session').json()['csrf']}
+    forged = copy.deepcopy(body)
+    forged['items'][0]['verification_state'] = 'verified'
+    assert client.post('/api/benchmarks/observations', json=forged, headers=headers).status_code == 422
+    assert client.post('/api/benchmarks/observations', json=body, headers=headers).status_code == 200
+
+
+def test_large_six_observation_packet_is_rejected_without_truncating_evidence(store):
+    body = observation_body(store)
+    body['items'] = [{**body['items'][0], 'url': f'https://www.instagram.com/p/ExamplePost{i}/',
+                      'title': '관측 제목' * 30, 'summary': '독립 요약 문장 ' * 60} for i in range(8)]
+    board = benchmarks.import_observations(store, body)
+    selection = {'source_ids': [body['source_id']], 'fields': [], 'platforms': [],
+                 'expected_hash': board['registry_hash'], 'snapshot_hash': board['snapshot_hash'],
+                 'item_ids': [item['id'] for item in board['items'][:6]]}
+    before = database(store)
+    with pytest.raises(WorkflowError, match='깁니다'):
+        benchmarks.research_packet(store, selection)
+    assert database(store) == before
+    packet = benchmarks.research_packet(store, {**selection, 'item_ids': selection['item_ids'][:3]})
+    assert len(packet['observations']) == 3 and len(packet['text']) <= 3600
+    assert packet['coverage']['available_items'] == 8 and packet['coverage']['omitted_items'] == 5
+    for item in packet['observations']:
+        assert item['url'] in packet['text'] and item['published_at'] in packet['text']
+        assert item['provenance']['observed_at'] in packet['text']
+    assert '5.8천' in packet['text'] and 'browser_public_observation' in packet['text']
+
+
+def test_verified_research_candidate_keeps_frozen_observation_when_snapshot_advances(store):
+    board = benchmarks.import_observations(store, observation_body(store))
+    item = board['items'][0]
+    newer = observation_body(store)
+    newer['capture_sha256'] = 'b' * 64
+    newer['items'][0]['metrics']['likes']['value'] = 900
+    newer['items'][0]['metrics']['likes']['raw_text'] = '900'
+    benchmarks.import_observations(store, newer)
+    receipt = {'request_id': '3a06791a-3635-41ab-9496-a4c5dad230e6', 'task_id': 't_final', 'run_id': 1,
+               'event_id': 2, 'report_sha256': 'c' * 64, 'body_sha256': 'd' * 64, 'packet_hash': 'e' * 64,
+               'registry_hash': board['registry_hash'], 'snapshot_hash': board['snapshot_hash']}
+    before = protected(store)
+    body = {'title': '완료 보고를 검토한 후보', 'angle': '실제 비교 실험으로 확인', 'target_platforms': ['youtube']}
+    idea = benchmarks.save_research_idea(store, item, body, receipt)
+    assert idea['observed_metrics']['likes']['value'] == 761 and idea['analysis_receipt'] == receipt
+    assert idea['primary_sources'] == 0 and idea['blocked'] and protected(store) == before
+    old = database(store)
+    assert benchmarks.save_research_idea(store, item, {**body, 'angle': '덮어쓰기 금지'}, receipt) == idea
+    assert database(store) == old
+    changed = registry(store)
+    changed['sources'][0]['name'] = '등록 변경'
+    benchmarks.save(store, changed, board['registry_hash'])
+    with pytest.raises(WorkflowError):
+        benchmarks.save_research_idea(store, item, body, receipt)
+
+
+def trend_report(points=123):
+    stamp = datetime.now(timezone.utc).isoformat()
+    return {'checked_at': stamp, 'recommendations': {'youtube': [
+        {'id': 'trend', 'title': 'AI 공개 반응 참고', 'url': 'https://news.ycombinator.com/item?id=1', 'kind': 'community',
+         'published_at': stamp, 'observed_at': stamp, 'signals': {'hn_points': points}, 'feed_name': 'HN'}]}}
+
+
+def test_trend_only_packet_and_idea_bind_composite_snapshot_and_preserve_frozen_evidence(store):
+    store.set_setting('discovery_report', trend_report())
+    board = benchmarks.status(store)
+    trend = board['trend_refs'][0]
+    selection = {'source_ids': [], 'fields': [], 'platforms': [], 'expected_hash': board['registry_hash'],
+                 'snapshot_hash': board['snapshot_hash'], 'item_ids': [trend['id']]}
+    packet = benchmarks.research_packet(store, selection)
+    assert packet['observations'] == [trend] and packet['coverage']['included_trend_refs'] == 1
+    with pytest.raises(WorkflowError):
+        benchmarks.research_packet(store, {**selection, 'item_ids': []})
+    idea_body = {'title': 'HN 관측에서 검증할 소재', 'source_url': trend['url'], 'source_id': '', 'fields': ['AI·기술'],
+                 'target_platforms': ['youtube'], 'angle': '원문과 반례 확인', 'expected_hash': board['registry_hash'],
+                 'snapshot_hash': board['snapshot_hash'], 'item_id': trend['id']}
+    idea = benchmarks.save_idea(store, idea_body)
+    assert idea['observed_signals'] == {'hn_points': 123} and idea['provenance'] == trend['provenance']
+    store.set_setting('discovery_report', trend_report(999))
+    after_refresh = database(store)
+    with pytest.raises(WorkflowError, match='바뀌'):
+        benchmarks.save_idea(store, idea_body)
+    with pytest.raises(WorkflowError, match='바뀌'):
+        benchmarks.research_packet(store, selection)
+    assert database(store) == after_refresh and store.ideas()[0]['observed_signals']['hn_points'] == 123
+    receipt = {'request_id': '3a06791a-3635-41ab-9496-a4c5dad230e6', 'task_id': 't_final', 'run_id': 1,
+               'event_id': 2, 'report_sha256': 'c' * 64, 'body_sha256': 'd' * 64, 'packet_hash': packet['packet_hash'],
+               'registry_hash': board['registry_hash'], 'snapshot_hash': board['snapshot_hash']}
+    frozen = benchmarks.save_research_idea(store, packet['observations'][0],
+        {'title': '독립 검토 보고를 연결한 기획', 'angle': '동결한 표본으로 비교', 'target_platforms': ['youtube']}, receipt)
+    assert frozen['observed_signals']['hn_points'] == 123 and frozen['analysis_receipt'] == receipt
+    assert frozen['primary_sources'] == 0 and frozen['blocked']
+
+
+def test_selected_observation_resolves_its_source_without_a_separate_checkbox(store):
+    board = benchmarks.import_observations(store, observation_body(store))
+    packet = benchmarks.research_packet(store, {'source_ids': [], 'fields': [], 'platforms': [],
+        'expected_hash': board['registry_hash'], 'snapshot_hash': board['snapshot_hash'],
+        'item_ids': [board['items'][0]['id']]})
+    assert packet['observations'] == board['items']
+    assert 'every._ai' in packet['text'] and packet['coverage']['included_items'] == 1
+
+
+def test_trend_change_during_idea_preparation_is_rechecked_under_writer_lock(store, monkeypatch):
+    store.set_setting('discovery_report', trend_report())
+    board = benchmarks.status(store)
+    trend = board['trend_refs'][0]
+    score = benchmarks.score_idea
+    def changed_while_scoring(card):
+        result = score(card)
+        store.set_setting('discovery_report', trend_report(456))
+        return result
+    monkeypatch.setattr(benchmarks, 'score_idea', changed_while_scoring)
+    before = protected(store)
+    with pytest.raises(WorkflowError, match='바뀌'):
+        benchmarks.save_idea(store, {'title': '경합', 'source_url': trend['url'], 'source_id': '', 'fields': ['AI·기술'],
+            'target_platforms': ['youtube'], 'angle': '원문 확인', 'expected_hash': board['registry_hash'],
+            'snapshot_hash': board['snapshot_hash'], 'item_id': trend['id']})
+    assert store.ideas() == [] and protected(store) == before
+
+
+@pytest.mark.parametrize('selected', [False, True])
+def test_research_cannot_claim_receipt_attachment_to_an_existing_manual_candidate(store, selected):
+    board = benchmarks.import_observations(store, observation_body(store))
+    item = board['items'][0]
+    old = store.save_idea(benchmarks.score_idea({'title': '이미 사람이 저장한 기획', 'source_url': item['url'],
+                                               'primary_sources': 2, 'angle': '기존 사람 편집'}))
+    if selected:
+        old = store.select_idea(old['id'], actor='human')
+    receipt = {'request_id': '3a06791a-3635-41ab-9496-a4c5dad230e6', 'task_id': 't_final', 'run_id': 1,
+               'event_id': 2, 'report_sha256': 'c' * 64, 'body_sha256': 'd' * 64, 'packet_hash': 'e' * 64,
+               'registry_hash': board['registry_hash'], 'snapshot_hash': board['snapshot_hash']}
+    before = database(store)
+    with pytest.raises(WorkflowError, match='기존 후보를 보존'):
+        benchmarks.save_research_idea(store, item,
+            {'title': old['title'], 'angle': '덮어쓰지 말아야 할 새 분석', 'target_platforms': ['youtube']}, receipt)
+    assert database(store) == before and store.ideas()[0] == old
