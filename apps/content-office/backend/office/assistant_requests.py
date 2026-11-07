@@ -19,7 +19,8 @@ PROFILES = {"default", "mybots-sage", "lumi", "ada", "ethan", "mia", "noah", "ol
 TASK_ID = re.compile(r"t_[a-zA-Z0-9_-]{1,80}\Z")
 UNSAFE_DISPLAY = re.compile(
     r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u202a-\u202e\u2066-\u2069]"
-    r"|(?:/|%2f)(?:home|users|mnt|tmp|etc|root|var)(?:/|%2f)|[a-z]:[\\/]|\.\.[\\/]"
+    # HTTP(S)'s p:/s:/ is a source URL, while drive paths (even embedded ones) remain private.
+    r"|(?:/|%2f)(?:home|users|mnt|tmp|etc|root|var)(?:/|%2f)|(?!(?<=http)s://|(?<=htt)p://)[a-z]:[\\/]|\.\.[\\/]"
     r"|bearer\s|(?:api[_-]?key|password|secret|token)\s*[:=]|sk-[a-z0-9]{12,}|xox[baprs]-[a-z0-9-]+",
     re.IGNORECASE,
 )
