@@ -53,6 +53,8 @@ def artifact_records(job, *, include_stale_cards=False):
 
 
 def _verified_path(store, file):
+    from .artifact_library import require_available
+    require_available(store, file['path'])
     path = (store.artifacts / file["path"]).resolve()
     if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file():
         raise HTTPException(404, "파일을 찾을 수 없습니다")

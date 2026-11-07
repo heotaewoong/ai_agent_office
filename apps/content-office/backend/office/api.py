@@ -428,6 +428,9 @@ def create_app(store: Store | None = None):
         response.set_cookie("hb_office_session", sid + "." + sign(sid), httponly=True, samesite="strict", max_age=86400, secure=bool(public))
         return response
 
+    from .api_artifact_library import register as register_artifact_library
+    register_artifact_library(app, store)
+
     @app.get("/api/dashboard")
     def dashboard(compact: bool = False, task_results: bool = True):
         from .voice_selection import profile_summary

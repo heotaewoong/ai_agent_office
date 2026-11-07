@@ -2,6 +2,7 @@
 import { ActionFeedback } from "./action-feedback";
 import { JobTrash,jobTrashWorking,type JobTrashRequest } from './job-trash';
 import {DeliveryConsole} from "./delivery-console";
+import ArtifactLibrary from './artifact-library';
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -151,6 +152,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const search = useSearchParams();
   const route = officeRoute(pathname);
   const view = route.view;
+  const libraryActive = view === 'delivery' && !search.get('job') && search.get('mode') !== 'jobs';
   const segment = newsSegment(search.get("seg"));
   const articleSort = newsSort(search.get("sort"));
   const creatorNews = search.get("tab") === "creators";
@@ -491,7 +493,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
         <nav aria-label="오피스 메뉴">
           {views.map((item) => (
             <Link
-              href={officeHref(item.id, activeId)}
+              href={officeHref(item.id, item.id === 'delivery' ? '' : activeId)}
               prefetch={false}
               key={item.id}
               className={`nav-item ${view === item.id ? "active" : ""}`}
@@ -576,7 +578,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 <span className="eyebrow-line" />
               </p>
               <h1>
-                {currentView.title}
+                {libraryActive ? '산출물 보관함' : currentView.title}
                 <span className="orange-period">.</span>
               </h1>
               <p className="page-description">
@@ -625,7 +627,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {view !== "world" && !(view === 'news' && !officialNews) && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
+          {view !== "world" && !libraryActive && !(view === 'news' && !officialNews) && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
 
           <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (
@@ -666,7 +668,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
           )}
 
           {children}
-          {loading ? (
+          {libraryActive ? <ArtifactLibrary active /> : loading ? (
             <div className="loading-panel" role="status">
               <span className="spinner" />
               <h2>오늘의 오피스를 불러오고 있어요</h2>
@@ -910,7 +912,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                           if(deletedId===activeId){
                             const next=dashboard.jobs.find(item=>item.id!==deletedId)?.id||'';
                             selectJob(next);
-                            router.replace(officeHref(view==='delivery'?'delivery':'studio',next||undefined));
+                            router.replace(view === 'delivery' && !next ? '/publish?mode=jobs' : officeHref(view==='delivery'?'delivery':'studio',next||undefined));
                           }
                           setDashboard(previous=>previous?{...previous,jobs:previous.jobs.filter(item=>item.id!==deletedId)}:previous);
                         }

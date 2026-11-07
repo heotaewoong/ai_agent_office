@@ -1,4 +1,5 @@
 import type { ArchitectureOverview } from "./architecture";
+import type {LibraryAction, LibraryInventory, LibraryQuote, LibraryResult} from './artifact-library';
 import type {ThumbnailState} from "../app/thumbnail-studio";
 import type { ContentHistory } from "./version-history";
 import type { ClipEstimate } from "./types";
@@ -124,6 +125,9 @@ async function request<T>(
 }
 
 export const api = {
+  artifactLibrary: () => request<LibraryInventory>('/library'),
+  artifactLibraryQuote: (ids: string[], action: LibraryAction) => request<LibraryQuote>('/library/quote', 'POST', {ids, action}),
+  artifactLibraryChange: (ids: string[], action: LibraryAction, quote: string, request_id: string) => request<LibraryResult>('/library/change', 'POST', {ids, action, quote, request_id}),
   trashJobs: () => request<{jobs: Pick<Job,'id'|'title'|'updated_at'>[]}>('/trash/jobs'),
   trashJob: (id:string,updatedAt:string) => request<Job>(`/jobs/${encodeURIComponent(id)}/trash`,'POST',{expected_updated_at:updatedAt}),
   restoreJob: (id:string,updatedAt:string) => request<Job>(`/jobs/${encodeURIComponent(id)}/restore`,'POST',{expected_updated_at:updatedAt}),
