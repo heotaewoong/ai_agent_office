@@ -28,6 +28,8 @@ def files_for(store, job, draft_id):
     paths, root = {}, store.artifacts.resolve()
     for name in (*REQUIRED, *(PACK_NAMES if has_pack else ())):
         a = records[name]
+        from .artifact_library import require_available
+        require_available(store, a['path'])
         path = (root / a['path']).resolve()
         limit = MAX_IMPORTED_VIDEO_BYTES if name == 'short.mp4' else 100_000_000
         if not path.is_relative_to(root) or not path.is_file() or not 0 < path.stat().st_size <= limit:
