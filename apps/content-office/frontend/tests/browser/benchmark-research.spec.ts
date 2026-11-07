@@ -8,7 +8,8 @@ import type { AssistantRequest } from '../../lib/assistant-requests';
 const registryHash = 'a'.repeat(64), snapshotHash = 'b'.repeat(64), captureHash = 'c'.repeat(64);
 const csrf = 'synthetic-research-csrf';
 const packetText = '합성 검증 요청문: 선택한 공개 관측 원문만 조사하고 세이지 분석·독립 검토·루미 최종 보고를 구분합니다.';
-const reportSummary = '합성 최종 보고입니다. 세이지가 원문 관측을 분석하고 에이다가 독립 검토했습니다. 누적 공개 반응과 실제 콘텐츠 성과를 구분해 작은 재현 실험을 제안합니다.';
+const publicSourceUrl = 'https://www.youtube.com/watch?v=--Quy-4QTMs';
+const reportSummary = `합성 최종 보고입니다. 세이지가 원문 관측을 분석하고 에이다가 독립 검토했습니다. 누적 공개 반응과 실제 콘텐츠 성과를 구분해 작은 재현 실험을 제안합니다.\n공개 원문 형식 검증 링크: ${publicSourceUrl}`;
 const receipt = { task_id: 't_fixture_lumi_final', run_id: 24, event_id: 34,
   report_sha256: createHash('sha256').update(reportSummary).digest('hex'), body_sha256: 'd'.repeat(64) };
 const observed = (value: number, raw_text = String(value), precision: BenchmarkMetric['precision'] = 'exact'): BenchmarkMetric => ({ value, raw_text, precision, availability: 'observed' });

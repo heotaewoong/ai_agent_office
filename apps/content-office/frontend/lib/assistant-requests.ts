@@ -40,7 +40,7 @@ export function initialAssistantRequestId(search: string, saved: string | null):
 const invalid = () => { throw new Error('비서 업무 응답을 확인할 수 없습니다.'); };
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : invalid();
 function text(value: unknown, limit = 300): string {
-  if (typeof value !== 'string' || !value.trim() || [...value].length > limit || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]|(?:\/|%2f)(?:home|users|mnt|tmp|etc|root|var)(?:\/|%2f)|[a-z]:[\\/]|\.\.[\\/]|bearer\s|(?:api[_-]?key|password|secret|token)\s*[:=]|sk-[a-z0-9]{12,}/i.test(value)) return invalid();
+  if (typeof value !== 'string' || !value.trim() || [...value].length > limit || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\u202a-\u202e\u2066-\u2069]|(?:\/|%2f)(?:home|users|mnt|tmp|etc|root|var)(?:\/|%2f)|(?!(?<=http)s:\/\/|(?<=htt)p:\/\/)[a-z]:[\\/]|\.\.[\\/]|bearer\s|(?:api[_-]?key|password|secret|token)\s*[:=]|sk-[a-z0-9]{12,}/i.test(value)) return invalid();
   return value;
 }
 const id = (value: unknown): string => { const s = text(value, 120); return /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(s) ? s : invalid(); };
