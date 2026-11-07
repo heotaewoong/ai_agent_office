@@ -912,7 +912,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                           if(deletedId===activeId){
                             const next=dashboard.jobs.find(item=>item.id!==deletedId)?.id||'';
                             selectJob(next);
-                            router.replace(officeHref(view==='delivery'?'delivery':'studio',next||undefined));
+                            router.replace(view === 'delivery' && !next ? '/publish?mode=jobs' : officeHref(view==='delivery'?'delivery':'studio',next||undefined));
                           }
                           setDashboard(previous=>previous?{...previous,jobs:previous.jobs.filter(item=>item.id!==deletedId)}:previous);
                         }
