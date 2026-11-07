@@ -1,2 +1,2 @@
 import { redirect } from 'next/navigation';
-export default function BenchmarksPage() { redirect('/plans#competitors'); }
+export default function BenchmarksPage() { redirect('/news?tab=competitors'); }

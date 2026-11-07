@@ -17,9 +17,9 @@ export function BenchmarkWorkspace({ connected, active, mode, officialUrls, onId
   useEffect(() => { if (!active || mode !== 'planning') setCloseSignal(value => value + 1); }, [active, mode]);
   return <div id="competitors" className="outline-target" hidden={!active}>
     <BenchmarkPanel active={active} mode={mode} officialUrls={officialUrls} onIdeaSaved={onIdeaSaved}
-      onOpenPlanning={() => router.push('/plans#competitors', { scroll: false })}
+      onOpenPlanning={() => router.push('/news?tab=competitors', { scroll: false })}
       onSendResearch={async text => {
-      if (!active || mode !== 'planning') return '기획 화면에서 조사 요청문을 검토하세요. 아직 접수하지 않았습니다.';
+      if (!active || mode !== 'planning') return '오늘의 뉴스 → 경쟁사·아이디어 탭에서 조사 요청문을 검토하세요. 아직 접수하지 않았습니다.';
       setPreparedDraft(text);
       setOpenSignal(value => value + 1);
       return '기존 비서 요청 화면을 열었습니다. 요청문을 확인한 뒤 직접 보내 주세요. 아직 접수하지 않았습니다.';

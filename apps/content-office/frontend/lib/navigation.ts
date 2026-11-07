@@ -5,7 +5,7 @@ export function officeHref(view: View, jobId = "") {
 }
 export function officeRoute(path: string): { view: View; jobId?: string } {
   const pathname = path.split("?")[0].replace(/\/$/, "") || "/";
-  if (pathname === "/benchmarks") return { view: "plans" };
+  if (pathname === "/benchmarks") return { view: "news" };
   if (pathname.startsWith("/scripts/")) {
     try { return { view: "studio", jobId: decodeURIComponent(pathname.slice(9)) }; } catch { return { view: "studio" }; }
   }

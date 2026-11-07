@@ -154,7 +154,9 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const segment = newsSegment(search.get("seg"));
   const articleSort = newsSort(search.get("sort"));
   const creatorNews = search.get("tab") === "creators";
-  const benchmarkActive = view === "plans" || (view === "news" && creatorNews);
+  const competitorPlanning = search.get("tab") === "competitors";
+  const officialNews = !creatorNews && !competitorPlanning;
+  const benchmarkActive = view === "news" && !officialNews;
   const [newsVisited, setNewsVisited] = useState(view === "news");
   const [plansVisited, setPlansVisited] = useState(view === "plans");
   const [benchmarkVisited, setBenchmarkVisited] = useState(benchmarkActive);
@@ -248,7 +250,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const routeJob = route.jobId || (view === "delivery" ? search.get("job") : null);
   useEffect(() => { if (routeJob) selectJob(routeJob); }, [routeJob, selectJob]);
   useEffect(() => {
-    if (view !== "news" || creatorNews) return;
+    if (view !== "news" || pathname !== '/news' || !officialNews) return;
     if (search.has("seg")) {
       try { localStorage.setItem("heobrain-news-segment-v1", segment); } catch { /* Storage can be disabled. */ }
     } else {
@@ -256,7 +258,16 @@ export default function Office({ children }: { children: React.ReactNode }) {
       try { remembered = newsSegment(localStorage.getItem("heobrain-news-segment-v1")); } catch { /* URL still works. */ }
       if (remembered !== "all") router.replace(newsHref(remembered, articleSort), { scroll: false });
     }
-  }, [view, creatorNews, segment, articleSort, search, router]);
+  }, [view, pathname, officialNews, segment, articleSort, search, router]);
+  useEffect(() => {
+    if (view !== 'plans') return;
+    const moveLegacyCompetitors = () => {
+      if (window.location.hash === '#competitors') router.replace('/news?tab=competitors');
+    };
+    moveLegacyCompetitors();
+    window.addEventListener('hashchange', moveLegacyCompetitors);
+    return () => window.removeEventListener('hashchange', moveLegacyCompetitors);
+  }, [view, router]);
   const loadDashboard = useCallback(async (force = false) => {
     const ticket = dashboardRefresh.current.begin(force);
     if (!ticket) return;
@@ -572,9 +583,9 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 {view === "home"
                   ? "내 검토가 필요한 작업과 다음 행동을 확인하세요."
                   : view === "plans"
-                    ? "독자 질문·경쟁사 분석과 출처에서 다음 기획을 고르세요."
+                    ? "독자 질문과 근거를 살피고, 다음에 만들 기획을 고르세요."
                     : view === "news"
-                  ? "공식 뉴스와 등록 크리에이터의 새 소식을 한곳에서 확인하세요."
+                  ? "뉴스와 크리에이터 소식을 읽고, 경쟁사를 분석해 내 아이디어로 연결하세요."
                   : view === "studio"
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
                     : view === "delivery"
@@ -614,7 +625,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {view !== "world" && !(view === 'news' && creatorNews) && <PageOutline scope={`${view}-${activeId}-${creatorNews}`} curated={view === "studio" || view === "delivery"} arrivalTarget={view === 'plans' ? 'competitors' : undefined} />}
+          {view !== "world" && !(view === 'news' && !officialNews) && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
 
           <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (
@@ -678,7 +689,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
               <div hidden={view!=="plans"}>
                 <OwnedSourceIntake onCreated={(j)=>{openCreatedJobs([j]);void loadDashboard(true);}} />
               {(view === "plans" || plansVisited) && <>
-                  <p className="muted">기획 후보와 독자 질문을 정리하세요. <a href="#competitors">경쟁사 분석·등록과 세이지 조사로 이동 ↓</a></p>
+                  <p className="muted">독자 질문과 기획 후보를 정리하고, 근거가 갖춰진 기획을 선택하세요.</p>
                   <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
                     drafts={ideaSourcesDrafts}
@@ -692,13 +703,14 @@ export default function Office({ children }: { children: React.ReactNode }) {
               </>}
               </div>
               {view === "news" && <nav className="news-segments" aria-label="소식 보기" style={{ marginBottom: 24 }}>
-                <Link href={search.has('seg') ? newsHref(segment, articleSort) : `/news?sort=${articleSort}`} scroll={false} prefetch={false} aria-current={!creatorNews ? 'page' : undefined}>공식 뉴스</Link>
+                <Link href={search.has('seg') ? newsHref(segment, articleSort) : `/news?sort=${articleSort}`} scroll={false} prefetch={false} aria-current={officialNews ? 'page' : undefined}>공식 뉴스</Link>
                 <Link href={newsHref(segment, articleSort, 'creators')} scroll={false} prefetch={false} aria-current={creatorNews ? 'page' : undefined}>등록 크리에이터 소식</Link>
+                <Link href={newsHref(segment, articleSort, 'competitors')} scroll={false} prefetch={false} aria-current={competitorPlanning ? 'page' : undefined}>경쟁사·아이디어</Link>
               </nav>}
-              <div hidden={view !== "news" || creatorNews}>
+              <div hidden={view !== "news" || !officialNews}>
               {(view === "news" || newsVisited) && (
                 <>
-                  <DiscoveryPanel active={view === 'news' && !creatorNews} />
+                  <DiscoveryPanel active={view === 'news' && officialNews} />
                   <section className="brief-banner" aria-label="수집 현황">
                     <div className="brief-copy">
                       <span className="brief-label">
@@ -827,7 +839,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 </>
               )}
               </div>
-              {(benchmarkActive || benchmarkVisited) && <BenchmarkWorkspace connected={connected} active={benchmarkActive} mode={view === 'news' ? 'news' : 'planning'} officialUrls={articles.map(article => article.url)} onIdeaSaved={() => setIdeaRefresh(value => value + 1)} />}
+              {(benchmarkActive || benchmarkVisited) && <BenchmarkWorkspace connected={connected} active={benchmarkActive} mode={creatorNews ? 'news' : 'planning'} officialUrls={articles.map(article => article.url)} onIdeaSaved={() => setIdeaRefresh(value => value + 1)} />}
 
               {(view === "studio" || view === "delivery") && (
                 <div className="studio-layout">

@@ -180,7 +180,7 @@ export function BenchmarkPanel({ active, mode, officialUrls = [], onIdeaSaved, o
   return <section className={styles.panel} hidden={!active} aria-labelledby="benchmark-heading" id={mode === 'news' ? 'creator-news' : undefined}>
     <header className={styles.compactHeader}>
       <div><h2 id="benchmark-heading">{mode === 'news' ? '등록 크리에이터 소식' : '경쟁사 분석·기획'}</h2><p>{mode === 'news' ? '공식 뉴스와 같은 원문을 제외한 등록 출처의 소식을 살펴보세요.' : '경쟁사 출처를 관리하고, 내 아이디어와 세이지 조사 요청을 준비하세요.'}</p></div>
-      <Link href={mode === 'news' ? '/plans#competitors' : '/news?tab=creators#creator-news'}>{mode === 'news' ? '경쟁사 관리·분석 →' : '등록 크리에이터 소식 보기 →'}</Link>
+      <Link href={mode === 'news' ? '/news?tab=competitors' : '/news?tab=creators'}>{mode === 'news' ? '경쟁사 관리·분석 →' : '등록 크리에이터 소식 보기 →'}</Link>
     </header>
 
     <section className={styles.filters} aria-label={mode === 'news' ? '소식 필터' : '경쟁사 조사 조건'}>
@@ -191,8 +191,10 @@ export function BenchmarkPanel({ active, mode, officialUrls = [], onIdeaSaved, o
     </section>
 
     <div className={styles.statusBar}><div><strong>최근 출처 확인 · {dateLabel(checked)}</strong><p>작업 시간 {data.window_open ? '열림' : '종료'}{data.activity ? ` · ${activityNames[data.activity.state] ?? '수집 상태 확인 필요'}` : ' · 수집 요청 기록 없음'}</p></div><div className={styles.actions}><button type="button" className="button secondary" disabled={Boolean(busy)} onClick={() => void reload()}>보드 다시 확인</button>{mode === 'news' && <button type="button" className="button primary" disabled={Boolean(busy) || !data.window_open} onClick={() => void perform('공개 소식 수집 요청', async () => { const result = await api.refreshBenchmarks({ expected_hash: data.registry_hash }); setNotice(result.window_open ? '공개 소식 수집을 요청했습니다. 완료 후 보드 다시 확인을 눌러 결과를 읽어 주세요.' : '작업 시간이 종료돼 수집을 시작하지 않았습니다.'); })}>공개 소식 수집 요청</button>}</div></div>
-    {!data.window_open && <p className={styles.hint}>수집은 열린 작업 시간 안에서만 진행합니다. <Link href="/settings">제작 설정에서 작업 시간 확인</Link></p>}
-    <p className={styles.hint}>YouTube 공개 RSS와 수동 원문 등록을 구분합니다. Instagram 등 자동 수집 미연동 출처의 실시간 소식·비공개 성과는 제공하지 않습니다.</p>
+    <details className={styles.undated}><summary>수집 범위와 작업 시간 안내</summary>
+      {!data.window_open && <p className={styles.hint}>수집은 열린 작업 시간 안에서만 진행합니다. <Link href="/settings">제작 설정에서 작업 시간 확인</Link></p>}
+      <p className={styles.hint}>YouTube 공개 RSS와 수동 원문 등록을 구분합니다. Instagram 등 자동 수집 미연동 출처의 실시간 소식·비공개 성과는 제공하지 않습니다.</p>
+    </details>
     {mode === 'news' && <p className={styles.coverage}>공식 뉴스와 중복되지 않은 등록 출처 소식 {registered.length}건입니다. {data.coverage && <>전체 가용 자료 {data.coverage.available_items.toLocaleString('ko-KR')}건 중 {data.coverage.returned_items.toLocaleString('ko-KR')}건을 불러온 범위에서 구분했습니다. </>}필터와 검색은 불러온 범위에만 적용되며 모든 플랫폼의 과거 자료를 전수 검색하지 않습니다.</p>}
     {busy && <p role="status" className={styles.notice}>{busy} 중…</p>}
     {error && <p role="alert" className={styles.error}>{error}</p>}
@@ -201,7 +203,7 @@ export function BenchmarkPanel({ active, mode, officialUrls = [], onIdeaSaved, o
 
     {mode === 'news' && <>
       <div className={styles.sectionHeading}><h3 id="benchmark-news-heading" tabIndex={-1}>발행일을 확인한 소식</h3><span className={styles.muted}>최신 발행일 순 · 확인 시각과 구분</span></div>
-      {dates.dated.length ? <div className={styles.cards} id="benchmark-news-candidates" ref={newsGrid}>{dates.dated.slice(0, newsLimit).map(item => itemCard(item))}</div> : <div className={styles.empty}><h4>{registered.length ? '현재 필터에 맞는 소식이 없어요' : '아직 등록 크리에이터 소식이 없어요'}</h4><p>{registered.length ? '다른 분야나 플랫폼을 고르거나 검색어를 줄여보세요. 발행일 확인이 필요한 자료는 아래에 따로 모았습니다.' : '경쟁사 관리에서 출처와 수집 상태를 확인하세요. 공식 뉴스는 위의 공식 뉴스 목록에서 따로 볼 수 있어요.'}</p><Link href="/plans#competitors">경쟁사 관리·분석 열기</Link></div>}
+      {dates.dated.length ? <div className={styles.cards} id="benchmark-news-candidates" ref={newsGrid}>{dates.dated.slice(0, newsLimit).map(item => itemCard(item))}</div> : <div className={styles.empty}><h4>{registered.length ? '현재 필터에 맞는 소식이 없어요' : '아직 등록 크리에이터 소식이 없어요'}</h4><p>{registered.length ? '다른 분야나 플랫폼을 고르거나 검색어를 줄여보세요. 발행일 확인이 필요한 자료는 아래에 따로 모았습니다.' : '경쟁사·아이디어 탭에서 출처와 수집 상태를 확인하세요. 공식 뉴스는 공식 뉴스 탭에서 따로 볼 수 있어요.'}</p><Link href="/news?tab=competitors">경쟁사 관리·분석 열기</Link></div>}
       {dates.dated.length > 0 && <div className={styles.browseActions} role="group" aria-label="소식 후보 더 보기"><p role="status">후보 {dates.dated.length}건 중 {Math.min(newsLimit, dates.dated.length)}건 표시</p>{newsLimit < dates.dated.length && <button type="button" className="button secondary" aria-controls="benchmark-news-candidates" onClick={() => showNews(newsLimit + 9, newsLimit)}>후보 {Math.min(9, dates.dated.length - newsLimit)}건 더 보기</button>}{newsLimit > 9 && <button type="button" className={styles.textButton} aria-controls="benchmark-news-candidates" onClick={() => showNews(9, -1)}>주요 소식 9건만 보기</button>}</div>}
       {dates.undated.length > 0 && <details className={styles.undated}><summary>발행일 확인이 필요한 자료 {dates.undated.length}건</summary><p className={styles.hint}>날짜 미상·미래 날짜·잘못된 날짜는 최신 소식에 섞지 않았습니다.</p><div className={styles.cards}>{dates.undated.map(item => itemCard(item, true))}</div></details>}
     </>}
