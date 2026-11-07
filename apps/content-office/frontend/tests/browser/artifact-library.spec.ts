@@ -33,6 +33,9 @@ for(const width of [1440,390]) test(`보관함 ${width}px 선택 취소·휴지�
   const changes=await harness(page);await page.setViewportSize({width,height:950});await page.goto('/publish');
   const library=page.getByRole('region',{name:'산출물 보관함',exact:true});
   await expect(library.getByRole('heading',{name:'만든 결과물을 한눈에'})).toBeVisible();
+  const image=library.locator('article img').first();
+  await expect.poll(()=>image.evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
+  expect(await image.evaluate(el=>{const a=el.getBoundingClientRect(),b=el.parentElement!.getBoundingClientRect();return a.width<=b.width+1&&a.height<=b.height+1;})).toBe(true);
   await expect(library.getByRole('checkbox',{name:'현재 출고본 approved.mp4 선택'})).toBeDisabled();
   await library.getByRole('checkbox',{name:'지난 영상 short.mp4 선택'}).check();
   await library.getByRole('checkbox',{name:'요약 카드 카드뉴스 선택'}).check();
