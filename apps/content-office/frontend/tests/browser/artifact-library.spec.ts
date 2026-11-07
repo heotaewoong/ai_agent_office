@@ -37,6 +37,9 @@ for(const width of [1440,390]) test(`보관함 ${width}px 선택 취소·휴지�
   await library.getByRole('checkbox',{name:'지난 영상 short.mp4 선택'}).check();
   await library.getByRole('checkbox',{name:'요약 카드 카드뉴스 선택'}).check();
   const bar=page.getByRole('region',{name:'선택한 산출물 작업'});await expect(bar).toBeInViewport();
+  await page.setViewportSize({width:width===390?1440:390,height:950});
+  await expect(library.getByRole('checkbox',{name:'지난 영상 short.mp4 선택'})).toBeChecked();await expect(bar).toBeInViewport();
+  await page.setViewportSize({width,height:950});
   await bar.getByRole('button',{name:'휴지통으로',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'휴지통으로 옮길까요?'});await expect(dialog).toContainText('지난 영상');
   await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();expect(changes).toHaveLength(0);
@@ -57,4 +60,14 @@ test('카드 미리보기·키보드 닫기는 상태를 변경하지 않는다'
   await page.getByRole('button',{name:'요약 카드 카드뉴스 미리보기',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'요약 카드',exact:true});await expect(dialog.getByRole('img')).toHaveCount(2);
   await page.keyboard.press('Escape');await expect(dialog).not.toBeVisible();expect(changes).toHaveLength(0);
+});
+
+test('목록 조회 실패는 빈 보관함으로 표시하지 않고 다시 확인할 수 있다',async({page})=>{
+  const changes=await harness(page);let failed=true;
+  await page.route('**/api/library',route=>route.fulfill({status:failed?503:200,contentType:'application/json',body:JSON.stringify(failed?{detail:'저장소를 확인하지 못했습니다'}:{items:[],storage:{total_bytes:1024,used_bytes:0,free_bytes:1024},checked_at:'now'})}));
+  await page.goto('/publish');const library=page.getByRole('region',{name:'산출물 보관함',exact:true});
+  await expect(library.getByRole('alert')).toContainText('저장소를 확인하지 못했습니다');
+  await expect(library.getByRole('heading',{name:'아직 보관된 산출물이 없습니다.'})).toHaveCount(0);
+  failed=false;await library.getByRole('button',{name:'목록 다시 확인'}).click();
+  await expect(library.getByRole('heading',{name:'아직 보관된 산출물이 없습니다.'})).toBeVisible();expect(changes).toHaveLength(0);
 });
