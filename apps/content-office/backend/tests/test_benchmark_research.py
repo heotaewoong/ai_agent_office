@@ -1,5 +1,6 @@
 """Native research uses fixture receipts only: no model, Slack or live service calls."""
 import copy
+import hashlib
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
@@ -102,6 +103,47 @@ def idea_input(run, item):
     return {'item_id': item['id'], 'title': '내 자료로 공개 주장을 확인하기',
             'angle': '공개 관측을 출발점으로 직접 재현하고 반례를 함께 보여준다',
             'target_platforms': ['youtube'], 'receipt': run['analysis_receipt']}
+
+
+@pytest.mark.parametrize('reference', [
+    'https://www.youtube.com/watch?v=--Quy-4QTMs',
+    'http://example.com/public-source',
+    'HTTPS://www.instagram.com/p/De6OvlsFfaA/',
+])
+def test_completed_research_accepts_public_source_urls(research, reference):
+    store, native, body, _ = research
+    benchmark_research.submit_run(store, native, body)
+    summary = '# 공개 관측 조사 보고\n\n' + ('공개 관측과 추론을 구분하고 독립 검토한 결과를 정리합니다. ' * 8) + reference
+    completed(native, summary=summary)
+    before = protected(store)
+    result = benchmark_research.read_run(store, native, body['request_id'])
+    assert result['execution']['status'] == 'completed'
+    assert result['execution']['report']['summary'] == summary
+    assert result['analysis_receipt']['report_sha256'] == hashlib.sha256(summary.encode()).hexdigest()
+    assert protected(store) == before
+    assert len(native.posts) == 1 and native.subscriptions == native.delivery_reads == 0
+
+
+@pytest.mark.parametrize('private_text', [
+    r'C:\Users\owner\private.txt', 'D:/private/report.md',
+    r'prefixC:\Users\owner\private.txt', r'httpS:\Users\owner\private.txt',
+    'P:/private/report.md', 'S://private/report.md', 'file:///C:/private/report.md',
+    '/home/owner/private.txt', '%2fhome%2fowner', '../private.txt', r'..\private.txt',
+    'https://example.com/home/owner/private.txt',
+    'Bearer private-value', 'token=private-value', 'api_key: private-value',
+    'xoxb-123456789012-secret', '\u202ereversed', '\x01control',
+])
+def test_completed_research_still_blocks_private_paths_and_secrets(research, private_text):
+    store, native, body, _ = research
+    benchmark_research.submit_run(store, native, body)
+    completed(native, summary=('공개 원문을 검토한 결과입니다. ' * 8) + '\nhttps://example.com/public\n' + private_text)
+    before = protected(store)
+    result = benchmark_research.read_run(store, native, body['request_id'])
+    assert result['execution']['status'] == 'blocked'
+    assert result['execution']['error']['code'] == 'report_redaction_required'
+    assert result['execution']['report'] is None and result['analysis_receipt'] is None
+    assert protected(store) == before
+    assert len(native.posts) == 1 and native.subscriptions == native.delivery_reads == 0
 
 
 def test_closed_window_and_exhausted_budget_do_not_admit_or_reserve(research):
