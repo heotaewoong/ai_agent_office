@@ -242,6 +242,8 @@ for (const width of [1440, 390]) test(`불명 접수는 같은 UUID로 재확인
   expect(state.writes.every(write => write.csrf === csrf && write.method === 'POST')).toBe(true);
   expect(state.reads.some(path => path.includes('subscribe'))).toBe(false);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await expect(page.getByRole('link', { name: '본문으로 이동', exact: true })).not.toBeInViewport();
+  await page.screenshot({ path: testInfo.outputPath(`2026-11-07_실제경쟁사_browser_viewport_${width}.png`) });
   await panel.screenshot({ path: testInfo.outputPath(`2026-11-07_실제경쟁사_browser_report_${width}.png`) });
   const audit = await new AxeBuilder({ page }).include('section[aria-label="실제 세이지 조사와 최종 보고"]').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(audit.violations.filter(row => row.impact === 'critical' || row.impact === 'serious')).toEqual([]);
