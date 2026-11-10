@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - 'sites/office-world/**'
+      - 'apps/content-office/frontend/playwright.config.ts'
+      - 'apps/content-office/frontend/package*.json'
+      - 'apps/content-office/frontend/app/world-view.tsx'
+      - 'apps/content-office/frontend/app/globals.css'
       - 'apps/content-office/frontend/tests/browser/world-resize.spec.ts'
       - '.github/workflows/world-stability.yml'
 permissions:
