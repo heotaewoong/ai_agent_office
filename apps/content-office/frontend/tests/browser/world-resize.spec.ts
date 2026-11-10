@@ -7,6 +7,7 @@ test.beforeEach(async ({ page }) => {
   await client.send('Profiler.enable');
   await client.send('Profiler.start');
   await client.send('Performance.enable');
+  await client.send('Tracing.start', { categories: 'devtools.timeline,cc,gpu', transferMode: 'ReturnAsStream' });
   profilers.set(page, client);
 });
 test.afterEach(async ({ page }, info) => {
@@ -14,6 +15,17 @@ test.afterEach(async ({ page }, info) => {
   if (!client) return;
   const { profile } = await client.send('Profiler.stop');
   const metrics = await client.send('Performance.getMetrics');
+  const completed = new Promise<{ stream: string }>(resolve => client.once('Tracing.tracingComplete', resolve));
+  await client.send('Tracing.end');
+  const { stream } = await completed;
+  const chunks: Buffer[] = [];
+  for (;;) {
+    const chunk = await client.send('IO.read', { handle: stream });
+    chunks.push(Buffer.from(chunk.data, chunk.base64Encoded ? 'base64' : 'utf8'));
+    if (chunk.eof) break;
+  }
+  await client.send('IO.close', { handle: stream });
+  await info.attach('native-timeline', { body: Buffer.concat(chunks), contentType: 'application/json' });
   await info.attach('cpu-profile', { body: JSON.stringify(profile), contentType: 'application/json' });
   await info.attach('browser-metrics', { body: JSON.stringify(metrics), contentType: 'application/json' });
 });
