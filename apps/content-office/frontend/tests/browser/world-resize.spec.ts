@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
+// Use the real Chromium headless compositor rather than the legacy headless shell.
+test.use({ channel: 'chromium' });
+
 const profilers = new WeakMap();
 test.beforeEach(async ({ page }) => {
   const client = await page.context().newCDPSession(page);
