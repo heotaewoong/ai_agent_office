@@ -10,6 +10,8 @@ test.beforeEach(async ({ page, browser }, info) => {
   const gpuInfo = await browserClient.send('SystemInfo.getInfo');
   await browserClient.detach();
   await info.attach('gpu-info', { body: JSON.stringify(gpuInfo.gpu), contentType: 'application/json' });
+  if (process.env.CI) expect(gpuInfo.gpu.featureStatus.gpu_compositing).toBe('enabled');
+  if (!process.env.WORLD_DIAGNOSTICS) return;
   const client = await page.context().newCDPSession(page);
   await client.send('Profiler.enable');
   await client.send('Profiler.start');
