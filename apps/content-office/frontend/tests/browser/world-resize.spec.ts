@@ -1,6 +1,23 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
+const profilers = new WeakMap();
+test.beforeEach(async ({ page }) => {
+  const client = await page.context().newCDPSession(page);
+  await client.send('Profiler.enable');
+  await client.send('Profiler.start');
+  await client.send('Performance.enable');
+  profilers.set(page, client);
+});
+test.afterEach(async ({ page }, info) => {
+  const client = profilers.get(page);
+  if (!client) return;
+  const { profile } = await client.send('Profiler.stop');
+  const metrics = await client.send('Performance.getMetrics');
+  await info.attach('cpu-profile', { body: JSON.stringify(profile), contentType: 'application/json' });
+  await info.attach('browser-metrics', { body: JSON.stringify(metrics), contentType: 'application/json' });
+});
+
 for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel, fullscreen chat and drafts without writes (${mobile ? 'mobile' : 'PC'})`, async ({ page }) => {
   // This loads the full Babylon world on software-rendered CI, beyond the UI-only default.
   // CI software rendering may take over 90s for the complete PC flow.

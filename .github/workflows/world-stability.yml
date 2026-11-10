@@ -1,0 +1,45 @@
+name: 3D stability
+on:
+  pull_request:
+    paths:
+      - 'sites/office-world/**'
+      - 'apps/content-office/frontend/tests/browser/world-resize.spec.ts'
+      - '.github/workflows/world-stability.yml'
+permissions:
+  contents: read
+jobs:
+  stability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/content-office/frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=3072
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/content-office/frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: node node_modules/next/dist/bin/next build --webpack
+      - name: Fixed six real 3D runs, zero retries
+        run: |
+          node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3110 > /tmp/world-stability.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:3110/office3d > /dev/null; then break; fi
+            sleep 0.5
+          done
+          npx playwright test tests/browser/world-resize.spec.ts --workers=1 --repeat-each=3 --retries=0 --trace=on
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: world-stability-evidence
+          path: apps/content-office/frontend/test-results/
+          retention-days: 7
