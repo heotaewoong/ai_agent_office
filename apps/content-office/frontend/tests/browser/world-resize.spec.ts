@@ -48,6 +48,10 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
   const shell = page.locator('.world-frame-resizer');
   const frame = page.frameLocator('iframe[title="오피스 월드"]');
   const body = frame.locator('#panel-body');
+  await expect.poll(() => frame.locator('#scene').evaluate(() => {
+    const state = (window as unknown as { __officeWorld: { world: { scene: { getFrameId(): number } } } }).__officeWorld;
+    return state?.world.scene.getFrameId() ?? 0;
+  }), { timeout: 15_000 }).toBeGreaterThan(0);
   // Mobile uses a horizontal department strip; keyboard navigation must reveal its next item.
   await phase('open team panel with keyboard', async () => {
     await frame.locator('#department-nav button').first().focus();

@@ -496,6 +496,7 @@
     init(canvas) {
       this.canvas = canvas;
       this.engine = new B.Engine(canvas, true, { preserveDrawingBuffer: false, stencil: false, antialias: true });
+      this.renderContext = canvas.getContext('webgl2');
       // 저사양은 CSS 픽셀당 1픽셀, 고화질은 최대 2픽셀로 GPU 작업량을 제한한다.
       const applyDpr = () => this.engine.setHardwareScalingLevel(this.renderScale(window.devicePixelRatio));
       applyDpr();
@@ -542,7 +543,7 @@
 
       scene.onBeforeRenderObservable.add(() => this.tick());
       window.addEventListener('resize', () => { this.applyDpr(); this.engine.resize(); controls.syncCameraFraming(); });
-      this.renderFrame = () => scene.render();
+      this.renderFrame = () => this.renderNextFrame();
       this.renderPaused = true;
       document.addEventListener('visibilitychange', () => this.syncRendering());
       this.syncRendering();
@@ -551,6 +552,21 @@
     renderScale(dpr) {
       const density = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
       return 1 / Math.min(QUALITY === 'low' ? 1 : 2, Math.max(1, density));
+    },
+
+    renderNextFrame() {
+      const gl = this.renderContext;
+      if (gl?.isContextLost()) { this.pendingFrame = null; this.lastRenderAt = undefined; return; }
+      if (gl && this.pendingFrame) {
+        // Poll without waiting: slow software GPUs must not queue frames ahead of UI input.
+        if (gl.clientWaitSync(this.pendingFrame, 0, 0) === gl.TIMEOUT_EXPIRED) return;
+        gl.deleteSync(this.pendingFrame); this.pendingFrame = null;
+      }
+      const now = performance.now();
+      this.renderDeltaMs = this.lastRenderAt === undefined ? this.engine.getDeltaTime() : now - this.lastRenderAt;
+      this.lastRenderAt = now;
+      this.scene.render();
+      if (gl) { this.pendingFrame = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush(); }
     },
 
     syncMotionUI() {
@@ -564,7 +580,11 @@
       const paused = document.hidden || space.rosterOpen || space.resultsOpen;
       if (!this.renderFrame || this.renderPaused === paused) return;
       this.renderPaused = paused;
-      if (paused) this.engine.stopRenderLoop(this.renderFrame);
+      if (paused) {
+        this.engine.stopRenderLoop(this.renderFrame);
+        if (this.pendingFrame) this.renderContext.deleteSync(this.pendingFrame);
+        this.pendingFrame = null; this.lastRenderAt = undefined;
+      }
       else { this.engine.resize(); this.engine.runRenderLoop(this.renderFrame); }
     },
 
@@ -1776,7 +1796,7 @@
     },
 
     tick() {
-      const dt = Math.min(0.1, this.engine.getDeltaTime() / 1000);
+      const dt = Math.min(0.1, (this.renderDeltaMs ?? this.engine.getDeltaTime()) / 1000);
       this.time += dt;
       this.stepTraffic(dt);
       this.assistantNative?.tick(dt);
