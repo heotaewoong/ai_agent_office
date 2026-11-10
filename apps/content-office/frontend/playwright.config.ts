@@ -13,6 +13,9 @@ export default defineConfig({
     baseURL: process.env.OFFICE_BROWSER_BASE_URL ?? "http://127.0.0.1:3110",
     viewport: { width: 1440, height: 1050 },
     launchOptions: {
+      // Use one software GPU driver for WebGL and compositing on GPU-less CI.
+      // WebGL-only fallback forces synchronous canvas ReadPixels on every frame.
+      args: process.env.CI ? ['--enable-gpu', '--use-gl=angle', '--use-angle=swiftshader'] : [],
       executablePath: process.env.OFFICE_BROWSER_EXECUTABLE || undefined,
       env: {
         ...Object.fromEntries(

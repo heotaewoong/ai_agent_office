@@ -5,7 +5,11 @@ import { test, expect } from '@playwright/test';
 test.use({ channel: 'chromium' });
 
 const profilers = new WeakMap();
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page, browser }, info) => {
+  const browserClient = await browser.newBrowserCDPSession();
+  const gpuInfo = await browserClient.send('SystemInfo.getInfo');
+  await browserClient.detach();
+  await info.attach('gpu-info', { body: JSON.stringify(gpuInfo.gpu), contentType: 'application/json' });
   const client = await page.context().newCDPSession(page);
   await client.send('Profiler.enable');
   await client.send('Profiler.start');
