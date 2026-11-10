@@ -1,6 +1,44 @@
 import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
+// Use the real Chromium headless compositor rather than the legacy headless shell.
+test.use({ channel: 'chromium' });
+
+const profilers = new WeakMap();
+test.beforeEach(async ({ page, browser }, info) => {
+  const browserClient = await browser.newBrowserCDPSession();
+  const gpuInfo = await browserClient.send('SystemInfo.getInfo');
+  await browserClient.detach();
+  await info.attach('gpu-info', { body: JSON.stringify(gpuInfo.gpu), contentType: 'application/json' });
+  if (process.env.CI) expect(gpuInfo.gpu.featureStatus?.gpu_compositing).toBe('enabled');
+  if (!process.env.WORLD_DIAGNOSTICS) return;
+  const client = await page.context().newCDPSession(page);
+  await client.send('Profiler.enable');
+  await client.send('Profiler.start');
+  await client.send('Performance.enable');
+  await client.send('Tracing.start', { categories: 'devtools.timeline,cc,gpu', transferMode: 'ReturnAsStream' });
+  profilers.set(page, client);
+});
+test.afterEach(async ({ page }, info) => {
+  const client = profilers.get(page);
+  if (!client) return;
+  const { profile } = await client.send('Profiler.stop');
+  const metrics = await client.send('Performance.getMetrics');
+  const completed = new Promise<{ stream: string }>(resolve => client.once('Tracing.tracingComplete', resolve));
+  await client.send('Tracing.end');
+  const { stream } = await completed;
+  const chunks: Buffer[] = [];
+  for (;;) {
+    const chunk = await client.send('IO.read', { handle: stream });
+    chunks.push(Buffer.from(chunk.data, chunk.base64Encoded ? 'base64' : 'utf8'));
+    if (chunk.eof) break;
+  }
+  await client.send('IO.close', { handle: stream });
+  await info.attach('native-timeline', { body: Buffer.concat(chunks), contentType: 'application/json' });
+  await info.attach('cpu-profile', { body: JSON.stringify(profile), contentType: 'application/json' });
+  await info.attach('browser-metrics', { body: JSON.stringify(metrics), contentType: 'application/json' });
+});
+
 for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel, fullscreen chat and drafts without writes (${mobile ? 'mobile' : 'PC'})`, async ({ page }) => {
   // This loads the full Babylon world on software-rendered CI, beyond the UI-only default.
   // CI software rendering may take over 90s for the complete PC flow.
@@ -31,6 +69,10 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
   const shell = page.locator('.world-frame-resizer');
   const frame = page.frameLocator('iframe[title="오피스 월드"]');
   const body = frame.locator('#panel-body');
+  await expect.poll(() => frame.locator('#scene').evaluate(() => {
+    const state = (window as unknown as { __officeWorld: { world: { scene: { getFrameId(): number } } } }).__officeWorld;
+    return state?.world.scene.getFrameId() ?? 0;
+  }), { timeout: 15_000 }).toBeGreaterThan(0);
   // Mobile uses a horizontal department strip; keyboard navigation must reveal its next item.
   await phase('open team panel with keyboard', async () => {
     await frame.locator('#department-nav button').first().focus();
