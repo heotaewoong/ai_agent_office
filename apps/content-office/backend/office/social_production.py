@@ -5,6 +5,7 @@ from .store import WorkflowError,canonical,digest
 
 def card_paths(store,job_id,source_hash,folder):
     from .cards import plan_cards
+    from .artifact_library import require_available
     job=store.require_source_approval(job_id)
     if job['source_hash']!=source_hash:raise WorkflowError('카드 제작 원고가 변경되었습니다')
     cards=job.get('cards') or {}
@@ -18,6 +19,7 @@ def card_paths(store,job_id,source_hash,folder):
     root=store.artifacts.resolve();paths=[];seen=set()
     for slide in cards['slides']:
         record=slide.get('artifact') or {}
+        require_available(store,record.get('path',''))
         path=(root/record.get('path','')).resolve()
         if not path.is_relative_to(root) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest()!=record.get('sha256'):
             raise WorkflowError('카드뉴스 파일 검증에 실패했습니다. 새로 검수해 주세요')

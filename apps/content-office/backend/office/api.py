@@ -788,6 +788,8 @@ def create_app(store: Store | None = None):
             from .blog_assets import verify_manifest
             verify_manifest(store, job, manifest)
         for file in released_files(job, outputs):
+            from .artifact_library import require_available
+            require_available(store, file['path'])
             path = (store.artifacts / file["path"]).resolve()
             if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != file["sha256"]:
                 raise WorkflowError("제작물이 변경되었거나 파일 검증에 실패했습니다")
@@ -871,7 +873,7 @@ def create_app(store: Store | None = None):
     def download_review_package(job_id: str):
         from .review_bundle import build_review_bundle
         job = store.require_source_approval(job_id)
-        data = build_review_bundle(job, store.artifacts)
+        data = build_review_bundle(job, store.artifacts, store=store)
         return Response(data, media_type='application/zip', headers={
             'Content-Disposition': f'attachment; filename="{job["id"]}-review.zip"',
             'Cache-Control': 'no-store',
@@ -922,6 +924,8 @@ def create_app(store: Store | None = None):
         record = next((f for f in manifest.get('files', []) if f['name'] == filename and 'blog' in f.get('outputs', ['blog'])), None)
         if not record:
             raise WorkflowError('요청한 블로그 파일이 아직 없습니다')
+        from .artifact_library import require_available
+        require_available(store, record['path'])
         path = (store.artifacts / record['path']).resolve()
         if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file():
             raise WorkflowError('블로그 파일을 찾을 수 없습니다')

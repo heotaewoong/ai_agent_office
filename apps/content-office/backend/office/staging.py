@@ -47,11 +47,13 @@ def _verified_records(store, job):
     if not selected.issubset(requested & completed):
         raise WorkflowError("출고 승인한 출력과 현재 완성품이 다릅니다")
     root, verified = store.artifacts.resolve(), {}
+    from .artifact_library import require_available
     for record in manifest.get("files", []):
         outputs = record.get("outputs", [])
         if outputs and "shared" not in outputs and not selected.intersection(outputs):
             continue
         try:
+            require_available(store, record['path'])
             path = (root / record["path"]).resolve()
             if not path.is_relative_to(root) or not path.is_file():
                 raise WorkflowError("출고 파일이 없거나 허용 경로 밖에 있습니다")

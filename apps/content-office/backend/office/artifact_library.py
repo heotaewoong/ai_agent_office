@@ -47,6 +47,8 @@ def _kind(name):
         return 'cards'
     if name.endswith(('.png', '.jpg', '.jpeg', '.webp')) and re.search(r'thumb|cover', name):
         return 'thumbnail'
+    if name.endswith(('.png', '.jpg', '.jpeg', '.webp')):
+        return 'image'
     if re.fullmatch(r'(?:summary|checklist|quiz|export|result)(?:[-_].*)?\.pdf', name) or re.fullmatch(r'(?:tistory|naver|blog)(?:[-_].*)?\.(?:html|md|txt)', name):
         return 'document'
     return None
@@ -77,23 +79,31 @@ def _scan(store, db):
     ledger = json.loads(row[0]) if row else {'entries': {}, 'receipts': {}}
     jobs = {j['id']: j for r in db.execute('SELECT data FROM jobs') if (j := json.loads(r[0]))}
     protected, owners, busy = {}, {}, set()
+    current_paths, warnings = set(), defaultdict(set)
     for job in jobs.values():
         for path in _paths([job.get('manifest'), job.get('cards'), job.get('quiz'), job.get('thumbnail_studio')]):
-            protected[path] = '현재 제작·출고에서 사용 중입니다'
+            current_paths.add(path)
         for path in _paths(job.get('source_packet')):
             protected[path] = '원고 입력·참조 원본입니다'
-    for r in db.execute("SELECT payload FROM tasks WHERE state IN ('queued','running','claimed','unknown')"):
-        busy.add(json.loads(r[0]).get('job_id'))
+    for r in db.execute("SELECT payload,state FROM tasks WHERE state IN ('queued','running','claimed','unknown')"):
+        job_id = json.loads(r[0]).get('job_id')
+        if r[1] in {'queued', 'running', 'claimed'}:
+            busy.add(job_id)
+        else:
+            warnings[job_id].add('결과 불명 작업 기록은 삭제 후에도 보존됩니다')
     for r in db.execute("SELECT data FROM costs WHERE state IN ('reserved','unknown')"):
-        busy.add(json.loads(r[0]).get('job_id'))
+        warnings[json.loads(r[0]).get('job_id')].add('비용 예약·대사 기록은 삭제 후에도 보존됩니다')
     for r in db.execute("SELECT value FROM settings WHERE key IN ('deliveries','owner_draft_deliveries')"):
         for record in json.loads(r[0]).values():
-            if record.get('state') in BUSY | {'pending', 'pending_owner', 'office_held', 'created', 'accepted', 'needs_review'}:
+            if record.get('state') in {'queued', 'running', 'claimed'}:
                 busy.add(record.get('job_id'))
+            elif record.get('state') in BUSY | {'pending', 'pending_owner', 'office_held', 'created', 'accepted', 'needs_review'}:
+                warnings[record.get('job_id')].add('기존 전송·대사 기록은 삭제 후에도 보존됩니다')
     for job in jobs.values():
         if job.get('state') in {'drafting', 'production_queued', 'producing', 'needs_reconciliation'}:
-            busy.add(job['id'])
+            warnings[job['id']].add('이전 작업 상태 기록은 삭제 후에도 보존됩니다')
     busy.discard(None)
+    warnings.pop(None, None)
     for r in db.execute('SELECT data FROM drafts'):
         draft = json.loads(r[0])
         for path in _paths(draft.get('assets', [])):
@@ -121,12 +131,17 @@ def _scan(store, db):
             job = jobs.get(job_id, {})
             title = owner[0] or job.get('title') or job.get('article', {}).get('title') or Path(relative).parent.name
             item = groups.setdefault(identity, {'id': identity, 'kind': kind, 'title': str(title or name)[:200],
-                'name': '카드뉴스' if kind == 'cards' else name, 'job_id': job_id, 'files': [], 'protected_reason': '', 'state': 'available'})
+                'name': '카드뉴스' if kind == 'cards' else name, 'job_id': job_id, 'files': [], 'protected_reason': '', 'usage_note': '', 'state': 'available'})
             item['files'].append({'path': relative, **fs})
+            notes = set(warnings.get(job_id, ()))
+            notes.update(item['usage_note'].split(' · ') if item['usage_note'] else ())
+            if relative in current_paths:
+                notes.add('현재 제작물 참조·승인 이력은 보존되며 삭제한 파일은 사용할 수 없습니다')
+            item['usage_note'] = ' · '.join(sorted(notes))
             if relative in protected:
                 item['protected_reason'] = protected[relative]
             if job_id in busy:
-                item['protected_reason'] = '진행 중이거나 결과·비용·전송 확인이 필요한 작업입니다'
+                item['protected_reason'] = '현재 대기·실행 중인 작업이 사용 중입니다'
     # Keep missing trash members visible as attention, never pretend that they can be restored.
     for identity, entry in ledger['entries'].items():
         if entry['state'] == 'purged':
@@ -191,7 +206,8 @@ def _quote(store, chosen, action, stamp=None):
     stamp = int(time.time()) if stamp is None else stamp
     signature = hmac.new(secret, canonical({'at': stamp, 'action': action, 'items': [(i['id'], i['fingerprint']) for i in chosen]}).encode(), hashlib.sha256).hexdigest()
     return {'token': f'{stamp}.{signature}', 'count': len(chosen), 'size_bytes': sum(f['bytes'] for f in files.values()),
-            'reclaimable_bytes': reclaim if action == 'purge' else 0, 'shared_files': sum(f['links'] > 1 for f in files.values())}
+            'reclaimable_bytes': reclaim if action == 'purge' else 0, 'shared_files': sum(f['links'] > 1 for f in files.values()),
+            'usage_notes': sorted({item['usage_note'] for item in chosen if item.get('usage_note')})}
 
 
 def quote(store, ids, action):
@@ -280,6 +296,7 @@ def change(store, ids, action, token, request_id):
 
 
 def require_available(store, relative):
+    relative = _path(store, relative).relative_to(store.artifacts).as_posix()
     ledger = store.setting(KEY, {'entries': {}})
     for row in ledger['entries'].values():
         if relative not in row['paths']:

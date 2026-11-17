@@ -897,6 +897,7 @@ def production_lock(folder):
         os.close(fd)
 
 def produce(store, job_id, *, voice_renderer=None, background_renderer=None, clip_renderer=None):
+    from .artifact_library import require_available
     # This guard must run before directory creation or any external voice or image callback.
     job = store.require_source_approval(job_id)
     source_hash = job['source_hash']
@@ -956,6 +957,7 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                             try:verify_manifest(store, store.job(job_id), previous)
                             except WorkflowError:valid = False
                         for record in old_records:
+                            require_available(store, record['path'])
                             path = (root / record['path']).resolve()
                             valid = valid and path.is_relative_to(root) and path.is_file() and file_hash(path) == record['sha256']
                         if valid and kind=='cards':
