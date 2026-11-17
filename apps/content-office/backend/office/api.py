@@ -430,6 +430,8 @@ def create_app(store: Store | None = None):
 
     from .api_artifact_library import register as register_artifact_library
     register_artifact_library(app, store)
+    from .api_pipeline_studio import register as register_pipeline_studio
+    register_pipeline_studio(app, session)
 
     @app.get("/api/dashboard")
     def dashboard(compact: bool = False, task_results: bool = True):

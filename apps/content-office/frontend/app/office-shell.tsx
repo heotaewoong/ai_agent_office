@@ -55,7 +55,7 @@ import { validWindowMinutes } from "../lib/settings";
 import { SettingsPanel } from "./settings-panel";
 import { ProduceButton } from "./produce-button";
 import { ThumbnailStudio } from "./thumbnail-studio";
-import { ArchitectureView } from "./architecture-view";
+import { PipelineStudio as ArchitectureView } from "./pipeline-studio";
 import { BriefPanel } from "./brief-panel";
 import { updateBriefDrafts, type BriefDraft, type BriefDraftUpdate } from "../lib/briefs";
 import { updateOfferDrafts, type OfferDraft, type OfferDraftUpdate } from "../lib/offer";
@@ -571,7 +571,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
           </div>
         </header>
         <main id="main-content" tabIndex={-1}>
-          <div className="page-heading">
+          {view !== "architecture" && <div className="page-heading">
             <div>
               <p className="eyebrow">
                 {currentView.en}
@@ -596,9 +596,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                         ? "지금 진행 중인 모든 작업을 한 공간에서 보고, 바로 이동하거나 요청하세요."
                         : view === "settings"
                           ? "음성·배경 이미지·생성 영상과 키 연결, 작업 시간을 한곳에서 정하세요."
-                          : view === "architecture"
-                            ? "제작 순서와 사람 승인, 서버 연결과 실제 운영 기록을 함께 확인하세요."
-                            : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
+                          : "수집부터 검수까지, 오피스가 실제로 수행한 기록입니다."}
               </p>
             </div>
             <div className="heading-actions">
@@ -625,9 +623,9 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 </button>
               )}
             </div>
-          </div>
+          </div>}
 
-          {view !== "world" && !libraryActive && !(view === 'news' && !officialNews) && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
+          {view !== "world" && view !== "architecture" && !libraryActive && !(view === 'news' && !officialNews) && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
 
           <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (
