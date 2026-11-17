@@ -23,6 +23,7 @@ APP_PATH = Path('apps/content-office')
 DEPENDENCIES = ('backend/requirements.txt', 'backend/requirements-lock.txt', 'backend/pyproject.toml',
                 'backend/poetry.lock', 'backend/uv.lock', 'frontend/package.json', 'frontend/package-lock.json',
                 'frontend/npm-shrinkwrap.json', 'frontend/pnpm-lock.yaml', 'frontend/yarn.lock')
+PREPARED_MANIFESTS = ('requirements.txt', 'requirements-lock.txt')
 
 
 class DeployError(RuntimeError):
@@ -82,11 +83,40 @@ def isolated_env(parent, folder):
     return env
 
 
+def validate_locked_packages(requirements, lock, packages, marker_environment):
+    """Check exact installed pins, including platform markers, without installing anything."""
+    from packaging.requirements import InvalidRequirement, Requirement
+    from packaging.utils import canonicalize_name
+    def parse(text):
+        try:
+            values = [Requirement(line.strip()) for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#')]
+        except InvalidRequirement as error:
+            raise DeployError('Prepared dependencies must use plain package requirements.') from error
+        if any(value.url for value in values):
+            raise DeployError('Prepared dependencies cannot use URLs or editable packages.')
+        return [value for value in values if not value.marker or value.marker.evaluate(marker_environment)]
+    locked = {}
+    for value in parse(lock):
+        name, pins = canonicalize_name(value.name), list(value.specifier)
+        if name in locked or len(pins) != 1 or pins[0].operator != '==' or '*' in pins[0].version:
+            raise DeployError('Prepared dependency lock must contain unique exact pins.')
+        locked[name] = pins[0].version
+    installed = {canonicalize_name(name): version for name, version in packages.items()}
+    if any(installed.get(name) != version for name, version in locked.items()) or set(installed) - set(locked) - {'pip', 'setuptools', 'wheel'}:
+        raise DeployError('Prepared installed packages do not match the exact dependency lock.')
+    for value in parse(requirements):
+        name = canonicalize_name(value.name)
+        if name not in locked or not value.specifier.contains(installed[name], prereleases=True):
+            raise DeployError('Prepared installed packages do not satisfy target requirements.')
+
+
 class Deployment:
-    def __init__(self, repo, state, target, *, runner=run, lock_type=None, identity=None, ci=None):
+    def __init__(self, repo, state, target, *, runner=run, lock_type=None, identity=None, ci=None, prepared_backend_venv=None):
         self.repo, self.state, self.target = Path(repo).resolve(), Path(state).resolve(), target.lower()
         # ci: the result of ci_verification() for this exact target. When present, tests ran off-server.
         self.ci = ci
+        self.prepared_backend_venv = Path(prepared_backend_venv) if prepared_backend_venv is not None else None
+        self.prepared_backend_evidence = None
         self.app = self.repo / APP_PATH
         if self.state.is_relative_to(self.repo) or self.app.resolve() != self.app:
             raise DeployError('State must be outside the checkout and the app path must not escape it.')
@@ -120,10 +150,47 @@ class Deployment:
             if path.is_symlink() or not path.resolve().is_relative_to(self.state):
                 raise DeployError('Protected state path must stay inside the state root without symlinks: ' + relative)
 
-    def git(self, *args, cwd=None):
+    def git(self, *args, cwd=None, raw=False):
         env = {key: value for key, value in self.env.items() if not key.startswith('GIT_')}
-        return self.runner(['git', '-c', 'core.hooksPath=' + str(self.state / 'runtime/no-hooks'),
-                            '-c', 'core.fsmonitor=false', '-c', 'gc.auto=0', *args], cwd=cwd or self.repo, env=env).strip()
+        output = self.runner(['git', '-c', 'core.hooksPath=' + str(self.state / 'runtime/no-hooks'),
+                             '-c', 'core.fsmonitor=false', '-c', 'gc.auto=0', *args], cwd=cwd or self.repo, env=env)
+        return output if raw else output.strip()
+
+    def validate_prepared_backend(self):
+        path = self.prepared_backend_venv
+        live = self.app / 'backend/.venv'
+        if (not path.is_absolute() or path.resolve() != path or not path.is_dir()
+                or any(part.is_symlink() for part in (path, *path.parents))
+                or any(path.is_relative_to(root) or root.is_relative_to(path) for root in (self.repo, self.state, live.resolve()))):
+            raise DeployError('Prepared venv path must be an absolute, separate directory without symlink ancestors.')
+        manifest_path, config = path / 'heobrain-prepared.json', path / 'pyvenv.cfg'
+        if any(item.is_symlink() or not item.is_file() for item in (manifest_path, config)) or not (path / 'bin/python').is_file():
+            raise DeployError('Prepared venv must contain its regular preparation manifest and venv configuration.')
+        if not re.search(r'^include-system-site-packages\s*=\s*false\s*$', config.read_text(), re.MULTILINE | re.IGNORECASE):
+            raise DeployError('Prepared venv must exclude system site packages.')
+        manifests = {name: self.git('show', self.target + ':' + (APP_PATH / 'backend' / name).as_posix(), raw=True) for name in PREPARED_MANIFESTS}
+        hashes = {name: hashlib.sha256(text.encode()).hexdigest() for name, text in manifests.items()}
+        manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+        if manifest.get('manifest_sha256') != hashes:
+            raise DeployError('Prepared manifest hashes do not match target backend requirements and lock.')
+        with tempfile.TemporaryDirectory(prefix='office-venv-check-') as isolated:
+            env = isolated_env(self.env, Path(isolated))
+            probe = ('import importlib.metadata as m,json,sys; from packaging.markers import default_environment; '
+                     'from packaging.utils import canonicalize_name; '
+                     'print(json.dumps(dict(prefix=sys.prefix,base_prefix=sys.base_prefix,python_version=sys.version.split()[0],'
+                     'packages={canonicalize_name(d.metadata["Name"]):d.version for d in m.distributions()},marker_environment=default_environment())))')
+            actual = json.loads(self.runner([path / 'bin/python', '-I', '-c', probe], cwd=isolated, env=env))
+            if Path(actual['prefix']).resolve() != path or actual['prefix'] == actual['base_prefix']:
+                raise DeployError('Prepared interpreter does not belong to the candidate venv.')
+            if actual['packages'] != manifest.get('packages') or actual['python_version'] != manifest.get('python_version'):
+                raise DeployError('Prepared installed packages or Python version changed after preparation.')
+            validate_locked_packages(manifests['requirements.txt'], manifests['requirements-lock.txt'], actual['packages'], actual['marker_environment'])
+            self.runner([path / 'bin/python', '-I', '-m', 'pip', 'check'], cwd=isolated, env=env)
+        evidence = {'path': str(path), 'manifest_sha256': hashes, 'python_version': actual['python_version'],
+                    'packages_sha256': hashlib.sha256(json.dumps(actual['packages'], sort_keys=True).encode()).hexdigest()}
+        if self.prepared_backend_evidence is not None and self.prepared_backend_evidence != evidence:
+            raise DeployError('Prepared backend environment changed during deployment.')
+        self.prepared_backend_evidence = evidence
 
     def clean_head(self, expected=None):
         if self.git('status', '--porcelain', '--untracked-files=no'):
@@ -178,8 +245,12 @@ class Deployment:
         if self.git('rev-parse', '--verify', self.target + '^{commit}') != self.target:
             raise DeployError('Target must be an available commit; fetch separately before deploying.')
         self.git('merge-base', '--is-ancestor', previous, self.target)
-        if self.git('diff', '--name-only', previous, self.target, '--', *(str(APP_PATH / path).replace('\\', '/') for path in DEPENDENCIES)):
+        changed = set(self.git('diff', '--name-only', previous, self.target, '--', *((APP_PATH / path).as_posix() for path in DEPENDENCIES)).splitlines())
+        allowed = {(APP_PATH / 'backend' / name).as_posix() for name in PREPARED_MANIFESTS} if self.prepared_backend_venv is not None else set()
+        if changed - allowed:
             raise DeployError('Dependency manifests/locks changed; review and prepare dependencies separately.')
+        if self.prepared_backend_venv is not None:
+            self.validate_prepared_backend()
         self.owner()
         if not (self.app / 'frontend/.next/BUILD_ID').is_file():
             raise DeployError('An existing production build is required for rollback; do initial setup separately.')
@@ -205,11 +276,11 @@ class Deployment:
             if any((folder / name).exists() for name in ('.env', '.env.local', '.env.production', '.env.production.local', '.env.test', '.env.test.local')):
                 raise DeployError('A tracked runtime environment file exists in staging; key-free checks cannot be guaranteed.')
         for relative in ('backend/.venv', 'frontend/node_modules'):
-            source = self.app / relative
+            source = self.prepared_backend_venv if relative == 'backend/.venv' and self.prepared_backend_venv is not None else self.app / relative
             if not source.is_dir():
                 raise DeployError('Existing dependency directory is missing: ' + relative)
             (app / relative).symlink_to(source, target_is_directory=True)
-        python = self.app / 'backend/.venv/bin/python'
+        python = (self.prepared_backend_venv or self.app / 'backend/.venv') / 'bin/python'
         node = shutil.which('node', path=self.env.get('PATH'))
         if not python.is_file() or not node:
             raise DeployError('Existing Linux venv Python and Node must already be installed.')
@@ -280,10 +351,12 @@ class Deployment:
                 resume.append('OFFICE_ENV_FILE=' + self.env['OFFICE_ENV_FILE'])
             resume += [str(self.app / 'backend/.venv/bin/python'), str(helper), '<reviewed-40-character-SHA>', '--repo', str(self.repo)]
             self.record('checking', previous=previous, business_hash=fingerprint, repo=str(self.repo), state_dir=str(self.state),
-                        preserved_helper=str(helper), next_deploy_command=resume, ci=self.ci)
+                        preserved_helper=str(helper), next_deploy_command=resume, ci=self.ci, prepared_backend=self.prepared_backend_evidence)
             build = self.app / 'frontend/.next'
             before = build.with_name('.next.before-' + run_id)
             candidate = build.with_name('.next.candidate-' + run_id)
+            venv = self.app / 'backend/.venv'
+            previous_venv = venv.with_name('.venv.before-' + run_id)
             info = runtime / 'build-info.json'
             self.validate_state_paths()
             old_info = info.read_bytes() if info.exists() else None
@@ -297,11 +370,16 @@ class Deployment:
                 self.owner()
                 if self.business_state() != fingerprint:
                     raise DeployError('Business records changed during checks; live source/build were preserved.')
+                if self.prepared_backend_venv is not None:
+                    self.validate_prepared_backend()
                 cutover = True
                 self.service('stop')
                 self.owner(expected=())
                 self.clean_head(previous)
                 self.git('merge', '--ff-only', self.target)
+                if self.prepared_backend_venv is not None:
+                    venv.rename(previous_venv)
+                    venv.symlink_to(self.prepared_backend_venv, target_is_directory=True)
                 if build.exists():
                     build.rename(before)
                 candidate.rename(build)
@@ -319,11 +397,19 @@ class Deployment:
                               'tests': {'ci': self.ci} if self.ci else {'backend': counts, 'frontend': {'passed': front_counts.get('pass', 0), 'failed': front_counts.get('fail', 0)}}}
                 self.validate_state_paths()
                 info.write_text(json.dumps(build_info, ensure_ascii=False), encoding='utf-8')
-                self.record('deployed', actual_head=self.clean_head(self.target), previous_build=str(before), business_unchanged=True)
+                self.record('deployed', actual_head=self.clean_head(self.target), previous_build=str(before), business_unchanged=True,
+                            previous_backend_venv=str(previous_venv) if self.prepared_backend_venv is not None else None)
                 return self.release
             except BaseException as error:
                 if cutover:
                     try:
+                        # Both service scripts need .venv/bin/python, even when link creation failed.
+                        if previous_venv.exists() or previous_venv.is_symlink():
+                            if venv.is_symlink() and venv.resolve() == self.prepared_backend_venv:
+                                venv.unlink()
+                            elif venv.exists() or venv.is_symlink():
+                                raise DeployError('Live venv changed during recovery; preserve both environments for manual recovery.')
+                            previous_venv.rename(venv)
                         self.service('stop')
                         self.owner(expected=())
                         head = self.clean_head()
@@ -360,6 +446,8 @@ def main():
     parser.add_argument('--repo', type=Path, help='Explicit live repository root when using the preserved recovery helper')
     parser.add_argument('--ci-verified-repo', metavar='OWNER/REPO',
                         help='Skip server-side tests only if GitHub reports the `verify` check passed for this exact commit')
+    parser.add_argument('--prepared-backend-venv', type=Path,
+                        help='Use a separately prepared Linux venv with matching heobrain-prepared.json; never install during deployment')
     args = parser.parse_args()
     app = Path(__file__).resolve().parents[1]
     repo = args.repo.resolve() if args.repo else Path(run(['git', 'rev-parse', '--show-toplevel'], cwd=app).strip()).resolve()
@@ -369,7 +457,7 @@ def main():
     operation = None
     try:
         ci = ci_verification(args.ci_verified_repo, args.target.lower()) if args.ci_verified_repo else None
-        operation = Deployment(repo, state, args.target, ci=ci)
+        operation = Deployment(repo, state, args.target, ci=ci, prepared_backend_venv=args.prepared_backend_venv)
         path = operation.execute()
         print('Deployed exact commit ' + args.target + '; verification artifacts: ' + str(path))
     except (DeployError, OSError, ValueError) as error:

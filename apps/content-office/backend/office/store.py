@@ -16,6 +16,10 @@ class WorkflowError(ValueError):
     pass
 
 
+class EditorialInputChanged(WorkflowError):
+    """An editorial result belongs to older inputs; preserve newer human decisions."""
+
+
 class DefiniteFailure(WorkflowError):
     """Nothing billable is in doubt (e.g. the article page could not be read before any model call).
     The worker records a plain, retryable failure instead of an 'unknown result needs reconciliation'."""
@@ -208,12 +212,28 @@ class Store:
             job.update(values)
             return self._write_job(db, job)
 
-    def save_source(self, job_id, packet, expected_hash=_UNSET, *, expected_offer_hash=_UNSET, expected_brief_hash=_UNSET):
+    def _require_editorial_snapshot(self, db, job, snapshot):
+        row = db.execute("SELECT value FROM settings WHERE key='model'").fetchone()
+        selected_model = json.loads(row[0]) if row else None
+        if (any(job.get(key) != value for key, value in snapshot["inputs"].items())
+                or selected_model != snapshot["selected_model"]):
+            raise EditorialInputChanged("검수 중 원고 입력·모델 또는 승인 판본이 변경되어 이전 결과를 저장하지 않았습니다")
+
+    def begin_editorial(self, job_id, expected_snapshot):
+        with self.connection(transaction=True) as db:
+            job = self._job(db, job_id)
+            self._require_editorial_snapshot(db, job, expected_snapshot)
+            job.update(state="drafting", error=None)
+            return self._write_job(db, job)
+
+    def save_source(self, job_id, packet, expected_hash=_UNSET, *, expected_offer_hash=_UNSET, expected_brief_hash=_UNSET, expected_editorial_snapshot=_UNSET):
         if not packet.get("title") or not packet.get("body"):
             raise WorkflowError("원고 제목과 본문이 필요합니다")
         from .offers import offer_hash, offer_snapshot, source_version
         with self.connection(transaction=True) as db:
             job = self._job(db, job_id)
+            if expected_editorial_snapshot is not _UNSET:
+                self._require_editorial_snapshot(db, job, expected_editorial_snapshot)
             if expected_brief_hash is not _UNSET and digest(job.get('brief')) != expected_brief_hash:
                 raise WorkflowError('검수 중 독자 브리프가 변경되어 이전 주제의 결과를 저장하지 않았습니다. 현재 설정으로 재검수하세요')
             if expected_offer_hash is not _UNSET and offer_hash(job.get("offer")) != expected_offer_hash:

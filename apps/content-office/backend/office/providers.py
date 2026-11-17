@@ -105,6 +105,12 @@ def openai_wire_schema(schema):
     return candidate if closed_required_schema(candidate) else schema
 
 
+def _not_dispatched(error: WorkflowError) -> WorkflowError:
+    """Evidence for this attempt only; existing reserved/unknown costs stay untouched."""
+    error.provider_not_dispatched = True
+    return error
+
+
 class Provider:
     def __init__(self, store: Store, model=None, transport=None, *, job_id=None, cost_scope=None):
         self.store = store
@@ -126,12 +132,16 @@ class Provider:
         options = {"max_tokens": 8192, "temperature": 0.5, **(options or {})}
         if self.model == "codex-subscription-text":
             from .content_api_mode import require_subscription_allowed
-            require_subscription_allowed(self.store)
+            try:
+                require_subscription_allowed(self.store)
+            except WorkflowError as error:
+                _not_dispatched(error)
+                raise
             from .codex_text_provider import generate
             return generate(self, role, messages, schema, options)
         provider = provider_for(self.model)
         if provider is None:
-            raise WorkflowError("모델의 검증된 단가가 없어 호출을 보류합니다")
+            raise _not_dispatched(WorkflowError("모델의 검증된 단가가 없어 호출을 보류합니다"))
         wire_schema = openai_wire_schema(schema) if provider == 'openai' else schema
         key = cache_key(provider, self.model, messages, wire_schema, options)
         cached = self.store.cache_get(key)
@@ -139,25 +149,25 @@ class Provider:
             try:
                 Draft202012Validator(schema).validate(cached)
             except ValidationError:
-                raise WorkflowError("저장된 모델 결과 형식이 schema와 달라 검토가 필요합니다") from None
+                raise _not_dispatched(WorkflowError("저장된 모델 결과 형식이 schema와 달라 검토가 필요합니다")) from None
             self.store.event("model_cache_hit", {"role": role, "model": self.model, "key": key}, self.job_id)
             return cached
         price_until = self.store.setting("price_valid_until", DEFAULT_PRICE_VALID_UNTIL)
         if datetime.now(timezone.utc) >= datetime.fromisoformat(price_until):
-            raise WorkflowError("검증한 요금 단가의 유효기간이 지났습니다. 단가를 재확인하세요")
+            raise _not_dispatched(WorkflowError("검증한 요금 단가의 유효기간이 지났습니다. 단가를 재확인하세요"))
         window = self.store.setting("work_window", {})
         if window.get("authorized_end") and datetime.now(timezone.utc) >= datetime.fromisoformat(window["authorized_end"]):
-            raise WorkflowError("허용된 작업 시간이 종료되어 새 유료 호출을 보류합니다")
+            raise _not_dispatched(WorkflowError("허용된 작업 시간이 종료되어 새 유료 호출을 보류합니다"))
         if provider == "openai":
             api_key = os.environ.get("OPENAI_API_KEY")
             if not api_key:
-                raise WorkflowError("OpenAI 연결이 없습니다. OPENAI_API_KEY를 설정하거나 제작 설정에서 글 모델을 바꾸세요")
+                raise _not_dispatched(WorkflowError("OpenAI 연결이 없습니다. OPENAI_API_KEY를 설정하거나 제작 설정에서 글 모델을 바꾸세요"))
             url, headers, payload = self._openai_request(api_key, messages, schema, options)
             price, price_source, price_checked = OPENAI_PRICES[self.model], OPENAI_PRICE_SOURCE, OPENAI_PRICE_CHECKED
         else:
             api_key = os.environ.get("GEMINI_API_KEY")
             if not api_key:
-                raise WorkflowError("기존 Gemini 연결이 없습니다. 자격 설정 후 다시 요청하세요")
+                raise _not_dispatched(WorkflowError("기존 Gemini 연결이 없습니다. 자격 설정 후 다시 요청하세요"))
             url, headers, payload = self._gemini_request(api_key, messages, schema, options)
             price, price_source, price_checked = PRICES[self.model], PRICE_SOURCE, "2026-10-26"
         # UTF-8 byte length is a conservative token bound for these text-only inputs.
@@ -165,8 +175,12 @@ class Provider:
         maximum = ((input_bound * price["input_usd_million"] + options["max_tokens"] * price["output_usd_million"]) / 1_000_000 * FX_RESERVATION_KRW) * 1.2
         try:
             reservation = self.store.reserve_cost("model", maximum, {"role": role, "model": self.model, "provider": provider, "cache_key": key, "input_byte_bound": input_bound, "max_output_tokens": options["max_tokens"], "price": price, "price_source": price_source, "price_checked": price_checked, "fx_reservation_krw": FX_RESERVATION_KRW, "job_id": self.job_id}, scope=self.cost_scope)
-        except CostScopeExceeded:
+        except CostScopeExceeded as error:
             self.cost_scope_exhausted = True
+            _not_dispatched(error)
+            raise
+        except WorkflowError as error:
+            _not_dispatched(error)
             raise
         self.store.event("model_started", {"role": role, "model": self.model, "provider": provider, "reservation_id": reservation["id"], "input_hash": digest(messages), "schema_hash": digest(schema), "reserved_krw": reservation["reserved_krw"]}, self.job_id)
         try:

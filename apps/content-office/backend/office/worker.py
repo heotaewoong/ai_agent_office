@@ -6,7 +6,7 @@ import signal
 import time
 from .bootstrap import default_store, refresh
 from .editorial import prepare_source
-from .store import SourceUnavailable, WorkflowError, canonical, identifier, now
+from .store import EditorialInputChanged, SourceUnavailable, WorkflowError, canonical, identifier, now
 from .runtime import WorkerRuntime, WorkerInterrupted, WindowDeadline, run_before_deadline, window_open, worker_heartbeat
 
 
@@ -114,7 +114,9 @@ def run_once(store, owner):
         if job_id and task["kind"] not in ("quiz", "cards", "private_delivery", "thumbnail_artwork"):
             with store.connection(transaction=True) as db:
                 current = store._job(db, job_id)
-                if current.get("source_hash") == task["payload"].get("_source_hash_at_claim"):
+                newer_editorial_state = (task["kind"] in ("draft", "evaluate")
+                    and isinstance(error, EditorialInputChanged) and current.get("state") != "drafting")
+                if not newer_editorial_state and current.get("source_hash") == task["payload"].get("_source_hash_at_claim"):
                     current.update(state="needs_reconciliation" if uncertain else "blocked", error=message)
                     store._write_job(db, current)
         store.event("task_result_unknown" if uncertain else "task_failed", {"task_id": task["id"], "kind": task["kind"], "error": message}, job_id)
