@@ -42,13 +42,17 @@ def _released_job(db, store, job_id):
             or release.get("decision") != "approved" or not release.get("outputs")
             or release.get("version") != manifest.get("hash") or manifest.get("source_hash") != job.get("source_hash")):
         raise WorkflowError("현재 제작물의 출고 승인②가 필요합니다. 뉴스레터 회차는 만들지 않았습니다")
+    from .artifact_library import require_available
     root = store.artifacts.resolve()
     for record in manifest.get("files", []):
         if not set(record.get("outputs", [])).intersection(release["outputs"]):
             continue
         try:
+            require_available(store, record["path"])
             path = (root / record["path"]).resolve()
             valid = path.is_relative_to(root) and path.is_file() and hashlib.sha256(path.read_bytes()).hexdigest() == record["sha256"]
+        except WorkflowError:
+            raise
         except (KeyError, OSError, TypeError, ValueError):
             valid = False
         if not valid:

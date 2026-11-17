@@ -60,6 +60,8 @@ def _approved(store, jid):
 
 
 def _file(store, record):
+    from .artifact_library import require_available
+    require_available(store, record['path'])
     root = store.artifacts.resolve()
     path = (root / record['path']).resolve()
     if not path.is_relative_to(root) or not path.is_file() or path.stat().st_size > 100_000_000:

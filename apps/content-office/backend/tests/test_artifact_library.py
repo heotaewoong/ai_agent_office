@@ -48,6 +48,23 @@ def mutate(ctx, ids, action, request_id):
     return ctx[4].post('/api/library/change', json={'ids': ids, 'action': action, 'quote': q['token'], 'request_id': request_id}, headers=ctx[5])
 
 
+@pytest.mark.parametrize('alias', ['standalone/./scene.png', 'standalone//scene.png', 'standalone/../standalone/scene.png'])
+def test_trash_availability_rejects_same_file_path_aliases(tmp_path, alias):
+    from office import artifact_library as library
+    from office.store import WorkflowError
+    store = Store(tmp_path)
+    create_app(store)
+    path = store.artifacts / 'standalone' / 'scene.png'
+    path.parent.mkdir()
+    path.write_bytes(b'generated image')
+    identity = library.inventory(store)['items'][0]['id']
+    token = library.quote(store, [identity], 'trash')['token']
+    library.change(store, [identity], 'trash', token, 'trash-path-alias')
+    assert (store.artifacts / alias).resolve() == path.resolve()
+    with pytest.raises(WorkflowError):
+        library.require_available(store, alias)
+
+
 def test_real_file_groups_exclude_originals_and_get_is_readonly(ctx):
     before = ctx[0].job(ctx[1]['id'])
     rows = listing(ctx)
@@ -78,16 +95,110 @@ def test_trash_restore_then_purge_preserves_source_approvals_and_request_receipt
     assert not any(x['id'] in ids for x in listing(ctx))
 
 
-def test_current_manifest_file_and_busy_job_are_protected(ctx):
+def test_current_manifest_can_be_trashed_but_active_tasks_still_protect_files(ctx):
     store, job, video, _, client, headers = ctx
     record = {'id': 'asset_current', 'path': video.relative_to(store.artifacts).as_posix(), 'sha256': hashlib.sha256(video.read_bytes()).hexdigest(), 'name': video.name}
     store.update_job(job['id'], manifest={'hash': 'approved', 'files': [record]}, release_approval={'decision': 'approved', 'version': 'approved'})
     row = item(ctx, 'video')
-    assert row['protected_reason']
-    assert client.post('/api/library/quote', json={'ids': [row['id']], 'action': 'trash'}, headers=headers).status_code == 409
+    assert not row['protected_reason'] and row['usage_note']
+    before = store.job(job['id'])
+    assert mutate(ctx, [row['id']], 'trash', 'current-trash').status_code == 200
+    assert video.exists() and store.job(job['id']) == before
+    assert mutate(ctx, [row['id']], 'purge', 'current-purge').status_code == 200
+    assert not video.exists() and store.job(job['id']) == before
     store.enqueue('produce', {'job_id': job['id']}, key='busy-library')
     row = item(ctx, 'cards')
-    assert row['protected_reason'] and video.exists()
+    assert row['protected_reason'] and not video.exists()
+
+
+@pytest.mark.parametrize('name', ['background-01.png', 'image.jpg', 'scene-01.jpeg', 'artwork.webp'])
+def test_generated_images_are_listed_and_can_be_trashed(ctx, name):
+    image = ctx[2].parent / name
+    image.write_bytes(b'generated image')
+    row = next(x for x in listing(ctx) if x['name'] == name)
+    assert row['kind'] == 'image' and not row['protected_reason']
+    assert mutate(ctx, [row['id']], 'trash', 'image-trash').status_code == 200
+    assert image.exists() and item(ctx, 'image')['state'] == 'trash'
+
+
+@pytest.mark.parametrize('state', ['reserved', 'unknown'])
+def test_unresolved_cost_is_a_warning_and_is_preserved_when_purging(ctx, state):
+    store, job = ctx[:2]
+    with store.connection(transaction=True) as db:
+        db.execute('INSERT INTO costs VALUES(?,?,?,?,?,?,?,?)',
+                   ('cost_warning', 'image', state, 10, None,
+                    json.dumps({'job_id': job['id']}), '2026-11-17', '2026-11-17'))
+    row = item(ctx, 'video')
+    assert not row['protected_reason'] and row['usage_note']
+    assert mutate(ctx, [row['id']], 'trash', 'cost-trash').status_code == 200
+    assert mutate(ctx, [row['id']], 'purge', 'cost-purge').status_code == 200
+    with store.connection() as db:
+        assert db.execute('SELECT state FROM costs WHERE id=?', ('cost_warning',)).fetchone()[0] == state
+
+
+@pytest.mark.parametrize('state', ['pending', 'pending_owner', 'office_held', 'unknown', 'needs_review'])
+def test_old_delivery_is_a_warning_without_rewriting_its_record(ctx, state):
+    store, job = ctx[:2]
+    delivery = {'old': {'job_id': job['id'], 'state': state}}
+    store.set_setting('owner_draft_deliveries', delivery)
+    row = item(ctx, 'video')
+    assert not row['protected_reason'] and row['usage_note']
+    assert mutate(ctx, [row['id']], 'trash', 'delivery-trash').status_code == 200
+    assert store.setting('owner_draft_deliveries') == delivery
+
+
+@pytest.mark.parametrize('state', ['queued', 'running', 'claimed'])
+def test_only_active_task_rows_block_deletion(ctx, state):
+    store, job = ctx[:2]
+    task = store.enqueue('produce', {'job_id': job['id']}, key='active-deletion-test')
+    with store.connection(transaction=True) as db:
+        db.execute('UPDATE tasks SET state=? WHERE id=?', (state, task['id']))
+    row = item(ctx, 'video')
+    assert row['protected_reason']
+    assert ctx[4].post('/api/library/quote', json={'ids': [row['id']], 'action': 'trash'}, headers=ctx[5]).status_code == 409
+
+
+def test_stale_job_and_unknown_task_do_not_prevent_requested_deletion(ctx):
+    store, job = ctx[:2]
+    store.update_job(job['id'], state='producing')
+    task = store.enqueue('produce', {'job_id': job['id']}, key='unknown-deletion-test')
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE tasks SET state='unknown' WHERE id=?", (task['id'],))
+    row = item(ctx, 'video')
+    assert not row['protected_reason'] and row['usage_note']
+    assert mutate(ctx, [row['id']], 'trash', 'stale-task-trash').status_code == 200
+
+
+def test_source_packet_asset_stays_protected(ctx):
+    store, job = ctx[:2]
+    video_path = ctx[2].relative_to(store.artifacts).as_posix()
+    store.update_job(job['id'], source_packet={'reference': {'path': video_path}})
+    row = item(ctx, 'video')
+    assert row['protected_reason']
+    assert ctx[4].post('/api/library/quote', json={'ids': [row['id']], 'action': 'trash'}, headers=ctx[5]).status_code == 409
+
+
+def test_quote_refreshes_usage_warnings_when_delivery_changes_after_listing(ctx):
+    store, job = ctx[:2]
+    ids = [item(ctx, 'video')['id'], item(ctx, 'cards')['id']]
+    assert all(not row['usage_note'] for row in listing(ctx))
+    store.set_setting('owner_draft_deliveries', {'old': {'job_id': job['id'], 'state': 'unknown'}})
+    with_warning = quote(ctx, ids, 'trash')
+    assert len(with_warning['usage_notes']) == 1
+    store.set_setting('owner_draft_deliveries', {})
+    resolved = quote(ctx, ids, 'trash')
+    assert resolved['usage_notes'] == []
+    assert resolved['token'] != with_warning['token']
+
+
+@pytest.mark.parametrize('state', ['queued', 'running', 'claimed'])
+def test_active_delivery_still_protects_files(ctx, state):
+    store, job, video, _, client, headers = ctx
+    store.set_setting('owner_draft_deliveries', {'delivery-active': {'job_id': job['id'], 'state': state}})
+    row = item(ctx, 'video')
+    assert row['protected_reason']
+    response = client.post('/api/library/quote', json={'ids': [row['id']], 'action': 'trash'}, headers=headers)
+    assert response.status_code == 409 and video.exists()
 
 
 def test_shared_inode_counts_reclaimable_bytes_once(ctx):
