@@ -9,6 +9,7 @@ import shutil
 
 from PIL import Image, ImageDraw, ImageOps
 
+from .artifact_library import require_available
 from .image_provider import ImageProvider, image_profile_config
 from .speech_provider import _lock
 from .store import WorkflowError, digest, now
@@ -115,6 +116,7 @@ def compose(artwork, output, title, *, portrait=False):
 
 def candidate_path(store, state, candidate, kind='image'):
     record = candidate[kind]
+    require_available(store, record['path'])
     path = (store.artifacts / record['path']).resolve()
     if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file() or path.stat().st_size != record['size']:
         raise WorkflowError('썸네일 파일을 찾지 못했습니다')
@@ -231,6 +233,10 @@ def generate(store, job_id, expected_hash, *, edit_id=None, instruction='', prov
                 raise WorkflowError('선택 이미지와 1~1200자의 수정 요청이 필요합니다')
             reference = candidate_path(store, state, chosen, 'artwork')
         elif state.get('source_hash') == expected_hash and len([c for c in state.get('candidates', []) if not c.get('parent_id')]) >= 3:
+            for candidate in state['candidates']:
+                for kind in ('artwork', 'image', 'portrait'):
+                    if candidate.get(kind):
+                        require_available(store, candidate[kind]['path'])
             return snapshot(store, job_id)
         provider = provider_factory(store, job_id=job_id, edit_reference=reference)
         angles = [instruction.strip()] if edit_id else ANGLES
@@ -264,10 +270,14 @@ def choose(store, job_id, candidate_id, revision, *, finalize=False, actor='loca
         candidate_path(store, state, candidate, kind)
         if finalize and (state.get('selected_id') != candidate_id or state.get('selected_format', 'landscape') != format):
             raise WorkflowError('비교에서 선택한 이미지를 먼저 확인하세요')
+        manifest = job.get('manifest') or {}
+        if finalize and manifest and manifest.get('source_hash') == job.get('source_hash') and 'video' in manifest.get('completed_outputs', []):
+            for other in state['candidates']:
+                if other.get(kind):
+                    candidate_path(store, state, other, kind)
         state.update(selected_id=candidate_id, selected_format=format, finalized_id=candidate_id if finalize else None,
                      finalized_format=format if finalize else None,
                      updated_at=now(), decided_by=actor)
-        manifest = job.get('manifest') or {}
         if manifest and manifest.get('source_hash') == job.get('source_hash') and 'video' in manifest.get('completed_outputs', []):
             if finalize:
                 records = [{**c[kind], 'outputs': ['video']} for c in state['candidates'] if c.get(kind)]

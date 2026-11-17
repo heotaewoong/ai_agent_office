@@ -5,14 +5,16 @@ async function harness(page: Page) {
     {id:'video',title:'지난 영상',name:'short.mp4',kind:'video',size_bytes:2048,file_count:1},
     {id:'cards',title:'요약 카드',name:'카드뉴스',kind:'cards',size_bytes:1024,file_count:2},
     {id:'thumb',title:'표지 시안',name:'thumbnail.png',kind:'thumbnail',size_bytes:512,file_count:1},
-    {id:'approved',title:'현재 출고본',name:'approved.mp4',kind:'video',size_bytes:4096,file_count:1,protected_reason:'현재 제작·출고에서 사용 중입니다'},
+    {id:'approved',title:'현재 출고본',name:'approved.mp4',kind:'video',size_bytes:4096,file_count:1,usage_note:'목록 조회 당시 사용 안내'},
+    {id:'image',title:'생성 이미지',name:'scene-01.png',kind:'image',size_bytes:512,file_count:1},
+    {id:'active',title:'제작 중',name:'render.mp4',kind:'video',size_bytes:512,file_count:1,protected_reason:'현재 제작 중입니다'},
   ].map(i=>({state:'available',protected_reason:'',shared:false,modified_at:'2026-11-07T00:00:00Z',preview_url:`/api/library/items/${i.id}/files/0`,...i}));
   const changes: any[] = [];
   await page.route('**/api/**', async route=>{
     const req=route.request(), path=new URL(req.url()).pathname;
     let body:any={},status=200;
     if(path==='/api/library') body={items,storage:{total_bytes:10240,used_bytes:8192,free_bytes:2048},checked_at:'now'};
-    else if(path==='/api/library/quote') body={token:'test-quote',count:req.postDataJSON().ids.length,size_bytes:3072,reclaimable_bytes:2048,shared_files:0};
+    else if(path==='/api/library/quote') body={token:'test-quote',count:req.postDataJSON().ids.length,size_bytes:3072,reclaimable_bytes:2048,shared_files:0,usage_notes:req.postDataJSON().ids.includes('approved')?['현재 제작·출고에서 사용 중인 파일입니다. 삭제하면 이 파일의 출고를 사용할 수 없습니다.']:[]};
     else if(path==='/api/library/change') {
       const data=req.postDataJSON();changes.push(data);
       for(const id of data.ids){const item=items.find(i=>i.id===id)!;if(data.action==='purge')items.splice(items.indexOf(item),1);else item.state=data.action==='trash'?'trash':'available';}
@@ -36,7 +38,8 @@ for(const width of [1440,390]) test(`보관함 ${width}px 선택 취소·휴지�
   const image=library.locator('article img').first();
   await expect.poll(()=>image.evaluate((el:HTMLImageElement)=>el.complete&&el.naturalWidth>0)).toBe(true);
   expect(await image.evaluate(el=>{const a=el.getBoundingClientRect(),b=el.parentElement!.getBoundingClientRect();return a.width<=b.width+1&&a.height<=b.height+1;})).toBe(true);
-  await expect(library.getByRole('checkbox',{name:'현재 출고본 approved.mp4 선택'})).toBeDisabled();
+  await expect(library.getByRole('checkbox',{name:'현재 출고본 approved.mp4 선택'})).toBeEnabled();
+  await expect(library.getByRole('checkbox',{name:'제작 중 render.mp4 선택'})).toBeDisabled();
   await library.getByRole('checkbox',{name:'지난 영상 short.mp4 선택'}).check();
   await library.getByRole('checkbox',{name:'요약 카드 카드뉴스 선택'}).check();
   const bar=page.getByRole('region',{name:'선택한 산출물 작업'});await expect(bar).toBeInViewport();
@@ -73,4 +76,29 @@ test('목록 조회 실패는 빈 보관함으로 표시하지 않고 다시 확
   await expect(library.getByRole('heading',{name:'아직 보관된 산출물이 없습니다.'})).toHaveCount(0);
   failed=false;await library.getByRole('button',{name:'목록 다시 확인'}).click();
   await expect(library.getByRole('heading',{name:'아직 보관된 산출물이 없습니다.'})).toBeVisible();expect(changes).toHaveLength(0);
+});
+
+for(const width of [1440,390]) test(`개별 삭제 ${width}px 현재 파일·이미지·복원과 대상 고정`,async({page})=>{
+  const changes=await harness(page); await page.setViewportSize({width,height:950}); await page.goto('/publish');
+  const library=page.getByRole('region',{name:'산출물 보관함',exact:true});
+  await expect(library.getByRole('button',{name:'이미지',exact:true})).toBeVisible();
+  await library.getByRole('checkbox',{name:'지난 영상 short.mp4 선택'}).check();
+  await library.getByRole('button',{name:'현재 출고본 approved.mp4 삭제',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'휴지통으로 옮길까요?'});
+  await expect(dialog).toContainText('현재 제작·출고에서 사용 중인 파일');
+  await expect(dialog).not.toContainText('지난 영상');
+  await dialog.getByRole('button',{name:'휴지통으로 이동',exact:true}).click();
+  expect(changes.at(-1)?.ids).toEqual(['approved']);
+  await library.getByRole('button',{name:'이미지',exact:true}).click();
+  await library.getByRole('button',{name:'생성 이미지 scene-01.png 삭제',exact:true}).click();
+  await dialog.getByRole('button',{name:'취소',exact:true}).click();
+  expect(changes).toHaveLength(1);
+  await library.getByRole('button',{name:'생성 이미지 scene-01.png 삭제',exact:true}).click();
+  await dialog.getByRole('button',{name:'휴지통으로 이동',exact:true}).click();
+  expect(changes.at(-1)?.ids).toEqual(['image']);
+  await library.getByRole('tab',{name:/휴지통/}).click();
+  await library.getByRole('button',{name:'생성 이미지 scene-01.png 복원',exact:true}).click();
+  await page.getByRole('dialog',{name:'선택한 산출물을 복원할까요?'}).getByRole('button',{name:'복원하기'}).click();
+  expect(changes.at(-1)?.action).toBe('restore');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
