@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel, fullscreen chat and drafts without writes (${mobile ? 'mobile' : 'PC'})`, async ({ page }) => {
-  // This loads the full Babylon world on software-rendered CI, beyond the UI-only default.
+  // This loads the real Orbit scene on software-rendered CI, beyond the UI-only default.
   // CI software rendering may take over 90s for the complete PC flow.
   // Keep every 15s assertion and the real world/fullscreen checks unchanged.
   test.setTimeout(180_000);
@@ -30,10 +30,10 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
   await phase('load real 3D iframe', async () => { await page.goto('/office3d'); });
   const shell = page.locator('.world-frame-resizer');
   const frame = page.frameLocator('iframe[title="오피스 월드"]');
-  const body = frame.locator('#panel-body');
+  const body = frame.locator('.oper-body');
   // Mobile uses a horizontal department strip; keyboard navigation must reveal its next item.
   await phase('open team panel with keyboard', async () => {
-    await frame.locator('#department-nav button').first().focus();
+    await frame.locator('.rail [data-section=city]').focus();
     await page.keyboard.press('Tab');
     await page.keyboard.press('Enter');
     await expect(body).toBeVisible();
@@ -50,12 +50,12 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
   await phase('restore viewer height', async () => {
     await page.getByRole('button', { name: '화면 짧게', exact: true }).click();
     await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
-    await expect(frame.locator('#panel-close')).toBeVisible();
+    await expect(frame.getByRole('button', { name: '운영 패널 닫기', exact: true })).toBeVisible();
   });
   await phase('enter native fullscreen', async () => {
     await page.getByRole('button', { name: '전체화면', exact: true }).click();
     await expect.poll(() => shell.evaluate(el => Math.round(el.getBoundingClientRect().height)), { timeout: 15_000 }).toBe(mobile ? 844 : 900);
-    await expect(frame.locator('#panel-body')).toBeVisible();
+    await expect(frame.locator('.oper-body')).toBeVisible();
   });
   await phase('preserve assistant draft above fullscreen', async () => {
     // Exercise the real modal above the Fullscreen top layer, preserving unsent input.
@@ -69,7 +69,7 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
   await phase('exit fullscreen and reopen unsent draft', async () => {
     await page.getByRole('button', { name: '원래 크기', exact: true }).click();
     await expect.poll(() => shell.evaluate(el => el.getBoundingClientRect().height), { timeout: 15_000 }).toBe(height);
-    await expect(frame.locator('#panel-body')).toBeVisible();
+    await expect(frame.locator('.oper-body')).toBeVisible();
     await page.getByRole('button', { name: '루미와 대화하기', exact: true }).click();
     await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('전체화면 대화 입력 보존 확인');
   });
