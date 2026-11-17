@@ -23,10 +23,12 @@ export function PipelineStudio() {
   const [mapLoaded,setMapLoaded]=useState(false);
   const [mapError,setMapError]=useState("");
   const [fullscreen,setFullscreen]=useState(false);
+  const [expanded,setExpanded]=useState(false);
   const [frameHeight,setFrameHeight]=useState(860);
   const [fullscreenError,setFullscreenError]=useState("");
   const frame=useRef<HTMLIFrameElement>(null);
   const canvas=useRef<HTMLDivElement>(null);
+  const fullscreenButton=useRef<HTMLButtonElement>(null);
   const alive=useRef(false);
   const requestId=useRef(0);
   const resizeCleanup=useRef<(()=>void)|null>(null);
@@ -80,6 +82,31 @@ export function PipelineStudio() {
     document.addEventListener("fullscreenchange",changed);
     return()=>document.removeEventListener("fullscreenchange",changed);
   },[]);
+  useEffect(()=>{
+    if(!expanded || !canvas.current)return;
+    const previousOverflow=document.body.style.overflow;
+    const background:Array<[HTMLElement,boolean]>=[];
+    let branch:HTMLElement=canvas.current;
+    while(branch.parentElement) {
+      for(const sibling of Array.from(branch.parentElement.children))if(sibling!==branch && sibling instanceof HTMLElement) {background.push([sibling,sibling.inert]);sibling.inert=true;}
+      branch=branch.parentElement;
+      if(branch===document.body)break;
+    }
+    document.body.style.overflow="hidden";
+    const close=(event:globalThis.KeyboardEvent)=>{
+      if(event.key!=="Escape")return;
+      event.preventDefault();event.stopImmediatePropagation();setExpanded(false);setFullscreenError("");
+    };
+    const inside=frame.current?.contentDocument;
+    document.addEventListener("keydown",close,true);inside?.addEventListener("keydown",close,true);
+    const focus=requestAnimationFrame(()=>fullscreenButton.current?.focus());
+    return()=>{
+      cancelAnimationFrame(focus);document.removeEventListener("keydown",close,true);inside?.removeEventListener("keydown",close,true);
+      document.body.style.overflow=previousOverflow;
+      for(const [element,inert] of background)element.inert=inert;
+      if(fullscreenButton.current?.isConnected)fullscreenButton.current.focus();
+    };
+  },[expanded,mapLoaded]);
   const navigateTabs=(event:KeyboardEvent<HTMLDivElement>)=>{
     if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
     event.preventDefault();
@@ -106,14 +133,17 @@ export function PipelineStudio() {
   };
   const toggleFullscreen=async()=>{
     setFullscreenError("");
+    if(expanded){setExpanded(false);return;}
+    const nativeActive=document.fullscreenElement===canvas.current;
     try {
-      if(document.fullscreenElement===canvas.current)await document.exitFullscreen();
+      if(nativeActive)await document.exitFullscreen();
       else {
         if(!canvas.current?.requestFullscreen)throw Error("Fullscreen API unavailable");
         await canvas.current.requestFullscreen();
       }
     } catch {
-      setFullscreenError("이 브라우저에서 전체화면을 열지 못했습니다. 지도를 새 탭에서 열 수 있습니다.");
+      if(nativeActive)setFullscreenError("전체화면을 닫지 못했습니다. Esc 키로 닫을 수 있습니다.");
+      else {setExpanded(true);setFullscreenError("브라우저 전체화면 대신 확대보기로 전환했습니다.");}
     }
   };
   const windowStatus=overview?.window.status;
@@ -121,7 +151,8 @@ export function PipelineStudio() {
   const windowLabel=!overview?(liveError?"확인 불가":"확인 전"):windowStatus==="active" && Number.isFinite(end)?(end>Date.now()?"열림":"닫힘"):["closed","stopped"].includes(windowStatus || "")?"닫힘":"확인 불가";
   const workerState=overview?.worker.state;
   const heartbeat=overview?.worker.heartbeat?Date.parse(overview.worker.heartbeat):NaN;
-  const workerLabel=!overview?(liveError?"확인 불가":"확인 전"):workerState==="online"?(Number.isFinite(heartbeat) && Date.now()-heartbeat>=0 && Date.now()-heartbeat<120_000?"온라인 기록":"온라인 · 오래된 기록"):["stopped","offline","closed"].includes(workerState || "")?"중지":workerState==="error"?"오류 기록":"확인 불가";
+  const workerLabel=!overview?(liveError?"확인 불가":"확인 전"):workerState==="online"?(Number.isFinite(heartbeat) && Date.now()-heartbeat>=0 && Date.now()-heartbeat<120_000?"온라인 기록":"최근 상태 미확인"):["stopped","offline","closed"].includes(workerState || "")?"중지":workerState==="error"?"오류 기록":"확인 불가";
+  const workerNote=workerState==="online"?`마지막 기록: 온라인 · ${Number.isFinite(heartbeat)?formatDate(overview?.worker.heartbeat || undefined,true):"기록 시각 확인 불가"}`:"저장된 상태 기록";
   const runningCommit=overview?.git.commit?.slice(0,7);
   const livePlaceholder=liveError?"확인 불가":"확인 전";
 
@@ -133,9 +164,9 @@ export function PipelineStudio() {
     <div className="pipeline-studio-live-heading"><span>서버에서 확인한 상태</span><button type="button" data-testid="pipeline-live-refresh" onClick={()=>void load()} disabled={liveLoading}>{liveLoading?"확인 중…":"상태 새로고침"}</button></div>
     {liveError && <div className="pipeline-studio-alert" role="alert" data-testid="pipeline-live-error">{overview?"갱신에 실패해 마지막 조회 내용을 표시합니다. ":""}{liveError}</div>}
     <dl className={`pipeline-studio-metrics${liveError?" is-stale":""}`} aria-label="운영 상태 요약">
-      <div data-testid="pipeline-live-budget"><dt>사용 가능 예산</dt><dd>{overview?money(overview.budget.remaining_krw):livePlaceholder}</dd><small>{overview?`한도 ${money(overview.budget.cap_krw)}`:"서버 조회 전"}</small></div>
+      <div data-testid="pipeline-live-budget"><dt>사용 가능 예산</dt><dd>{overview?money(Math.max(0,overview.budget.remaining_krw)):livePlaceholder}</dd><small>{overview?`한도 ${money(overview.budget.cap_krw)}${overview.budget.remaining_krw<0?` · 장부 잔액 ${money(overview.budget.remaining_krw)}`:""}`:"서버 조회 전"}</small></div>
       <div data-testid="pipeline-live-window"><dt>작업 시간</dt><dd>{windowLabel}</dd><small>{windowLabel==="열림"?`${formatDate(overview?.window.authorized_end || undefined,true)}까지`:"허용된 시간 기준"}</small></div>
-      <div data-testid="pipeline-live-worker"><dt>콘텐츠 작업자</dt><dd>{workerLabel}</dd><small>저장된 상태 기록</small></div>
+      <div data-testid="pipeline-live-worker"><dt>콘텐츠 작업자</dt><dd>{workerLabel}</dd><small>{workerNote}</small></div>
       <div data-testid="pipeline-live-updated"><dt>{liveError && overview?"마지막 조회":"조회 시각"}</dt><dd className="pipeline-studio-time">{loadedAt?formatDate(loadedAt,true):livePlaceholder}</dd><small>{runningCommit?`실행판 ${runningCommit}`:"실행판 확인 전"}</small></div>
     </dl>
     <div className="pipeline-studio-tabs" role="tablist" aria-label="파이프라인 보기" onKeyDown={navigateTabs}>
@@ -143,13 +174,13 @@ export function PipelineStudio() {
       <button type="button" role="tab" id="pipeline-tab-operations" data-testid="pipeline-tab-operations" aria-controls="pipeline-panel-operations" aria-selected={tab==="operations"} tabIndex={tab==="operations"?0:-1} onClick={()=>setTab("operations")}>운영 상세</button>
     </div>
     <div id="pipeline-panel-map" role="tabpanel" aria-labelledby="pipeline-tab-map" hidden={tab!=="map"}>
-      <div className="pipeline-studio-canvas" ref={canvas}>
-        <div className="pipeline-studio-map-bar"><div><h3>기획·구현 지도</h3><p>상자를 눌러 확인하고, 직접 편집으로 개선안을 남기세요.</p></div><div className="pipeline-studio-map-actions"><a href={sessionReady?MAP_URL:undefined} aria-disabled={!sessionReady} target="_blank" rel="noopener" data-testid="pipeline-map-new-tab">새 탭에서 열기 <span aria-hidden="true">↗</span></a><button type="button" data-testid="pipeline-map-fullscreen" onClick={()=>void toggleFullscreen()} disabled={!mapLoaded}>{fullscreen?"전체화면 닫기":"전체화면"}</button></div></div>
-        {fullscreenError && <p className="pipeline-studio-alert" role="alert" data-testid="pipeline-fullscreen-error">{fullscreenError}</p>}
+      <div className={`pipeline-studio-canvas${expanded?" is-expanded":""}`} ref={canvas} role={expanded?"dialog":undefined} aria-modal={expanded?true:undefined} aria-labelledby={expanded?"pipeline-map-title":undefined} data-testid="pipeline-map-canvas">
+        <div className="pipeline-studio-map-bar"><div><h3 id="pipeline-map-title">기획·구현 지도</h3><p>상자를 눌러 확인하고, 직접 편집으로 개선안을 남기세요.</p></div><div className="pipeline-studio-map-actions"><a href={sessionReady?MAP_URL:undefined} aria-disabled={!sessionReady} target="_blank" rel="noopener" data-testid="pipeline-map-new-tab">새 탭에서 열기 <span aria-hidden="true">↗</span></a><button type="button" data-testid="pipeline-map-fullscreen" ref={fullscreenButton} onClick={()=>void toggleFullscreen()} disabled={!mapLoaded}>{expanded?"확대보기 닫기":fullscreen?"전체화면 닫기":"전체화면"}</button></div></div>
+        {fullscreenError && <p className="pipeline-studio-alert" role={expanded?"status":"alert"} data-testid="pipeline-fullscreen-error">{fullscreenError}</p>}
         <div className="pipeline-studio-frame-wrap" aria-busy={!mapLoaded && !mapError}>
           {!mapLoaded && !mapError && <div className="pipeline-studio-frame-state" role="status" data-testid="pipeline-map-loading"><span className="pipeline-studio-spinner" aria-hidden="true"/><strong>{sessionReady?"지도를 불러오고 있습니다":"운영자 연결을 확인하고 있습니다"}</strong></div>}
           {mapError && <div className="pipeline-studio-frame-state pipeline-studio-frame-error" role="alert" data-testid="pipeline-map-error"><strong>지도를 열지 못했습니다</strong><p>{mapError}</p><button type="button" data-testid="pipeline-map-reload" onClick={()=>setMapAttempt(value=>value+1)}>지도 다시 불러오기</button></div>}
-          {sessionReady && <iframe key={mapAttempt} ref={frame} src={MAP_URL} title="기획·구현 파이프라인 지도" data-testid="pipeline-map-frame" allow="fullscreen" onLoad={mapOnLoad} onError={()=>setMapError("지도를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.")} style={{visibility:mapLoaded && !mapError?"visible":"hidden",height:fullscreen?"100%":frameHeight}}/>}
+          {sessionReady && <iframe key={mapAttempt} ref={frame} src={MAP_URL} title="기획·구현 파이프라인 지도" data-testid="pipeline-map-frame" allow="fullscreen" onLoad={mapOnLoad} onError={()=>setMapError("지도를 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도하세요.")} style={{visibility:mapLoaded && !mapError?"visible":"hidden",height:fullscreen || expanded?"100%":frameHeight}}/>}
         </div>
         <p className="pipeline-studio-baseline">구현 대조 기준 2026-11-17 · {BASELINE}{runningCommit && runningCommit!==BASELINE?` · 현재 실행판 ${runningCommit}은 별도 확인`:""}</p>
       </div>

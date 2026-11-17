@@ -43,5 +43,5 @@ test("지도 HTTP 오류와 전체화면 거부는 성공으로 숨기지 않고
   await expect(page.getByTestId("pipeline-map-error")).toBeVisible();fixture.failMap(false);await page.getByTestId("pipeline-map-reload").click();
   await expect(page.frameLocator('[data-testid="pipeline-map-frame"]').locator("#currentView")).toBeVisible();await expect(page.getByTestId("pipeline-map-error")).toHaveCount(0);
   await page.evaluate(()=>{Element.prototype.requestFullscreen=()=>Promise.reject(new Error("fixture fullscreen denied"));});
-  await page.getByTestId("pipeline-map-fullscreen").click();await expect(page.getByTestId("pipeline-fullscreen-error")).toBeVisible();expect(fixture.writes).toEqual([]);
+  await page.getByTestId("pipeline-map-fullscreen").click();await expect(page.getByTestId("pipeline-map-canvas")).toHaveClass(/is-expanded/);await page.getByTestId("pipeline-map-fullscreen").click();await expect(page.getByTestId("pipeline-map-canvas")).not.toHaveClass(/is-expanded/);expect(fixture.writes).toEqual([]);
 });
