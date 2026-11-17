@@ -17,7 +17,7 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
     let body: unknown = {};
     if (path === '/api/space') body = space;
     else if (path === '/api/session') body = { csrf: 'local-layout-test' };
-    else if (path === '/api/dashboard') body = { articles: [], jobs: [], feeds: [], agents: [], events: [], tasks: [], budget: { cap_krw: 0, spent_krw: 0, reserved_krw: 0, remaining_krw: 0 }, window: { status: 'closed', authorized_end: '2026-10-01T00:00:00Z' }, provider: { model: 'fixture', configured: false }, knowledge: {} };
+    else if (path === '/api/dashboard') body = { articles: [], jobs: Array.from({ length: 20 }, (_, i) => ({ id: `layout_${i}`, title: `화면 크기 검증용 업무 ${i + 1}`, state: 'source_review' })), feeds: [], agents: [], events: [], tasks: [], budget: { cap_krw: 0, spent_krw: 0, reserved_krw: 0, remaining_krw: 0 }, window: { status: 'closed', authorized_end: '2026-10-01T00:00:00Z' }, provider: { model: 'fixture', configured: false }, knowledge: {} };
     else if (path === '/api/jobs/summaries') body = { jobs: [] };
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
   });
@@ -31,8 +31,8 @@ for (const mobile of [false, true]) test(`low-quality 3D viewer preserves panel,
   const shell = page.locator('.world-frame-resizer');
   const frame = page.frameLocator('iframe[title="오피스 월드"]');
   const body = frame.locator('.oper-body');
-  // Mobile uses a horizontal department strip; keyboard navigation must reveal its next item.
-  await phase('open team panel with keyboard', async () => {
+  // Open a real overflowing work list by keyboard before testing available reading space.
+  await phase('open work panel with keyboard', async () => {
     await frame.locator('.rail [data-section=city]').focus();
     await page.keyboard.press('Tab');
     await page.keyboard.press('Enter');
