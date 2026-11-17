@@ -45,3 +45,15 @@
 .native-report-dialog>p{overflow-wrap:anywhere}
 @media(max-width:900px){.home-actions,.snapshot-source-card,.source-status-row{grid-column:1/-1}.snapshot-metrics{grid-column:1/-1}}
 @media(max-width:760px){.operational-status{font-size:9px;max-width:112px;padding:5px 7px}.source-status-row .snapshot-note{font-size:10px}.snapshot-source-card{margin-bottom:14px}}
+
+/* Keep the mobile mission grid inside the viewport, including design-lab controls. */
+@media(max-width:900px){
+ .mission-panel{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .mission-panel>*{min-width:0;max-width:100%}
+ .mission-panel .lab-launch{grid-column:1/-1;grid-template-columns:repeat(3,minmax(0,1fr))}
+ .mission-panel .lab-launch>*{min-width:0}
+ .mission-panel .lab-launch button{white-space:normal;overflow-wrap:anywhere}
+ .mission-panel .lumi-card>div{min-width:0}
+ .mission-panel .lumi-orbit{flex-shrink:0}
+ .mission-panel .section-row{flex-wrap:wrap;gap:6px}
+}
