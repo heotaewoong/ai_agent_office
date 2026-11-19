@@ -17,7 +17,15 @@ async function researchHarness(page: Page, articles: Record<string, unknown>[] =
     if (path==='/api/discovery') {
       if (request.method()==='PUT') {const {expected_hash: ignored,...next}=request.postDataJSON();config=next;}
       body={config,config_hash:'a'.repeat(64),platforms:{youtube:'YouTube·Shorts',tistory:'티스토리·검색형 블로그',linkedin:'LinkedIn'},plan:{youtube:['youtube','community'],tistory:['search_trend']},window_open:false,stale:false,unconnected:['ViewStats 자동 연동 미구현'],snapshot,task:{state:'queued'}};
-    } else if (path==='/api/session') body={csrf:'contract-token'};
+    } else if (path==='/api/platform-news') body={
+      checked_at:'2026-10-30T12:00:00Z',topic:'AI 자동화',region:'KR',
+      platforms:[
+        {id:'youtube',label:'YouTube',source_status:'available',method:'YouTube Data API',ranking_basis:'검색 표본 누적 조회수',items:[{id:'sample-video',title:'정기 검색 영상',url:'https://www.youtube.com/watch?v=synthetic',source:'예시 크리에이터',published_at:null,summary:'정기 수집 결과',metrics:{views:1250},observed_at:null}]},
+        {id:'instagram',label:'Instagram',source_status:'observed',method:'공개 게시물',message:'공개 반응만 표시합니다.',items:[{id:'sample-post',title:'인스타 공개 후보',url:'https://www.instagram.com/p/example/',source:'예시 계정',published_at:null,summary:'공개 게시물 표본',metrics:{likes:0,comments:50},metric_precision:{comments:'approximate'},observed_at:null}]},
+        {id:'linkedin',label:'LinkedIn',source_status:'waiting',method:'공개 게시물',message:'확인된 게시물이 없습니다.',items:[]},
+      ],
+    };
+    else if (path==='/api/session') body={csrf:'contract-token'};
     else if (path==='/api/dashboard') body={articles,jobs:[],feeds:[],agents:[],events:[],tasks:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:'closed',authorized_end:'2026-10-01T00:00:00Z'},provider:{model:'gpt-5.4-mini',configured:false},knowledge:{}};
     else if (path==='/api/jobs/summaries') body={jobs:[]};
     await route.fulfill({contentType:'application/json',body:JSON.stringify(body)});
@@ -49,9 +57,40 @@ for(const width of [1440,390])test(`뉴스 후보를 9건씩 늘려도 선택과
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(writes).toEqual([]);
 });
 
+test('공식 뉴스와 플랫폼 소식은 한 눈에 구분되고 트렌드 조사와 출처 관리는 같은 화면에 있다',async({page})=>{
+  const writes = await researchHarness(page);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/news');
+  const navigation = page.getByRole('navigation', { name: '소식 보기' });
+  const settings = page.getByText('트렌드 조사 설정과 결과', { exact: true });
+  await expect(settings).not.toBeVisible();
+  await expect(navigation.getByRole('link')).toHaveCount(2);
+  await navigation.getByRole('link', { name: '플랫폼 소식', exact: true }).click();
+  await expect(settings).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '출처 플랫폼', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: '뉴스 선택과 작업 만들기' })).not.toBeVisible();
+  await expect(page.getByText('검색 표본 누적 조회수')).toBeVisible();
+  await expect(page.getByText('누적 조회수 1,250')).toBeVisible();
+  const filter = page.getByRole('combobox', { name: '출처 플랫폼', exact: true });
+  await filter.selectOption('instagram');
+  await expect(page.getByRole('link', { name: '인스타 공개 후보' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '정기 검색 영상' })).toHaveCount(0);
+  await expect(page.getByText('좋아요 0')).toBeVisible();
+  await expect(page.getByText('댓글 약 50')).toBeVisible();
+  await expect(page.getByText(/누적 조회수/)).toHaveCount(0);
+  await filter.selectOption('linkedin');
+  await expect(page.getByText('수집 대기', { exact: true })).toBeVisible();
+  await settings.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('region', { name: '게시할 곳에 맞춰 소식과 트렌드 조사' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(writes).toEqual([]);
+});
+
 test('게시 대상 저장은 조사만 요청하고 시간·원고·승인을 쓰지 않는다',async({page})=>{
   const writes=await researchHarness(page);
-  await page.setViewportSize({width:390,height:844});await page.goto('/news?seg=ai');
+  await page.setViewportSize({width:390,height:844});await page.goto('/news?tab=platforms');
+  await page.getByText('트렌드 조사 설정과 결과', { exact: true }).click();
   const panel=page.getByRole('region',{name:'게시할 곳에 맞춰 소식과 트렌드 조사'});
   await panel.getByRole('checkbox',{name:'LinkedIn',exact:true}).check();
   await panel.getByLabel('조사 주제',{exact:true}).fill('AI agent');
@@ -66,7 +105,8 @@ test('게시 대상 저장은 조사만 요청하고 시간·원고·승인을 �
 });
 
 test('출처 실패와 누적 반응을 구분하고 조회만으로 업무를 쓰지 않는다',async({page})=>{
-  const writes=await researchHarness(page);await page.goto('/news?seg=ai');
+  const writes=await researchHarness(page);await page.goto('/news?tab=platforms');
+  await page.getByText('트렌드 조사 설정과 결과', { exact: true }).click();
   const panel=page.getByRole('region',{name:'게시할 곳에 맞춰 소식과 트렌드 조사'});
   await panel.getByText('수집 출처·실패 상태 확인 (2개)',{exact:true}).click();
   await expect(panel.getByText('HN · 수집 실패',{exact:true})).toBeVisible();
@@ -209,7 +249,7 @@ test('뉴스 목차는 제목의 줄바꿈을 공백으로 읽고 PC·모바일�
  const outline=page.getByRole('navigation',{name:'이 페이지 목차'});
  await expect(outline.getByRole('link',{name:/흩어진 질문과 소식이 나만의 콘텐츠가 되는 곳\./})).toBeVisible();
  await page.setViewportSize({width:375,height:812});
- await expect(outline.getByRole('combobox',{name:'목차 바로 이동'}).locator('option')).toContainText(['2. 흩어진 질문과 소식이 나만의 콘텐츠가 되는 곳.']);
+ await expect(outline.getByRole('combobox',{name:'목차 바로 이동'}).locator('option')).toContainText(['흩어진 질문과 소식이 나만의 콘텐츠가 되는 곳.']);
  expect(writes).toEqual([]);
 });
 

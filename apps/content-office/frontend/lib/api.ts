@@ -142,6 +142,7 @@ export const api = {
   setVideoPlatforms: (id: string, platforms: ("youtube_shorts" | "instagram_reels")[], version: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/video-platforms`, "PUT", {platforms, version}),
   prepareExternalMedia: (jobId: string, body: {version:string;draft_id:string}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/prepare`, "POST", body),
   adoptExternalMedia: (jobId: string, body: {version:string;reviewed:boolean}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/adopt`, "POST", body),
+  platformNews: () => request<import('./platform-news').PlatformNews>('/platform-news'),
   discovery: () => request<import('./discovery').DiscoveryStatus>('/discovery'),
   saveDiscovery: (body: import('./discovery').ResearchConfig & { expected_hash: string }) => request<import('./discovery').DiscoveryStatus>('/discovery', 'PUT', body),
   versionHistory: (jobId: string) => request<ContentHistory>(`/jobs/${encodeURIComponent(jobId)}/history`),

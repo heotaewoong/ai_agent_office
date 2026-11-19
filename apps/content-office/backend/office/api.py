@@ -433,6 +433,11 @@ def create_app(store: Store | None = None):
     from .api_pipeline_studio import register as register_pipeline_studio
     register_pipeline_studio(app, session)
 
+    @app.get("/api/platform-news")
+    def read_platform_news():
+        from .platform_news import status
+        return JSONResponse(status(store), headers={"Cache-Control": "private, no-store"})
+
     @app.get("/api/dashboard")
     def dashboard(compact: bool = False, task_results: bool = True):
         from .voice_selection import profile_summary

@@ -8,9 +8,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { officeHref, officeRoute, type View } from "../lib/navigation";
-import { draftableNews, filterNews, newsSegment, newsSegments, newsEmptyState, newsSort, newsSorts, sortNews, newsHref } from "../lib/news";
+import { draftableNews, filterNews, newsSegment, newsSegments, newsEmptyState, newsSort, newsSorts, sortNews, newsHref, newsTab } from "../lib/news";
 import { DecisionHome } from "./decision-home";
-import { DiscoveryPanel } from './discovery-panel';
 import { BenchmarkWorkspace } from './benchmark-workspace';
 import { api, OfficeApiError } from "../lib/api";
 import { createDashboardRefreshGuard } from "../lib/dashboard-refresh";
@@ -155,9 +154,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const libraryActive = view === 'delivery' && !search.get('job') && search.get('mode') !== 'jobs';
   const segment = newsSegment(search.get("seg"));
   const articleSort = newsSort(search.get("sort"));
-  const creatorNews = search.get("tab") === "creators";
-  const competitorPlanning = search.get("tab") === "competitors";
-  const officialNews = !creatorNews && !competitorPlanning;
+  const officialNews = newsTab(search.get("tab")) === "official";
+  const managePlatformSources = search.get("tab") === "competitors";
   const benchmarkActive = view === "news" && !officialNews;
   const [newsVisited, setNewsVisited] = useState(view === "news");
   const [plansVisited, setPlansVisited] = useState(view === "plans");
@@ -587,7 +585,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                   : view === "plans"
                     ? "독자 질문과 근거를 살피고, 다음에 만들 기획을 고르세요."
                     : view === "news"
-                  ? "뉴스와 크리에이터 소식을 읽고, 경쟁사를 분석해 내 아이디어로 연결하세요."
+                  ? "공식 뉴스와 플랫폼 소식을 살펴보고 기획 후보를 정리하세요."
                   : view === "studio"
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
                     : view === "delivery"
@@ -704,13 +702,11 @@ export default function Office({ children }: { children: React.ReactNode }) {
               </div>
               {view === "news" && <nav className="news-segments" aria-label="소식 보기" style={{ marginBottom: 24 }}>
                 <Link href={search.has('seg') ? newsHref(segment, articleSort) : `/news?sort=${articleSort}`} scroll={false} prefetch={false} aria-current={officialNews ? 'page' : undefined}>공식 뉴스</Link>
-                <Link href={newsHref(segment, articleSort, 'creators')} scroll={false} prefetch={false} aria-current={creatorNews ? 'page' : undefined}>등록 크리에이터 소식</Link>
-                <Link href={newsHref(segment, articleSort, 'competitors')} scroll={false} prefetch={false} aria-current={competitorPlanning ? 'page' : undefined}>경쟁사·아이디어</Link>
+                <Link href={newsHref(segment, articleSort, 'platforms')} scroll={false} prefetch={false} aria-current={!officialNews ? 'page' : undefined}>플랫폼 소식</Link>
               </nav>}
               <div hidden={view !== "news" || !officialNews}>
               {(view === "news" || newsVisited) && (
                 <>
-                  <DiscoveryPanel active={view === 'news' && officialNews} />
                   <section className="brief-banner" aria-label="수집 현황">
                     <div className="brief-copy">
                       <span className="brief-label">
@@ -839,7 +835,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 </>
               )}
               </div>
-              {(benchmarkActive || benchmarkVisited) && <BenchmarkWorkspace connected={connected} active={benchmarkActive} mode={creatorNews ? 'news' : 'planning'} officialUrls={articles.map(article => article.url)} onIdeaSaved={() => setIdeaRefresh(value => value + 1)} />}
+              {(benchmarkActive || benchmarkVisited) && <BenchmarkWorkspace connected={connected} active={benchmarkActive} manageSources={managePlatformSources} officialUrls={articles.map(article => article.url)} onIdeaSaved={() => setIdeaRefresh(value => value + 1)} />}
 
               {(view === "studio" || view === "delivery") && (
                 <div className="studio-layout">

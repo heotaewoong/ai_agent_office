@@ -7,7 +7,7 @@ import { researchSourceLabels, signalLabels, type DiscoveryStatus, type Research
 const controlStyle: CSSProperties = { display: 'block', width: '100%', minHeight: 44, marginTop: 6,
   padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 8, background: 'var(--white)', fontSize: 16 };
 
-export function DiscoveryPanel({ active = true }: { active?: boolean } = {}) {
+export function DiscoveryPanel({ active = true, platform = 'all' }: { active?: boolean; platform?: string } = {}) {
   const [data, setData] = useState<DiscoveryStatus | null>(null);
   const [draft, setDraft] = useState<ResearchConfig | null>(null);
   const [baseHash, setBaseHash] = useState('');
@@ -50,7 +50,7 @@ export function DiscoveryPanel({ active = true }: { active?: boolean } = {}) {
   }
   return <section className="outline-panel" aria-labelledby="discovery-heading" style={{ fontSize: 16 }}>
     <h2 id="discovery-heading">게시할 곳에 맞춰 소식과 트렌드 조사</h2>
-    <p>공식 소식·YouTube·HN을 함께 수집하고, 게시 대상에 필요한 검색·뉴스 신호를 추가합니다. 선택 저장 후 자동 조사하며 원고·승인·게시를 시작하지 않습니다. 추가 모델 호출은 없습니다.</p>
+    <p>주제와 지역, 게시 대상을 고른 뒤 조사 결과를 확인하세요. 추가 모델 호출 없이 공개 검색과 뉴스 신호를 수집합니다.</p>
     {error && <p role="alert" className="notice error">{error}</p>}
     {!data || !draft ? <div><p role="status">조사 설정을 불러오는 중입니다.</p><button className="button secondary" disabled={busy} onClick={() => void reload()}>조사 설정 다시 불러오기</button></div> : <>
       <form onSubmit={e => { e.preventDefault(); void save(); }}>
@@ -68,13 +68,13 @@ export function DiscoveryPanel({ active = true }: { active?: boolean } = {}) {
       {message && <p role="status">{message}</p>}
       <p className="muted">작업 시간 {data.window_open ? '열림' : '종료'} · 같은 조건은 15분 동안 저장된 결과를 재사용합니다. 기존 API 비용 상한과 사람 승인 단계는 유지합니다.</p>
       {data.activity && <p role="status">조사 상태: {({ queued: '대기', running: '수집 중', completed: '완료', failed: '실패', unknown: '결과 확인 필요' } as Record<string, string>)[data.activity.state] ?? data.activity.state}{data.activity.error ? ` · ${data.activity.error}` : ''}</p>}
-      <div style={{ display: 'grid', gap: 12 }}>{Object.entries(data.plan).map(([id, kinds]) => <p key={id}><strong>{data.platforms[id]}</strong> → {kinds.map(k => researchSourceLabels[k] ?? k).join(' · ')}</p>)}</div>
+      <div style={{ display: 'grid', gap: 12 }}>{Object.entries(data.plan).filter(([id]) => platform === 'all' || id === platform).map(([id, kinds]) => <p key={id}><strong>{data.platforms[id]}</strong> → {kinds.map(k => researchSourceLabels[k] ?? k).join(' · ')}</p>)}</div>
       {data.stale && <p className="notice">아래 결과는 이전 조사 조건입니다. 새 조건의 조사 완료를 기다리고 있습니다.</p>}
       {data.snapshot ? <>
         <p>마지막 조사 {new Date(data.snapshot.checked_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} KST · 추가 모델 호출 {data.snapshot.paid_calls}회</p>
         <p className="muted">{data.snapshot.method}</p>
         <details><summary>수집 출처·실패 상태 확인 ({data.snapshot.sources.length}개)</summary><ul>{data.snapshot.sources.map(source => <li key={source.id}>{source.name} · {source.state === 'ok' ? `조회 성공 ${source.count ?? 0}건` : '수집 실패'}{source.raw_items !== undefined && source.raw_items !== source.count ? ` (조회 항목 ${source.raw_items}, 주제 일치 ${source.count})` : ''}{source.error ? ` · ${source.error}` : ''}</li>)}</ul></details>
-        {Object.entries(data.snapshot.recommendations).map(([platform, rows]) => <details key={platform}><summary>{data.platforms[platform]}에 맞춰 살펴볼 후보 {rows.length}건</summary>{rows.length ? <ul>{rows.map(row => <li key={row.id} style={{ marginBlock: 16, overflowWrap: 'anywhere' }}><a href={row.url} target="_blank" rel="noopener noreferrer">{row.title}</a><p>{row.feed_name} · {signalLabels(row.signals).join(' · ') || '반응 지표 없음'}<br />{row.reason}</p><p className="muted">{row.date_note} {row.signal_note}</p></li>)}</ul> : <p>현재 주제와 기간에 맞는 후보가 없습니다. 연결 실패와 후보 없음은 다릅니다.</p>}</details>)}
+        {Object.entries(data.snapshot.recommendations).filter(([id]) => platform === 'all' || id === platform).map(([platform, rows]) => <details key={platform}><summary>{data.platforms[platform]}에 맞춰 살펴볼 후보 {rows.length}건</summary>{rows.length ? <ul>{rows.map(row => <li key={row.id} style={{ marginBlock: 16, overflowWrap: 'anywhere' }}><a href={row.url} target="_blank" rel="noopener noreferrer">{row.title}</a><p>{row.feed_name} · {signalLabels(row.signals).join(' · ') || '반응 지표 없음'}<br />{row.reason}</p><p className="muted">{row.date_note} {row.signal_note}</p></li>)}</ul> : <p>현재 주제와 기간에 맞는 후보가 없습니다. 연결 실패와 후보 없음은 다릅니다.</p>}</details>)}
       </> : <p>아직 이 조사 기능의 수집 기록이 없습니다. 조건을 저장한 뒤 작업 시간을 열어 주세요.</p>}
       <details><summary>아직 자동으로 연결되지 않은 도구</summary><ul>{data.unconnected.map(note => <li key={note}>{note}</li>)}</ul><p>개별 서비스의 자동 연동 권한·공식 제공 방식·비용을 확인하기 전에는 연결 완료로 표시하지 않습니다.</p></details>
     </>}

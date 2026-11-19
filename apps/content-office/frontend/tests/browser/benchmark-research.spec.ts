@@ -112,7 +112,6 @@ const runPanel = (page: Page) => page.getByRole('region', { name: '실제 세이
 async function chooseEvidence(page: Page, count: number) {
   await page.goto('/news?tab=creators');
   for (let index = 0; index < count; index++) await board(page).getByRole('checkbox', { name: `조사 근거로 선택 · 합성 원문 관측 ${index + 1}`, exact: true }).check();
-  await page.getByRole('navigation', { name: '소식 보기', exact: true }).getByRole('link', { name: '경쟁사·아이디어', exact: true }).click();
   await board(page).getByRole('button', { name: '세이지 조사 요청문 준비', exact: true }).click();
   await expect(board(page).getByLabel('준비된 세이지 조사 요청문', { exact: true })).toHaveValue(packetText);
 }
@@ -135,12 +134,12 @@ for (const width of [1440, 390]) test(`공개 반응의 비표시·실제 0·근
   await expect(card.getByText(/전체 플랫폼 인기 순위·증가 속도·영상 본문 검증을 뜻하지 않습니다/)).toBeVisible();
   const compare = board(page).getByLabel('표본 비교', { exact: true });
   await expect(compare).toBeDisabled();
-  await board(page).getByLabel('출처 플랫폼', { exact: true }).selectOption('instagram');
+  await page.getByLabel('출처 플랫폼', { exact: true }).selectOption('instagram');
   await expect(compare).toBeEnabled();
   await compare.selectOption('likes');
   await expect(board(page).locator('#benchmark-news-candidates article').first().getByRole('heading')).toHaveText('합성 원문 관측 2');
   await expect(board(page).getByRole('heading', { name: '합성 원문 관측 8', exact: true })).toHaveCount(0);
-  await board(page).getByLabel('출처 플랫폼', { exact: true }).selectOption('all');
+  await page.getByLabel('출처 플랫폼', { exact: true }).selectOption('all');
   await expect(compare).toBeDisabled();
   await expect(board(page).locator('#benchmark-news-candidates article').first().getByRole('heading')).toHaveText('합성 원문 관측 2');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -154,13 +153,12 @@ for (const width of [1440, 390]) test(`선택한 6개 원문과 스냅샷만 조
   await page.goto('/news?tab=creators');
   for (let index = 0; index < 6; index++) await board(page).getByRole('checkbox', { name: `조사 근거로 선택 · 합성 원문 관측 ${index + 1}`, exact: true }).check();
   await expect(board(page).getByRole('checkbox', { name: '조사 근거로 선택 · 합성 원문 관측 7', exact: true })).toBeDisabled();
-  await page.getByRole('navigation', { name: '소식 보기', exact: true }).getByRole('link', { name: '경쟁사·아이디어', exact: true }).click();
   await board(page).getByRole('button', { name: '세이지 조사 요청문 준비', exact: true }).click();
   await expect(runPanel(page).getByRole('button', { name: '선택한 근거로 세이지 조사 시작', exact: true })).toBeEnabled();
   await expect(board(page).getByRole('button', { name: '세이지 조사 요청문 검토', exact: true })).toHaveCount(0);
   expect(state.writes).toEqual([{ path: '/api/benchmarks/research-packet', method: 'POST', csrf, body: { source_ids: ['every-ig'], fields: [], platforms: [], expected_hash: registryHash,
     item_ids: state.data.items.slice(0, 6).map(item => item.id), snapshot_hash: snapshotHash } }]);
-  await board(page).getByLabel('출처 플랫폼', { exact: true }).selectOption('instagram');
+  await page.getByLabel('출처 플랫폼', { exact: true }).selectOption('instagram');
   await expect(runPanel(page).getByRole('button', { name: '선택한 근거로 세이지 조사 시작', exact: true })).toBeDisabled();
   await expect(board(page).getByText('출처 또는 조사 조건이 바뀌었습니다. 요청문을 다시 준비하세요.', { exact: true })).toBeVisible();
   expect(state.reads.some(path => path.includes('research-runs') || path.includes('subscribe'))).toBe(false);
