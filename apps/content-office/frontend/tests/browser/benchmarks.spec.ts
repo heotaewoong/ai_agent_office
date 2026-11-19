@@ -195,7 +195,7 @@ for (const width of [1440, 390]) test(`소식은 9건씩 읽고 뉴스 탭·기�
   await menu.getByRole('link', { name: '오늘의 뉴스', exact: true }).click();
   await page.getByRole('checkbox', { name: '공식 원문 소식 선택', exact: true }).check();
   await page.getByRole('navigation', { name: '소식 보기' }).getByRole('link', { name: '플랫폼 소식', exact: true }).click();
-  await page.getByText('트렌드 조사 설정과 결과', { exact: true }).click();
+  await page.getByText('소재 참고 조사 · 설정과 결과', { exact: true }).click();
   const topic = page.getByLabel('조사 주제', { exact: true });
   await topic.fill('아직 저장하지 않은 조사 조건');
   const cards = board.locator('#benchmark-news-candidates article');

@@ -24,7 +24,7 @@ export function BenchmarkWorkspace({ connected, active, manageSources, officialU
   return <div id="competitors" className={"outline-target " + styles.workspace} hidden={!active}>
     <PlatformNewsPanel active={active} platform={platform} onPlatformChange={setPlatform} />
     <details id="platform-trend-research" className={styles.discovery} onToggle={event => setDiscoveryOpen(event.currentTarget.open)}>
-      <summary>트렌드 조사 설정과 결과</summary>
+      <summary>소재 참고 조사 · 설정과 결과</summary>
       <DiscoveryPanel active={active && discoveryOpen} platform={platform} />
     </details>
     <BenchmarkPanel active={active} platform={platform} onResetPlatform={() => setPlatform('all')} manageSources={manageSources}

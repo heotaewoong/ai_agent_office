@@ -18,16 +18,29 @@ export type PlatformNews = {
     ranking_basis: string;
     message?: string;
     checked_at: string | null;
-    items: {
-      id: string;
-      title: string;
-      url: string;
-      source: string;
-      published_at: string | null;
-      summary: string;
-      metrics: Partial<Record<Metric, number>>;
-      metric_precision?: Partial<Record<Metric, 'exact' | 'approximate'>>;
-      observed_at: string | null;
-    }[];
+    criteria?: {
+      kind: 'popularity' | 'latest';
+      metric: 'views' | 'likes' | 'reactions' | null;
+      published_days: number;
+      observation_days: number;
+      reference_days: number;
+      source: 'youtube_api' | 'public_rss' | 'browser_observation';
+      scope: string;
+    };
+    items: PlatformNewsItem[];
+    reference_items?: PlatformNewsItem[];
   }[];
+};
+
+export type PlatformNewsItem = {
+  id: string;
+  title: string;
+  url: string;
+  source: string;
+  published_at: string | null;
+  summary: string;
+  metrics: Partial<Record<Metric, number>>;
+  metric_precision?: Partial<Record<Metric, 'exact' | 'approximate'>>;
+  observed_at: string | null;
+  reference_reason?: string;
 };

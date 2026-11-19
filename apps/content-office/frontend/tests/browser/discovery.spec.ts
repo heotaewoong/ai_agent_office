@@ -2,7 +2,7 @@ import {readFileSync} from "node:fs";
 import { test, expect, type Page } from '@playwright/test';
 
 // Synthetic contracts: no source requests, account, approval or production writes.
-async function researchHarness(page: Page, articles: Record<string, unknown>[] = []) {
+async function researchHarness(page: Page, articles: Record<string, unknown>[] = [], stale = false) {
   const writes: { path: string; csrf?: string; body: unknown }[] = [];
   let config = { platforms: ['youtube', 'tistory'], topic: 'AI 자동화', region: 'KR', youtube_channels: ['UCXZCJLdBC09xxGZ6gcdrc6A'] };
   const snapshot = {
@@ -16,12 +16,13 @@ async function researchHarness(page: Page, articles: Record<string, unknown>[] =
     if (request.method()!=='GET') writes.push({path,csrf:request.headers()['x-office-csrf'],body:request.postDataJSON()});
     if (path==='/api/discovery') {
       if (request.method()==='PUT') {const {expected_hash: ignored,...next}=request.postDataJSON();config=next;}
-      body={config,config_hash:'a'.repeat(64),platforms:{youtube:'YouTube·Shorts',tistory:'티스토리·검색형 블로그',linkedin:'LinkedIn'},plan:{youtube:['youtube','community'],tistory:['search_trend']},window_open:false,stale:false,unconnected:['ViewStats 자동 연동 미구현'],snapshot,task:{state:'queued'}};
+      body={config,config_hash:'a'.repeat(64),platforms:{youtube:'YouTube·Shorts',tistory:'티스토리·검색형 블로그',linkedin:'LinkedIn'},plan:{youtube:['youtube','community'],tistory:['search_trend']},window_open:false,stale,unconnected:['ViewStats 자동 연동 미구현'],snapshot,task:{state:'queued'}};
     } else if (path==='/api/platform-news') body={
       checked_at:'2026-10-30T12:00:00Z',topic:'AI 자동화',region:'KR',
       platforms:[
-        {id:'youtube',label:'YouTube',source_status:'available',method:'YouTube Data API',ranking_basis:'검색 표본 누적 조회수',items:[{id:'sample-video',title:'정기 검색 영상',url:'https://www.youtube.com/watch?v=synthetic',source:'예시 크리에이터',published_at:null,summary:'정기 수집 결과',metrics:{views:1250},observed_at:null}]},
+        {id:'youtube',label:'YouTube',source_status:'available',method:'YouTube Data API',ranking_basis:'검색 표본 누적 조회수',criteria:{kind:'popularity',metric:'views',published_days:7,observation_days:7,reference_days:30,source:'youtube_api',scope:'한국·주제 검색 표본'},reference_items:[{id:'reference-video',title:'발행일 미확인 영상',url:'https://www.youtube.com/watch?v=reference',source:'예시 계정',published_at:null,summary:'이전 수집 결과',metrics:{views:5000},observed_at:null,reference_reason:'발행일을 확인하지 못했습니다.'}],items:[{id:'sample-video',title:'정기 검색 영상',url:'https://www.youtube.com/watch?v=synthetic',source:'예시 크리에이터',published_at:null,summary:'정기 수집 결과',metrics:{views:1250},observed_at:null}]},
         {id:'instagram',label:'Instagram',source_status:'observed',method:'공개 게시물',message:'공개 반응만 표시합니다.',items:[{id:'sample-post',title:'인스타 공개 후보',url:'https://www.instagram.com/p/example/',source:'예시 계정',published_at:null,summary:'공개 게시물 표본',metrics:{likes:0,comments:50},metric_precision:{comments:'approximate'},observed_at:null}]},
+        {id:'naver_blog',label:'네이버 블로그',source_status:'available',criteria:{kind:'latest',metric:null,published_days:7,observation_days:7,reference_days:30,source:'public_rss',scope:'등록 블로그 표본'},items:[]},
         {id:'linkedin',label:'LinkedIn',source_status:'waiting',method:'공개 게시물',message:'확인된 게시물이 없습니다.',items:[]},
       ],
     };
@@ -62,14 +63,22 @@ test('공식 뉴스와 플랫폼 소식은 한 눈에 구분되고 트렌드 조
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto('/news');
   const navigation = page.getByRole('navigation', { name: '소식 보기' });
-  const settings = page.getByText('트렌드 조사 설정과 결과', { exact: true });
+  const settings = page.getByText('소재 참고 조사 · 설정과 결과', { exact: true });
   await expect(settings).not.toBeVisible();
   await expect(navigation.getByRole('link')).toHaveCount(2);
   await navigation.getByRole('link', { name: '플랫폼 소식', exact: true }).click();
   await expect(settings).toBeVisible();
   await expect(page.getByRole('combobox', { name: '출처 플랫폼', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: '뉴스 선택과 작업 만들기' })).not.toBeVisible();
-  await expect(page.getByText('검색 표본 누적 조회수')).toBeVisible();
+  const youtube = page.getByRole('region', { name: 'YouTube 공개 후보' });
+  await expect(youtube.getByText('누적 조회수 순', { exact: true })).toBeVisible();
+  await expect(youtube.getByText(/최근 7일 발행 · 최근 7일 지표 확인/)).toBeVisible();
+  await expect(youtube.getByText('YouTube Data API · 한국·주제 검색 표본')).toBeVisible();
+  const references = youtube.getByText('참고 게시물 1건', { exact: true });
+  await expect(youtube.getByRole('link', { name: '발행일 미확인 영상' })).not.toBeVisible();
+  await references.click();
+  await expect(youtube.getByRole('link', { name: '발행일 미확인 영상' })).toBeVisible();
+  await expect(youtube.getByText('발행일을 확인하지 못했습니다.')).toBeVisible();
   await expect(page.getByText('누적 조회수 1,250')).toBeVisible();
   const filter = page.getByRole('combobox', { name: '출처 플랫폼', exact: true });
   await filter.selectOption('instagram');
@@ -78,11 +87,15 @@ test('공식 뉴스와 플랫폼 소식은 한 눈에 구분되고 트렌드 조
   await expect(page.getByText('좋아요 0')).toBeVisible();
   await expect(page.getByText('댓글 약 50')).toBeVisible();
   await expect(page.getByText(/누적 조회수/)).toHaveCount(0);
+  await filter.selectOption('naver_blog');
+  const naver = page.getByRole('region', { name: '네이버 블로그 공개 후보' });
+  await expect(naver.getByText('최신 발행일 순', { exact: true })).toBeVisible();
+  await expect(naver.getByText('공개 RSS · 등록 블로그 표본')).toBeVisible();
   await filter.selectOption('linkedin');
   await expect(page.getByText('수집 대기', { exact: true })).toBeVisible();
   await settings.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('region', { name: '게시할 곳에 맞춰 소식과 트렌드 조사' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '게시할 콘텐츠의 소재 참고 조사' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(writes).toEqual([]);
 });
@@ -90,14 +103,14 @@ test('공식 뉴스와 플랫폼 소식은 한 눈에 구분되고 트렌드 조
 test('게시 대상 저장은 조사만 요청하고 시간·원고·승인을 쓰지 않는다',async({page})=>{
   const writes=await researchHarness(page);
   await page.setViewportSize({width:390,height:844});await page.goto('/news?tab=platforms');
-  await page.getByText('트렌드 조사 설정과 결과', { exact: true }).click();
-  const panel=page.getByRole('region',{name:'게시할 곳에 맞춰 소식과 트렌드 조사'});
+  await page.getByText('소재 참고 조사 · 설정과 결과', { exact: true }).click();
+  const panel=page.getByRole('region',{name:'게시할 콘텐츠의 소재 참고 조사'});
   await panel.getByRole('checkbox',{name:'LinkedIn',exact:true}).check();
   await panel.getByLabel('조사 주제',{exact:true}).fill('AI agent');
   const topic=panel.getByLabel('조사 주제',{exact:true});
   expect(await topic.evaluate(el=>parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
   expect((await topic.boundingBox())!.width).toBeGreaterThan(200);
-  await panel.getByRole('button',{name:'선택 저장하고 자동 조사'}).click();
+  await panel.getByRole('button',{name:'조건 저장하고 조사 요청'}).click();
   await expect(panel.getByText(/설정과 조사 요청을 저장했습니다/)).toBeVisible();
   expect(writes).toHaveLength(1);
   expect(writes[0]).toMatchObject({path:'/api/discovery',csrf:'contract-token',body:{platforms:['youtube','tistory','linkedin'],topic:'AI agent',expected_hash:'a'.repeat(64)}});
@@ -105,12 +118,16 @@ test('게시 대상 저장은 조사만 요청하고 시간·원고·승인을 �
 });
 
 test('출처 실패와 누적 반응을 구분하고 조회만으로 업무를 쓰지 않는다',async({page})=>{
-  const writes=await researchHarness(page);await page.goto('/news?tab=platforms');
-  await page.getByText('트렌드 조사 설정과 결과', { exact: true }).click();
-  const panel=page.getByRole('region',{name:'게시할 곳에 맞춰 소식과 트렌드 조사'});
-  await panel.getByText('수집 출처·실패 상태 확인 (2개)',{exact:true}).click();
+  const writes=await researchHarness(page,[],true);await page.goto('/news?tab=platforms');
+  await page.getByText('소재 참고 조사 · 설정과 결과', { exact: true }).click();
+  const panel=page.getByRole('region',{name:'게시할 콘텐츠의 소재 참고 조사'});
+  await panel.getByText('참고 출처와 수집 상태 (2개)',{exact:true}).click();
   await expect(panel.getByText('HN · 수집 실패',{exact:true})).toBeVisible();
-  await panel.getByText('YouTube·Shorts에 맞춰 살펴볼 후보 1건',{exact:true}).click();
+  const oldResults = panel.getByText('이전 조건의 소재 후보 보기', { exact: true });
+  const youtube = panel.getByText('YouTube·Shorts 소재 후보 1건', { exact: true });
+  await expect(youtube).not.toBeVisible();
+  await oldResults.click();
+  await youtube.click();
   await expect(panel.getByText(/누적 조회 123/)).toBeVisible();expect(writes).toEqual([]);
 });
 

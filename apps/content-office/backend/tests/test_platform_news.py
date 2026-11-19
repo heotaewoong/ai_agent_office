@@ -43,7 +43,7 @@ def test_read_only_platform_news_keeps_observations_on_real_platform_and_preserv
     def row(pid, url, metrics):
         return {"id": pid, "title": "AI agent walkthrough", "platform": "instagram",
                 "url": url, "source_id": "every-ai-instagram", "source_name": "Sample creator",
-                "checked_at": NOW.isoformat(), "metrics": metrics}
+                "checked_at": NOW.isoformat(), "published_at": NOW.isoformat(), "metrics": metrics}
     store.set_setting("benchmark_snapshot", {"registry_hash": digest(BENCHMARK_DEFAULT), "items": [
         row("example", "https://www.instagram.com/p/test_public_/", {"likes": {"value": 7, "availability": "observed", "precision": "approximate"},
             "comments": {"value": None, "availability": "not_visible", "precision": "unknown"}}),
@@ -145,7 +145,7 @@ def test_platform_status_keeps_multiple_observed_creators_without_unrelated_or_o
     monkeypatch.setenv("HEOBRAIN_PLATFORM_NEWS_SOURCES_DB", str(tmp_path / "missing.db"))
     baseline = {
         "platform": "threads", "title": "Agentic AI workflow", "source": "@Mixed.Name",
-        "observed_at": NOW.isoformat(), "metric_precision": {"likes": "exact"},
+        "observed_at": NOW.isoformat(), "published_at": NOW.isoformat(), "metric_precision": {"likes": "exact"},
     }
     observations = [
         {**baseline, "url": "https://www.threads.com/@mixed.name/post/A1", "metrics": {"likes": 60}},
@@ -175,11 +175,11 @@ def test_platform_status_keeps_multiple_observed_creators_without_unrelated_or_o
     groups = {row["id"]: row for row in platform_news.status(store, current=NOW)["platforms"]}
     threads = groups["threads"]
     assert threads["source_status"] == "observed"
-    assert threads["ranking_basis"] == "공개 표본의 관측 좋아요순"
+    assert threads["criteria"]["metric"] == "likes"
     assert [row["url"].split("/")[-1] for row in threads["items"]] == ["A1", "A2", "B5"]
     assert threads["items"][-1]["metrics"] == {"likes": 12}
     linkedin = groups["linkedin"]
-    assert linkedin["ranking_basis"] == "공개 표본의 관측 반응수순"
+    assert linkedin["criteria"]["metric"] == "reactions"
     assert linkedin["items"][0]["metrics"] == {"reactions": 51}
     assert [row["url"] for row in groups["tistory"]["items"]] == ["https://aijournal.tistory.com/42"]
 
@@ -200,8 +200,85 @@ def test_tistory_keeps_recent_topical_rows_from_several_publishers(tmp_path, mon
             row("aijournal", 12, "Claude Code 사용법", 1),
             row("different", 42, "AI 에이전트 실전", 2),
             row("noise", 12, "축구 국가대표 경기"),
+            row("reference", 43, "AI 에이전트 기본", 8),
             row("old", 44, "생성형 AI 개론", 31),
         ],
     }}})
     groups = {row["id"]: row for row in platform_news.status(store, current=NOW)["platforms"]}
     assert [row["url"].split("/")[-1] for row in groups["tistory"]["items"]] == ["10", "11", "42"]
+    assert groups["tistory"]["criteria"]["kind"] == "latest"
+    assert [r["url"].split("/")[-1] for r in groups["tistory"]["reference_items"]] == ["43"]
+
+
+def test_native_popularity_separates_publication_and_observation_uses_fixed_metric_and_preserves_unknown(tmp_path, monkeypatch):
+    import json
+
+    store = Store(tmp_path)
+    monkeypatch.setenv("HEOBRAIN_PLATFORM_NEWS_SOURCES_DB", str(tmp_path / "missing.db"))
+
+    def row(identity, author, published_days, observed_days, metrics):
+        return {"platform": "instagram", "source": author, "title": "AI agent workflow",
+                "url": "https://www.instagram.com/p/" + identity + "/",
+                "published_at": (NOW - timedelta(days=published_days)).isoformat()
+                if published_days is not None else None,
+                "observed_at": (NOW - timedelta(days=observed_days)).isoformat(),
+                "metrics": metrics, "metric_precision": dict.fromkeys(metrics, "exact")}
+
+    observations = [
+        row("zero", "Zero", 1, 0, {"likes": 0, "views": 90000}),
+        row("top", "High", 1, 0, {"likes": 27}),
+        row("newer_measurement", "Same", 1, 0, {"likes": 15}),
+        row("newer_measurement", "Same", 1, 2, {"likes": 17}),
+        row("old", "Old", 8, 0, {"likes": 10000}),
+        row("unknown_date", "Undated", None, 0, {"likes": 20000}),
+        row("stale_measurement", "Stale", 7, 8, {"likes": 20000}),
+        row("views_only", "Views", 1, 0, {"views": 25000}),
+        row("beyond_window", "Archives", 31, 0, {"likes": 99999}),
+    ]
+    observation_file = platform_news._cache_path(store).with_name("public-platform-observations.json")
+    observation_file.parent.mkdir(parents=True, exist_ok=True)
+    observation_file.write_text(json.dumps(observations), encoding="utf-8")
+    groups = {row["id"]: row for row in platform_news.status(store, current=NOW)["platforms"]}
+    instagram = groups["instagram"]
+    assert instagram["criteria"] == {
+        "kind": "popularity", "metric": "likes", "published_days": 7, "observation_days": 7,
+        "reference_days": 30, "source": "browser_observation", "scope": instagram["criteria"]["scope"],
+    }
+    assert [r["url"].split("/")[-2] for r in instagram["items"]] == ["top", "newer_measurement", "zero"]
+    assert [r["metrics"]["likes"] for r in instagram["items"]] == [27, 15, 0]
+    refs = {r["url"].split("/")[-2]: r for r in instagram["reference_items"]}
+    assert set(refs) == {"old", "unknown_date", "stale_measurement", "views_only"}
+    assert "likes" not in refs["views_only"]["metrics"]
+    assert "likes" not in refs["stale_measurement"]["metrics"]
+
+
+def test_youtube_registered_rss_fallback_uses_published_date_while_api_popularity_requires_views(tmp_path, monkeypatch):
+    store = Store(tmp_path)
+    monkeypatch.setenv("HEOBRAIN_PLATFORM_NEWS_SOURCES_DB", str(tmp_path / "missing.db"))
+    creator = next(row for row in BENCHMARK_DEFAULT["sources"] if row["platform"] == "youtube")
+    listed = [
+        {"id": "older", "title": "AI agent guide", "platform": "youtube", "source_id": creator["id"],
+         "url": "https://www.youtube.com/watch?v=AA000000000", "source_name": "Example",
+         "published_at": (NOW - timedelta(days=2)).isoformat(), "checked_at": NOW.isoformat(),
+         "metrics": {"views": {"availability": "observed", "precision": "exact", "value": 9999}}},
+        {"id": "newer", "title": "AI agent news", "platform": "youtube", "source_id": creator["id"],
+         "url": "https://www.youtube.com/watch?v=BB000000000", "source_name": "Example",
+         "published_at": NOW.isoformat(), "checked_at": NOW.isoformat()},
+    ]
+    store.set_setting("benchmark_snapshot", {"registry_hash": digest(BENCHMARK_DEFAULT), "items": listed})
+    data = platform_news.status(store, current=NOW)["platforms"][0]
+    assert data["criteria"]["source"] == "public_rss"
+    assert data["criteria"]["kind"] == "latest"
+    assert data["criteria"]["metric"] is None
+    assert [r["id"] for r in data["items"]] == ["newer", "older"]
+
+    api_items = {r["id"]: r for r in data["items"]}
+    platform_news._write_cache(store, {"youtube": {
+        "state": "available", "topic": discovery.DEFAULT["topic"], "region": "KR",
+        "checked_at": NOW.isoformat(), "items": list(api_items.values()),
+    }})
+    data = platform_news.status(store, current=NOW)["platforms"][0]
+    assert data["criteria"]["source"] == "youtube_api"
+    assert data["criteria"]["metric"] == "views"
+    assert [r["id"] for r in data["items"]] == ["older"]
+    assert [r["id"] for r in data["reference_items"]] == ["newer"]

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 import { benchmarkPublicUrl } from '../lib/benchmarks';
-import { platformNewsLabels, type PlatformNews } from '../lib/platform-news';
+import { platformNewsLabels, type PlatformNews, type PlatformNewsItem } from '../lib/platform-news';
 import styles from './platform-news.module.css';
 
 const statuses = {
@@ -16,6 +16,13 @@ const statuses = {
 const metrics = [
   ['views', '누적 조회수'], ['likes', '좋아요'], ['reactions', '반응'], ['comments', '댓글'], ['reposts', '리포스트'],
 ] as const;
+
+const rankingSources = {
+  youtube_api: 'YouTube Data API',
+  public_rss: '공개 RSS',
+  browser_observation: '브라우저 공개 화면',
+};
+const rankingMetrics = { views: '누적 조회수', likes: '좋아요 수', reactions: '반응 수' };
 
 function displayDate(value: string | null): string {
   return value && Number.isFinite(Date.parse(value))
@@ -73,7 +80,7 @@ export function PlatformNewsPanel({ active, platform, onPlatformChange }: {
       </select></label>
     </header>
     <nav className={styles.jumpLinks} aria-label="플랫폼 소식 바로 이동">
-      <a href="#platform-trend-research">트렌드 조사</a>
+      <a href="#platform-trend-research">소재 참고 조사</a>
       <a href="#creator-news">등록 출처와 아이디어</a>
     </nav>
     {error && <div className={styles.statusLine}>
@@ -88,34 +95,58 @@ export function PlatformNewsPanel({ active, platform, onPlatformChange }: {
           <h3>{group.label}</h3>
           <span className={styles.state}>{statuses[group.source_status] ?? '상태 확인 필요'}</span>
         </div>
-        <p className={styles.muted}>{group.ranking_basis || group.method}</p>
+        {group.criteria ? <>
+          <p className={styles.muted}>
+            <strong>{group.criteria.kind === 'latest' ? '최신 발행일 순' : group.criteria.metric ? rankingMetrics[group.criteria.metric] + ' 순' : '반응 지표 확인 중'}</strong>
+            {' · '}최근 {group.criteria.published_days}일 발행
+            {group.criteria.kind === 'popularity' && ' · 최근 ' + group.criteria.observation_days + '일 지표 확인'}
+          </p>
+          <p className={styles.muted}>{rankingSources[group.criteria.source] || group.method}{group.criteria.scope && ' · ' + group.criteria.scope}</p>
+        </> : <p className={styles.muted}>{group.ranking_basis || group.method}</p>}
         {group.source_status !== 'available' && group.message && <p className={styles.muted}>{group.message}</p>}
         {group.checked_at && <p className={styles.muted}>최근 확인 {displayDate(group.checked_at)}</p>}
-        {group.items.length === 0 && group.source_status === 'available' && <p className={styles.muted}>현재 조건에 맞는 후보가 없습니다.</p>}
+        {group.items.length === 0 && (group.criteria || group.source_status === 'available') && <p className={styles.muted}>
+          {group.criteria ? '발행일과 수집 기준을 충족하는 게시물이 없습니다.' : '현재 조건에 맞는 후보가 없습니다.'}
+        </p>}
         {group.items.length > 0 && <ol className={styles.items}>
-          {group.items.slice(0, platform === 'all' ? 3 : group.items.length).map(item => {
-            const href = benchmarkPublicUrl(item.url);
-            return <li key={item.id}>
-              <p className={styles.muted}>{item.source || group.label}{item.published_at && ' · ' + displayDate(item.published_at)}</p>
-              <strong>{href ? <a href={href} target="_blank" rel="noopener noreferrer">{item.title}</a> : item.title}</strong>
-              {item.summary && <p>{item.summary}</p>}
-              <ul className={styles.metrics}>
-                {metrics.map(([key, label]) => {
-                  const value = item.metrics?.[key];
-                  return typeof value === 'number' && Number.isFinite(value) && value >= 0
-                    ? <li key={key}>{label} {item.metric_precision?.[key] === 'approximate' && '약 '}{value.toLocaleString('ko-KR')}</li>
-                    : null;
-                })}
-              </ul>
-              {item.observed_at && <p className={styles.muted}>관측 {displayDate(item.observed_at)}</p>}
-            </li>;
-          })}
+          {group.items.slice(0, platform === 'all' ? 3 : group.items.length).map(item =>
+            <Candidate key={item.id} item={item} platformLabel={group.label} />)}
         </ol>}
         {platform === 'all' && group.items.length > 3 && <button type="button" className={styles.more}
           onClick={() => { onPlatformChange(group.id); platformSelect.current?.focus(); }}>
           {group.label} 후보 {group.items.length}건 보기
         </button>}
+        {group.reference_items && group.reference_items.length > 0 && <details>
+          <summary>참고 게시물 {group.reference_items.length}건</summary>
+          <p className={styles.muted}>발행일 또는 지표를 확인하지 못했거나 최근 발행 범위를 지난 자료입니다.</p>
+          <ul className={styles.items}>
+            {group.reference_items.map(item => <Candidate key={item.id} item={item} platformLabel={group.label} reference />)}
+          </ul>
+        </details>}
       </section>)}
     </div>}
   </section>;
+}
+
+function Candidate({ item, platformLabel, reference = false }: {
+  item: PlatformNewsItem; platformLabel: string; reference?: boolean;
+}) {
+  const href = benchmarkPublicUrl(item.url);
+  const published = displayDate(item.published_at);
+  const observed = displayDate(item.observed_at);
+  return <li>
+    <p className={styles.muted}>{item.source || platformLabel}{published && ' · 발행 ' + published}</p>
+    <strong>{href ? <a href={href} target="_blank" rel="noopener noreferrer">{item.title}</a> : item.title}</strong>
+    {item.summary && <p>{item.summary}</p>}
+    <ul className={styles.metrics}>
+      {metrics.map(([key, label]) => {
+        const value = item.metrics?.[key];
+        return typeof value === 'number' && Number.isFinite(value) && value >= 0
+          ? <li key={key}>{label} {item.metric_precision?.[key] === 'approximate' && '약 '}{value.toLocaleString('ko-KR')}</li>
+          : null;
+      })}
+    </ul>
+    {observed && <p className={styles.muted}>지표 확인 {observed}</p>}
+    {reference && item.reference_reason && <p className={styles.muted}>{item.reference_reason}</p>}
+  </li>;
 }

@@ -31,11 +31,14 @@ OBSERVATION_BYTES = 256 * 1024
 OBSERVATION_LIMIT = 128
 FRESHNESS = timedelta(hours=30)
 REFRESH_INTERVAL = timedelta(hours=12)
+PUBLICATION_AGE = timedelta(days=7)
 OBSERVATION_AGE = timedelta(days=7)
-BLOG_AGE = timedelta(days=30)
+REFERENCE_AGE = timedelta(days=30)
 VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 COUNTERS = {"views": "viewCount", "likes": "likeCount", "comments": "commentCount"}
 OBSERVED_COUNTERS = (*COUNTERS, "reactions", "reposts")
+SOCIAL_METRICS = {"instagram": "likes", "threads": "likes", "tiktok": "likes", "x": "views", "linkedin": "reactions"}
+METRIC_LABELS = {"views": "조회수", "likes": "좋아요", "reactions": "반응수"}
 PLATFORMS = ("youtube", "naver_blog", "tistory", "instagram", "threads", "tiktok", "x", "linkedin")
 AI_QUERIES = {
     "KR": ("AI 에이전트", "AI 자동화", "생성형 AI"),
@@ -128,7 +131,7 @@ def _matches_topic(text, topic):
 
 
 def youtube_candidates(key, topic, region, current, *, fetch=_youtube_get):
-    since = current - timedelta(days=7)
+    since = current - PUBLICATION_AGE
     queries = AI_QUERIES.get(region, ("AI agents", "AI automation", "generative AI")) if _broad_ai(topic) else (topic,)
     ids = {}
     for query in queries:
@@ -167,7 +170,8 @@ def youtube_candidates(key, topic, region, current, *, fetch=_youtube_get):
                            "summary": _public_text(snippet.get("description"), 180, max_words=20),
                            "published_at": published.isoformat(), "observed_at": current.isoformat(),
                            "metrics": metrics, "metric_precision": dict.fromkeys(metrics, "exact")})
-    return _select("youtube", candidates, "views")
+    ranked, references = _rank_rows("youtube", candidates, current, "views")
+    return ranked + references
 
 
 def _exact_post(platform, url):
@@ -260,18 +264,23 @@ def _post_key(platform, url):
     return normalize_url(url)
 
 
-def _unique(platform, rows):
+def _unique(platform, rows, metric=None):
+    def evidence(row):
+        return (metric in row["metrics"] if metric else bool(row["metrics"]),
+                row["observed_at"] or "", bool(row["published_at"]))
+
     items = {}
     for row in rows:
         key = _post_key(platform, row["url"])
         previous = items.get(key)
-        if previous is None or (not previous["metrics"] and row["metrics"]):
+        if previous is None or evidence(row) > evidence(previous):
             items[key] = row
     return list(items.values())
 
 
 def _sort_key(row, metric=None):
-    return row["metrics"].get(metric, -1), row["published_at"] or row["observed_at"] or ""
+    return (row["metrics"].get(metric, -1), bool(row["published_at"]),
+            row["published_at"] or row["observed_at"] or "", row["url"])
 
 
 def _creator_key(platform, row):
@@ -289,7 +298,7 @@ def _creator_key(platform, row):
 
 
 def _select(platform, rows, metric=None):
-    ranked = sorted(_unique(platform, rows), key=lambda row: _sort_key(row, metric), reverse=True)
+    ranked = sorted(_unique(platform, rows, metric), key=lambda row: _sort_key(row, metric), reverse=True)
     result, creators = [], {}
     for row in ranked:
         creator = _creator_key(platform, row)
@@ -309,8 +318,28 @@ def _topic_rows(rows, topic):
     return [row for row in rows if _matches_topic(row["title"], topic)]
 
 
-def _recent_blogs(rows, current):
-    return [row for row in rows if _recent(row["published_at"] or row["observed_at"], current, BLOG_AGE)]
+def _reference_window(row, current):
+    return _recent(row["published_at"] or row["observed_at"], current, REFERENCE_AGE)
+
+
+def _rank_rows(platform, rows, current, metric=None):
+    eligible, references = [], []
+    for row in _unique(platform, rows, metric):
+        if not _reference_window(row, current):
+            continue
+        if not row["published_at"]:
+            reason = "publication_unknown"
+        elif not _recent(row["published_at"], current, PUBLICATION_AGE):
+            reason = "outside_window"
+        elif metric and not _recent(row["observed_at"], current, OBSERVATION_AGE):
+            reason = "observation_expired"
+        elif metric and metric not in row["metrics"]:
+            reason = "metric_missing"
+        else:
+            eligible.append(row)
+            continue
+        references.append({**row, "reference_reason": reason})
+    return _select(platform, eligible, metric), _select(platform, references)
 
 
 def blog_candidates(current, topic=discovery.DEFAULT["topic"]):
@@ -333,11 +362,12 @@ def blog_candidates(current, topic=discovery.DEFAULT["topic"]):
     groups = {}
     for platform in BLOG_FEEDS:
         own = [(label, ok, items) for code, label, ok, items in reports if code == platform]
-        rows = _recent_blogs([r for _, _, items in own for r in items], current)
+        rows = _topic_rows([r for _, _, items in own for r in items], topic)
+        latest, references = _rank_rows(platform, rows, current)
         groups[platform] = {"checked_at": current.isoformat(), "sources_checked": len(own),
                             "sources_succeeded": sum(ok for _, ok, _ in own),
                             "failed_sources": [label for label, ok, _ in own if not ok],
-                            "items": _select(platform, _topic_rows(rows, topic))}
+                            "items": latest + references}
     return groups
 
 
@@ -405,7 +435,7 @@ def _supplemental_groups(store, current):
             continue
         observed = row.get("observed_at")
         published = row.get("published_at")
-        if not _recent(observed, current, OBSERVATION_AGE) or (published is not None and not _date_string(published, current)):
+        if not _recent(observed, current, REFERENCE_AGE) or (published is not None and not _date_string(published, current)):
             continue
         counters, precision = row.get("metrics"), row.get("metric_precision")
         metrics = {}
@@ -517,11 +547,25 @@ def refresh(store, *, current=None):
         return {"status": "running"}
 
 
-def _panel(platform, state, method, ranking, rows, *, checked_at=None, message=""):
-    seen = max((row["observed_at"] or "" for row in rows), default="")
+def _panel(platform, state, method, source, scope, rows, current, *, checked_at=None, message=""):
+    metric = SOCIAL_METRICS.get(platform) if source == "browser_observation" else None
+    if source == "youtube_api":
+        metric = "views"
+    items, references = _rank_rows(platform, rows, current, metric)
+    seen = max((row["observed_at"] or "" for row in [*items, *references]), default="")
+    if metric:
+        observation = "최근 7일 확인 · " if source == "browser_observation" else ""
+        ranking = f"최근 7일 발행 · {observation}누적 {METRIC_LABELS[metric]}순 · 작성자별 최대 2건"
+    else:
+        ranking = "최근 7일 발행 · 최신순 · 작성자별 최대 2건"
+    if not items and not message and state in ("available", "observed"):
+        message = "최근 7일 발행과 공개 지표가 모두 확인된 후보가 없습니다." if metric else "최근 7일 발행이 확인된 글이 없습니다."
     value = {"id": platform, "label": LABELS[platform], "source_status": state, "method": method,
              "ranking_basis": ranking, "message": message, "checked_at": checked_at or seen or None,
-             "items": rows[:MAX_ITEMS]}
+             "items": items, "reference_items": references,
+             "criteria": {"kind": "popularity" if metric else "latest", "metric": metric,
+                          "published_days": PUBLICATION_AGE.days, "observation_days": OBSERVATION_AGE.days,
+                          "reference_days": REFERENCE_AGE.days, "source": source, "scope": scope}}
     if platform in REFERENCE:
         value["reference_url"] = REFERENCE[platform]
     return value
@@ -538,57 +582,47 @@ def status(store, *, current=None):
     freshness = saved_youtube.get("checked_at")
     official = saved_youtube.get("state") in ("available", "stale")
     same_query = saved_youtube.get("topic") == topic and saved_youtube.get("region") == region
-    youtube_rank = "최근 7일 관련 영상의 공개 누적 조회수순 · 채널별 최대 2건"
+    youtube_scope = f"{region} · {topic} 공식 검색 영상 표본 · 쇼츠·일반 영상 형식 미분류"
     if official and same_query and _recent(freshness, current, FRESHNESS):
         rows = [row for row in saved_youtube["items"] if _matches_topic(row["title"], topic)]
-        youtube = _panel("youtube", saved_youtube["state"], "YouTube Data API v3",
-                         youtube_rank, _select("youtube", rows, "views"), checked_at=freshness,
-                         message=saved_youtube.get("message") or f"{region} 지역 · {topic} 검색 표본")
+        youtube = _panel("youtube", saved_youtube["state"], "YouTube Data API v3", "youtube_api",
+                         youtube_scope, rows, current, checked_at=freshness, message=saved_youtube.get("message", ""))
     else:
-        fallback = _select("youtube", _topic_rows(benchmark.get("youtube", []), topic), "views")
+        fallback = [row for row in benchmark.get("youtube", [])
+                    if _reference_window(row, current) and _matches_topic(row["title"], topic)]
         state = "stale" if official else "observed" if fallback else saved_youtube.get("state", "waiting")
         message = ("저장된 검색 결과의 조건 또는 유효 기간이 달라 새 조회를 기다립니다." if official else
                    saved_youtube.get("message", "정기 검색 결과를 기다립니다."))
-        youtube = _panel("youtube", state, "등록 채널 공개 RSS" if fallback else "YouTube Data API v3",
-                         "등록 채널에서 확인한 누적 조회수·날짜순" if fallback else youtube_rank,
-                         fallback, message=message)
+        if fallback:
+            youtube = _panel("youtube", state, "등록 채널 공개 RSS", "public_rss", "등록 채널의 공개 영상",
+                             fallback, current, message=message)
+        else:
+            youtube = _panel("youtube", state, "YouTube Data API v3", "youtube_api", youtube_scope, [],
+                             current, message=message)
     panels = [youtube]
     blogs = cache.get("blogs", {})
     for platform in ("naver_blog", "tistory"):
         feed = blogs.get(platform, {})
-        reviews = feed.get("items") or []
-        rows = _recent_blogs(reviews + additional.get(platform, []) + benchmark.get(platform, []) +
-                             sidecar.get(platform, []), current)
-        rows = _select(platform, _topic_rows(rows, topic))
+        rows = _topic_rows((feed.get("items") or []) + additional.get(platform, []) + benchmark.get(platform, []) +
+                           sidecar.get(platform, []), topic)
+        rows = [row for row in rows if _reference_window(row, current)]
         state = ("available" if feed.get("sources_succeeded") and _recent(feed.get("checked_at"), current, FRESHNESS)
                  else "stale" if feed.get("sources_succeeded")
                  else "observed" if rows else "error" if feed.get("failed_sources") else "waiting")
         message = "수집이 지연된 피드: " + ", ".join(feed["failed_sources"]) if feed.get("failed_sources") else ""
-        if not message and state == "available" and not rows:
-            message = "최근 30일 이내 조건에 맞는 공개 글이 확인되지 않았습니다."
         method = "공개 RSS 및 게시물 관측" if additional.get(platform) else "등록 블로그의 공개 RSS"
-        panels.append(_panel(platform, state, method, "최근 30일 발행일·관측일순 · 작성자별 최대 2건",
-                             rows, checked_at=feed.get("checked_at"), message=message))
+        panels.append(_panel(platform, state, method, "public_rss", "선별한 블로그의 공개 글 표본",
+                             rows, current, checked_at=feed.get("checked_at"), message=message))
     for platform in PLATFORMS[3:]:
         rows = _topic_rows(additional.get(platform, []) + benchmark.get(platform, []) + sidecar.get(platform, []), topic)
-        metric = next((name for name in ("views", "likes", "reactions") if any(name in row["metrics"] for row in rows)), None)
-        if metric:
-            rows = [row for row in rows if metric in row["metrics"]]
+        rows = [row for row in rows if _reference_window(row, current)]
         current_rows = any(_recent(row["observed_at"], current, OBSERVATION_AGE) for row in rows)
         state = "observed" if current_rows else "stale" if rows else "waiting"
-        ranking = {"views": "공개 표본의 관측 조회수순", "likes": "공개 표본의 관측 좋아요순",
-                   "reactions": "공개 표본의 관측 반응수순"}.get(
-            metric, "확인된 공개 게시물의 발행일·관측일순")
-        message = {
-            "instagram": "확인한 공개 게시물 표본입니다.",
-            "threads": "확인한 공개 게시물 표본입니다.",
-            "tiktok": ("확인한 틱톡 공개 영상 표본입니다." if rows else
-                       "크리에이티브 센터에서 공개 해시태그 동향을 확인할 수 있습니다."),
-            "x": "확인한 공개 게시물 표본입니다." if rows else "확인된 공개 게시물 수집을 기다립니다.",
-            "linkedin": "공개 기업·작성자 게시물 표본과 참고 기업 페이지입니다.",
-        }[platform]
-        panels.append(_panel(platform, state, "공개 게시물 관측", ranking,
-                             _select(platform, rows, metric), message=message))
+        message = "확인된 공개 게시물 수집을 기다립니다." if not rows else ""
+        if platform == "tiktok" and not rows:
+            message = "크리에이티브 센터에서 공개 해시태그 동향을 확인할 수 있습니다."
+        panels.append(_panel(platform, state, "공개 게시물 관측", "browser_observation",
+                             "직접 확인한 해당 플랫폼의 공개 게시물 표본", rows, current, message=message))
     return {"checked_at": cache.get("checked_at"), "topic": topic, "region": region, "platforms": panels}
 
 
