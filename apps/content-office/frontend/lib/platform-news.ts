@@ -8,6 +8,7 @@ type Metric = 'views' | 'likes' | 'reactions' | 'comments' | 'reposts';
 
 export type PlatformNews = {
   checked_at: string | null;
+  snapshot_hash?: string | null;
   topic: string;
   region: string;
   platforms: {

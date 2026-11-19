@@ -444,6 +444,13 @@ export type Idea = {
   source_urls?: string[];
   operator_verified_sources?: number;
   public_evidence?: IdeaPublicEvidence[];
+  platform_origin?: { platform: string; url: string; title: string; summary: string; observed_at: string | null };
+  public_discovery?: {
+    status: "ready" | "insufficient" | "unavailable";
+    claims: { label: string; evidence_ids: string[] }[];
+    checked_at: string;
+    paid_calls: 0;
+  };
   edit_hash?: string;
   state: "candidate" | "selected";
   score: number;

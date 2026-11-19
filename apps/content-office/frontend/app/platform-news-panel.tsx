@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { api } from '../lib/api';
 import { benchmarkPublicUrl } from '../lib/benchmarks';
 import { platformNewsLabels, type PlatformNews, type PlatformNewsItem } from '../lib/platform-news';
+import type { Idea } from '../lib/types';
 import styles from './platform-news.module.css';
 
 const statuses = {
@@ -30,8 +32,8 @@ function displayDate(value: string | null): string {
     : '';
 }
 
-export function PlatformNewsPanel({ active, platform, onPlatformChange }: {
-  active: boolean; platform: string; onPlatformChange: (value: string) => void;
+export function PlatformNewsPanel({ active, platform, onPlatformChange, onIdeaSaved }: {
+  active: boolean; platform: string; onPlatformChange: (value: string) => void; onIdeaSaved?: () => void;
 }) {
   const [data, setData] = useState<PlatformNews | null>(null);
   const [error, setError] = useState('');
@@ -110,7 +112,8 @@ export function PlatformNewsPanel({ active, platform, onPlatformChange }: {
         </p>}
         {group.items.length > 0 && <ol className={styles.items}>
           {group.items.slice(0, platform === 'all' ? 3 : group.items.length).map(item =>
-            <Candidate key={item.id} item={item} platformLabel={group.label} />)}
+            <Candidate key={item.id} item={item} platform={group.id} platformLabel={group.label}
+              snapshotHash={data.snapshot_hash} onIdeaSaved={onIdeaSaved} />)}
         </ol>}
         {platform === 'all' && group.items.length > 3 && <button type="button" className={styles.more}
           onClick={() => { onPlatformChange(group.id); platformSelect.current?.focus(); }}>
@@ -120,7 +123,8 @@ export function PlatformNewsPanel({ active, platform, onPlatformChange }: {
           <summary>참고 게시물 {group.reference_items.length}건</summary>
           <p className={styles.muted}>발행일 또는 지표를 확인하지 못했거나 최근 발행 범위를 지난 자료입니다.</p>
           <ul className={styles.items}>
-            {group.reference_items.map(item => <Candidate key={item.id} item={item} platformLabel={group.label} reference />)}
+            {group.reference_items.map(item => <Candidate key={item.id} item={item} platform={group.id} platformLabel={group.label}
+              snapshotHash={data.snapshot_hash} onIdeaSaved={onIdeaSaved} reference />)}
           </ul>
         </details>}
       </section>)}
@@ -128,12 +132,34 @@ export function PlatformNewsPanel({ active, platform, onPlatformChange }: {
   </section>;
 }
 
-function Candidate({ item, platformLabel, reference = false }: {
-  item: PlatformNewsItem; platformLabel: string; reference?: boolean;
+function Candidate({ item, platform, platformLabel, snapshotHash, onIdeaSaved, reference = false }: {
+  item: PlatformNewsItem; platform: string; platformLabel: string; snapshotHash?: string | null;
+  onIdeaSaved?: () => void; reference?: boolean;
 }) {
   const href = benchmarkPublicUrl(item.url);
   const published = displayDate(item.published_at);
   const observed = displayDate(item.observed_at);
+  const sending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState<Idea>();
+  const discoveryStatus = saved?.public_discovery?.status;
+  async function save() {
+    if (sending.current || (saved && discoveryStatus !== 'unavailable') || !snapshotHash || !href) return;
+    sending.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const { idea } = await api.savePlatformNewsIdea({ platform, url: item.url, expected_hash: snapshotHash });
+      setSaved(idea);
+      onIdeaSaved?.();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '기획 후보를 저장하지 못했습니다.');
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  }
   return <li>
     <p className={styles.muted}>{item.source || platformLabel}{published && ' · 발행 ' + published}</p>
     <strong>{href ? <a href={href} target="_blank" rel="noopener noreferrer">{item.title}</a> : item.title}</strong>
@@ -148,5 +174,18 @@ function Candidate({ item, platformLabel, reference = false }: {
     </ul>
     {observed && <p className={styles.muted}>지표 확인 {observed}</p>}
     {reference && item.reference_reason && <p className={styles.muted}>{item.reference_reason}</p>}
+    {saved && <div className={styles.statusLine}>
+      <p role="status">기획 후보에 저장됨
+        {discoveryStatus === 'ready' && ' · 공개 원문 확인 가능'}
+        {discoveryStatus === 'insufficient' && ' · 원문 근거 보완 필요'}
+        {discoveryStatus === 'unavailable' && ' · 공개 원문 조회 일시 지연'}
+      </p>
+      <Link className={styles.more} href={'/plans#' + encodeURIComponent(saved.id)} prefetch={false}>저장한 후보에서 근거 검토</Link>
+    </div>}
+    {(!saved || discoveryStatus === 'unavailable') && href && /^[a-f0-9]{64}$/.test(snapshotHash ?? '') && <button type="button" className={styles.more}
+      aria-label={`${item.title} ${saved ? '공개 원문 다시 찾기' : '기획 후보로 저장'}`} disabled={busy} onClick={() => void save()}>
+      {busy ? '공개 원문 찾는 중…' : saved ? '공개 원문 다시 찾기' : '기획 후보로 저장'}
+    </button>}
+    {error && <p role="alert">{error}</p>}
   </li>;
 }

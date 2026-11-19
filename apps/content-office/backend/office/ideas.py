@@ -147,15 +147,39 @@ def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
 
     with store.connection() as db:
         candidate = _reviewable_candidate(db, idea_id, expected_hash)
+    public_discovery = None
     try:
-        references = _checked_public_references(find_public_evidence(candidate["title"], limit=PUBLIC_EVIDENCE_LIMIT))
+        origin = candidate.get("platform_origin")
+        if origin:
+            from .public_discovery import discover_public_evidence
+
+            cited_links = [word.rstrip(".,);]") for word in origin["summary"].split()
+                           if word.startswith("https://")][:2]
+            seeds = tuple(dict.fromkeys([*origin.get("original_urls", []), candidate["source_url"],
+                                        *candidate.get("source_urls", [])[:3], *cited_links, origin["url"]]))
+            result = discover_public_evidence(candidate["title"], seed_urls=seeds,
+                                              context=origin["summary"], limit=PUBLIC_EVIDENCE_LIMIT)
+            if result["status"] == "unavailable":
+                with store.connection() as db:
+                    current = _reviewable_candidate(db, idea_id, expected_hash)
+                response = score_idea(with_edit_hash(current), lessons=lessons)
+                response.setdefault("public_discovery", {"status": "unavailable", "claims": [],
+                                                         "checked_at": now(), "paid_calls": 0})
+                return response
+            references = _checked_public_references(result["references"])
+            public_discovery = {"status": "ready" if references else "insufficient",
+                                "claims": result["claims"], "checked_at": now(), "paid_calls": 0}
+        else:
+            references = _checked_public_references(find_public_evidence(candidate["title"], limit=PUBLIC_EVIDENCE_LIMIT))
     except PublicEvidenceUnavailable as error:
         raise WorkflowError(str(error) or "공개 근거 검색을 실행할 수 없습니다. 잠시 후 다시 확인하세요") from error
-    # Model inference happens outside the transaction. Re-check what the operator saw before saving.
+    # External reads happen outside the write transaction. Re-check the candidate version on save.
     with store.connection(transaction=True) as db:
         stored = _reviewable_candidate(db, idea_id, expected_hash)
-        if stored.get("public_evidence") != references:
+        if stored.get("public_evidence") != references or public_discovery is not None:
             stored = {**stored, "public_evidence": references}
+            if public_discovery is not None:
+                stored["public_discovery"] = public_discovery
             db.execute("UPDATE ideas SET data=?,updated_at=? WHERE id=?", (canonical(stored), now(), idea_id))
             store._event(db, "idea_public_evidence_refreshed", {"idea_id": idea_id, "matches": len(references)})
     return score_idea(with_edit_hash(stored), lessons=lessons)
@@ -213,6 +237,7 @@ def set_idea_sources(store, idea_id, source_urls, *, expected_hash, operator_ver
         updated = score_idea({**stored, "source_url": urls[0], "source_urls": urls,
                               "primary_sources": len(urls), "operator_verified_sources": len(urls)}, lessons=lessons)
         updated.pop("public_evidence", None)
+        updated.pop("public_discovery", None)
         key = store._idea_key(updated)
         if db.execute("SELECT id FROM ideas WHERE dedup_key=? AND id<>?", (key, idea_id)).fetchone():
             raise WorkflowError("같은 제목과 대표 출처의 기획이 이미 있습니다. 기존 기획을 확인하세요")

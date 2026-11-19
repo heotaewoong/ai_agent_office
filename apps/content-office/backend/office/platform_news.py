@@ -12,6 +12,7 @@ import tempfile
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from xml.etree.ElementTree import ParseError
@@ -21,7 +22,7 @@ from requests import RequestException
 from . import benchmarks, discovery
 from .feeds import clean_text, fetch_public, normalize_url, parse_date, parse_feed
 from .runtime import AlreadyRunning, ProcessLock
-from .store import Store, digest
+from .store import Store, WorkflowError, canonical, digest, identifier, now
 
 MAX_ITEMS = 8
 MAX_PER_CREATOR = 2
@@ -624,7 +625,77 @@ def status(store, *, current=None):
             message = "크리에이티브 센터에서 공개 해시태그 동향을 확인할 수 있습니다."
         panels.append(_panel(platform, state, "공개 게시물 관측", "browser_observation",
                              "직접 확인한 해당 플랫폼의 공개 게시물 표본", rows, current, message=message))
-    return {"checked_at": cache.get("checked_at"), "topic": topic, "region": region, "platforms": panels}
+    snapshot_hash = digest([topic, region, [
+        [panel["id"], panel["items"], panel["reference_items"]] for panel in panels
+    ]])
+    return {"checked_at": cache.get("checked_at"), "topic": topic, "region": region,
+            "platforms": panels, "snapshot_hash": snapshot_hash}
+
+
+@lru_cache(maxsize=1)
+def _browser_confirmed_originals():
+    # Original links actually read from public posts. They are research inputs, not approvals.
+    path = Path(__file__).resolve().parent.parent / "config" / "public-observation-originals.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_platform_idea(store, platform, url, expected_hash):
+    from .ideas import refresh_idea_public_evidence, score_idea, with_edit_hash
+
+    board = status(store)
+    if board["snapshot_hash"] != expected_hash:
+        raise WorkflowError("플랫폼 소식이 바뀌었습니다. 목록을 새로 불러온 뒤 소재를 다시 고르세요")
+    panel = next((entry for entry in board["platforms"] if entry["id"] == platform), None)
+    if not panel:
+        raise WorkflowError("현재 플랫폼 소식에서 확인한 게시물을 고르세요")
+    item = next((row for row in panel["items"] + panel["reference_items"] if row["url"] == url), None)
+    if item is None:
+        raise WorkflowError("현재 플랫폼 소식에서 확인한 게시물을 고르세요")
+
+    origin = {key: item[key] for key in ("title", "url", "summary", "observed_at")}
+    post_key = _post_key(platform, url)
+    origin.update(platform=platform, identity=digest([platform, post_key]))
+    known_originals = _browser_confirmed_originals().get(url, [])
+    if known_originals:
+        origin["original_urls"] = known_originals
+    card = score_idea({"title": item["title"], "source_url": url, "primary_sources": 0,
+                       "origin": "platform_news", "platform_origin": origin})
+    with store.connection(transaction=True) as db:
+        previous = db.execute(
+            "SELECT data FROM ideas WHERE dedup_key=? OR json_extract(data,'$.platform_origin.identity')=? "
+            "ORDER BY created_at, id LIMIT 1", (store._idea_key(card), origin["identity"]),
+        ).fetchone()
+        if previous:
+            existing_idea = json.loads(previous[0])
+        else:
+            existing_idea = None
+            for row in db.execute("SELECT data FROM ideas ORDER BY created_at, id"):
+                old = json.loads(row[0])
+                old_url = old.get("source_url")
+                if _exact_post(platform, old_url) and _post_key(platform, old_url) == post_key:
+                    existing_idea = old
+                    break
+        if existing_idea is not None:
+            idea = existing_idea
+        else:
+            idea = {**card, "id": identifier("idea"), "state": "candidate"}
+            stamp = now()
+            db.execute("INSERT INTO ideas VALUES(?,?,?,?,?,?)",
+                       (idea["id"], store._idea_key(card), "candidate", canonical(idea), stamp, stamp))
+            store._event(db, "idea_saved", {"idea_id": idea["id"], "title": idea["title"]})
+
+    if idea.get("state") != "candidate" or not idea.get("platform_origin") or "public_discovery" in idea:
+        return score_idea(with_edit_hash(idea), lessons=store.lessons("approved"))
+    try:
+        return refresh_idea_public_evidence(store, idea["id"], expected_hash=digest(idea),
+                                            lessons=store.lessons("approved"))
+    except WorkflowError:
+        # A different tab may have completed research, edited sources or selected the saved idea.
+        with store.connection() as db:
+            row = db.execute("SELECT data FROM ideas WHERE id=?", (idea["id"],)).fetchone()
+        if not row or digest(json.loads(row[0])) == digest(idea):
+            raise
+        return score_idea(with_edit_hash(json.loads(row[0])), lessons=store.lessons("approved"))
 
 
 def main():

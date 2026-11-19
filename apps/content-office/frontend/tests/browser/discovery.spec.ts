@@ -4,6 +4,16 @@ import { test, expect, type Page } from '@playwright/test';
 // Synthetic contracts: no source requests, account, approval or production writes.
 async function researchHarness(page: Page, articles: Record<string, unknown>[] = [], stale = false) {
   const writes: { path: string; csrf?: string; body: unknown }[] = [];
+  const platformSnapshotHash = 'c'.repeat(64);
+  const evidenceId = 'd'.repeat(64);
+  const platformIdea = {
+    id: 'idea-platform-example', title: '정기 검색 영상', state: 'candidate', score: 0, reasons: [],
+    outlier_band: 'unknown', blocked: ['1차 출처 없음'], edit_hash: 'e'.repeat(64),
+    platform_origin: { platform: 'youtube', url: 'https://www.youtube.com/watch?v=synthetic', title: '정기 검색 영상', summary: '정기 수집 결과', observed_at: null },
+    public_evidence: [{ id: evidenceId, url: 'https://example.org/official-update', title: '공식 업데이트', paragraph: 2, quote: '공식 원문의 두 번째 문단입니다.' }],
+    public_discovery: { status: 'insufficient', claims: [{ label: '공식 발표의 변경점', evidence_ids: [evidenceId] }, { label: '요금 변경', evidence_ids: [] }], checked_at: '2026-10-30T12:00:00Z', paid_calls: 0 },
+  };
+  let platformIdeaSaved = false;
   let config = { platforms: ['youtube', 'tistory'], topic: 'AI 자동화', region: 'KR', youtube_channels: ['UCXZCJLdBC09xxGZ6gcdrc6A'] };
   const snapshot = {
     config_hash: 'a'.repeat(64), checked_at: '2026-10-30T12:00:00+00:00', method: '주제·출처 규칙 추천', paid_calls: 0,
@@ -18,7 +28,7 @@ async function researchHarness(page: Page, articles: Record<string, unknown>[] =
       if (request.method()==='PUT') {const {expected_hash: ignored,...next}=request.postDataJSON();config=next;}
       body={config,config_hash:'a'.repeat(64),platforms:{youtube:'YouTube·Shorts',tistory:'티스토리·검색형 블로그',linkedin:'LinkedIn'},plan:{youtube:['youtube','community'],tistory:['search_trend']},window_open:false,stale,unconnected:['ViewStats 자동 연동 미구현'],snapshot,task:{state:'queued'}};
     } else if (path==='/api/platform-news') body={
-      checked_at:'2026-10-30T12:00:00Z',topic:'AI 자동화',region:'KR',
+      checked_at:'2026-10-30T12:00:00Z',snapshot_hash:platformSnapshotHash,topic:'AI 자동화',region:'KR',
       platforms:[
         {id:'youtube',label:'YouTube',source_status:'available',method:'YouTube Data API',ranking_basis:'검색 표본 누적 조회수',criteria:{kind:'popularity',metric:'views',published_days:7,observation_days:7,reference_days:30,source:'youtube_api',scope:'한국·주제 검색 표본'},reference_items:[{id:'reference-video',title:'발행일 미확인 영상',url:'https://www.youtube.com/watch?v=reference',source:'예시 계정',published_at:null,summary:'이전 수집 결과',metrics:{views:5000},observed_at:null,reference_reason:'발행일을 확인하지 못했습니다.'}],items:[{id:'sample-video',title:'정기 검색 영상',url:'https://www.youtube.com/watch?v=synthetic',source:'예시 크리에이터',published_at:null,summary:'정기 수집 결과',metrics:{views:1250},observed_at:null}]},
         {id:'instagram',label:'Instagram',source_status:'observed',method:'공개 게시물',message:'공개 반응만 표시합니다.',items:[{id:'sample-post',title:'인스타 공개 후보',url:'https://www.instagram.com/p/example/',source:'예시 계정',published_at:null,summary:'공개 게시물 표본',metrics:{likes:0,comments:50},metric_precision:{comments:'approximate'},observed_at:null}]},
@@ -26,6 +36,17 @@ async function researchHarness(page: Page, articles: Record<string, unknown>[] =
         {id:'linkedin',label:'LinkedIn',source_status:'waiting',method:'공개 게시물',message:'확인된 게시물이 없습니다.',items:[]},
       ],
     };
+    else if (path==='/api/platform-news/ideas' && request.method()==='POST') {
+      body = { idea: platformIdeaSaved ? platformIdea : {
+        ...platformIdea, public_evidence: [], public_discovery: { ...platformIdea.public_discovery, claims: [], status: 'unavailable' },
+      } };
+      platformIdeaSaved = true;
+    }
+    else if (path==='/api/ideas') body={ideas:platformIdeaSaved ? [platformIdea] : []};
+    else if (path==='/api/benchmarks') body={registry:{sources:[]},registry_hash:'b'.repeat(64),fields:[],platforms:{},items:[],sources_status:[],ideas:[],window_open:false};
+    else if (path==='/api/questions') body={questions:[],groups:[]};
+    else if (path==='/api/channels') body={channels:[]};
+    else if (path==='/api/briefs') body={default:'',presets:[]};
     else if (path==='/api/session') body={csrf:'contract-token'};
     else if (path==='/api/dashboard') body={articles,jobs:[],feeds:[],agents:[],events:[],tasks:[],budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},window:{status:'closed',authorized_end:'2026-10-01T00:00:00Z'},provider:{model:'gpt-5.4-mini',configured:false},knowledge:{}};
     else if (path==='/api/jobs/summaries') body={jobs:[]};
@@ -33,6 +54,34 @@ async function researchHarness(page: Page, articles: Record<string, unknown>[] =
   });
   return writes;
 }
+
+test('플랫폼 소재 저장은 원문 근거 검토로 연결하고 승인과 제작을 시작하지 않는다', async ({ page }) => {
+  const writes = await researchHarness(page);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/news?tab=platforms');
+  const youtube = page.getByRole('region', { name: 'YouTube 공개 후보' });
+  await expect(writes).toEqual([]);
+  await youtube.getByRole('button', { name: '정기 검색 영상 기획 후보로 저장' }).click();
+  await expect(youtube.getByText('기획 후보에 저장됨 · 공개 원문 조회 일시 지연')).toBeVisible();
+  await expect(youtube.getByRole('link', { name: '저장한 후보에서 근거 검토' })).toBeVisible();
+  await youtube.getByRole('button', { name: '정기 검색 영상 공개 원문 다시 찾기' }).click();
+  await expect(youtube.getByText('기획 후보에 저장됨 · 원문 근거 보완 필요')).toBeVisible();
+  await youtube.getByRole('link', { name: '저장한 후보에서 근거 검토' }).click();
+  await expect(page).toHaveURL(/\/plans#idea-platform-example$/);
+  const idea = page.locator('#idea-platform-example');
+  await expect(idea).toBeFocused();
+  await expect(idea).toBeInViewport();
+  await expect(idea.getByText('공식 발표의 변경점', { exact: true })).toBeVisible();
+  await expect(idea.getByText('요금 변경 · 원문 근거 확인 필요')).toBeVisible();
+  await expect(idea.getByText('공식 원문의 두 번째 문단입니다.')).toBeVisible();
+  await expect(idea.getByRole('checkbox', { name: '공식 업데이트 · 문단 2' })).not.toBeChecked();
+  await expect(idea.getByRole('button', { name: '이 기획으로 작업 만들기' })).toBeDisabled();
+  const save = {
+    path: '/api/platform-news/ideas', csrf: 'contract-token',
+    body: { platform: 'youtube', url: 'https://www.youtube.com/watch?v=synthetic', expected_hash: 'c'.repeat(64) },
+  };
+  expect(writes).toEqual([save, save]);
+});
 
 for(const width of [1440,390])test(`뉴스 후보를 9건씩 늘려도 선택과 작업 버튼에 바로 접근한다 ${width}px`,async({page})=>{
  const rows=Array.from({length:31},(_,i)=>({id:'browse-'+i,title:`뉴스 후보 ${String(i+1).padStart(2,'0')}`,summary:'공식 원문 설명입니다. '.repeat(12),url:`https://example.org/news/${i}`,feed_name:'공식 피드',published_at:new Date().toISOString(),segment:'ai',source_readable:true,score:100-i,score_reasons:['공식 출처']}));

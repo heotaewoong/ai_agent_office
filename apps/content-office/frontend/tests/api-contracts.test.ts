@@ -199,6 +199,22 @@ test("수동 리드 등록은 명시한 동의 목적을 그대로 전송하고 
   assert.deepEqual(bodies, [{ ...lead, consent_purpose: "lead_magnet_delivery" }, { ...lead, consent_purpose: "newsletter" }]);
 });
 
+test("플랫폼 소식 저장은 현재 수집 판본과 원문만 전달하고 기획을 선택하지 않는다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const body = { platform: "youtube", url: "https://www.youtube.com/watch?v=evidence123", expected_hash: "a".repeat(64) };
+  const calls: string[] = [];
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    calls.push(String(input));
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), body);
+    return Response.json({ idea: { id: "news-idea", state: "candidate" } });
+  };
+  assert.equal((await api.savePlatformNewsIdea(body)).idea.id, "news-idea");
+  assert.deepEqual(calls, ["/api/platform-news/ideas"]);
+});
+
 test("공개 근거 검색은 현재 기획 판본만 전송하고 기획을 선택하지 않는다", async (t) => {
   const originalFetch = globalThis.fetch;
   t.after(() => { globalThis.fetch = originalFetch; });

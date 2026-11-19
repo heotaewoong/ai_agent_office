@@ -22,7 +22,7 @@ export function BenchmarkWorkspace({ connected, active, manageSources, officialU
   useEffect(() => { if (!active) setCloseSignal(value => value + 1); }, [active]);
 
   return <div id="competitors" className={"outline-target " + styles.workspace} hidden={!active}>
-    <PlatformNewsPanel active={active} platform={platform} onPlatformChange={setPlatform} />
+    <PlatformNewsPanel active={active} platform={platform} onPlatformChange={setPlatform} onIdeaSaved={onIdeaSaved} />
     <details id="platform-trend-research" className={styles.discovery} onToggle={event => setDiscoveryOpen(event.currentTarget.open)}>
       <summary>소재 참고 조사 · 설정과 결과</summary>
       <DiscoveryPanel active={active && discoveryOpen} platform={platform} />

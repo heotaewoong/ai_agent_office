@@ -230,6 +230,13 @@ class BriefInput(BaseModel):
     expected_brief_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class PlatformIdeaInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    platform: str = Field(min_length=1, max_length=30)
+    url: str = Field(min_length=1, max_length=2000)
+    expected_hash: str = Field(pattern=r"[0-9a-f]{64}")
+
+
 class IdeaSourcesInput(BaseModel):
     source_urls: list[str] = Field(min_length=1, max_length=10)
     operator_verified: bool = Field(strict=True)
@@ -444,6 +451,11 @@ def create_app(store: Store | None = None):
     def read_platform_news():
         from .platform_news import status
         return JSONResponse(status(store), headers={"Cache-Control": "private, no-store"})
+
+    @app.post("/api/platform-news/ideas")
+    def add_platform_idea(body: PlatformIdeaInput):
+        from .platform_news import save_platform_idea
+        return {"idea": save_platform_idea(store, body.platform, body.url, body.expected_hash)}
 
     @app.get("/api/dashboard")
     def dashboard(compact: bool = False, task_results: bool = True):

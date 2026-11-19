@@ -690,6 +690,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
                   <p className="muted">독자 질문과 기획 후보를 정리하고, 근거가 갖춰진 기획을 선택하세요.</p>
                   <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
+                    active={view === "plans"}
                     drafts={ideaSourcesDrafts}
                     onDraftChange={updateIdeaSourcesDraft}
                     refreshKey={ideaRefresh}
