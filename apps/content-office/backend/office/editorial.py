@@ -443,7 +443,9 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
 
     def review_checks(packet):
         # Missing newly selected citations are handled once after review, outside model refinement.
-        return deterministic_checks(packet, deferred_citation_ids=approved_ids)
+        if approved_ids:
+            return deterministic_checks(packet, deferred_citation_ids=approved_ids)
+        return deterministic_checks(packet)
 
     def build_packet(provider):
         if evaluate_only:
