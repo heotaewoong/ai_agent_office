@@ -14,7 +14,7 @@ const statuses = {
   error: '수집 실패',
 } satisfies Record<PlatformNews['platforms'][number]['source_status'], string>;
 const metrics = [
-  ['views', '누적 조회수'], ['likes', '좋아요'], ['comments', '댓글'], ['reposts', '리포스트'],
+  ['views', '누적 조회수'], ['likes', '좋아요'], ['reactions', '반응'], ['comments', '댓글'], ['reposts', '리포스트'],
 ] as const;
 
 function displayDate(value: string | null): string {

@@ -4,7 +4,7 @@ export const platformNewsLabels: Record<string, string> = {
   newsletter: '뉴스레터', website: '웹사이트', other: '기타',
 };
 
-type Metric = 'views' | 'likes' | 'comments' | 'reposts';
+type Metric = 'views' | 'likes' | 'reactions' | 'comments' | 'reposts';
 
 export type PlatformNews = {
   checked_at: string | null;

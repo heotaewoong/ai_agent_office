@@ -9,10 +9,11 @@ import re
 import sqlite3
 import stat
 import tempfile
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import parse_qs, urlencode, urlsplit
+from urllib.parse import parse_qs, unquote, urlencode, urlsplit
 from xml.etree.ElementTree import ParseError
 
 from requests import RequestException
@@ -23,19 +24,47 @@ from .runtime import AlreadyRunning, ProcessLock
 from .store import Store, digest
 
 MAX_ITEMS = 8
+MAX_PER_CREATOR = 2
 MAX_STAT = 9007199254740991
 MAX_BYTES = 1_000_000
+OBSERVATION_BYTES = 256 * 1024
+OBSERVATION_LIMIT = 128
 FRESHNESS = timedelta(hours=30)
 REFRESH_INTERVAL = timedelta(hours=12)
 OBSERVATION_AGE = timedelta(days=7)
+BLOG_AGE = timedelta(days=30)
 VIDEO_ID = re.compile(r"[A-Za-z0-9_-]{11}")
 COUNTERS = {"views": "viewCount", "likes": "likeCount", "comments": "commentCount"}
-OBSERVED_COUNTERS = (*COUNTERS, "reposts")
+OBSERVED_COUNTERS = (*COUNTERS, "reactions", "reposts")
 PLATFORMS = ("youtube", "naver_blog", "tistory", "instagram", "threads", "tiktok", "x", "linkedin")
+AI_QUERIES = {
+    "KR": ("AI 에이전트", "AI 자동화", "생성형 AI"),
+    "JP": ("AI エージェント", "AI 自動化", "生成 AI"),
+}
+AI_SIGNALS = re.compile(
+    r"(?<![a-z\d])(?:openai|anthropic|claude(?:\s+code)?|chatgpt|gpt(?:-\d+)?|codex|llms?|rag|mcp|"
+    r"llama\.cpp|ollama|qwen\d*|langgraph|coding\s+agents?|"
+    r"gemini\s+(?:\d|cli|pro|flash|advanced|ultra)|artificial intelligence|machine learning|"
+    r"ai[-\s]+(?:agents?\b|automation\b|workflow|tools?\b|models?\b|coding\b|developer\b|news\b|"
+    r"research\b|engineer|researcher|inference\b|training\b|updates?\b|에이전트|자동화|워크플로|"
+    r"도구|모델|코딩|뉴스|개발|기술|연구|전략|생성|활용|비서|서비스|エージェント|自動化)|"
+    r"ai(?:가|로|를|의|를|에서|에이전트|자동화)|(?:generative|agentic)\s+ai\b|agentic\s+(?:engineer|workflow|coding))(?![a-z\d])|"
+    r"인공지능|코딩\s*에이전트|대형\s*언어\s*모델|생성형|챗GPT|머신\s*러닝|딥\s*러닝|제미나이|生成\s*AI|人工知能",
+    re.IGNORECASE,
+)
 BLOG_FEEDS = {
-    "naver_blog": (("naver-cloud", "네이버클라우드", "https://rss.blog.naver.com/n_cloudplatform.xml"),),
-    "tistory": (("tistory-bcho", "조대협 티스토리", "https://bcho.tistory.com/rss"),
-                ("tistory-learning", "러닝머신 티스토리", "https://lsjsj92.tistory.com/rss")),
+    "naver_blog": (
+        ("naver-cloud", "네이버클라우드", "https://rss.blog.naver.com/n_cloudplatform.xml"),
+        ("naver-search", "NAVER Search & Tech", "https://rss.blog.naver.com/naver_search.xml"),
+        ("naver-kcc", "한국저작권위원회", "https://rss.blog.naver.com/kcc_press.xml"),
+    ),
+    "tistory": (
+        ("tistory-bcho", "조대협 티스토리", "https://bcho.tistory.com/rss"),
+        ("tistory-learning", "러닝머신 티스토리", "https://lsjsj92.tistory.com/rss"),
+        ("tistory-gillilab", "GilliLab", "https://rupijun.tistory.com/rss"),
+        ("tistory-bilient", "Connecting HW and SW", "https://bilient.tistory.com/rss"),
+        ("tistory-brainchaos", "brainchaos UnLoG", "https://brainchaos.tistory.com/rss"),
+    ),
 }
 SIDECAR_SOURCES = {
     "instagram-every": ("instagram", "every._ai"),
@@ -84,29 +113,48 @@ def _youtube_get(endpoint, params, key):
         conn.close()
 
 
+def _broad_ai(topic):
+    return " ".join(topic.casefold().split()) in {"ai", "인공지능", "ai 자동화", "ai automation"}
+
+
+def _matches_topic(text, topic):
+    if _broad_ai(topic):
+        return bool(AI_SIGNALS.search(text))
+    terms = re.findall(r"[^\W_]+", topic.casefold())
+    text = text.casefold()
+    return bool(terms) and all(
+        re.search(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", text) for term in terms
+    )
+
+
 def youtube_candidates(key, topic, region, current, *, fetch=_youtube_get):
     since = current - timedelta(days=7)
-    search = fetch("search", {"part": "snippet", "fields": "items(id/videoId)", "type": "video", "q": topic, "order": "viewCount",
-                             "publishedAfter": since.isoformat(), "regionCode": region,
-                             "relevanceLanguage": discovery.REGIONS[region][0].split("-")[0],
-                             "maxResults": MAX_ITEMS * 2}, key)
-    ids = list(dict.fromkeys(r.get("id", {}).get("videoId") for r in search["items"][:MAX_ITEMS * 2]
-                            if isinstance(r, dict) and isinstance(r.get("id"), dict)))
-    ids = [v for v in ids if isinstance(v, str) and VIDEO_ID.fullmatch(v)]
+    queries = AI_QUERIES.get(region, ("AI agents", "AI automation", "generative AI")) if _broad_ai(topic) else (topic,)
+    ids = {}
+    for query in queries:
+        search = fetch("search", {"part": "snippet", "fields": "items(id/videoId)", "type": "video",
+                                 "q": query, "order": "viewCount", "publishedAfter": since.isoformat(),
+                                 "regionCode": region, "relevanceLanguage": discovery.REGIONS[region][0].split("-")[0],
+                                 "maxResults": MAX_ITEMS * 2}, key)
+        for row in search["items"][:MAX_ITEMS * 2]:
+            identity = row.get("id") if isinstance(row, dict) else None
+            video_id = identity.get("videoId") if isinstance(identity, dict) else None
+            if isinstance(video_id, str) and VIDEO_ID.fullmatch(video_id):
+                ids[video_id] = None
     if not ids:
         return []
     rows = fetch("videos", {"part": "snippet,statistics", "id": ",".join(ids)}, key)
     candidates = []
     seen = set()
-    for row in rows["items"][:MAX_ITEMS * 2]:
+    for row in rows["items"][:len(ids)]:
         if not isinstance(row, dict):
             continue
         video_id, snippet = row.get("id"), row.get("snippet", {})
-        if video_id not in ids or video_id in seen or not isinstance(snippet, dict):
+        if not isinstance(video_id, str) or video_id not in ids or video_id in seen or not isinstance(snippet, dict):
             continue
         published = _optional_date(snippet.get("publishedAt"))
         title = _public_text(snippet.get("title"), 180)
-        if not published or not since <= published <= current + timedelta(minutes=5) or not title:
+        if not published or not since <= published <= current + timedelta(minutes=5) or not _matches_topic(title, topic):
             continue
         seen.add(video_id)
         stats = row.get("statistics")
@@ -119,8 +167,7 @@ def youtube_candidates(key, topic, region, current, *, fetch=_youtube_get):
                            "summary": _public_text(snippet.get("description"), 180, max_words=20),
                            "published_at": published.isoformat(), "observed_at": current.isoformat(),
                            "metrics": metrics, "metric_precision": dict.fromkeys(metrics, "exact")})
-    return sorted(candidates, key=lambda row: (row["metrics"].get("views", -1), row["published_at"]),
-                  reverse=True)[:MAX_ITEMS]
+    return _select("youtube", candidates, "views")
 
 
 def _exact_post(platform, url):
@@ -143,9 +190,10 @@ def _exact_post(platform, url):
     if platform == "naver_blog":
         return host in ("blog.naver.com", "m.blog.naver.com") and bool(
             re.fullmatch(r"/[A-Za-z0-9_.-]+/\d+/?", path) or
-            path == "/PostView.naver" and parse_qs(p.query).get("logNo", [""])[0].isdigit())
+            path == "/PostView.naver" and parse_qs(p.query).get("logNo", [""])[0].isdigit()
+            and re.fullmatch(r"[A-Za-z0-9_.-]+", parse_qs(p.query).get("blogId", [""])[0]))
     if platform == "tistory":
-        return host.endswith(".tistory.com") and path not in ("", "/", "/rss")
+        return host.endswith(".tistory.com") and bool(re.fullmatch(r"/(?:[0-9]+|entry/[^/]+)/?", path))
     if platform == "instagram":
         return host in ("www.instagram.com", "instagram.com") and bool(re.fullmatch(
             r"/(?:[A-Za-z0-9._]+/)?(?:p|reel)/[A-Za-z0-9_-]+/?", path))
@@ -157,7 +205,10 @@ def _exact_post(platform, url):
     if platform == "x":
         return host in ("www.x.com", "x.com", "www.twitter.com", "twitter.com") and bool(
             re.fullmatch(r"/[^/]+/status/\d+/?", path))
-    return host in ("www.linkedin.com", "linkedin.com") and path.startswith(("/posts/", "/feed/update/"))
+    return host in ("www.linkedin.com", "linkedin.com") and bool(
+        re.fullmatch(r"/posts/[^/]+/?", path)
+        or re.fullmatch(r"/feed/update/urn:li:(?:activity|ugcPost|share):[0-9]+/?", unquote(path))
+    )
 
 
 def _optional_date(value):
@@ -197,8 +248,15 @@ def _candidate(row, platform, current, *, observed=None):
 
 
 def _post_key(platform, url):
+    parsed = urlsplit(url)
     if platform in ("instagram", "threads", "tiktok", "x"):
-        return urlsplit(url).path.strip("/").split("/")[-1]
+        return parsed.path.strip("/").split("/")[-1]
+    if platform == "naver_blog":
+        fields = parse_qs(parsed.query)
+        if parsed.path == "/PostView.naver":
+            return (fields.get("blogId", [""])[0].casefold(), fields["logNo"][0])
+        creator, identity = parsed.path.strip("/").split("/")
+        return (creator.casefold(), identity)
     return normalize_url(url)
 
 
@@ -206,7 +264,8 @@ def _unique(platform, rows):
     items = {}
     for row in rows:
         key = _post_key(platform, row["url"])
-        if key not in items:
+        previous = items.get(key)
+        if previous is None or (not previous["metrics"] and row["metrics"]):
             items[key] = row
     return list(items.values())
 
@@ -215,7 +274,46 @@ def _sort_key(row, metric=None):
     return row["metrics"].get(metric, -1), row["published_at"] or row["observed_at"] or ""
 
 
-def blog_candidates(current):
+def _creator_key(platform, row):
+    parsed = urlsplit(row["url"])
+    path = parsed.path.strip("/").split("/")
+    if platform == "tistory":
+        name = parsed.hostname
+    elif platform == "naver_blog":
+        name = parse_qs(parsed.query).get("blogId", [""])[0] if parsed.path == "/PostView.naver" else path[0]
+    elif platform in ("threads", "tiktok", "x") or platform == "instagram" and len(path) == 3:
+        name = path[0]
+    else:
+        name = row["source"]
+    return " ".join(unicodedata.normalize("NFKC", name or row["source"]).casefold().lstrip("@").split())
+
+
+def _select(platform, rows, metric=None):
+    ranked = sorted(_unique(platform, rows), key=lambda row: _sort_key(row, metric), reverse=True)
+    result, creators = [], {}
+    for row in ranked:
+        creator = _creator_key(platform, row)
+        count = creators.get(creator, 0)
+        if count >= MAX_PER_CREATOR:
+            continue
+        result.append(row)
+        creators[creator] = count + 1
+        if len(result) == MAX_ITEMS:
+            break
+    return result
+
+
+def _topic_rows(rows, topic):
+    if not _broad_ai(topic):
+        return rows
+    return [row for row in rows if _matches_topic(row["title"], topic)]
+
+
+def _recent_blogs(rows, current):
+    return [row for row in rows if _recent(row["published_at"] or row["observed_at"], current, BLOG_AGE)]
+
+
+def blog_candidates(current, topic=discovery.DEFAULT["topic"]):
     def collect(platform, feed):
         identity, label, url = feed
         try:
@@ -223,22 +321,23 @@ def blog_candidates(current):
             raw, _, _ = fetch_public(url, allowed_hosts={urlsplit(url).hostname})
             rows = parse_feed(raw, {"id": identity, "name": label, "segment": "ai",
                                   "topics": ["AI·기술"], "language": "ko"}, current)
-            items = [_candidate(r, platform, current, observed=current.isoformat()) for r in rows[:40]]
+            items = [_candidate(r, platform, current, observed=current.isoformat()) for r in rows[:40]
+                     if r.get("date_status") != "future"]
             return platform, label, True, [r for r in items if r]
         except (RequestException, ValueError, OSError, ParseError):
             return platform, label, False, []
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         futures = [pool.submit(collect, platform, feed) for platform, feeds in BLOG_FEEDS.items() for feed in feeds]
         reports = [future.result() for future in futures]
     groups = {}
     for platform in BLOG_FEEDS:
         own = [(label, ok, items) for code, label, ok, items in reports if code == platform]
-        rows = _unique(platform, [r for _, _, items in own for r in items])
+        rows = _recent_blogs([r for _, _, items in own for r in items], current)
         groups[platform] = {"checked_at": current.isoformat(), "sources_checked": len(own),
                             "sources_succeeded": sum(ok for _, ok, _ in own),
                             "failed_sources": [label for label, ok, _ in own if not ok],
-                            "items": sorted(rows, key=_sort_key, reverse=True)[:MAX_ITEMS]}
+                            "items": _select(platform, _topic_rows(rows, topic))}
     return groups
 
 
@@ -281,7 +380,45 @@ def _benchmark_groups(store, current):
 
 
 def _cache_path(store):
-    return store.root / "runtime" / "platform-news.json"
+    return store.root / "runtime" / "platform-news-v2.json"
+
+
+def _supplemental_groups(store, current):
+    path = _cache_path(store).with_name("public-platform-observations.json")
+    try:
+        with path.open("rb") as file:
+            raw = file.read(OBSERVATION_BYTES + 1)
+        rows = json.loads(raw) if len(raw) <= OBSERVATION_BYTES else []
+    except (OSError, ValueError, RecursionError):
+        return {}
+    if not isinstance(rows, list) or len(rows) > OBSERVATION_LIMIT:
+        return {}
+
+    groups = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        platform = row.get("platform")
+        title = _public_text(row.get("title"), 180)
+        source = _public_text(row.get("source"), 100)
+        if platform not in PLATFORMS[1:] or not title or not source:
+            continue
+        observed = row.get("observed_at")
+        published = row.get("published_at")
+        if not _recent(observed, current, OBSERVATION_AGE) or (published is not None and not _date_string(published, current)):
+            continue
+        counters, precision = row.get("metrics"), row.get("metric_precision")
+        metrics = {}
+        if isinstance(counters, dict) and isinstance(precision, dict):
+            metrics = {name: {"value": counters.get(name), "availability": "observed", "precision": precision.get(name)}
+                       for name in OBSERVED_COUNTERS if name in counters}
+        candidate = _candidate({"url": row.get("url"), "title": title, "source_name": source,
+                                "summary": _public_text(row.get("summary"), 250),
+                                "published_at": published, "metrics": metrics},
+                               platform, current, observed=observed)
+        if candidate:
+            groups.setdefault(platform, []).append(candidate)
+    return groups
 
 
 def _read_cache(store):
@@ -340,7 +477,7 @@ def refresh(store, *, current=None):
     current = current or datetime.now(timezone.utc)
     topic, region = _settings(store)
     try:
-        with ProcessLock(_cache_path(store).with_suffix(".lock")):
+        with ProcessLock(_cache_path(store).with_name("platform-news.lock")):
             cached = _read_cache(store)
             key = _key()
             recent = _recent(cached.get("attempted_at"), current, REFRESH_INTERVAL)
@@ -371,7 +508,7 @@ def refresh(store, *, current=None):
                                            "message": "YouTube 재조회에 실패했습니다. 이전 검색 결과입니다."}
             snapshot = {"attempted_at": stamp, "checked_at": stamp, "youtube": current_youtube,
                         "youtube_attempted_at": cached.get("youtube_attempted_at"),
-                        "blogs": cached.get("blogs", {}) if recent else blog_candidates(current)}
+                        "blogs": cached.get("blogs", {}) if recent else blog_candidates(current, topic)}
             _write_cache(store, snapshot)
             return {"status": "refreshed", "checked_at": stamp,
                     "youtube_status": current_youtube["state"],
@@ -397,49 +534,61 @@ def status(store, *, current=None):
     saved_youtube = cache.get("youtube", {})
     benchmark = _benchmark_groups(store, current)
     sidecar = _sidecar_groups(current)
+    additional = _supplemental_groups(store, current)
     freshness = saved_youtube.get("checked_at")
     official = saved_youtube.get("state") in ("available", "stale")
     same_query = saved_youtube.get("topic") == topic and saved_youtube.get("region") == region
+    youtube_rank = "최근 7일 관련 영상의 공개 누적 조회수순 · 채널별 최대 2건"
     if official and same_query and _recent(freshness, current, FRESHNESS):
+        rows = [row for row in saved_youtube["items"] if _matches_topic(row["title"], topic)]
         youtube = _panel("youtube", saved_youtube["state"], "YouTube Data API v3",
-                         "최근 7일 검색 후보의 공개 누적 조회수순", saved_youtube["items"], checked_at=freshness,
-                         message=saved_youtube.get("message") or f"{region} 지역 · {topic} 검색 결과")
+                         youtube_rank, _select("youtube", rows, "views"), checked_at=freshness,
+                         message=saved_youtube.get("message") or f"{region} 지역 · {topic} 검색 표본")
     else:
-        fallback = sorted(benchmark.get("youtube", []), key=lambda row: _sort_key(row, "views"), reverse=True)
+        fallback = _select("youtube", _topic_rows(benchmark.get("youtube", []), topic), "views")
         state = "stale" if official else "observed" if fallback else saved_youtube.get("state", "waiting")
         message = ("저장된 검색 결과의 조건 또는 유효 기간이 달라 새 조회를 기다립니다." if official else
                    saved_youtube.get("message", "정기 검색 결과를 기다립니다."))
         youtube = _panel("youtube", state, "등록 채널 공개 RSS" if fallback else "YouTube Data API v3",
-                         "등록 채널에서 확인한 누적 조회수·날짜순" if fallback else "최근 7일 검색 후보의 공개 누적 조회수순",
+                         "등록 채널에서 확인한 누적 조회수·날짜순" if fallback else youtube_rank,
                          fallback, message=message)
     panels = [youtube]
     blogs = cache.get("blogs", {})
     for platform in ("naver_blog", "tistory"):
         feed = blogs.get(platform, {})
         reviews = feed.get("items") or []
-        rows = _unique(platform, reviews + benchmark.get(platform, []) + sidecar.get(platform, []))
+        rows = _recent_blogs(reviews + additional.get(platform, []) + benchmark.get(platform, []) +
+                             sidecar.get(platform, []), current)
+        rows = _select(platform, _topic_rows(rows, topic))
         state = ("available" if feed.get("sources_succeeded") and _recent(feed.get("checked_at"), current, FRESHNESS)
                  else "stale" if feed.get("sources_succeeded")
                  else "observed" if rows else "error" if feed.get("failed_sources") else "waiting")
         message = "수집이 지연된 피드: " + ", ".join(feed["failed_sources"]) if feed.get("failed_sources") else ""
-        panels.append(_panel(platform, state, "등록 블로그의 공개 RSS", "등록 출처 발행일순",
-                             sorted(rows, key=_sort_key, reverse=True), checked_at=feed.get("checked_at"), message=message))
+        if not message and state == "available" and not rows:
+            message = "최근 30일 이내 조건에 맞는 공개 글이 확인되지 않았습니다."
+        method = "공개 RSS 및 게시물 관측" if additional.get(platform) else "등록 블로그의 공개 RSS"
+        panels.append(_panel(platform, state, method, "최근 30일 발행일·관측일순 · 작성자별 최대 2건",
+                             rows, checked_at=feed.get("checked_at"), message=message))
     for platform in PLATFORMS[3:]:
-        rows = _unique(platform, benchmark.get(platform, []) + sidecar.get(platform, []))
-        metric = next((name for name in ("views", "likes") if any(name in row["metrics"] for row in rows)), None)
+        rows = _topic_rows(additional.get(platform, []) + benchmark.get(platform, []) + sidecar.get(platform, []), topic)
+        metric = next((name for name in ("views", "likes", "reactions") if any(name in row["metrics"] for row in rows)), None)
+        if metric:
+            rows = [row for row in rows if metric in row["metrics"]]
         current_rows = any(_recent(row["observed_at"], current, OBSERVATION_AGE) for row in rows)
         state = "observed" if current_rows else "stale" if rows else "waiting"
-        ranking = {"views": "공개 표본의 관측 조회수순", "likes": "공개 표본의 관측 좋아요순"}.get(
+        ranking = {"views": "공개 표본의 관측 조회수순", "likes": "공개 표본의 관측 좋아요순",
+                   "reactions": "공개 표본의 관측 반응수순"}.get(
             metric, "확인된 공개 게시물의 발행일·관측일순")
         message = {
-            "instagram": "등록 공개 계정의 직접 관측 표본입니다.",
-            "threads": "공개 게시물 표본입니다. 공개 조회수는 확인되지 않았습니다.",
-            "tiktok": "크리에이티브 센터에서 공개 해시태그 동향을 확인할 수 있습니다.",
-            "x": "확인된 공개 게시물 수집을 기다립니다.",
-            "linkedin": "공개 기업 게시물 표본과 등록 기업 페이지입니다.",
+            "instagram": "확인한 공개 게시물 표본입니다.",
+            "threads": "확인한 공개 게시물 표본입니다.",
+            "tiktok": ("확인한 틱톡 공개 영상 표본입니다." if rows else
+                       "크리에이티브 센터에서 공개 해시태그 동향을 확인할 수 있습니다."),
+            "x": "확인한 공개 게시물 표본입니다." if rows else "확인된 공개 게시물 수집을 기다립니다.",
+            "linkedin": "공개 기업·작성자 게시물 표본과 참고 기업 페이지입니다.",
         }[platform]
-        panels.append(_panel(platform, state, "공개 게시물 관측", ranking, sorted(
-            rows, key=lambda row: _sort_key(row, metric), reverse=True), message=message))
+        panels.append(_panel(platform, state, "공개 게시물 관측", ranking,
+                             _select(platform, rows, metric), message=message))
     return {"checked_at": cache.get("checked_at"), "topic": topic, "region": region, "platforms": panels}
 
 
