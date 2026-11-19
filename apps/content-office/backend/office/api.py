@@ -28,7 +28,10 @@ from .analytics import baseline, parse_studio_text, propose_lessons
 from .brand import load_brand
 from .briefs import DEFAULT_PRESET, build_brief, presets_payload
 from .gates import run_gates
-from .ideas import rank_ideas, score_idea, select_reviewed_idea, set_idea_sources, with_edit_hash
+from .ideas import (
+    PUBLIC_EVIDENCE_LIMIT, approved_public_references, rank_ideas, refresh_idea_public_evidence,
+    score_idea, select_reviewed_idea, set_idea_sources, with_edit_hash,
+)
 from .packaging import attach_packaging, require_packaging
 from .space import project_space
 
@@ -233,8 +236,12 @@ class IdeaSourcesInput(BaseModel):
     expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class IdeaSelectionInput(BaseModel):
+class IdeaEvidenceRequest(BaseModel):
     expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class IdeaSelectionInput(IdeaEvidenceRequest):
+    public_evidence_ids: list[str] = Field(default_factory=list, max_length=PUBLIC_EVIDENCE_LIMIT)
 
 
 class ThumbnailInput(BaseModel):
@@ -629,8 +636,10 @@ def create_app(store: Store | None = None):
         if current["state"] in ("drafting", "production_queued", "producing", "needs_reconciliation"):
             raise WorkflowError("처리 중에는 원고를 저장할 수 없습니다. 완료 후 다시 저장하세요")
         packet = {**edit.packet, "evidence": current["article"].get("evidence", []), "quality": {"status": "unverified", "critical": False, "reviews": [], "refine_count": 0}, "audience": (current.get("source_packet") or {}).get("audience", {})}
-        for field in ("editorial_copy", "original_source_hash"):
+        for field in ("editorial_copy", "original_source_hash", "approved_public_evidence_hash"):
             packet.pop(field, None)
+        if approved_public_references(current["article"]):
+            packet["approved_public_evidence_hash"] = current["article"]["approved_public_evidence_hash"]
         if current["article"].get("preserve_original") is True:
             original = current["article"].get("operator_source_text")
             body = edit.packet.get("body")
@@ -1083,10 +1092,16 @@ def create_app(store: Store | None = None):
         job = store.set_brief(job_id, brief, "local-operator", expected_hash=body.expected_brief_hash)
         return {**job, "brief_hash": digest(job.get("brief"))}
 
+    @app.post("/api/ideas/{idea_id}/public-evidence")
+    def find_idea_public_evidence(idea_id: str, body: IdeaEvidenceRequest):
+        return refresh_idea_public_evidence(store, idea_id, expected_hash=body.expected_hash,
+                                            lessons=store.lessons("approved"))
+
     @app.post("/api/ideas/{idea_id}/select")
     def choose_idea(idea_id: str, body: IdeaSelectionInput):
         return select_reviewed_idea(store, idea_id, expected_hash=body.expected_hash,
-                                    actor="local-operator", lessons=store.lessons("approved"))
+                                    actor="local-operator", lessons=store.lessons("approved"),
+                                    public_evidence_ids=body.public_evidence_ids)
 
     @app.post("/api/jobs/{job_id}/packaging")
     def set_packaging(job_id: str, brief: PackagingInput):

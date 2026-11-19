@@ -4,8 +4,10 @@ demand는 요청마다 최대값을 100으로 맞춘 상대값(네이버 데이�
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import re
 
 from .calendar import enrich_idea
 from .evidence import reference_url
@@ -91,6 +93,98 @@ def with_edit_hash(card):
     return {**card, "edit_hash": digest(card)}
 
 
+
+PUBLIC_EVIDENCE_LIMIT = 4
+_PUBLIC_ID = re.compile(r"[0-9a-f]{64}")
+_PUBLIC_FIELDS = ("id", "url", "title", "paragraph", "quote", "source_sha256", "quote_sha256")
+
+
+def _checked_public_references(references):
+    from .public_evidence import public_evidence_id
+
+    if not isinstance(references, list) or len(references) > PUBLIC_EVIDENCE_LIMIT:
+        raise WorkflowError("공개 근거 목록의 판본을 다시 확인하세요")
+    checked, seen = [], set()
+    for entry in references:
+        if not isinstance(entry, dict) or any(key not in entry for key in _PUBLIC_FIELDS):
+            raise WorkflowError("공개 근거의 출처와 문단을 다시 확인하세요")
+        item = {key: entry[key] for key in _PUBLIC_FIELDS}
+        if any(not isinstance(item[key], str) or not _PUBLIC_ID.fullmatch(item[key])
+               for key in ("id", "source_sha256", "quote_sha256")):
+            raise WorkflowError("공개 근거의 해시가 올바르지 않습니다")
+        url, title, paragraph, quote = (item[key] for key in ("url", "title", "paragraph", "quote"))
+        if (not isinstance(url, str) or len(url) > 2000 or url in seen
+                or not isinstance(title, str) or not title.strip() or len(title) > 500
+                or type(paragraph) is not int or not 1 <= paragraph <= 100_000
+                or not isinstance(quote, str) or not quote.strip() or len(quote) > 2400):
+            raise WorkflowError("공개 근거의 출처와 문단을 다시 확인하세요")
+        try:
+            reference_url(url)
+        except ValueError as error:
+            raise WorkflowError("공개 근거의 HTTPS 주소가 올바르지 않습니다") from error
+        quote_hash = hashlib.sha256(quote.encode()).hexdigest()
+        if quote_hash != item["quote_sha256"] or item["id"] != public_evidence_id(url, item["source_sha256"], paragraph, quote_hash):
+            raise WorkflowError("공개 근거의 원문 판본이 일치하지 않습니다")
+        checked.append(item)
+        seen.add(url)
+    return checked
+
+
+def _reviewable_candidate(db, idea_id, expected_hash):
+    row = db.execute("SELECT state,data FROM ideas WHERE id=?", (idea_id,)).fetchone()
+    if not row:
+        raise WorkflowError("기획을 찾을 수 없습니다")
+    stored = json.loads(row["data"])
+    if row["state"] != "candidate" or stored.get("state") != "candidate":
+        raise WorkflowError("이미 선택한 기획입니다. 기존 작업을 확인하세요")
+    if digest(stored) != expected_hash:
+        raise WorkflowError("기획이 변경되었습니다. 출처와 내용을 다시 확인한 뒤 선택하세요")
+    return stored
+
+
+def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
+    from .public_evidence import PublicEvidenceUnavailable, find_public_evidence
+
+    with store.connection() as db:
+        candidate = _reviewable_candidate(db, idea_id, expected_hash)
+    try:
+        references = _checked_public_references(find_public_evidence(candidate["title"], limit=PUBLIC_EVIDENCE_LIMIT))
+    except PublicEvidenceUnavailable as error:
+        raise WorkflowError(str(error) or "공개 근거 검색을 실행할 수 없습니다. 잠시 후 다시 확인하세요") from error
+    # Model inference happens outside the transaction. Re-check what the operator saw before saving.
+    with store.connection(transaction=True) as db:
+        stored = _reviewable_candidate(db, idea_id, expected_hash)
+        if stored.get("public_evidence") != references:
+            stored = {**stored, "public_evidence": references}
+            db.execute("UPDATE ideas SET data=?,updated_at=? WHERE id=?", (canonical(stored), now(), idea_id))
+            store._event(db, "idea_public_evidence_refreshed", {"idea_id": idea_id, "matches": len(references)})
+    return score_idea(with_edit_hash(stored), lessons=lessons)
+
+
+def _selected_public_references(card, public_evidence_ids):
+    if public_evidence_ids is None:
+        return []
+    if (not isinstance(public_evidence_ids, list) or len(public_evidence_ids) > PUBLIC_EVIDENCE_LIMIT
+            or any(not isinstance(key, str) or not _PUBLIC_ID.fullmatch(key) for key in public_evidence_ids)
+            or len(set(public_evidence_ids)) != len(public_evidence_ids)):
+        raise WorkflowError("공개 근거는 화면에서 중복 없이 최대 4개를 고르세요")
+    if not public_evidence_ids:
+        return []
+    latest = {item["id"]: item for item in _checked_public_references(card.get("public_evidence", []))}
+    if any(key not in latest for key in public_evidence_ids):
+        raise WorkflowError("기획의 공개 근거가 변경되었습니다. 다시 확인한 뒤 선택하세요")
+    return [latest[key] for key in public_evidence_ids]
+
+
+def approved_public_references(article):
+    if "approved_public_evidence" not in article and "approved_public_evidence_hash" not in article:
+        return []
+    references = _checked_public_references(article.get("approved_public_evidence"))
+    if not references or digest(references) != article.get("approved_public_evidence_hash"):
+        raise WorkflowError("기획 승인⓪의 공개 근거 판본이 일치하지 않습니다")
+    return references
+
+
 def set_idea_sources(store, idea_id, source_urls, *, expected_hash, operator_verified, lessons=()):
     """선택 전 출처를 운영자 확인으로 보완한다. 본문 열람·독립 검증·기획 선택은 수행하지 않는다."""
     if operator_verified is not True:
@@ -118,6 +212,7 @@ def set_idea_sources(store, idea_id, source_urls, *, expected_hash, operator_ver
             raise WorkflowError("기획이 변경되었습니다. 현재 기획을 다시 불러온 뒤 출처를 확인하세요")
         updated = score_idea({**stored, "source_url": urls[0], "source_urls": urls,
                               "primary_sources": len(urls), "operator_verified_sources": len(urls)}, lessons=lessons)
+        updated.pop("public_evidence", None)
         key = store._idea_key(updated)
         if db.execute("SELECT id FROM ideas WHERE dedup_key=? AND id<>?", (key, idea_id)).fetchone():
             raise WorkflowError("같은 제목과 대표 출처의 기획이 이미 있습니다. 기존 기획을 확인하세요")
@@ -126,17 +221,10 @@ def set_idea_sources(store, idea_id, source_urls, *, expected_hash, operator_ver
     return with_edit_hash(updated)
 
 
-def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=()):
+def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=(), public_evidence_ids=None):
     """읽은 기획 판본의 선택과 작업 생성을 한 번에 저장한다. 출처 편집과 같은 DB 잠금을 쓴다."""
     with store.connection(transaction=True) as db:
-        row = db.execute("SELECT state,data FROM ideas WHERE id=?", (idea_id,)).fetchone()
-        if not row:
-            raise WorkflowError("기획을 찾을 수 없습니다")
-        stored = json.loads(row["data"])
-        if row["state"] != "candidate" or stored.get("state") != "candidate":
-            raise WorkflowError("이미 선택한 기획입니다. 기존 작업을 확인하세요")
-        if digest(stored) != expected_hash:
-            raise WorkflowError("기획이 변경되었습니다. 출처와 내용을 다시 확인한 뒤 선택하세요")
+        stored = _reviewable_candidate(db, idea_id, expected_hash)
         refreshed = score_idea(stored, lessons=lessons)
         if refreshed.get("blocked"):
             raise WorkflowError("정책·근거 검사에서 막힌 기획은 선택할 수 없습니다")
@@ -145,7 +233,17 @@ def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=()):
         except ValueError as error:
             raise WorkflowError("기획을 선택하려면 공개 https 출처 URL이 필요합니다") from error
         selected = {**refreshed, "state": "selected", "selected_by": actor, "selected_at": now()}
+        article = {"id": idea_id, "title": selected["title"], "url": selected["source_url"], "origin": "idea", "evidence": []}
+        event = {"idea_id": idea_id, "actor": actor}
+        references = _selected_public_references(stored, public_evidence_ids)
+        if references:
+            reference_hash = digest(references)
+            article.update(approved_public_evidence=references, approved_public_evidence_hash=reference_hash)
+            selected.update(approved_public_evidence_ids=public_evidence_ids, approved_public_evidence_hash=reference_hash)
+            event.update(approved_public_evidence_count=len(references), approved_public_evidence_hash=reference_hash)
         db.execute("UPDATE ideas SET state='selected',data=?,updated_at=? WHERE id=?", (canonical(selected), now(), idea_id))
-        store._event(db, "idea_selected", {"idea_id": idea_id, "actor": actor})
-        job = store._create_job(db, {"id": idea_id, "title": selected["title"], "url": selected["source_url"], "origin": "idea", "evidence": []}, brief=selected.get("brief"))
+        store._event(db, "idea_selected", event)
+        job = store._create_job(db, article, brief=selected.get("brief"))
+        if references and approved_public_references(job["article"]) != references:
+            raise WorkflowError("기존 작업과 기획의 승인 근거가 다릅니다. 기존 작업을 확인하세요")
     return {"idea": selected, "job": job}

@@ -389,3 +389,57 @@ for(const width of [375,1440])test(`승인 최종확인 ${width}px에서도 긴 
  await confirm.getByRole('button',{name:'취소',exact:true}).click();await confirm.getByRole('button',{name:'돌아가기',exact:true}).click();
  expect(writes).toEqual([]);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+
+test('공개 원문 문단 검색과 사용자 선택을 새 기획 판본에 연결한다', async ({ page }) => {
+  const { writes, old } = await newsJobHarness(page);
+  const first = { id: 'a'.repeat(64), title: '원문 A', url: 'https://example.org/evidence-a', paragraph: 4, quote: '승인할 첫 번째 원문 문단입니다.', source_sha256: 'b'.repeat(64), quote_sha256: 'c'.repeat(64) };
+  const second = { ...first, id: 'd'.repeat(64), title: '원문 B', url: 'https://example.edu/evidence-b', paragraph: 9, quote: '확인할 두 번째 원문 문단입니다.' };
+  const initial = 'e'.repeat(64);
+  const afterFirst = 'f'.repeat(64);
+  const afterSecond = '1'.repeat(64);
+  const failedReads: string[] = [];
+  page.on('response', (response) => {
+    if (response.status() >= 400 && response.request().method() === 'GET') failedReads.push(new URL(response.url()).pathname);
+  });
+  let idea = { id: 'public-sample', title: '공개 원문 검증 기획', source_url: 'https://example.org/primary', state: 'candidate', blocked: [], reasons: [], score: 60, outlier_band: 'normal', edit_hash: initial, public_evidence: undefined as (typeof first)[] | undefined };
+  await page.route('**/api/briefs', route => route.fulfill({ json: { default: '', presets: [] } }));
+  await page.route('**/api/questions', route => route.fulfill({ json: { questions: [], groups: [] } }));
+  await page.route('**/api/jobs/job-recent', route => route.fulfill({ json: { ...old, id: 'job-recent' } }));
+  await page.route('**/api/ideas', route => route.fulfill({ json: { ideas: [idea] } }));
+  await page.route('**/api/ideas/public-sample/public-evidence', async route => {
+    writes.push({ path: '/api/ideas/public-sample/public-evidence', body: route.request().postDataJSON() });
+    idea = { ...idea, edit_hash: idea.edit_hash === initial ? afterFirst : afterSecond, public_evidence: [first, second] };
+    await route.fulfill({ json: idea });
+  });
+  await page.route('**/api/ideas/public-sample/select', async route => {
+    writes.push({ path: '/api/ideas/public-sample/select', body: route.request().postDataJSON() });
+    idea = { ...idea, state: 'selected' };
+    await route.fulfill({ json: { idea, job: old } });
+  });
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/plans');
+  const panel = page.getByRole('region', { name: '공개 원문 검증 기획 공개 원문 근거' });
+  await panel.getByRole('button', { name: '공개 원문 근거 찾기', exact: true }).click();
+  await expect(panel.getByText(first.quote, { exact: true })).toBeVisible();
+  await expect(panel.getByText(second.quote, { exact: true })).toBeVisible();
+  await expect(panel.getByRole('link', { name: '원문 B 원문 열기' })).toHaveAttribute('href', second.url);
+  const firstChoice = panel.getByRole('checkbox', { name: '원문 A · 문단 4' });
+  const secondChoice = panel.getByRole('checkbox', { name: '원문 B · 문단 9' });
+  await expect(firstChoice).not.toBeChecked();
+  await expect(secondChoice).not.toBeChecked();
+  await firstChoice.check();
+  await panel.getByRole('button', { name: '공개 원문 근거 다시 찾기', exact: true }).click();
+  await expect(firstChoice).not.toBeChecked();
+  await expect(secondChoice).not.toBeChecked();
+  await secondChoice.check();
+  expect(writes).toEqual([
+    { path: '/api/ideas/public-sample/public-evidence', body: { expected_hash: initial } },
+    { path: '/api/ideas/public-sample/public-evidence', body: { expected_hash: afterFirst } },
+  ]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(failedReads).toEqual([]);
+  await page.getByRole('button', { name: '이 기획으로 작업 만들기', exact: true }).click();
+  await expect.poll(() => writes.length).toBe(3);
+  expect(writes[2]).toEqual({ path: '/api/ideas/public-sample/select', body: { expected_hash: afterSecond, public_evidence_ids: [second.id] } });
+});

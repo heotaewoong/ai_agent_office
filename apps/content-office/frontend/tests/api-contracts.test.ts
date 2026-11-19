@@ -198,3 +198,33 @@ test("수동 리드 등록은 명시한 동의 목적을 그대로 전송하고 
   await api.addLead({ ...lead, consent_purpose: "newsletter" });
   assert.deepEqual(bodies, [{ ...lead, consent_purpose: "lead_magnet_delivery" }, { ...lead, consent_purpose: "newsletter" }]);
 });
+
+test("공개 근거 검색은 현재 기획 판본만 전송하고 기획을 선택하지 않는다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const expected = "a".repeat(64);
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    assert.equal(String(input), "/api/ideas/idea%20a%2F1/public-evidence");
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), { expected_hash: expected });
+    return Response.json({ id: "idea a/1", edit_hash: "b".repeat(64), public_evidence: [] });
+  };
+  const updated = await api.searchIdeaPublicEvidence("idea a/1", expected);
+  assert.deepEqual(updated.public_evidence, []);
+});
+
+test("공개 근거 ID는 명시적으로 고른 항목만 기획 선택⓪ 요청에 들어간다", async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => { globalThis.fetch = originalFetch; });
+  const expected = "b".repeat(64);
+  const selected = "d".repeat(64);
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === "/api/session") return Response.json({ csrf: "isolated-contract-token" });
+    assert.equal(String(input), "/api/ideas/idea%20read/select");
+    assert.equal(init?.method, "POST");
+    assert.deepEqual(JSON.parse(String(init?.body)), { expected_hash: expected, public_evidence_ids: [selected] });
+    return Response.json({ idea: { id: "idea read" }, job: { id: "job-one" } });
+  };
+  assert.equal((await api.selectIdea("idea read", expected, [selected])).job.id, "job-one");
+});

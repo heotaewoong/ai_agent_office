@@ -274,17 +274,19 @@ export const api = {
   addIdea: (input: IdeaInput) => request<Idea>("/ideas", "POST", input),
   updateIdeaSources: (id: string, input: IdeaSourcesInput) =>
     request<Idea>(`/ideas/${encodeURIComponent(id)}/sources`, "PUT", input),
+  searchIdeaPublicEvidence: (id: string, expectedHash: string) =>
+    request<Idea>(`/ideas/${encodeURIComponent(id)}/public-evidence`, "POST", { expected_hash: expectedHash }),
   uploadStudioCsv: (body: {
     channel: SnapshotChannel;
     period: SnapshotPeriod;
     csv: string;
     job_id?: string;
   }) => request<StudioCsvResult>("/analytics/studio-csv", "POST", body),
-  selectIdea: (id: string, expectedHash: string) =>
+  selectIdea: (id: string, expectedHash: string, publicEvidenceIds: readonly string[] = []) =>
     request<{ idea: Idea; job: Job }>(
       `/ideas/${encodeURIComponent(id)}/select`,
       "POST",
-      { expected_hash: expectedHash },
+      { expected_hash: expectedHash, ...(publicEvidenceIds.length ? { public_evidence_ids: publicEvidenceIds } : {}) },
     ),
   setPackaging: (jobId: string, brief: PackagingBrief) =>
     request(`/jobs/${encodeURIComponent(jobId)}/packaging`, "POST", brief),

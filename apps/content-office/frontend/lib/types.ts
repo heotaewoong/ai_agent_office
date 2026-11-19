@@ -427,12 +427,23 @@ export type KnowledgeSearch = {
 export type DiagnosticCheck = {id:string;label:string;passed:boolean;detail:string};
 export type ContentDiagnostics = {source_hash?:string|null;analysis:{blog:DiagnosticCheck[];social:Record<string,DiagnosticCheck[]>;note:string}|null};
 
+export type IdeaPublicEvidence = {
+  id: string;
+  url: string;
+  title: string;
+  paragraph: number;
+  quote: string;
+  source_sha256: string;
+  quote_sha256: string;
+};
+
 export type Idea = {
   id: string;
   title: string;
   source_url?: string | null;
   source_urls?: string[];
   operator_verified_sources?: number;
+  public_evidence?: IdeaPublicEvidence[];
   edit_hash?: string;
   state: "candidate" | "selected";
   score: number;
