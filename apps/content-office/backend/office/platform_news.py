@@ -280,7 +280,7 @@ def _unique(platform, rows, metric=None):
 
 def _sort_key(row, metric=None):
     return (row["metrics"].get(metric, -1), bool(row["published_at"]),
-            row["published_at"] or row["observed_at"] or "", row["url"])
+            row["published_at"] or row["observed_at"] or "")
 
 
 def _creator_key(platform, row):
@@ -298,7 +298,8 @@ def _creator_key(platform, row):
 
 
 def _select(platform, rows, metric=None):
-    ranked = sorted(_unique(platform, rows, metric), key=lambda row: _sort_key(row, metric), reverse=True)
+    ranked = sorted(rows, key=lambda row: row["url"])
+    ranked.sort(key=lambda row: _sort_key(row, metric), reverse=True)
     result, creators = [], {}
     for row in ranked:
         creator = _creator_key(platform, row)
