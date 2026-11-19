@@ -1,4 +1,4 @@
-"""Build the public article index from an explicitly reviewed URL list and saved evidence."""
+"""Build the public index from saved article snapshots and reviewed body paragraphs."""
 
 import argparse
 import fcntl
@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 
 MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 REPO = "models--Qdrant--paraphrase-multilingual-MiniLM-L12-v2-onnx-Q"
+MODEL_REVISION = "faf4aa4225822f3bc6376869cb1164e8e3feedd0"
 DIMENSIONS = 384
 TOKEN_LIMIT = 112
 
@@ -87,16 +88,27 @@ def source_snapshots(evidence_dir, urls):
     return latest
 
 
-def load_passages(snapshots, titles, tokenizer):
+def load_passages(snapshots, titles, tokenizer, reviewed):
     unique = {}
+    if reviewed.keys() != snapshots.keys():
+        raise ValueError("Every source needs an explicit reviewed body-paragraph list.")
     for url, report in sorted(snapshots.items()):
         title = titles.get(source_location(url))
         if not title:
             raise ValueError("A reviewed source has no matching article title.")
         source_hash = report["source_sha256"]
+        selected = reviewed[url]
+        if selected.get("source_sha256") != source_hash:
+            raise ValueError("The source snapshot has changed and needs a new body review.")
+        selected = selected["paragraphs"]
+        seen = set()
         for number, text in enumerate(report["paragraphs"], 1):
-            if not isinstance(text, str) or not text.strip():
+            key = str(number)
+            if key not in selected:
                 continue
+            if not isinstance(text, str) or not text.strip() or sha(text) != selected[key]:
+                raise ValueError("The source paragraph no longer matches its body review.")
+            seen.add(key)
             offsets = tokenizer.encode(text, add_special_tokens=False).offsets
             for start in range(0, len(offsets), TOKEN_LIMIT):
                 first = offsets[start][0]
@@ -105,8 +117,10 @@ def load_passages(snapshots, titles, tokenizer):
                 if quote and len(quote) <= 1800:
                     eid = fingerprints(url, source_hash, number, quote)
                     unique.setdefault(eid, (url, title, number, quote, source_hash))
-    if not unique or len(unique) > 4096:
-        raise ValueError("The reviewed corpus must contain 1–4,096 public passages.")
+        if seen != selected.keys():
+            raise ValueError("The reviewed paragraph number does not exist in the source.")
+    if len({row[0] for row in unique.values()}) < 2 or len(unique) > 4096:
+        raise ValueError("The corpus needs at least two distinct sources and at most 4,096 passages.")
     return unique
 
 
@@ -126,16 +140,14 @@ def build(state):
         raise ValueError("Every reviewed URL needs a recorded public title.")
     for url, title in saved_titles.items():
         titles.setdefault(source_location(url), title.strip())
-    revision = (cache / REPO / "refs" / "main").read_text().strip()
-    if not re.fullmatch(r"[0-9a-f]{40}", revision):
-        raise ValueError("Invalid offline tokenizer revision.")
-    checkpoint = cache / REPO / "snapshots" / revision
+    checkpoint = cache / REPO / "snapshots" / MODEL_REVISION
     if not all((checkpoint / name).is_file() for name in ("model_optimized.onnx", "tokenizer.json", "config.json", "tokenizer_config.json", "special_tokens_map.json")):
         raise ValueError("The offline MiniLM snapshot is incomplete.")
     tokenizer = Tokenizer.from_file(str(checkpoint / "tokenizer.json"))
     tokenizer.no_truncation()
     tokenizer.no_padding()
-    passages = load_passages(snapshots, titles, tokenizer)
+    reviewed = json.loads((dest / "public-reviewed-paragraphs.json").read_text(encoding="utf-8"))
+    passages = load_passages(snapshots, titles, tokenizer, reviewed)
     corpus_hash = sha("\n".join(sorted(passages)))
 
     with open(dest / "query.lock", "a+b") as lock:
@@ -172,8 +184,9 @@ def build(state):
         finally:
             if tmp.exists():
                 tmp.unlink()
-    print(json.dumps({"articles": len(snapshots), "passages": len(passages), "corpus_sha256": corpus_hash,
-                      "model_revision": revision, "dimensions": DIMENSIONS}))
+    print(json.dumps({"articles": len({row[0] for row in passages.values()}), "passages": len(passages),
+                      "corpus_sha256": corpus_hash,
+                      "model_revision": MODEL_REVISION, "dimensions": DIMENSIONS}))
 
 
 if __name__ == "__main__":
