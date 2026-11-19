@@ -702,7 +702,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
               </div>
               {view === "news" && <nav className="news-segments" aria-label="소식 보기" style={{ marginBottom: 24 }}>
                 <Link href={search.has('seg') ? newsHref(segment, articleSort) : `/news?sort=${articleSort}`} scroll={false} prefetch={false} aria-current={officialNews ? 'page' : undefined}>공식 뉴스</Link>
-                <Link href={newsHref(segment, articleSort, 'platforms')} scroll={false} prefetch={false} aria-current={!officialNews ? 'page' : undefined}>플랫폼 소식</Link>
+                <Link href={search.has('seg') ? newsHref(segment, articleSort, 'platforms') : `/news?tab=platforms&sort=${articleSort}`} scroll={false} prefetch={false} aria-current={!officialNews ? 'page' : undefined}>플랫폼 소식</Link>
               </nav>}
               <div hidden={view !== "news" || !officialNews}>
               {(view === "news" || newsVisited) && (
