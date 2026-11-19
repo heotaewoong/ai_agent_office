@@ -344,15 +344,19 @@ class Store:
         self._event(db, "source_input_saved", {"source_input_hash": digest(text), "version": version, "preserve_original": preserve_original, "role": "연구"}, job_id)
         return self._write_job(db, job)
 
-    def add_draft(self, job_id, draft, *, expected_source_hash=_UNSET):
+    def add_draft(self, job_id, draft, *, expected_source_hash=_UNSET, expected_evidence_hash=_UNSET):
         """Keep an editorial draft beside the job. It never changes source, approvals or outputs."""
         if not draft.get("title") or not draft.get("body"):
             raise WorkflowError("초안 제목과 본문이 필요합니다")
         identity={"job_id": job_id, "title": draft["title"], "body": draft["body"], "video": draft.get("video")}
         if draft.get('assets'):identity.update(assets=draft['assets'],source_hash_snapshot=draft.get('source_hash_snapshot'))
+        if expected_evidence_hash is not _UNSET:
+            identity["approved_public_evidence_hash"] = expected_evidence_hash
         draft_id = "draft_" + digest(identity)[:16]
         with self.connection(transaction=True) as db:
             current=self._job(db, job_id)
+            if expected_evidence_hash is not _UNSET and current["article"].get("approved_public_evidence_hash") != expected_evidence_hash:
+                raise WorkflowError("초안을 저장하는 동안 승인한 공개 근거가 변경되었습니다")
             if expected_source_hash is not _UNSET and current.get('source_hash')!=expected_source_hash:
                 raise WorkflowError('편집 결과를 연결하는 동안 원고 판본이 변경되었습니다')
             row = db.execute("SELECT data FROM drafts WHERE id=?", (draft_id,)).fetchone()

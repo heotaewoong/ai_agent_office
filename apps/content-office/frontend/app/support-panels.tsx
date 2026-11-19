@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import type { Action, Idea, IdeaPublicEvidence, Job, JobBudget, JobMetadata, KnowledgeSearch, Task, OutputKind } from "../lib/types";
@@ -17,6 +18,7 @@ import { IdeaSourcesPanel } from "./idea-sources-panel";
 import type { IdeaSourcesDraft } from "../lib/ideas";
 import { benchmarkPublicUrl } from "../lib/benchmarks";
 import { packagingRequired } from "../lib/packaging";
+import { officeHref } from "../lib/navigation";
 
 export type IntakeDraft = {
   text: string;
@@ -630,7 +632,8 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
   const [busy, setBusy] = useState<{ id: string; action: "search" | "choose" } | null>(null);
   const [editingSources, setEditingSources] = useState<Record<string, boolean>>({});
   const [evidenceSelections, setEvidenceSelections] = useState<Record<string, { hash: string; ids: string[] }>>({});
-  const [searchFailure, setSearchFailure] = useState<{ id: string; message: string } | null>(null);
+  const [evidenceFailure, setEvidenceFailure] = useState<{ id: string; message: string } | null>(null);
+  const [evidenceApproval, setEvidenceApproval] = useState<{ ideaId: string; jobId: string } | null>(null);
   const readTicket = useRef(0);
   const writing = useRef(false);
   const focusedFragment = useRef("");
@@ -673,22 +676,36 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
     target.focus({ preventScroll: true });
     target.scrollIntoView({ block: "start" });
   }, [active, ideas]);
-  function canEditIdea(idea: Idea) {
-    return idea.state === "candidate" && !editingSources[idea.id] && !drafts[idea.id]?.dirty && /^[a-f0-9]{64}$/.test(idea.edit_hash ?? "");
+  function canReviewEvidence(idea: Idea) {
+    return (idea.state === "candidate" || idea.public_evidence_reviewable === true)
+      && !editingSources[idea.id] && !drafts[idea.id]?.dirty && /^[a-f0-9]{64}$/.test(idea.edit_hash ?? "");
+  }
+
+  function acceptSavedIdea(previous: Idea, saved: Idea) {
+    readTicket.current++;
+    setIdeas((cards) => cards.map((card) => card.id === saved.id ? saved : card));
+    const hash = saved.edit_hash;
+    if (!hash) return;
+    const currentIds = new Set(saved.public_evidence?.map((item) => item.id));
+    setEvidenceSelections((selections) => {
+      const prior = selections[saved.id];
+      if (!prior || prior.hash !== previous.edit_hash) return selections;
+      return { ...selections, [saved.id]: { hash, ids: prior.ids.filter((id) => currentIds.has(id)) } };
+    });
   }
 
   async function searchPublicEvidence(idea: Idea) {
-    if (writing.current || !canEditIdea(idea)) return;
+    if (writing.current || !canReviewEvidence(idea)) return;
     writing.current = true;
     readTicket.current++;
     setBusy({ id: idea.id, action: "search" });
-    setSearchFailure(null);
+    setEvidenceFailure(null);
+    setEvidenceApproval(null);
     try {
       const saved = await api.searchIdeaPublicEvidence(idea.id, idea.edit_hash!);
-      readTicket.current++;
-      setIdeas((cards) => cards.map((card) => card.id === saved.id ? saved : card));
+      acceptSavedIdea(idea, saved);
     } catch (cause) {
-      setSearchFailure({ id: idea.id, message: cause instanceof Error ? cause.message : "공개 근거를 검색하지 못했습니다." });
+      setEvidenceFailure({ id: idea.id, message: cause instanceof Error ? cause.message : "공개 근거를 검색하지 못했습니다." });
       await load();
     } finally {
       writing.current = false;
@@ -697,17 +714,32 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
   }
 
   async function choose(idea: Idea, evidenceIds: string[]) {
-    if (writing.current || !canEditIdea(idea) || idea.blocked.length > 0) return;
+    const reviewing = idea.state === "selected";
+    if (writing.current || !canReviewEvidence(idea) || idea.blocked.length > 0 || (reviewing && evidenceIds.length === 0)) return;
     writing.current = true;
     readTicket.current++;
     setBusy({ id: idea.id, action: "choose" });
     setError("");
+    setEvidenceFailure(null);
+    setEvidenceApproval(null);
     try {
-      const result = await api.selectIdea(idea.id, idea.edit_hash!, evidenceIds);
-      onSelected?.(result.job);
-      await load();
+      if (reviewing) {
+        const result = await api.approveIdeaPublicEvidence(idea.id, idea.edit_hash!, evidenceIds);
+        acceptSavedIdea(idea, result.idea);
+        setEvidenceApproval({ ideaId: idea.id, jobId: result.job.id });
+      } else {
+        const result = await api.selectIdea(idea.id, idea.edit_hash!, evidenceIds);
+        onSelected?.(result.job);
+        await load();
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "기획을 선택하지 못했습니다.");
+      const message = cause instanceof Error ? cause.message : reviewing ? "선택한 근거를 반영하지 못했습니다." : "기획을 선택하지 못했습니다.";
+      if (reviewing) {
+        setEvidenceFailure({ id: idea.id, message });
+        await load();
+      } else {
+        setError(message);
+      }
     } finally {
       writing.current = false;
       setBusy(null);
@@ -740,8 +772,11 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
             else evidenceGroups.set(label, [item]);
           }
           const pendingClaims = claims.filter((claim) => !claim.evidence_ids.some((id) => publicEvidence?.some((item) => item.id === id)));
-          const selectedIds = storedSelection && storedSelection.hash === idea.edit_hash ? storedSelection.ids : [];
-          const canEdit = canEditIdea(idea) && busy === null;
+          const selectedIds = (storedSelection && storedSelection.hash === idea.edit_hash
+            ? storedSelection.ids : idea.approved_public_evidence_ids ?? [])
+            .filter((id) => publicEvidence?.some((item) => item.id === id));
+          const canEdit = canReviewEvidence(idea) && busy === null;
+          const canReapprove = idea.state === "selected" && idea.public_evidence_reviewable === true;
           const searching = busy?.id === idea.id && busy.action === "search";
           return <li key={idea.id} id={idea.id} tabIndex={-1} className="outline-target">
             <strong>{idea.title}</strong> · {idea.score}점 · 이상치 {idea.outlier_band}
@@ -789,19 +824,18 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
               onDraftChange={onDraftChange}
               onEditingChange={sourceEditing}
               onSaved={(saved) => {
-                readTicket.current++;
-                setIdeas((cards) => cards.map((card) => card.id === saved.id ? saved : card));
+                acceptSavedIdea(idea, saved);
                 void load();
               }}
             />
             {editingSources[idea.id] && <p role="status">출처를 저장하거나 입력을 정리한 뒤 기획을 선택하세요.</p>}
-            {idea.state === "candidate" && (
+            {(idea.state === "candidate" || canReapprove || evidenceApproval?.ideaId === idea.id) && (
               <section className="idea-public-evidence" aria-label={`${idea.title} 공개 원문 근거`}>
                 <button className="button secondary" type="button" disabled={!canEdit} onClick={() => void searchPublicEvidence(idea)}>
                   {origin || discovery || publicEvidence ? "공개 원문 근거 다시 찾기" : "공개 원문 근거 찾기"}
                 </button>
                 {searching && <p role="status">{origin ? "이 기획에 맞는 공개 원문을 찾고 있습니다." : "저장된 공개 원문을 검색하고 있습니다."}</p>}
-                {searchFailure?.id === idea.id && <p role="alert">{searchFailure.message}</p>}
+                {evidenceFailure?.id === idea.id && <p role="alert">{evidenceFailure.message}</p>}
                 {!searching && discovery && <p role="status">
                   {discovery.status === "ready" && "공개 원문에서 확인할 근거를 찾았습니다."}
                   {discovery.status === "insufficient" && "공개 원문 근거가 더 필요합니다."}
@@ -814,7 +848,7 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                 </ul>}
                 {publicEvidence && publicEvidence.length > 0 && (
                   <fieldset disabled={!canEdit}>
-                    <legend>기획 선택⓪에서 원고에 넘길 근거</legend>
+                    <legend>{canReapprove ? "기존 작업의 원고에 연결할 근거" : "기획 선택⓪에서 원고에 넘길 근거"}</legend>
                     {idea.blocked.includes("1차 출처 없음") && <p className="muted">관련 원문을 직접 확인한 뒤 위의 ‘출처 확인·보완’에 대표 출처를 저장하세요.</p>}
                     {[...evidenceGroups].map(([label, items]) => <div key={label}>
                       {label && <p><strong>{label}</strong></p>}
@@ -836,12 +870,20 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                     </div>)}
                   </fieldset>
                 )}
+                {canReapprove && <button className="button primary" type="button"
+                  disabled={!canEdit || idea.blocked.length > 0 || selectedIds.length === 0}
+                  onClick={() => void choose(idea, selectedIds)}>
+                  선택한 근거를 승인⓪에 반영
+                </button>}
+                {evidenceApproval?.ideaId === idea.id && <p role="status">
+                  선택한 근거를 기존 작업에 연결했습니다. <Link href={officeHref("studio", evidenceApproval.jobId)}>기존 작업 열기</Link>
+                </p>}
               </section>
             )}
             <button
               className="button secondary"
               type="button"
-              disabled={idea.blocked.length > 0 || !canEdit}
+              disabled={idea.state === "selected" || idea.blocked.length > 0 || !canEdit}
               onClick={() => void choose(idea, selectedIds)}
             >
               {idea.state === "selected" ? "선택됨" : "이 기획으로 작업 만들기"}

@@ -190,3 +190,57 @@ def test_suggestions_never_satisfy_primary_source_gate_or_choose_for_operator(sc
     result = client.post(root + "/select", headers=headers, json={"expected_hash": found["edit_hash"]})
     assert result.status_code == 200
     assert "approved_public_evidence" not in result.json()["job"]["article"]
+def test_selected_platform_idea_approves_evidence_on_existing_job_only(scope):
+    store, client, headers, idea, hits, _ = scope
+    root = f"/api/ideas/{idea['id']}"
+    chosen = client.post(root + "/select", headers=headers, json={"expected_hash": digest(idea)}).json()
+    old_job = chosen["job"]
+    old_events = store.events()
+    budget = store.budget()
+    route = root + "/public-evidence"
+    listed = client.get("/api/ideas").json()["ideas"][0]
+    assert listed["public_evidence_reviewable"] is True
+    found = client.post(route, headers=headers, json={"expected_hash": listed["edit_hash"]}).json()
+    assert found["state"] == "selected" and found["public_evidence"] == hits
+    keys = [hits[1]["id"]]
+    request = {"expected_hash": found["edit_hash"], "public_evidence_ids": keys}
+    assert client.post(route + "/approve", json=request).status_code == 403
+    assert client.post(route + "/approve", headers=headers, json={**request, "public_evidence_ids": []}).status_code == 409
+    assert client.post(route + "/approve", headers=headers, json={**request, "expected_hash": listed["edit_hash"]}).status_code == 409
+    approved = client.post(route + "/approve", headers=headers, json=request)
+    assert approved.status_code == 200, approved.text
+    result = approved.json()
+    assert result["idea"]["selected_at"] == chosen["idea"]["selected_at"]
+    assert result["idea"]["approved_public_evidence_ids"] == keys
+    job = store.job(old_job["id"])
+    assert job["article"]["approved_public_evidence"] == [hits[1]]
+    evidence_hash = job["article"]["approved_public_evidence_hash"]
+    assert result["job"]["id"] == old_job["id"] and len(store.jobs()) == 1
+    assert {k: v for k, v in job.items() if k not in ("article", "updated_at")} == {k: v for k, v in old_job.items() if k not in ("article", "updated_at")}
+    assert all(event in store.events() for event in old_events)
+
+    preview = f"/api/jobs/{old_job['id']}/drafts/evidence-preview"
+    draft_request = {"title": "근거 인용 검토 원고", "body": "공개 문서의 핵심 사실을 설명합니다 [E1].", "expected_evidence_hash": evidence_hash}
+    assert client.post(preview, headers=headers, json={**draft_request, "body": "인용 없음"}).status_code == 409
+    assert client.post(preview, headers=headers, json={**draft_request, "expected_evidence_hash": "0" * 64}).status_code == 409
+    draft_response = client.post(preview, headers=headers, json=draft_request)
+    assert draft_response.status_code == 200, draft_response.text
+    draft = draft_response.json()
+    assert draft["status"] == "unapproved_draft"
+    assert draft["evidence"][0]["source_quote"] == hits[1]["quote"]
+    html = client.get(f"/api/jobs/{old_job['id']}/drafts/{draft['id']}/preview").text
+    body, heading, sources = html.partition("출처와 확인 범위")
+    assert heading and "공개 문서의 핵심 사실을 설명합니다 [E1]." in body
+    assert f'<a href="{hits[1]["url"]}"' in sources
+    assert client.post(preview, headers=headers, json=draft_request).json()["id"] == draft["id"]
+    assert store.job(old_job["id"]) == job and len(store.drafts(old_job["id"])) == 1
+    assert store.budget() == budget and not store.tasks()
+    with store.connection() as db:
+        assert db.execute("SELECT count(*) FROM approvals").fetchone()[0] == 0
+        assert db.execute("SELECT count(*) FROM costs").fetchone()[0] == 0
+
+    store.enqueue("draft", {"job_id": old_job["id"]}, key="fixture-queued")
+    assert client.get("/api/ideas").json()["ideas"][0]["public_evidence_reviewable"] is False
+    current = result["idea"]["edit_hash"]
+    assert client.post(route, headers=headers, json={"expected_hash": current}).status_code == 409
+    assert client.post(route + "/approve", headers=headers, json={**request, "expected_hash": current}).status_code == 409

@@ -278,6 +278,11 @@ export const api = {
     request<Idea>(`/ideas/${encodeURIComponent(id)}/sources`, "PUT", input),
   searchIdeaPublicEvidence: (id: string, expectedHash: string) =>
     request<Idea>(`/ideas/${encodeURIComponent(id)}/public-evidence`, "POST", { expected_hash: expectedHash }),
+  approveIdeaPublicEvidence: (id: string, expectedHash: string, evidenceIds: readonly string[]) =>
+    request<{ idea: Idea; job: Job }>(
+      `/ideas/${encodeURIComponent(id)}/public-evidence/approve`, "POST",
+      { expected_hash: expectedHash, public_evidence_ids: evidenceIds },
+    ),
   uploadStudioCsv: (body: {
     channel: SnapshotChannel;
     period: SnapshotPeriod;

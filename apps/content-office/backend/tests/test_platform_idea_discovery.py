@@ -69,15 +69,13 @@ def test_platform_save_resolves_observation_and_researches_before_approval(tmp_p
     })
     assert response.status_code == 200, response.text
     reviewed = response.json()
-    assert "public_discovery" not in reviewed and "public_evidence" not in reviewed
+    assert reviewed["public_discovery"] == saved["public_discovery"] and reviewed["public_evidence"] == [evidence]
     assert client.post(idea_route + "/select", headers=headers, json=approve).status_code == 409
-    refreshed = client.post(idea_route + "/public-evidence", headers=headers,
-                            json={"expected_hash": reviewed["edit_hash"]}).json()
     approved = client.post(idea_route + "/select", headers=headers, json={
-        "expected_hash": refreshed["edit_hash"], "public_evidence_ids": [evidence["id"]],
+        "expected_hash": reviewed["edit_hash"], "public_evidence_ids": [evidence["id"]],
     })
     assert approved.status_code == 200, approved.text
     assert approved.json()["job"]["article"]["approved_public_evidence"] == [evidence]
     prior = store.ideas()[0]
     assert client.post(route, headers=headers, json=payload).json()["idea"]["state"] == "selected"
-    assert store.ideas()[0] == prior and len(calls) == 3 and not store.tasks() and store.budget() == budget
+    assert store.ideas()[0] == prior and len(calls) == 2 and not store.tasks() and store.budget() == budget

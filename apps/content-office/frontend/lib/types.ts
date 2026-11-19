@@ -444,6 +444,8 @@ export type Idea = {
   source_urls?: string[];
   operator_verified_sources?: number;
   public_evidence?: IdeaPublicEvidence[];
+  public_evidence_reviewable?: boolean;
+  approved_public_evidence_ids?: string[];
   platform_origin?: { platform: string; url: string; title: string; summary: string; observed_at: string | null };
   public_discovery?: {
     status: "ready" | "insufficient" | "unavailable";

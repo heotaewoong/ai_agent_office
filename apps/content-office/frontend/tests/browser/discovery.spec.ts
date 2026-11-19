@@ -492,3 +492,95 @@ test('공개 원문 문단 검색과 사용자 선택을 새 기획 판본에 �
   await expect.poll(() => writes.length).toBe(3);
   expect(writes[2]).toEqual({ path: '/api/ideas/public-sample/select', body: { expected_hash: afterSecond, public_evidence_ids: [second.id] } });
 });
+
+const earlierIdeaHash = 'e'.repeat(64);
+const updatedIdeaHash = 'f'.repeat(64);
+const checkedReferenceId = 'd'.repeat(64);
+
+async function evidenceReviewHarness(page: Page, selected: boolean) {
+  const writes: { path: string; body: unknown }[] = [];
+  const retained = { id: checkedReferenceId, url: 'https://example.org/source', title: '공식 문서', paragraph: 2, quote: '확인한 원문입니다.' };
+  const removed = { ...retained, id: 'b'.repeat(64), paragraph: 3, quote: '현재 문서에서 제외된 문단입니다.' };
+  const job = { id: 'job-existing-evidence' };
+  let idea = {
+    id: 'idea-evidence-regression', title: '새 출처의 게시물', state: selected ? 'selected' : 'candidate', score: 0, reasons: [],
+    source_url: selected ? retained.url : null, edit_hash: earlierIdeaHash, outlier_band: 'unknown',
+    blocked: selected ? [] : ['1차 출처 없음'],
+    public_evidence_reviewable: selected, public_evidence: selected ? [] : [retained, removed],
+    approved_public_evidence_ids: [] as string[],
+  };
+  await page.route('**/api/**', async route => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    const ideaPath = '/api/ideas/' + idea.id;
+    if (req.method() !== 'GET') writes.push({ path, body: req.postDataJSON() });
+    let body: unknown = {};
+    if (path === '/api/ideas') body = { ideas: [idea] };
+    else if (path === ideaPath + '/sources') {
+      idea = { ...idea, source_url: retained.url, blocked: [], edit_hash: updatedIdeaHash, public_evidence: [retained] };
+      body = idea;
+    } else if (path === ideaPath + '/public-evidence') {
+      idea = { ...idea, edit_hash: updatedIdeaHash, public_evidence: [retained] };
+      body = idea;
+    } else if (path === ideaPath + '/public-evidence/approve') {
+      idea = { ...idea, edit_hash: 'a'.repeat(64), approved_public_evidence_ids: [retained.id] };
+      body = { idea, job };
+    } else if (path === '/api/dashboard') {
+      body = {
+        articles: [], jobs: [], feeds: [], agents: [], events: [], tasks: [],
+        budget: { cap_krw: 10000, spent_krw: 0, reserved_krw: 0, remaining_krw: 10000 },
+        window: { status: 'closed', authorized_end: '2026-10-01T00:00:00Z' },
+        provider: { model: 'fixture', configured: false }, knowledge: {},
+      };
+    } else if (path === '/api/questions') body = { questions: [], groups: [] };
+    else if (path === '/api/channels') body = { channels: [] };
+    else if (path === '/api/briefs') body = { default: '', presets: [] };
+    else if (path === '/api/session') body = { csrf: 'contract-token' };
+    else if (path === '/api/jobs/summaries') body = { jobs: [] };
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
+  });
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto('/plans#' + idea.id);
+  return { writes, job, idea: page.locator('#' + idea.id) };
+}
+
+test('대표 출처 저장이 현재 응답에서 확인된 근거 체크만 유지한다', async ({ page }) => {
+  const { writes, idea } = await evidenceReviewHarness(page, false);
+  const retained = idea.getByRole('checkbox', { name: '공식 문서 · 문단 2' });
+  await retained.check();
+  await idea.getByRole('checkbox', { name: '공식 문서 · 문단 3' }).check();
+  await idea.getByText('출처 확인·보완', { exact: true }).click();
+  await idea.getByRole('textbox', { name: /공개 HTTPS 원출처 주소/ }).fill('https://example.org/source');
+  await idea.getByRole('checkbox', { name: /각 주소의 본문과 기획 관련성을 직접 확인했습니다/ }).check();
+  await idea.getByRole('button', { name: '확인한 출처 저장' }).click();
+  await expect(idea.getByText('막힌 이유: 1차 출처 없음')).toHaveCount(0);
+  await expect(idea.getByRole('checkbox', { name: '공식 문서 · 문단 3' })).toHaveCount(0);
+  await expect(retained).toBeChecked();
+  await expect(idea.getByRole('button', { name: '이 기획으로 작업 만들기' })).toBeEnabled();
+  expect(writes).toEqual([{
+    path: '/api/ideas/idea-evidence-regression/sources',
+    body: { expected_hash: earlierIdeaHash, source_urls: ['https://example.org/source'], operator_verified: true },
+  }]);
+});
+
+test('선택한 기획에서 근거만 다시 골라 같은 작업에 승인하고 재열람한다', async ({ page }) => {
+  const { writes, job, idea } = await evidenceReviewHarness(page, true);
+  await expect(idea.getByRole('button', { name: '선택됨' })).toBeDisabled();
+  await idea.getByRole('button', { name: /공개 원문 근거.*찾기/ }).click();
+  const evidence = idea.getByRole('checkbox', { name: '공식 문서 · 문단 2' });
+  await expect(evidence).not.toBeChecked();
+  const approve = idea.getByRole('button', { name: '선택한 근거를 승인⓪에 반영' });
+  await expect(approve).toBeDisabled();
+  await evidence.check();
+  await approve.click();
+  await expect(idea.getByText('선택한 근거를 기존 작업에 연결했습니다.')).toBeVisible();
+  await expect(idea.getByRole('link', { name: '기존 작업 열기' })).toHaveAttribute('href', '/scripts/' + job.id);
+  await page.reload();
+  await expect(evidence).toBeChecked();
+  await evidence.uncheck();
+  await expect(approve).toBeDisabled();
+  expect(writes).toEqual([
+    { path: '/api/ideas/idea-evidence-regression/public-evidence', body: { expected_hash: earlierIdeaHash } },
+    { path: '/api/ideas/idea-evidence-regression/public-evidence/approve', body: { expected_hash: updatedIdeaHash, public_evidence_ids: [checkedReferenceId] } },
+  ]);
+});

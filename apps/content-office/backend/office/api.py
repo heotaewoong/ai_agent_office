@@ -29,8 +29,8 @@ from .brand import load_brand
 from .briefs import DEFAULT_PRESET, build_brief, presets_payload
 from .gates import run_gates
 from .ideas import (
-    PUBLIC_EVIDENCE_LIMIT, approved_public_references, rank_ideas, refresh_idea_public_evidence,
-    score_idea, select_reviewed_idea, set_idea_sources, with_edit_hash,
+    PUBLIC_EVIDENCE_LIMIT, approve_existing_idea_evidence, approved_public_references, refresh_idea_public_evidence,
+    reviewable_ideas, score_idea, select_reviewed_idea, set_idea_sources,
 )
 from .packaging import attach_packaging, require_packaging
 from .space import project_space
@@ -249,6 +249,13 @@ class IdeaEvidenceRequest(BaseModel):
 
 class IdeaSelectionInput(IdeaEvidenceRequest):
     public_evidence_ids: list[str] = Field(default_factory=list, max_length=PUBLIC_EVIDENCE_LIMIT)
+
+
+class EvidenceDraftInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_evidence_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=20_000)
 
 
 class ThumbnailInput(BaseModel):
@@ -598,6 +605,11 @@ def create_app(store: Store | None = None):
     def set_job_budget(job_id: str, request: JobBudgetRequest):
         return store.set_job_budget(job_id, request.cap_krw, "local-operator", expected_hash=request.expected_hash)
 
+    @app.post("/api/jobs/{job_id}/drafts/evidence-preview")
+    def save_evidence_draft(job_id: str, draft: EvidenceDraftInput):
+        from .drafts import register_evidence_draft
+        return register_evidence_draft(store, job_id, **draft.model_dump())
+
     @app.get('/api/jobs/{job_id}/drafts/{draft_id}/preview')
     def draft_preview(job_id: str, draft_id: str):
         from .exports import blog_reader_html, blog_markdown, safe_fragment
@@ -606,7 +618,9 @@ def create_app(store: Store | None = None):
         if not draft:
             raise HTTPException(404, '초안을 찾을 수 없습니다')
         # Same reader and source list the blog export would produce from this draft.
-        packet = {**(job.get('source_packet') or {}), 'title': draft['title'], 'body': draft['body'], 'evidence': job['article'].get('evidence', [])}
+        basis = {} if draft.get('approved_public_evidence_hash') else (job.get('source_packet') or {})
+        packet = {**basis, 'title': draft['title'], 'body': draft['body'],
+                  'evidence': draft.get('evidence', job['article'].get('evidence', []))}
         # Resolve only registered image names; no arbitrary local paths or active HTML.
         import re
         from urllib.parse import quote
@@ -1077,7 +1091,7 @@ def create_app(store: Store | None = None):
 
     @app.get("/api/ideas")
     def list_ideas():
-        return {"ideas": rank_ideas([with_edit_hash(card) for card in store.ideas()], lessons=store.lessons("approved"))}
+        return {"ideas": reviewable_ideas(store, lessons=store.lessons("approved"))}
 
     @app.post("/api/ideas")
     def add_idea(idea: IdeaInput):
@@ -1108,6 +1122,12 @@ def create_app(store: Store | None = None):
     def find_idea_public_evidence(idea_id: str, body: IdeaEvidenceRequest):
         return refresh_idea_public_evidence(store, idea_id, expected_hash=body.expected_hash,
                                             lessons=store.lessons("approved"))
+
+    @app.post("/api/ideas/{idea_id}/public-evidence/approve")
+    def approve_idea_evidence(idea_id: str, body: IdeaSelectionInput):
+        return approve_existing_idea_evidence(store, idea_id, expected_hash=body.expected_hash,
+                                             actor="local-operator", lessons=store.lessons("approved"),
+                                             public_evidence_ids=body.public_evidence_ids)
 
     @app.post("/api/ideas/{idea_id}/select")
     def choose_idea(idea_id: str, body: IdeaSelectionInput):
