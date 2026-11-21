@@ -95,6 +95,24 @@ def register_folder(store, folder, job_id=None):
     return store.add_draft(job_id, draft)
 
 
+def register_evidence_draft(store, job_id, *, title, body, expected_evidence_hash):
+    from .editorial import _with_approved_public_references, cited_evidence_ids
+    from .ideas import approved_public_references
+
+    article = store.job(job_id)["article"]
+    references = approved_public_references(article)
+    if not references or article.get("approved_public_evidence_hash") != expected_evidence_hash:
+        raise WorkflowError("직접 승인한 근거의 현재 판본을 확인하세요")
+    evidence = _with_approved_public_references([], references)
+    if not title.strip() or set(cited_evidence_ids(body)) != {item["id"] for item in evidence}:
+        raise WorkflowError("원고 본문에 승인한 근거의 인용 번호를 모두 표시하세요")
+    return store.add_draft(job_id, {
+        "title": title.strip(), "body": body.strip(), "evidence": evidence,
+        "approved_public_evidence_hash": expected_evidence_hash,
+        "note": "선택⓪에서 승인한 근거를 연결한 비공개 검토 초안입니다. 모델 호출 없이 편집자가 작성했습니다.",
+    }, expected_evidence_hash=expected_evidence_hash)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("folders", nargs="+", help="article.md와 script.md가 있는 초안 폴더")

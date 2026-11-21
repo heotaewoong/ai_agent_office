@@ -148,3 +148,56 @@ def test_changed_original_body_keeps_both_private_evidence_receipts(tmp_path):
     second = collect_article_evidence({'id': 'fixture', 'title': '시험', 'url': 'https://example.com/ai', 'operator_source_text': TEXT + '\n\n새 원문의 확인 조건이 추가되었습니다.'}, ExtractingProvider(), tmp_path)
     assert first['source_sha256'] != second['source_sha256']
     assert len(list(tmp_path.glob('*.json'))) == 2
+
+
+class CapturingResearch(ExtractingProvider):
+    def generate(self, role, messages, schema, options=None):
+        self.calls = getattr(self, "calls", 0) + 1
+        self.supplied = json.loads(messages[1]["content"])
+        self.role = role
+        return super().generate(role, messages, schema, options)
+
+
+def install_public_article(monkeypatch, matching_paragraphs):
+    paragraphs = ["개요, 주변 조건 또는 자세한 기존 작업을 설명하는 원문 문단 " + str(i) for i in range(1, 21)]
+    for number in matching_paragraphs:
+        paragraphs[number - 1] = f"VectorClock은 분산 체크포인트 사이의 의존성을 식별한다. 실험 방법 {number}."
+    markup = "<article>" + "".join(f"<p>{text}</p>" for text in paragraphs) + "</article>"
+    monkeypatch.setattr("office.evidence.fetch_public",
+                        lambda url, **kwargs: (markup.encode("utf-8"), url, "text/html"))
+    return {"title": "VectorClock 분산 체크포인트", "url": "https://example.com/public"}
+
+
+def test_public_article_retrieval_is_local_bounded_and_preserves_original_citations(tmp_path, monkeypatch):
+    article = install_public_article(monkeypatch, range(9, 21))
+    provider = CapturingResearch(paragraph=18)
+
+    report = collect_article_evidence(article, provider, tmp_path)
+
+    paragraphs = provider.supplied["paragraphs"]
+    ids = [row["number"] for row in paragraphs]
+    assert provider.calls == 1 and provider.role == "research"
+    assert len(ids) == 12
+    assert ids[:2] == [1, 2]
+    assert ids == sorted(ids) and 18 in ids and 3 not in ids
+    assert report["evidence"][0]["source_paragraph"] == 18
+    assert report["evidence"][0]["source_quote"] == report["paragraphs"][17]
+    saved = json.loads(next(tmp_path.glob("*.json")).read_text(encoding="utf-8"))
+    assert len(saved["paragraphs"]) == 20
+    assert saved["retrieval"] == {"method": "langchain_core_sqlite_fts5", "paragraph_numbers": ids}
+
+
+def test_public_article_retrieval_rejects_an_unsupplied_original_paragraph(tmp_path, monkeypatch):
+    article = install_public_article(monkeypatch, [19])
+    with pytest.raises(WorkflowError, match="문단"):
+        collect_article_evidence(article, CapturingResearch(paragraph=3), tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_no_dependable_title_match_preserves_existing_context(tmp_path, monkeypatch):
+    article = install_public_article(monkeypatch, [])
+    provider = CapturingResearch(paragraph=3)
+    report = collect_article_evidence(article, provider, tmp_path)
+    assert len(provider.supplied["paragraphs"]) == 20
+    assert "retrieval" not in report
+    assert report["evidence"][0]["source_paragraph"] == 3

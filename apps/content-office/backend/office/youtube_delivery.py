@@ -122,10 +122,12 @@ def _released_video(store, job_id):
         raise WorkflowError("출고 승인된 영상 파일이 제작물 목록에 없습니다")
     root = store.artifacts.resolve()
     paths = {}
+    from .artifact_library import require_available
     for name in ("short.mp4", "description.txt"):
         record = files.get(name)
         if not record:
             continue
+        require_available(store, record['path'])
         path = (root / record["path"]).resolve()
         if not path.is_relative_to(root) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != record["sha256"]:
             raise WorkflowError("제작물이 변경되었거나 파일 검증에 실패했습니다. 다시 제작하고 출고 승인②를 받으세요")

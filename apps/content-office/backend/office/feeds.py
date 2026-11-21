@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from time import monotonic
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import requests
@@ -48,19 +49,29 @@ def validate_public_url(url: str) -> str:
     return url
 
 
-def fetch_public(url: str, *, maximum=MAX_BYTES, allowed_hosts=None):
+def fetch_public(url: str, *, maximum=MAX_BYTES, allowed_hosts=None, deadline=None):
     current = url
     for _ in range(5):
-        validate_public_url(current)
         if allowed_hosts and urlsplit(current).hostname not in allowed_hosts:
             raise ValueError("등록된 출처 범위 밖으로 이동했습니다")
-        with requests.get(current, timeout=(8, 20), stream=True, allow_redirects=False, headers={"User-Agent": "HeoBrainContentOffice/1.0 (public RSS research)"}) as response:
+        if deadline is not None and monotonic() >= deadline:
+            raise requests.Timeout("공개 원문 조회 시간이 지났습니다")
+        validate_public_url(current)
+        timeout = (8, 20)
+        if deadline is not None:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise requests.Timeout("공개 원문 조회 시간이 지났습니다")
+            timeout = (min(3, remaining), min(3, remaining))
+        with requests.get(current, timeout=timeout, stream=True, allow_redirects=False, headers={"User-Agent": "HeoBrainContentOffice/1.0 (public RSS research)"}) as response:
             if response.status_code in (301, 302, 303, 307, 308):
                 current = urljoin(current, response.headers.get("Location", ""))
                 continue
             response.raise_for_status()
             parts, length = [], 0
             for chunk in response.iter_content(65536):
+                if deadline is not None and monotonic() >= deadline:
+                    raise requests.Timeout("공개 원문 조회 시간이 지났습니다")
                 length += len(chunk)
                 if length > maximum:
                     raise ValueError("응답 크기 한도를 초과했습니다")

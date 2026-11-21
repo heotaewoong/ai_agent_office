@@ -206,7 +206,7 @@ export function WorldView({
     <section className="world-workspace" aria-label="오피스 월드와 콘텐츠 검토">
       <div className="world-workspace-bar">
         <div>
-          <strong>도시에서 살펴보고, 작업실에서 검토하세요.</strong>
+          <strong>우주 본사에서 확인하고, 작업실에서 검토하세요.</strong>
           <p>3D가 느리거나 열리지 않아도 원고와 완성 파일을 확인할 수 있어요. 승인과 발행은 별도 검토가 필요합니다.</p>
         </div>
         <div className="world-workspace-links" aria-label="콘텐츠 검토 화면">
@@ -227,7 +227,7 @@ export function WorldView({
         ref={frame}
         className="world-frame"
         title="오피스 월드"
-        src="/world/index.html?api=/api/space&embed=1"
+        src="/world/orbit/index.html?embed=1"
       />
       </div>
     </section>

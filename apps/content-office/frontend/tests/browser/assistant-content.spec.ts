@@ -22,7 +22,7 @@ async function setup(page: Page, mode: 'new' | 'saved' | 'failed' | 'delayed' = 
   const pending = new Promise<void>(resolve => { release = resolve; });
   page.on('pageerror', error => errors.push(error.message));
   // This test covers the real React report/routes, without repeating the separate 3D suite.
-  await page.route('**/world/index.html?*', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>3D boundary outside this test</title>' }));
+  await page.route(/\/world\/(?:orbit\/)?index\.html\?/, route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>3D boundary outside this test</title>' }));
   await page.route('https://**', route => route.abort());
   await page.route('**/api/**', async route => {
     const req = route.request(), path = new URL(req.url()).pathname;

@@ -8,7 +8,7 @@ import zipfile
 from .store import WorkflowError
 
 
-def build_review_bundle(job: dict, artifacts: Path) -> bytes:
+def build_review_bundle(job: dict, artifacts: Path, *, store=None) -> bytes:
     source_hash = job.get('source_hash')
     manifest = job.get('manifest') or {}
     if not source_hash or manifest.get('source_hash') != source_hash:
@@ -25,6 +25,9 @@ def build_review_bundle(job: dict, artifacts: Path) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
         for group, record in records:
+            if store is not None:
+                from .artifact_library import require_available
+                require_available(store, record['path'])
             name = record.get('name', '')
             if not name or name in ('.', '..') or '/' in name or '\\' in name:
                 raise WorkflowError('검토 파일 이름이 올바르지 않습니다')
