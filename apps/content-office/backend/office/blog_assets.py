@@ -1,6 +1,7 @@
 """Package current-source card art and the owner's finalized thumbnail into blog exports."""
 import hashlib,json,re
 from .store import WorkflowError,digest
+from .artifact_library import require_available
 
 NAME_PATTERN=re.compile(r'blog-image-\d{2}\.png')
 
@@ -15,6 +16,7 @@ def collect_assets(store,job,folder):
     source=job['source_hash'];root=store.artifacts.resolve();images=[];paths=[];warnings=[]
     def copy_image(record,name,alt,kind):
         try:
+            require_available(store,record['path'])
             path=(root/record['path']).resolve();relative=path.relative_to(root)
             if relative.parts[:2]!=(job['id'],source) or not path.is_file() or path.stat().st_size>8*1024*1024:raise ValueError()
             data=path.read_bytes()
@@ -26,6 +28,8 @@ def collect_assets(store,job,folder):
             target=folder/name
             if target.exists() and target.read_bytes()!=data:raise ValueError()
             if not target.exists():target.write_bytes(data)
+        except WorkflowError:
+            raise
         except (OSError,ValueError,KeyError):
             raise WorkflowError('블로그 재사용 이미지의 원고·파일·SHA를 확인하지 못했습니다') from None
         images.append({'name':name,'alt':str(alt),'kind':kind,'sha256':record['sha256'],'source_asset_id':record.get('id')});paths.append(target)
@@ -67,6 +71,7 @@ def verify_manifest(store,job,manifest):
     record=next((r for r in manifest.get('files',[]) if r.get('name')=='blog-assets.json' and 'blog' in r.get('outputs',[])),None)
     if record is None:return
     try:
+        require_available(store,record['path'])
         path=(store.artifacts/record['path']).resolve();relative=path.relative_to(store.artifacts.resolve());data=path.read_bytes()
         if relative.parts[:2]!=(job['id'],job['source_hash']) or hashlib.sha256(data).hexdigest()!=record['sha256']:raise ValueError()
         metadata=json.loads(data)
@@ -75,6 +80,9 @@ def verify_manifest(store,job,manifest):
             matches=[r for r in manifest.get('files',[]) if r.get('name')==image['name'] and 'blog' in r.get('outputs',[])]
             if len(matches)!=1 or not NAME_PATTERN.fullmatch(image['name']):raise ValueError()
             asset=matches[0];asset_path=(store.artifacts/asset['path']).resolve()
+            require_available(store,asset['path'])
             if asset_path.parent!=path.parent or asset_path.name!=image['name'] or asset.get('sha256')!=image['sha256'] or hashlib.sha256(asset_path.read_bytes()).hexdigest()!=image['sha256']:raise ValueError()
+    except WorkflowError:
+        raise
     except (OSError,ValueError,KeyError,TypeError):
         raise WorkflowError('블로그 이미지·선택이 변경되었습니다. 합본을 다시 제작·검토하세요') from None

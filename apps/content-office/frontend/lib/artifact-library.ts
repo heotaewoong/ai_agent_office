@@ -1,12 +1,12 @@
 export type LibraryAction = 'trash' | 'restore' | 'purge';
 export type LibraryItem = {
   id: string; title: string; name: string; job_id?: string | null;
-  kind: 'video' | 'cards' | 'thumbnail' | 'document';
-  state: 'available' | 'trash' | 'attention'; protected_reason: string;
+  kind: 'video' | 'cards' | 'thumbnail' | 'image' | 'document';
+  state: 'available' | 'trash' | 'attention'; protected_reason: string; usage_note?: string;
   size_bytes: number; file_count: number; modified_at: string; shared: boolean; preview_url: string | null;
 };
 export type LibraryInventory = {items: LibraryItem[]; storage: {total_bytes: number; used_bytes: number; free_bytes: number}; checked_at: string};
-export type LibraryQuote = {token: string; count: number; size_bytes: number; reclaimable_bytes: number; shared_files: number};
+export type LibraryQuote = {token: string; count: number; size_bytes: number; reclaimable_bytes: number; shared_files: number; usage_notes?: string[]};
 export type LibraryResult = {state: 'completed' | 'partial'; action: LibraryAction; count: number; deleted_files: number; message: string};
 export function libraryBytes(value: number) {
   if (value < 1024) return `${value} B`;

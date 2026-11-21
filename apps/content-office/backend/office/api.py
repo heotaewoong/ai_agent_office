@@ -28,7 +28,10 @@ from .analytics import baseline, parse_studio_text, propose_lessons
 from .brand import load_brand
 from .briefs import DEFAULT_PRESET, build_brief, presets_payload
 from .gates import run_gates
-from .ideas import rank_ideas, score_idea, select_reviewed_idea, set_idea_sources, with_edit_hash
+from .ideas import (
+    PUBLIC_EVIDENCE_LIMIT, approve_existing_idea_evidence, approved_public_references, refresh_idea_public_evidence,
+    reviewable_ideas, score_idea, select_reviewed_idea, set_idea_sources,
+)
 from .packaging import attach_packaging, require_packaging
 from .space import project_space
 
@@ -227,14 +230,32 @@ class BriefInput(BaseModel):
     expected_brief_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
+class PlatformIdeaInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    platform: str = Field(min_length=1, max_length=30)
+    url: str = Field(min_length=1, max_length=2000)
+    expected_hash: str = Field(pattern=r"[0-9a-f]{64}")
+
+
 class IdeaSourcesInput(BaseModel):
     source_urls: list[str] = Field(min_length=1, max_length=10)
     operator_verified: bool = Field(strict=True)
     expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class IdeaSelectionInput(BaseModel):
+class IdeaEvidenceRequest(BaseModel):
     expected_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class IdeaSelectionInput(IdeaEvidenceRequest):
+    public_evidence_ids: list[str] = Field(default_factory=list, max_length=PUBLIC_EVIDENCE_LIMIT)
+
+
+class EvidenceDraftInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_evidence_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=20_000)
 
 
 class ThumbnailInput(BaseModel):
@@ -430,6 +451,18 @@ def create_app(store: Store | None = None):
 
     from .api_artifact_library import register as register_artifact_library
     register_artifact_library(app, store)
+    from .api_pipeline_studio import register as register_pipeline_studio
+    register_pipeline_studio(app, session)
+
+    @app.get("/api/platform-news")
+    def read_platform_news():
+        from .platform_news import status
+        return JSONResponse(status(store), headers={"Cache-Control": "private, no-store"})
+
+    @app.post("/api/platform-news/ideas")
+    def add_platform_idea(body: PlatformIdeaInput):
+        from .platform_news import save_platform_idea
+        return {"idea": save_platform_idea(store, body.platform, body.url, body.expected_hash)}
 
     @app.get("/api/dashboard")
     def dashboard(compact: bool = False, task_results: bool = True):
@@ -572,6 +605,11 @@ def create_app(store: Store | None = None):
     def set_job_budget(job_id: str, request: JobBudgetRequest):
         return store.set_job_budget(job_id, request.cap_krw, "local-operator", expected_hash=request.expected_hash)
 
+    @app.post("/api/jobs/{job_id}/drafts/evidence-preview")
+    def save_evidence_draft(job_id: str, draft: EvidenceDraftInput):
+        from .drafts import register_evidence_draft
+        return register_evidence_draft(store, job_id, **draft.model_dump())
+
     @app.get('/api/jobs/{job_id}/drafts/{draft_id}/preview')
     def draft_preview(job_id: str, draft_id: str):
         from .exports import blog_reader_html, blog_markdown, safe_fragment
@@ -580,7 +618,9 @@ def create_app(store: Store | None = None):
         if not draft:
             raise HTTPException(404, '초안을 찾을 수 없습니다')
         # Same reader and source list the blog export would produce from this draft.
-        packet = {**(job.get('source_packet') or {}), 'title': draft['title'], 'body': draft['body'], 'evidence': job['article'].get('evidence', [])}
+        basis = {} if draft.get('approved_public_evidence_hash') else (job.get('source_packet') or {})
+        packet = {**basis, 'title': draft['title'], 'body': draft['body'],
+                  'evidence': draft.get('evidence', job['article'].get('evidence', []))}
         # Resolve only registered image names; no arbitrary local paths or active HTML.
         import re
         from urllib.parse import quote
@@ -622,8 +662,10 @@ def create_app(store: Store | None = None):
         if current["state"] in ("drafting", "production_queued", "producing", "needs_reconciliation"):
             raise WorkflowError("처리 중에는 원고를 저장할 수 없습니다. 완료 후 다시 저장하세요")
         packet = {**edit.packet, "evidence": current["article"].get("evidence", []), "quality": {"status": "unverified", "critical": False, "reviews": [], "refine_count": 0}, "audience": (current.get("source_packet") or {}).get("audience", {})}
-        for field in ("editorial_copy", "original_source_hash"):
+        for field in ("editorial_copy", "original_source_hash", "approved_public_evidence_hash"):
             packet.pop(field, None)
+        if approved_public_references(current["article"]):
+            packet["approved_public_evidence_hash"] = current["article"]["approved_public_evidence_hash"]
         if current["article"].get("preserve_original") is True:
             original = current["article"].get("operator_source_text")
             body = edit.packet.get("body")
@@ -788,6 +830,8 @@ def create_app(store: Store | None = None):
             from .blog_assets import verify_manifest
             verify_manifest(store, job, manifest)
         for file in released_files(job, outputs):
+            from .artifact_library import require_available
+            require_available(store, file['path'])
             path = (store.artifacts / file["path"]).resolve()
             if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != file["sha256"]:
                 raise WorkflowError("제작물이 변경되었거나 파일 검증에 실패했습니다")
@@ -871,7 +915,7 @@ def create_app(store: Store | None = None):
     def download_review_package(job_id: str):
         from .review_bundle import build_review_bundle
         job = store.require_source_approval(job_id)
-        data = build_review_bundle(job, store.artifacts)
+        data = build_review_bundle(job, store.artifacts, store=store)
         return Response(data, media_type='application/zip', headers={
             'Content-Disposition': f'attachment; filename="{job["id"]}-review.zip"',
             'Cache-Control': 'no-store',
@@ -922,6 +966,8 @@ def create_app(store: Store | None = None):
         record = next((f for f in manifest.get('files', []) if f['name'] == filename and 'blog' in f.get('outputs', ['blog'])), None)
         if not record:
             raise WorkflowError('요청한 블로그 파일이 아직 없습니다')
+        from .artifact_library import require_available
+        require_available(store, record['path'])
         path = (store.artifacts / record['path']).resolve()
         if not path.is_relative_to(store.artifacts.resolve()) or not path.is_file():
             raise WorkflowError('블로그 파일을 찾을 수 없습니다')
@@ -1045,7 +1091,7 @@ def create_app(store: Store | None = None):
 
     @app.get("/api/ideas")
     def list_ideas():
-        return {"ideas": rank_ideas([with_edit_hash(card) for card in store.ideas()], lessons=store.lessons("approved"))}
+        return {"ideas": reviewable_ideas(store, lessons=store.lessons("approved"))}
 
     @app.post("/api/ideas")
     def add_idea(idea: IdeaInput):
@@ -1072,10 +1118,22 @@ def create_app(store: Store | None = None):
         job = store.set_brief(job_id, brief, "local-operator", expected_hash=body.expected_brief_hash)
         return {**job, "brief_hash": digest(job.get("brief"))}
 
+    @app.post("/api/ideas/{idea_id}/public-evidence")
+    def find_idea_public_evidence(idea_id: str, body: IdeaEvidenceRequest):
+        return refresh_idea_public_evidence(store, idea_id, expected_hash=body.expected_hash,
+                                            lessons=store.lessons("approved"))
+
+    @app.post("/api/ideas/{idea_id}/public-evidence/approve")
+    def approve_idea_evidence(idea_id: str, body: IdeaSelectionInput):
+        return approve_existing_idea_evidence(store, idea_id, expected_hash=body.expected_hash,
+                                             actor="local-operator", lessons=store.lessons("approved"),
+                                             public_evidence_ids=body.public_evidence_ids)
+
     @app.post("/api/ideas/{idea_id}/select")
     def choose_idea(idea_id: str, body: IdeaSelectionInput):
         return select_reviewed_idea(store, idea_id, expected_hash=body.expected_hash,
-                                    actor="local-operator", lessons=store.lessons("approved"))
+                                    actor="local-operator", lessons=store.lessons("approved"),
+                                    public_evidence_ids=body.public_evidence_ids)
 
     @app.post("/api/jobs/{job_id}/packaging")
     def set_packaging(job_id: str, brief: PackagingInput):

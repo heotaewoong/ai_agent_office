@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light"><title>HeoBrain — 우주 본사</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./panels.css"><link rel="stylesheet" href="./lab.css"><link rel="stylesheet" href="./ops.css"><link rel="stylesheet" href="./coverage.css"><link rel="stylesheet" href="./operational.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js","three/addons/geometries/RoundedBoxGeometry.js":"./vendor/RoundedBoxGeometry.js"}}</script>
+</head>
+<body>
+<a class="skip-link" href="#main">업무 화면으로 이동</a>
+<header class="topbar">
+ <a class="brand" id="home-link" href="./index.html" aria-label="HeoBrain 우주 본사 처음"><span class="brand-symbol">H</span><span>HeoBrain <small>ORBIT</small></span></a>
+ <div class="top-divider"></div><span class="workspace-name">나의 우주 본사</span>
+ <button class="global-search" id="command-open"><svg class="icon"><use href="./icons.svg#search"/></svg><span>업무, 동료, 기능 찾기</span><kbd>Ctrl K</kbd></button>
+ <span class="preview-badge operational-status" id="connection-status" data-state="loading" role="status">운영 조회 중</span><button class="owner-button" id="owner-settings" aria-label="회사 설정 설계">H</button>
+</header>
+<nav class="rail" aria-label="주요 업무"><div id="primary-nav"></div><div class="rail-bottom"><button data-section="coverage" title="원본 기능 대조" aria-label="원본 기능 대조"><svg class="icon"><use href="./icons.svg#features"/></svg><span>기능</span></button><button data-section="settings" title="설정" aria-label="설정"><svg class="icon"><use href="./icons.svg#settings"/></svg><span>설정</span></button></div></nav>
+<main id="main" class="layout">
+ <section class="city-stage" aria-label="HeoBrain 우주 본사">
+  <div id="city-canvas"></div><div id="flat-office" class="flat-office" hidden><div class="flat-orbit-heading"><span class="eyebrow">FOCUS DESK</span><h2>팀과 업무에 집중하기</h2><p>3D 렌더링을 쉬고 같은 업무 화면을 이용합니다.</p></div><button class="flat-hq" data-section="approvals"><span>✦</span><strong>루미 총괄</strong><small>검토함 열기 →</small></button><div class="flat-teams"></div></div><div id="city-labels" class="city-labels"></div>
+  <div class="stage-heading"><div class="eyebrow">HEOBRAIN ORBIT</div><h1>우주 본사</h1><p>루미와 네 팀, 확인할 일부터 한곳에서.</p></div>
+  <div class="stage-actions"><button id="map-open" class="glass-button"><svg class="icon"><use href="./icons.svg#maps"/></svg><span id="world-label">궤도 본사</span><svg class="icon small"><use href="./icons.svg#chevron"/></svg></button><button id="concept-open" class="glass-button"><svg class="icon"><use href="./icons.svg#image"/></svg><span>선택한 시안</span></button></div>
+  <div id="loading" class="loading-note" role="status">우주도시를 준비하고 있어요…</div>
+  <div class="scene-tools" aria-label="도시 보기 조작"><button id="view-mode" title="2D 업무 모드" aria-label="2D 업무 모드" aria-pressed="false"><span>2D</span></button><button id="view-reset" title="전체 도시 보기" aria-label="전체 도시 보기"><svg class="icon"><use href="./icons.svg#reset"/></svg></button><button id="tour-toggle" title="도시 자동 둘러보기" aria-label="도시 자동 둘러보기" aria-pressed="false"><svg class="icon"><use href="./icons.svg#play"/></svg></button><button id="focus-mode" title="도시 크게 보기" aria-label="도시 크게 보기" aria-pressed="false"><svg class="icon"><use href="./icons.svg#maximize"/></svg></button><button id="quality-toggle" aria-label="그래픽 품질" title="그래픽 품질"><span>HD</span></button></div>
+  <div class="scene-help"><svg class="icon small"><use href="./icons.svg#move"/></svg>드래그로 둘러보기 <span>·</span> 스크롤로 확대 <span>·</span> 오피스를 눌러 입장</div>
+  <div class="city-bottom"><span class="world-coordinate">HEOBRAIN / ORBITAL CAMPUS</span><span class="read-only-note">운영 조회 · 실행은 기존 승인 절차</span></div>
+ </section>
+ <aside class="mission-panel" aria-label="루미 총괄과 팀 업무">
+  <div class="mission-intro"><span class="eyebrow">MISSION CONTROL</span><h2>오늘의 흐름을<br>한눈에.</h2><p>진행 중인 일과 막힌 일을 확인하고,<br>기존 검토·승인 화면으로 이어갑니다.</p></div>
+  <div class="lumi-card"><div class="lumi-orbit"><svg class="icon"><use href="./icons.svg#orbit"/></svg></div><div><strong>루미 <span>총괄</span></strong><p>4팀의 흐름을 한곳에서</p></div><button data-focus="hq" aria-label="루미 본사 보기"><svg class="icon"><use href="./icons.svg#arrow"/></svg></button></div>
+  <div class="section-row"><h3>확인이 필요한 일</h3><button data-section="tasks">전체 보기 <span>→</span></button></div>
+  <div id="snapshot-metrics" class="snapshot-metrics" aria-busy="true"><button class="metric-tile" data-section="tasks"><small>콘텐츠 작업</small><strong id="job-count">—</strong><svg class="icon"><use href="./icons.svg#tasks"/></svg></button><button class="metric-tile blocked" data-section="tasks"><small>막힌 작업</small><strong id="blocked-count">—</strong><svg class="icon"><use href="./icons.svg#warning"/></svg></button></div><div class="source-status-row"><p class="snapshot-note" id="snapshot-note">운영 응답을 확인하고 있습니다.</p><button id="refresh-operational" class="refresh-source" disabled aria-label="운영 데이터 다시 확인">새로고침</button></div>
+  <button class="attention-row" data-section="approvals"><span class="attention-icon"><svg class="icon"><use href="./icons.svg#approvals"/></svg></span><span><strong>원고·출고 검토</strong><small id="approval-note">운영 응답 확인 후 표시</small></span><span class="unknown-label" id="approval-count">—</span></button>
+  <div class="home-actions"><button class="primary-button" data-section="chat"><svg class="icon"><use href="./icons.svg#channels"/></svg>루미와 업무 이어가기<svg class="icon"><use href="./icons.svg#arrow"/></svg></button><p class="brief-note">기존 비서 화면이 열립니다. 열기만으로 요청을 전송하지 않습니다.</p></div>
+  <div class="lab-launch"><div><span class="eyebrow">DESIGN LAB · 실행 없는 실습</span><h3>기억·학습 방식을 설계해요.</h3></div><button data-section="memory">기억 실습 <span>→</span></button><button data-section="training">학습 설계 <span>→</span></button><button data-section="evolution">모델 병합 원리 <span>→</span></button></div><div class="section-row teams-title"><h3>우리의 4팀</h3><span class="quiet">관측 프로필 · 편집은 설계안</span></div>
+  <div id="team-list" class="team-list"></div>
+  <div class="snapshot-source-card"><span class="eyebrow">공개 데모</span><h3>Hermes 업무 예시와 기능 지도</h3><p id="snapshot-source-note">공개 예시를 불러오고 있습니다.</p><button data-section="snapshot-tasks">예시 작업 보기 →</button><button data-section="features">95개 기능 위치 지도 →</button></div>
+  <button id="new-brief" class="primary-button secondary-brief"><svg class="icon"><use href="./icons.svg#skills"/></svg>업무 설계 초안 만들기<svg class="icon"><use href="./icons.svg#arrow"/></svg></button><p class="brief-note">실행 없는 연습입니다. 입력은 이 탭 안에서만 다룹니다.</p>
+ </aside>
+ <div id="workspace" class="workspace" hidden></div><div id="knowledge-workspace" hidden></div><div id="operations-workspace" hidden></div><div id="coverage-workspace" hidden></div><div id="operational-workspace" hidden></div>
+</main>
+<footer class="bottom-dock" aria-label="빠른 도구"><div class="dock-title"><span class="mini-dot"></span>WORKSPACE</div><div id="dock-items"></div><button id="help-open" class="dock-help" aria-label="운영 조회와 설계 실습 안내"><svg class="icon"><use href="./icons.svg#help"/></svg></button></footer>
+<dialog id="map-dialog" class="shell-dialog map-dialog" aria-labelledby="map-title"><div class="dialog-top"><div><div class="eyebrow">ONE WORLD, MANY PLACES</div><h2 id="map-title">어디에서 일할까요?</h2></div><button class="icon-button dialog-close" aria-label="맵 선택 닫기"><svg class="icon"><use href="./icons.svg#close"/></svg></button></div><p>본사와 팀 구성은 유지하고 도시의 분위기를 바꿔 보세요.</p><div id="world-grid" class="world-grid"></div><div class="dialog-note">4가지 공간 분위기를 선택합니다. 업무 데이터와 봇 설정은 바뀌지 않습니다.</div></dialog>
+<dialog id="concept-dialog" class="shell-dialog concept-dialog" aria-labelledby="concept-title"><div class="dialog-top"><h2 id="concept-title">선택한 디자인 시안</h2><button class="icon-button dialog-close" aria-label="시안 닫기"><svg class="icon"><use href="./icons.svg#close"/></svg></button></div><img src="./concept.png" alt="중앙 루미 본사와 4팀 오피스가 연결된 HeoBrain 우주도시 콘셉트"><p>이 이미지는 디자인 기준입니다. 움직이는 3D 화면과 나란히 비교해 주세요.</p></dialog>
+<dialog id="command-dialog" class="shell-dialog command-dialog" aria-labelledby="command-title"><div class="dialog-top"><h2 id="command-title">필요한 일로 바로 이동</h2><button class="icon-button dialog-close" aria-label="검색 닫기"><svg class="icon"><use href="./icons.svg#close"/></svg></button></div><input id="command-input" aria-label="업무와 기능 검색" placeholder="예: 기억, 승인, 콘텐츠, MCP…" autocomplete="off"><div id="command-results" class="command-results"></div></dialog>
+<dialog id="brief-dialog" class="shell-dialog brief-dialog" aria-labelledby="brief-title"><div class="dialog-top"><div><div class="eyebrow">A SMALL IDEA, A NEW ORBIT</div><h2 id="brief-title">무엇을 함께 만들까요?</h2></div><button class="icon-button dialog-close" aria-label="기획 닫기"><svg class="icon"><use href="./icons.svg#close"/></svg></button></div><form id="brief-form"><label>주제·경험·자료<textarea id="brief-text" required minlength="5" maxlength="2000" placeholder="예: ChatGPT와 Suno로 오픽 공부를 덜 지루하게 만든 경험을 한 편의 글로 정리하고 싶어요."></textarea></label><label>함께할 팀<select id="brief-team"><option value="content">콘텐츠</option><option value="marketing">마케팅·상품</option><option value="data">데이터</option><option value="development">개발</option></select></label><button class="primary-button" type="submit">실행 전 기획 카드 미리보기</button><p class="dialog-note">모델 호출·실제 카드 생성 없이 작성 내용을 정리합니다.</p></form><div id="brief-result" hidden></div></dialog>
+<div id="toast" role="status" class="toast" hidden></div>
+<script type="module" src="./app.js"></script>
+</body></html>

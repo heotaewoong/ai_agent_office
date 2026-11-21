@@ -98,7 +98,7 @@ export function ArchitectureView() {
       <section id="pipeline-runtime" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-runtime-title">
         <div className="arch-section-heading"><span className="arch-index">04</span><div><h2 id="pipeline-runtime-title" tabIndex={-1}>같은 서버 안에서도 실행 책임은 나뉩니다</h2><p>화면·API·작업자·저장소와, 외부 서비스의 실제 호출 경로를 분리해 봅니다.</p></div></div>
         <RuntimeMap data={data} />
-        <div className="arch-runtime-separate"><strong>같은 EC2의 다른 도구</strong><p>Hermes · n8n · magma 사이트가 같은 서버에 있어도 이 콘텐츠 앱의 작업 큐와 자동 연결된 것은 아닙니다. Hermes 비서팀의 업무 전달·결과 회수는 보류된 별도 작업입니다.</p></div>
+        <div className="arch-runtime-separate"><strong>같은 EC2의 다른 도구</strong><p>Hermes · n8n · magma 사이트가 같은 서버에 있어도 이 콘텐츠 앱의 작업 큐와 자동 연결된 것은 아닙니다. 비서 요청·결과 인계는 명시적으로 연결된 경로이며, 모든 콘텐츠 작업이 Hermes 팀을 거치지는 않습니다.</p></div>
       </section>
 
       <section className="arch-section" aria-labelledby="pipeline-safety-title">

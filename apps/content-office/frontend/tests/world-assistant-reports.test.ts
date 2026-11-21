@@ -38,7 +38,7 @@ test('world embeds the real collapsed report panel using the existing GET adapte
     assert.match(html, /비서 협업 보고/);
     assert.match(html, /aria-expanded="false"/);
     assert.match(html, /title="오피스 월드"/);
-    assert.match(html, /\/world\/index.html\?api=\/api\/space/);
+    assert.match(html, /\/world\/orbit\/index.html\?embed=1/);
     assert.equal(passed.at(-1)?.connected, connected);
     assert.equal(passed.at(-1)?.loadReports, api.assistantReports);
   }

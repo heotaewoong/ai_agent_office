@@ -4479,6 +4479,13 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .v6-performance-form :is(input,select), .public-lead-links :is(select,textarea) { width:100%; min-width:0; padding:10px 12px; border:1px solid var(--line); border-radius:6px; background:var(--white); }
 .idea-sources-panel { margin-top:16px; border-top:1px solid var(--line); padding-top:12px; }
 .idea-sources-panel > summary { cursor:pointer; line-height:1.6; }
+.idea-public-evidence { margin:16px 0; min-width:0; overflow-wrap:anywhere; }
+.idea-public-evidence fieldset { margin:12px 0 0; padding:8px 12px; min-width:0; border:1px solid var(--line); border-radius:6px; }
+.idea-public-evidence legend { padding:0 4px; font-weight:600; }
+.idea-public-evidence-item + .idea-public-evidence-item { border-top:1px solid var(--line); padding-top:8px; }
+.idea-public-evidence-item label { display:flex; align-items:center; gap:8px; min-height:44px; }
+.idea-public-evidence-item input { flex:none; }
+.idea-public-evidence-item blockquote { margin:8px 0 12px; padding-left:10px; border-left:2px solid var(--line); white-space:pre-wrap; }
 .public-lead-links { min-width:0; margin-top:16px; }
 @media(max-width:600px) {
   .editorial-panel, .version-history, .improvement-panel, .job-clip-panel { padding:16px; }

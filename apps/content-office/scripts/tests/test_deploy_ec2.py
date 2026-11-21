@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 import importlib.util
+import hashlib
 import io
 import json
 import os
@@ -21,6 +22,8 @@ deploy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deploy)
 sys.path.insert(0, str(SCRIPT.parents[1] / 'backend'))
 from office.runtime import AlreadyRunning, ProcessLock
+
+GIT_TEST_TIMEOUT = 60 if os.name == 'nt' else 10
 
 
 class Harness:
@@ -104,7 +107,7 @@ class Harness:
         if 'build' in command:
             if self.started:
                 self.started.set()
-                assert self.finish.wait(10)
+                assert self.finish.wait(GIT_TEST_TIMEOUT)
             if self.fail_build:
                 raise deploy.DeployError('fake build failure')
             build = Path(cwd) / '.next'
@@ -136,7 +139,8 @@ class Harness:
 
 class DeploymentTests(unittest.TestCase):
     def setUp(self):
-        self.folder = TemporaryDirectory(prefix='office-deploy-fixture-')
+        # Windows sandbox temp roots are long; leave room for staged Git paths.
+        self.folder = TemporaryDirectory(prefix='dep-')
         self.addCleanup(self.folder.cleanup)
         self.h = Harness(self.folder.name)
         # Production is Linux. Fake dependency links avoid requiring Windows symlink privileges.
@@ -237,6 +241,184 @@ class DeploymentTests(unittest.TestCase):
         self.h.unchanged()
         self.assertEqual(self.h.calls, [])
         self.assertEqual((self.h.repo / 'source.txt').read_text(), 'operator edit')
+
+    def prepare_backend(self, *, extra_change=None):
+        self.h.git('checkout', '-q', 'candidate')
+        contents = {'requirements.txt': 'example>=1,<2\n', 'requirements-lock.txt': 'example==1.2\n'}
+        for name, text in contents.items():
+            (self.h.app / 'backend' / name).write_text(text)
+        if extra_change:
+            (self.h.app / extra_change).write_text('changed dependency')
+        self.h.git('add', '.')
+        self.h.git('commit', '-qm', 'reviewed backend dependencies')
+        self.h.target = self.h.git('rev-parse', 'HEAD')
+        self.h.git('checkout', '-q', 'main')
+        prepared = Path(self.folder.name) / 'prepared'
+        (prepared / 'bin').mkdir(parents=True)
+        (prepared / 'bin/python').touch()
+        (prepared / 'pyvenv.cfg').write_text('include-system-site-packages = false\n')
+        manifest = {'manifest_sha256': {name: hashlib.sha256(text.encode()).hexdigest() for name, text in contents.items()},
+                    'packages': {'example': '1.2', 'pip': '25.1.1'}, 'python_version': '3.14.4'}
+        (prepared / 'heobrain-prepared.json').write_text(json.dumps(manifest))
+        operation = self.h.deployment()
+        operation.prepared_backend_venv = prepared.resolve()
+        inner = operation.runner
+        self.candidate_commands = []
+        def candidate_runner(command, *, cwd, env=None):
+            if Path(command[0]) == prepared / 'bin/python' and ('-c' in command or 'pip' in command):
+                self.candidate_commands.append(command)
+                assert 'OPENAI_API_KEY' not in env and 'OFFICE_ENV_FILE' not in env
+                if 'pip' in command:
+                    return 'No broken requirements found.\n'
+                return json.dumps({'prefix': str(prepared), 'base_prefix': '/system-python', 'python_version': '3.14.4',
+                                   'packages': {'example': '1.2', 'pip': '25.1.1'}, 'marker_environment': {'sys_platform': 'linux'}})
+            return inner(command, cwd=cwd, env=env)
+        operation.runner = candidate_runner
+        return operation, prepared, manifest
+
+    def test_prepared_backend_accepts_only_matching_manifests_and_installed_pins(self):
+        operation, prepared, manifest = self.prepare_backend()
+        self.assertEqual(operation.preflight()[0], self.h.previous)
+        self.assertTrue(any('pip' in command for command in self.candidate_commands))
+        manifest['packages']['example'] = '1.3'
+        (prepared / 'heobrain-prepared.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(deploy.DeployError, 'installed packages'):
+            operation.preflight()
+        self.assertEqual(self.h.calls, [])
+
+    def test_prepared_backend_rejects_other_dependency_changes(self):
+        operation, _, _ = self.prepare_backend(extra_change='frontend/package-lock.json')
+        with self.assertRaisesRegex(deploy.DeployError, 'Dependency manifests'):
+            operation.preflight()
+        self.assertEqual(self.candidate_commands, [])
+        self.assertEqual(self.h.calls, [])
+
+    def test_prepared_backend_rejects_wrong_manifest_hash_before_services(self):
+        operation, prepared, manifest = self.prepare_backend()
+        manifest['manifest_sha256']['requirements-lock.txt'] = '0' * 64
+        (prepared / 'heobrain-prepared.json').write_text(json.dumps(manifest))
+        with self.assertRaisesRegex(deploy.DeployError, 'manifest hashes'):
+            operation.preflight()
+        self.assertEqual(self.h.calls, [])
+
+    def test_prepared_backend_rejects_unlocked_missing_or_incompatible_packages(self):
+        cases = [('example>=1', 'example>=1', {'example': '1.2'}),
+                 ('example>=2', 'example==1.2', {'example': '1.2'}),
+                 ('example>=1', 'example==1.2', {}),
+                 ('example>=1', 'example==1.2', {'example': '1.2', 'unexpected': '9'})]
+        for requirements, lock, packages in cases:
+            with self.subTest(lock=lock, packages=packages), self.assertRaises(deploy.DeployError):
+                deploy.validate_locked_packages(requirements, lock, packages, {'sys_platform': 'linux'})
+
+    def test_prepared_backend_path_must_be_separate_and_not_symlinked(self):
+        operation, prepared, _ = self.prepare_backend()
+        for path in (Path('relative-env'), self.h.repo, self.h.state, self.h.app / 'backend/.venv'):
+            operation.prepared_backend_venv = path
+            with self.subTest(path=path), self.assertRaisesRegex(deploy.DeployError, 'Prepared venv path'):
+                operation.preflight()
+        operation.prepared_backend_venv = prepared
+        original = Path.is_symlink
+        with patch.object(Path, 'is_symlink', lambda p: p == prepared.parent or original(p)):
+            with self.assertRaisesRegex(deploy.DeployError, 'Prepared venv path'):
+                operation.preflight()
+        self.assertEqual(self.h.calls, [])
+
+    def test_prepared_backend_pip_failure_preserves_live_state(self):
+        operation, _, _ = self.prepare_backend()
+        original = operation.runner
+        def fail_pip(command, *, cwd, env=None):
+            if 'pip' in command:
+                raise deploy.DeployError('pip check failed')
+            return original(command, cwd=cwd, env=env)
+        operation.runner = fail_pip
+        with self.assertRaisesRegex(deploy.DeployError, 'pip check failed'):
+            operation.execute()
+        self.h.unchanged()
+        self.assertEqual(self.h.calls, [])
+
+    def require_real_links(self, prepared):
+        if os.name == 'nt':
+            self.link_patch.stop()
+        link = Path(self.folder.name) / 'link-probe'
+        try:
+            link.symlink_to(prepared, target_is_directory=True)
+        except OSError:
+            self.skipTest('Host does not permit directory symlinks')
+        link.unlink()
+
+    def test_prepared_backend_stages_then_swaps_and_preserves_previous_venv(self):
+        operation, prepared, _ = self.prepare_backend()
+        self.require_real_links(prepared)
+        marker = self.h.app / 'backend/.venv/old-environment'
+        marker.write_text('preserved')
+        before = operation.business_state()
+        release = operation.execute()
+        live = self.h.app / 'backend/.venv'
+        self.assertTrue(live.is_symlink())
+        self.assertEqual(live.resolve(), prepared)
+        self.assertEqual((release / 'stage' / deploy.APP_PATH / 'backend/.venv').resolve(), prepared)
+        saved = list(live.parent.glob('.venv.before-*'))
+        self.assertEqual(len(saved), 1)
+        self.assertEqual((saved[0] / 'old-environment').read_text(), 'preserved')
+        self.assertEqual(operation.business_state(), before)
+
+    def test_prepared_backend_restart_failure_restores_original_venv(self):
+        operation, prepared, _ = self.prepare_backend()
+        self.require_real_links(prepared)
+        live = self.h.app / 'backend/.venv'
+        (live / 'old-environment').write_text('preserved')
+        self.h.fail_start = True
+        with self.assertRaisesRegex(deploy.DeployError, 'start failed'):
+            operation.execute()
+        self.h.unchanged()
+        self.assertFalse(live.is_symlink())
+        self.assertEqual((live / 'old-environment').read_text(), 'preserved')
+        self.assertTrue(prepared.is_dir())
+
+    def test_prepared_backend_link_failure_restores_interpreter_before_recovery_stop(self):
+        operation, prepared, _ = self.prepare_backend()
+        self.require_real_links(prepared)
+        live = self.h.app / 'backend/.venv'
+        (live / 'old-environment').write_text('preserved')
+        original_runner, original_link = operation.runner, Path.symlink_to
+        def require_interpreter(command, *, cwd, env=None):
+            if str(command[0]) == 'bash' and not (live / 'bin/python').is_file():
+                raise deploy.DeployError('service command requires the live interpreter')
+            return original_runner(command, cwd=cwd, env=env)
+        def fail_live_link(path, target, **kwargs):
+            if path == live:
+                raise OSError('synthetic candidate link failure')
+            return original_link(path, target, **kwargs)
+        operation.runner = require_interpreter
+        with patch.object(Path, 'symlink_to', fail_live_link):
+            with self.assertRaisesRegex(deploy.DeployError, 'candidate link failure'):
+                operation.execute()
+        self.h.unchanged()
+        self.assertFalse(live.is_symlink())
+        self.assertEqual((live / 'old-environment').read_text(), 'preserved')
+
+    def test_prepared_backend_change_during_checks_stops_before_cutover(self):
+        operation, prepared, manifest = self.prepare_backend()
+        original = operation.runner
+        def change_candidate(command, *, cwd, env=None):
+            result = original(command, cwd=cwd, env=env)
+            if 'build' in command:
+                manifest['packages']['example'] = '1.3'
+                (prepared / 'heobrain-prepared.json').write_text(json.dumps(manifest))
+            return result
+        operation.runner = change_candidate
+        with self.assertRaisesRegex(deploy.DeployError, 'installed packages'):
+            operation.execute()
+        self.h.unchanged()
+        self.assertEqual(self.h.calls, [])
+
+    def test_prepared_backend_marker_and_exact_lock_validation(self):
+        deploy.validate_locked_packages('example>=1\nwindows-only>=1; sys_platform == "win32"',
+                                        'example==1.2\nwindows-only==1; sys_platform == "win32"',
+                                        {'example': '1.2', 'pip': '25'}, {'sys_platform': 'linux'})
+        for lock in ('example==1.*', 'example==1.2\nexample==1.2', 'example @ https://invalid.invalid/package.whl'):
+            with self.subTest(lock=lock), self.assertRaises(deploy.DeployError):
+                deploy.validate_locked_packages('example>=1', lock, {'example': '1.2'}, {'sys_platform': 'linux'})
 
     def test_short_or_branch_target_is_never_resolved_to_latest(self):
         for target in ('main', self.h.target[:8]):
@@ -383,12 +565,12 @@ class DeploymentTests(unittest.TestCase):
         with ThreadPoolExecutor(max_workers=1) as pool:
             active = pool.submit(first.execute)
             try:
-                self.assertTrue(self.h.started.wait(10))
+                self.assertTrue(self.h.started.wait(GIT_TEST_TIMEOUT))
                 with self.assertRaises(AlreadyRunning):
                     duplicate.execute()
             finally:
                 self.h.finish.set()
-            active.result(timeout=15)
+            active.result(timeout=max(15, GIT_TEST_TIMEOUT))
         self.assertEqual(self.h.calls, ['stop', 'start'])
 
     def test_active_worker_lock_is_not_taken_over(self):
