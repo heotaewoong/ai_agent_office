@@ -213,6 +213,7 @@ async function newsJobHarness(page:Page, ready=false) {
   else if(path===`/api/jobs/${old.id}/reviews/source`)body={...old,state:'production_queued'};
   else if(path==='/api/jobs/summaries')body={jobs:[recent,old]};
   else if(path==='/api/channels')body={channels:[]};
+  else if(path==='/api/source-library')body={areas:[],items:[],stats:{items:0,ready:0,passages:0,evidence:0,needs_check:0},vectors:{passages:0,ready:0,pending:0,available:false},limits:{links:10,file_mb:8,memo_chars:60000}};
   else if(path==='/api/newsletters')body={issues:[]};
   else if(path.endsWith('/deliveries'))body={deliveries:[],youtube_configured:false};
   await route.fulfill({status:body===undefined?404:200,contentType:'application/json',body:JSON.stringify(body??{detail:'Synthetic fixture endpoint intentionally unavailable'})});
@@ -284,7 +285,8 @@ test('내 원고 등록은 주제 선택 전에는 저장하지 않고 선택한
  const body='합성 검증용 편입 학습 원고입니다. '.repeat(12);
  await panel.getByLabel('콘텐츠 제목 필수').fill('합성 편입 후기');
  await panel.getByLabel('원고·자료·만들고 싶은 내용 필수').fill(body);
- await panel.getByRole('checkbox').check();
+ await panel.getByRole('checkbox',{name:/내가 작성했거나 제작에 사용할 권한/}).check();
+ await expect(panel.getByRole('checkbox',{name:/내 경험 중심/})).not.toBeChecked();
  const save=panel.getByRole('button',{name:'내 원고로 작업실 열기'});
  await expect(save).toBeDisabled();expect(writes).toEqual([]);
  await panel.getByLabel('누구를 위한 주제인가요? · 필수').selectOption('transfer-admission');
