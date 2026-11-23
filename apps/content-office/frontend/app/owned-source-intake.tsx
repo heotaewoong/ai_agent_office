@@ -1,6 +1,7 @@
 "use client";
 import {useEffect,useId,useRef,useState} from "react";
 import {api} from "../lib/api";
+import {presetsByAxis} from "../lib/briefs";
 import type {BriefPreset,Job} from "../lib/types";
 import styles from "./owned-source-intake.module.css";
 
@@ -59,7 +60,7 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
         <textarea className={styles.body} id={id+"-body"} value={body} rows={12} maxLength={50000} aria-describedby={id+"-body-help"} placeholder={"준비한 원고를 붙여넣거나, 전하고 싶은 내용을 적어 주세요.\n\n누구에게 도움이 되는 글인가요?\n어떤 경험이나 방법을 전하고 싶나요?\n읽고 나서 무엇을 할 수 있으면 좋을까요?"} onChange={e=>{revision.current++;setBody(e.target.value);}} />
         <div id={id+"-body-help"} className={styles.bodyHelp}><span>본문 100자 이상 · 최대 50,000자</span><span>사진·표·코드는 Markdown으로 보존해요.</span></div>
       </div>
-      <div className={styles.field}><label htmlFor={id+"-preset"}>누구를 위한 주제인가요? · 필수</label><select className={styles.input} id={id+"-preset"} value={preset} onChange={e=>setPreset(e.target.value)}><option value="">주제·독자를 직접 선택해 주세요</option>{presets.map(row=><option key={row.id} value={row.id}>{row.label}</option>)}</select><p className={styles.hint}>{presets.find(row=>row.id===preset)?.reader??"알맞은 항목이 없으면 ‘내 원문 중심’을 선택하세요. AI 실무 주제를 자동으로 연결하지 않습니다."}</p></div>
+      <div className={styles.field}><label htmlFor={id+"-preset"}>누구를 위한 주제인가요? · 필수</label><select className={styles.input} id={id+"-preset"} value={preset} onChange={e=>setPreset(e.target.value)}><option value="">주제·독자를 직접 선택해 주세요</option>{presetsByAxis(presets).map(group=>group.axis?<optgroup key={group.axis} label={group.label}>{group.presets.map(row=><option key={row.id} value={row.id}>{row.label}</option>)}</optgroup>:group.presets.map(row=><option key={row.id} value={row.id}>{row.label}</option>))}</select><p className={styles.hint}>{presets.find(row=>row.id===preset)?.reader??"알맞은 항목이 없으면 ‘내 원문 중심’을 선택하세요. AI 실무 주제를 자동으로 연결하지 않습니다."}</p></div>
       <label className={styles.consent}><input type="checkbox" checked={owned} onChange={e=>setOwned(e.target.checked)} /><span>내가 작성했거나 제작에 사용할 권한이 있는 자료입니다.</span></label>
       {error&&<p className={styles.error} role="alert">{error}</p>}
       <footer className={styles.footer}><div><strong id={id+"-next"}>{nextStep}</strong><p>저장 후에도 수정할 수 있어요. 원고 승인·유료 제작·공개 게시에는 별도 확인이 필요해요.</p></div><button className={styles.submit} type="button" aria-describedby={id+"-next"} disabled={busy||!ready} onClick={()=>void create()}>{busy?"처리 중…":"내 원고로 작업실 열기"}<span aria-hidden="true">→</span></button></footer>

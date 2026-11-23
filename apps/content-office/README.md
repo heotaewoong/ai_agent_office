@@ -533,6 +533,11 @@ OpenAI는 Chat Completions + JSON schema 응답 형식, `reasoning_effort: low`�
 | `exam-opic` | A · 시험·편입 | 오픽(OPIc) 등급 올리기 | ko |
 | `exam-info-processing` | A · 시험·편입 | 정보처리기사 합격 | ko |
 | `transfer-admission` | A · 시험·편입 | 대학 편입 준비 | ko |
+| `learning-memory` · `learning-focus` · `learning-habit` · `learning-sleep-exercise` | C · 학습법과 뇌과학 | 공부법과 기억 · 집중력 · 습관과 동기 · 수면과 운동 | ko |
+| `growth-mindset` · `growth-time` · `growth-career` | D · 자기계발 | 마인드셋 · 시간 관리 · 취업과 면접 | ko |
+| `tips-life` · `tips-tools` | E · 일상생활 꿀팁 | 생활 정보 · 도구 추천 | ko |
+
+축이 화면의 큰 분야이고 프리셋이 세부 항목입니다. 화면 표시 이름은 A 시험과 자격증, B AI 활용과 자동화입니다. `GET /api/briefs`의 `axes`는 분야 이름과 근거 안내 문구를 돌려줍니다. 이 문구는 안내용이며 승인이나 검증을 대신하지 않습니다. C·D·E 축 프리셋은 CTA 기본값이 비어 있고, 뉴스레터는 CTA가 비어 있으면 CTA 줄을 쓰지 않습니다.
 
 덮어쓸 수 있는 칸은 `reader`(독자)·`problem`(문제)·`outcome`(약속한 결과)·`cta`·`language`(ko/en)·`topic`·`prior_knowledge`·`tone`입니다. 빈 문자열은 프리셋 값을 그대로 씁니다. 화면에서는 "기획 직접 등록"의 독자 브리프 칸(프리셋 선택 + 독자·문제·약속한 결과·CTA·언어)과 작업실 상단의 "독자 브리프" 카드에서 바꿉니다. 작업의 브리프를 바꾸면 다음 원고 생성부터 적용되고, 이미 만든 원고를 고치지는 않습니다.
 

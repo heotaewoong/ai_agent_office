@@ -62,7 +62,12 @@ def test_presets_cover_both_axes_and_legacy_default():
     assert DEFAULT_PRESET == "ai-agent"
     assert {"ai-agent", "exam-opic", "exam-info-processing", "transfer-admission", "productivity-automation"} <= set(PRESETS)
     axes = {p["axis"] for p in PRESETS.values()}
-    assert axes == {"A", "B", "source"}
+    from office.briefs import AXES, presets_payload
+    assert axes == {"A", "B", "C", "D", "E", "source"} == set(AXES)
+    assert {"learning-memory", "learning-focus", "learning-habit", "learning-sleep-exercise", "growth-mindset", "growth-time", "growth-career", "tips-life", "tips-tools"} <= set(PRESETS)
+    assert all(PRESETS[key]["cta"] == "" for key in PRESETS if PRESETS[key]["axis"] in ("C", "D", "E"))
+    payload = presets_payload()
+    assert [axis["id"] for axis in payload["axes"]] == list(AXES) and all(axis["label"] and axis["evidence"] for axis in payload["axes"])
     for key, preset in PRESETS.items():
         for field in ("axis", "topic", "reader", "prior_knowledge", "problem", "outcome", "tone", "language"):
             assert preset[field], (key, field)

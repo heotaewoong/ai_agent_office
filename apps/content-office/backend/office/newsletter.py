@@ -72,7 +72,7 @@ def build_markdown(job, subject):
     packet = job["source_packet"]
     brief = brief_for_job(job)
     text = f"# {subject}\n\n" + blog_markdown(packet).strip() + "\n\n"
-    text += "## 오늘 할 일\n\n" + brief["outcome"].strip() + "\n\n**" + brief["cta"].strip() + "**\n\n"
+    text += "## 오늘 할 일\n\n" + brief["outcome"].strip() + "\n\n" + ("**" + brief["cta"].strip() + "**\n\n" if brief["cta"].strip() else "")
     text += _offer_footer(job.get("offer"))
     return text + "---\n\n" + UNSUBSCRIBE_LINE + "\n"
 

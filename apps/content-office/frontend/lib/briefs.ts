@@ -11,7 +11,19 @@ export const BRIEF_FIELDS: { key: keyof BriefOverrides; label: string; hint: str
   { key: "cta", label: "CTA", hint: "예: 무료 체크리스트 받기" },
 ];
 
-export const AXIS_LABELS: Record<string, string> = { A: "시험·편입", B: "AI·자동화", source: "내 원문" };
+export const AXIS_LABELS: Record<string, string> = { A: "시험과 자격증", B: "AI 활용과 자동화", C: "학습법과 뇌과학", D: "자기계발", E: "일상생활 꿀팁", source: "내 원문" };
+
+/** 프리셋을 큰 분야(축)별로 묶습니다. 축이 없는 프리셋은 맨 앞에 그대로 둡니다. */
+export function presetsByAxis<T extends { axis?: string }>(presets: T[]): { axis: string; label: string; presets: T[] }[] {
+  const groups: { axis: string; label: string; presets: T[] }[] = [];
+  for (const preset of presets) {
+    const axis = preset.axis ?? "";
+    let group = groups.find((g) => g.axis === axis);
+    if (!group) groups.push((group = { axis, label: axis ? axisLabel(axis) : "", presets: [] }));
+    group.presets.push(preset);
+  }
+  return groups;
+}
 export const LANGUAGE_LABELS: Record<string, string> = { ko: "한국어", en: "영어" };
 
 export function axisLabel(axis: string): string {

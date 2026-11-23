@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { briefDraftForJob, briefDraftFromBrief, briefFormFromBrief, briefOverridesFromForm, axisLabel, briefSummary, changeBriefDraft, presetLabel, syncBriefDraft, updateBriefDrafts, type BriefDraft } from "../lib/briefs.ts";
+import { presetsByAxis, briefDraftForJob, briefDraftFromBrief, briefFormFromBrief, briefOverridesFromForm, axisLabel, briefSummary, changeBriefDraft, presetLabel, syncBriefDraft, updateBriefDrafts, type BriefDraft } from "../lib/briefs.ts";
 
 test("덮어쓰기는 빈 문자열을 빼고 공백을 다듬는다", () => {
   const r = briefOverridesFromForm({ brief_reader: " 독자 ", brief_problem: "", brief_outcome: "결과", brief_cta: "   ", brief_language: "", brief_topic: "주제", brief_prior_knowledge: "", brief_tone: "" });
@@ -131,8 +131,9 @@ test("명시적 다시 불러오기는 한 작업의 초안만 버리며 미편�
 });
 
 test("축 이름과 프리셋 이름", () => {
-  assert.equal(axisLabel("A"), "시험·편입");
-  assert.equal(axisLabel("B"), "AI·자동화");
+  assert.equal(axisLabel("A"), "시험과 자격증");
+  assert.equal(axisLabel("B"), "AI 활용과 자동화");
+  assert.equal(axisLabel("C"), "학습법과 뇌과학");
   assert.equal(axisLabel("Z"), "Z");
   const presets = [{ id: "ai-agent", axis: "B" as const, label: "AI 에이전트 입문", topic: "", reader: "", prior_knowledge: "", problem: "", outcome: "", tone: "", language: "ko" as const, cta: "" }];
   assert.equal(presetLabel(presets, "ai-agent"), "AI 에이전트 입문");
@@ -141,6 +142,11 @@ test("축 이름과 프리셋 이름", () => {
 
 test("브리프 요약은 독자·문제·CTA·언어를 한 줄씩 낸다", () => {
   const rows = briefSummary({ preset: "ai-agent", axis: "B", label: "AI 에이전트 입문", topic: "", reader: "직장인", prior_knowledge: "", problem: "반복 업무", outcome: "", tone: "", language: "en", cta: "뉴스레터" });
-  assert.deepEqual(rows, [["프리셋", "AI 에이전트 입문 · AI·자동화"], ["독자", "직장인"], ["문제", "반복 업무"], ["CTA", "뉴스레터"], ["언어", "영어"]]);
+  assert.deepEqual(rows, [["프리셋", "AI 에이전트 입문 · AI 활용과 자동화"], ["독자", "직장인"], ["문제", "반복 업무"], ["CTA", "뉴스레터"], ["언어", "영어"]]);
   assert.deepEqual(briefSummary(undefined), []);
+});
+
+test("프리셋을 큰 분야별로 묶고 축이 없는 항목은 그대로 둔다", () => {
+  const groups = presetsByAxis([{ id: "s", axis: "source" }, { id: "b1", axis: "B" }, { id: "c1", axis: "C" }, { id: "b2", axis: "B" }, { id: "x" }]);
+  assert.deepEqual(groups.map((g) => [g.axis, g.label, g.presets.map((p) => p.id)]), [["source", "내 원문", ["s"]], ["B", "AI 활용과 자동화", ["b1", "b2"]], ["C", "학습법과 뇌과학", ["c1"]], ["", "", ["x"]]]);
 });

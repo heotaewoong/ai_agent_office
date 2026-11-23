@@ -502,7 +502,7 @@ export type IdeaInput = {
 };
 export type IdeaSourcesInput = { source_urls: string[]; operator_verified: true; expected_hash: string };
 export type BriefLanguage = "ko" | "en";
-export type BriefAxis = "A" | "B" | "source";
+export type BriefAxis = "A" | "B" | "C" | "D" | "E" | "source";
 export type BriefPreset = {
   current_solution?: string;
   goal?: string;
@@ -518,7 +518,8 @@ export type BriefPreset = {
   language: BriefLanguage;
   cta: string;
 };
-export type BriefPresets = { default: string; presets: BriefPreset[] };
+export type BriefAxisInfo = { id: string; label: string; evidence: string };
+export type BriefPresets = { default: string; presets: BriefPreset[]; axes?: BriefAxisInfo[] };
 export type BriefOverrides = {
   current_solution?: string;
   goal?: string;
