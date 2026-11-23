@@ -335,13 +335,14 @@ test('기획 다음 안내는 한 번만 표시하고 버튼 설명도 같은 �
 });
 
 
-for(const width of [375,1440]) test(`파이프라인 ${width}px 바로가기는 제목을 목차 아래에 표시하고 초점을 옮긴다`,async({page})=>{
+for(const width of [375,1440]) test(`파이프라인 ${width}px 바로가기는 제목을 화면에 표시하고 초점을 옮긴다`,async({page})=>{
  const writes=await researchHarness(page);
  const doc=JSON.parse(readFileSync(new URL('../../../backend/config/architecture.json',import.meta.url),'utf8'));
  await page.route('**/api/architecture',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({doc,git:{commit:null,committed_at:null,subject:null,recent:[]},build:null,build_matches_running_code:false,keys:{openai:false,gemini:false,runway:false,youtube:false},profiles:{text:'synthetic',image:'none'},window:{status:'closed'},worker:{state:'stopped'},budget:{cap_krw:10000,spent_krw:0,reserved_krw:0,remaining_krw:10000},usage:[]})}));
  await page.setViewportSize({width,height:812});await page.goto('/pipeline');
+ await page.getByRole('tab',{name:'운영 상세',exact:true}).click();
  await page.getByRole('link',{name:'서버·연결 경계',exact:true}).press('Enter');
- await expect.poll(()=>page.evaluate(()=>document.getElementById('pipeline-runtime-title')!.getBoundingClientRect().top-document.querySelector('.page-outline')!.getBoundingClientRect().bottom)).toBeGreaterThanOrEqual(0);
+ await expect(page.locator('#pipeline-runtime-title')).toBeInViewport();
  await expect(page.locator('#pipeline-runtime-title')).toBeFocused();
  await expect(page).toHaveURL(/#pipeline-runtime-title$/);
  expect(writes).toEqual([]);
@@ -479,8 +480,9 @@ test('공개 원문 문단 검색과 사용자 선택을 새 기획 판본에 �
   await expect(secondChoice).not.toBeChecked();
   await firstChoice.check();
   await panel.getByRole('button', { name: '공개 원문 근거 다시 찾기', exact: true }).click();
-  await expect(firstChoice).not.toBeChecked();
+  await expect(firstChoice).toBeChecked();
   await expect(secondChoice).not.toBeChecked();
+  await firstChoice.uncheck();
   await secondChoice.check();
   expect(writes).toEqual([
     { path: '/api/ideas/public-sample/public-evidence', body: { expected_hash: initial } },

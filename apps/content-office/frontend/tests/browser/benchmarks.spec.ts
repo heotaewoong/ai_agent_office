@@ -327,7 +327,7 @@ test('전체 조건의 요청문은 준비 POST만 만들고 세이지 대화 �
 
 test('세이지 요청문 검토가 기존 루미 초안의 본문과 배정 대상을 덮어쓰지 않는다', async ({ page }) => {
   const writes = await boardHarness(page);
-  await page.goto('/news?tab=creators');
+  await page.goto('/news');
   await page.getByRole('navigation', { name: '소식 보기' }).getByRole('link', { name: '플랫폼 소식', exact: true }).click();
   const firstResearch = await prepareResearch(page);
   await firstResearch.getByRole('button', { name: '세이지 조사 요청문 검토', exact: true }).click();

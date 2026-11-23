@@ -76,7 +76,7 @@ export function PlatformNewsPanel({ active, platform, onPlatformChange, onIdeaSa
         <h2 id="platform-news-heading">플랫폼 소식</h2>
         <p>{data?.topic ? '수집 주제 · ' + data.topic : '플랫폼별 수집 결과와 등록 출처를 살펴보세요.'}</p>
       </div>
-      <label>출처 플랫폼<select ref={platformSelect} value={platform} onChange={event => onPlatformChange(event.target.value)}>
+      <label>출처 플랫폼<select aria-label="출처 플랫폼" ref={platformSelect} value={platform} onChange={event => onPlatformChange(event.target.value)}>
         <option value="all">전체 플랫폼</option>
         {Object.entries(platformNewsLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
       </select></label>

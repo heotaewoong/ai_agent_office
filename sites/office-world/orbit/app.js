@@ -65,7 +65,7 @@ function buildWorlds(){
  $('#world-grid').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{activeWorld=b.dataset.world;scene?.setWorld(activeWorld);$('#world-label').textContent=worlds.find(w=>w.id===activeWorld).name;buildWorlds();$('#map-dialog').close();toast('도시의 분위기를 바꿨습니다. 업무 데이터는 그대로입니다.');}));
 }
 function commandResults(q=''){
- const entries=[...nav,...dock,['coverage','features','원본 기능 대조'],['features','features','기능 위치 지도'],['snapshot-tasks','tasks','Hermes 작업 관측 사본'],['settings','settings','회사 설정 설계']].map(([section,ic,name])=>({section,icon:ic,name,type:operationalSections[section]?'운영 조회':section==='chat'?'기존 비서':'설계·관측'}));
+ const entries=[...nav,...dock,['coverage','features','원본 기능 대조'],['features','features','기능 위치 지도'],['snapshot-tasks','tasks','Hermes 업무 예시'],['settings','settings','회사 설정 설계']].map(([section,ic,name])=>({section,icon:ic,name,type:operationalSections[section]?'운영 조회':section==='chat'?'기존 비서':'설계·관측'}));
  entries.push(...[{section:'long',name:'장기 기억 · 지식 검토와 검색'},{section:'training',name:'SFT · DPO 학습 데이터와 계획'},{section:'evolution',name:'SLERP · Task Arithmetic 모델 병합 원리'}].map(e=>({...e,icon:'memory',type:'새 체험 화면'})));
  for(const t of data.teams)entries.push({section:'people',icon:t.id,name:t.name+'팀',type:'팀',context:{team:t.id}});
  for(const f of data.features)entries.push({section:'features',icon:'features',name:f.name,type:f.product,context:{featureId:f.id,query:f.name}});
@@ -79,7 +79,7 @@ async function init(){
  $('#primary-nav').innerHTML=nav.map(([id,ic,name])=>`<button data-section="${id}" aria-label="${name}" title="${name}">${icon(ic)}<span>${name}</span></button>`).join('');
  $('#dock-items').innerHTML=dock.map(([id,ic,name])=>`<button class="dock-item" data-section="${id}">${icon(ic)}<span>${name}</span></button>`).join('');
  $('#team-list').innerHTML=data.teams.map(t=>`<button class="team-row" data-focus="${t.id}" style="--team:${colors[t.id]};--tint:${tints[t.id]}" aria-label="${t.name} 오피스"><span class="team-emblem">${icon(t.id)}</span><span class="team-text"><strong>${t.name}</strong><small>${teamText[t.id]}</small></span>${icon('chevron')}</button>`).join('');
- $('#snapshot-source-note').textContent=snapshotAvailable?`${formatTime(data.cardCapturedAt)} · Hermes 작업 ${data.cards.length}개를 담은 관측 사본입니다. 현재 운영 수치와 합산하지 않습니다.`:'관측 사본을 불러오지 못했습니다. 프로필·기능 목록은 확인이 필요합니다.';
+ $('#snapshot-source-note').textContent=snapshotAvailable?`공개 예시 작업 ${data.cards.length}개입니다. 실제 운영 상태는 위에서 확인할 수 있습니다.`:'관측 사본을 불러오지 못했습니다. 프로필·기능 목록은 확인이 필요합니다.';
  panels=createWorkspacePanels($('#workspace'),{data,onNavigate:openSection,onToast:toast});
  coverage=createCoveragePanel($('#coverage-workspace'),{onNavigate:openSection});
  knowledge=createKnowledgeLab($('#knowledge-workspace'),{onToast:toast});

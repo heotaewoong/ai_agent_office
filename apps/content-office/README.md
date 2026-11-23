@@ -311,7 +311,7 @@ echo 'export PATH="$HOME/.local/node/bin:$PATH"' >> ~/.profile
 EC2에는 앱 실행 계정(`ubuntu`)의 crontab에 한 줄을 등록해야 실제로 돕니다(`crontab -e`). 스크립트가 `OFFICE_ENV_FILE`의 키를 직접 읽으며 값은 출력하지 않습니다. 상태 폴더를 기본값과 다르게 쓰면 같은 줄에 `OFFICE_STATE_DIR=...`도 넣습니다.
 
 ```bash
-*/15 * * * * cd /home/ubuntu/ai_agent_office/apps/content-office/backend && OFFICE_ENV_FILE=$HOME/office.env .venv/bin/python ../scripts/daily_collect.py >> $HOME/.local/state/heobrain-content-office/runtime/daily-collect.log 2>&1
+*/15 * * * * cd "$HOME/ai_agent_office/apps/content-office/backend" && OFFICE_ENV_FILE=$HOME/office.env .venv/bin/python ../scripts/daily_collect.py >> $HOME/.local/state/heobrain-content-office/runtime/daily-collect.log 2>&1
 ```
 
 cron은 15분마다 깨어나지만 꺼져 있거나 시각 밖이면 아무것도 하지 않고 한 줄만 로그에 남깁니다.
@@ -357,7 +357,7 @@ apps/content-office/backend/.venv/bin/python -m unittest discover \
 
 ```bash
 # 서버 cron (ubuntu 사용자). 스위치가 꺼져 있으면 상태만 기록하고 배포하지 않습니다.
-*/10 * * * * cd /home/ubuntu/ai_agent_office/apps/content-office && OFFICE_ENV_FILE=$HOME/office.env backend/.venv/bin/python scripts/auto_deploy.py >> $HOME/.local/state/heobrain-content-office/runtime/auto-deploy.log 2>&1
+*/10 * * * * cd "$HOME/ai_agent_office/apps/content-office" && OFFICE_ENV_FILE=$HOME/office.env backend/.venv/bin/python scripts/auto_deploy.py >> $HOME/.local/state/heobrain-content-office/runtime/auto-deploy.log 2>&1
 ```
 
 ### 주식 팀 (포트폴리오 점검 · 2026-11-03)

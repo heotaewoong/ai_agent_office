@@ -9,6 +9,6 @@ Bundled dependencies (no runtime CDN):
 - Three.js 0.180.0 and OrbitControls/RoundedBoxGeometry: MIT, https://github.com/mrdoob/three, license in vendor/LICENSE-three.txt.
 - Lucide React 1.45.0 icon paths rendered to icons.svg: ISC, https://github.com/lucide-icons/lucide, license in vendor/LICENSE-lucide.txt.
 
-The concept image is the previously created HeoBrain design reference; it is not a screenshot proving live operations. data.json is a dated, sanitized observation snapshot. Actual Content Office data are separately retrieved from fixed same-origin read routes. No secret is required in this directory.
+The concept image is the previously created HeoBrain design reference; it is not a screenshot proving live operations. data.json contains synthetic demo cards and profiles for the public preview. Actual Content Office data are separately retrieved from fixed same-origin read routes. No secret is required in this directory.
 
 Rollback: restore the original WorldView iframe source `/world/index.html?api=/api/space&embed=1` through the normal reviewed deployment. Never restore or replace the business database to roll back this UI.

@@ -1,1 +1,1354 @@
-{"capturedAt":"2026-11-17T06:04:51.391311+00:00","cardCapturedAt":"2026-11-17T06:04:51.391311+00:00","isLive":false,"boardCount":8,"teams":[{"id":"content","name":"콘텐츠","color":"#bf784f","profileIds":["noah","mia","ethan","oliver"],"leadProfileIds":["noah","mia"]},{"id":"marketing","name":"마케팅·상품","color":"#ad6996","profileIds":["ethan","oliver","noah","mia"],"leadProfileIds":["ethan","oliver"]},{"id":"data","name":"데이터","color":"#658db9","profileIds":["ada","oliver","sam"],"leadProfileIds":["ada"]},{"id":"development","name":"개발","color":"#a78b4f","profileIds":["sam"],"leadProfileIds":["sam"]}],"profiles":[{"id":"ada","displayName":"Ada","role":"HeoBrain 데이터 분석 보조","visibleInOffice":true,"teams":["data"],"kind":"specialist"},{"id":"default","displayName":"기본 프로필","role":null,"visibleInOffice":true,"teams":[],"kind":"specialist"},{"id":"ec2-migration-probe-20261030","displayName":"Ec2 Migration Probe 20261030","role":null,"visibleInOffice":false,"teams":[],"kind":"technical"},{"id":"ethan","displayName":"Ethan","role":"HeoBrain 기획 보조","visibleInOffice":true,"teams":["content","marketing"],"kind":"specialist"},{"id":"iris","displayName":"Iris","role":"HeoBrain 보안 감사역","visibleInOffice":true,"teams":[],"kind":"specialist"},{"id":"lumi","displayName":"루미","role":null,"visibleInOffice":true,"teams":[],"kind":"lead"},{"id":"mia","displayName":"Mia","role":"HeoBrain 디자인 보조","visibleInOffice":true,"teams":["content","marketing"],"kind":"specialist"},{"id":"mybots-sage","displayName":"세이지 · Sage","role":null,"visibleInOffice":true,"teams":[],"kind":"specialist"},{"id":"noah","displayName":"Noah","role":"HeoBrain 글쓰기·표현 보조","visibleInOffice":true,"teams":["content","marketing"],"kind":"specialist"},{"id":"oliver","displayName":"Oliver","role":"HeoBrain 전략기획·리서치 조정","visibleInOffice":true,"teams":["content","marketing","data"],"kind":"specialist"},{"id":"sam","displayName":"Sam","role":"HeoBrain 개발·파일 처리 보조","visibleInOffice":true,"teams":["data","development"],"kind":"specialist"},{"id":"windows-before-migration","displayName":"windows-before-migration","role":null,"visibleInOffice":false,"teams":[],"kind":"technical"},{"id":"windows-default","displayName":"windows-default","role":null,"visibleInOffice":true,"teams":[],"kind":"specialist"},{"id":"windows-lumi","displayName":"루미 (windows-lumi)","role":null,"visibleInOffice":true,"teams":[],"kind":"specialist"}],"cards":[{"key":"[\"heobrain-brand\", \"t_fb773c09\"]","id":"t_fb773c09","title":"HeoBrain 유료 PDF 가격 가설","assignee":"ada","status":"done","board":"heobrain-brand","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-brand\", \"t_f7c773f8\"]","id":"t_f7c773f8","title":"HeoBrain 슬로건·PDF 시리즈 네이밍","assignee":"noah","status":"done","board":"heobrain-brand","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-brand\", \"t_63d09448\"]","id":"t_63d09448","title":"HeoBrain 사업영역 정리","assignee":"ethan","status":"done","board":"heobrain-brand","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-brand\", \"t_4311de3a\"]","id":"t_4311de3a","title":"06 사업영역에 인터뷰 결과 반영","assignee":"ethan","status":"done","board":"heobrain-brand","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-brand\", \"t_afe85d5f\"]","id":"t_afe85d5f","title":"HeoBrain 로고·VI 컨셉","assignee":"mia","status":"done","board":"heobrain-brand","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-brand\", \"t_a25bf827\"]","id":"t_a25bf827","title":"편입 영어 어휘 PDF 첫 테스트 가격 확정, 대표 승인 필요","assignee":"ada","status":"done","board":"heobrain-brand","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch\", \"t_cbdafccb\"]","id":"t_cbdafccb","title":"HeoBrain 첫 유료 PDF 런칭 준비 패키지 (자격증)","assignee":"default","status":"archived","board":"heobrain-launch","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch\", \"t_6612261e\"]","id":"t_6612261e","title":"상품 상세 카피 초안 작성","assignee":"noah","status":"archived","board":"heobrain-launch","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch\", \"t_8ba7f71d\"]","id":"t_8ba7f71d","title":"자격증 수험생 학습 고민과 수요 조사","assignee":"ada","status":"archived","board":"heobrain-launch","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch\", \"t_954820f7\"]","id":"t_954820f7","title":"자격증 암기 PDF 가격대 점검","assignee":"ada","status":"archived","board":"heobrain-launch","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch\", \"t_a21fc7a6\"]","id":"t_a21fc7a6","title":"PDF 표지 시안 제작","assignee":"mia","status":"archived","board":"heobrain-launch","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch\", \"t_f18775fb\"]","id":"t_f18775fb","title":"최종 취합 문서 작성","assignee":"ethan","status":"archived","board":"heobrain-launch","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-2\", \"t_2ed44d74\"]","id":"t_2ed44d74","title":"상품 상세 카피","assignee":"noah","status":"archived","board":"heobrain-launch-2","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-2\", \"t_4b4cae3d\"]","id":"t_4b4cae3d","title":"자격증 수험 트렌드 조사","assignee":"mybots-sage","status":"archived","board":"heobrain-launch-2","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-2\", \"t_5da97f8b\"]","id":"t_5da97f8b","title":"Verify swarm outputs","assignee":"ethan","status":"archived","board":"heobrain-launch-2","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-2\", \"t_8fd8d42c\"]","id":"t_8fd8d42c","title":"Swarm: HeoBrain 첫 유료 PDF 런칭 준비 패키지 (자격증)","assignee":"default","status":"archived","board":"heobrain-launch-2","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-2\", \"t_e13e4742\"]","id":"t_e13e4742","title":"PDF 표지 시안","assignee":"mia","status":"archived","board":"heobrain-launch-2","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-2\", \"t_ff374cda\"]","id":"t_ff374cda","title":"Synthesize swarm outputs","assignee":"lumi","status":"archived","board":"heobrain-launch-2","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-2\", \"t_ffdbb64b\"]","id":"t_ffdbb64b","title":"자격증 암기 PDF 가격 점검","assignee":"ada","status":"archived","board":"heobrain-launch-2","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_0dec2af0\"]","id":"t_0dec2af0","title":"자격증 런칭 패키지 합성 및 비공개 Google 문서","assignee":"lumi","status":"blocked","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_831bc137\"]","id":"t_831bc137","title":"PDF 표지 시안","assignee":"mia","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_9cb7e391\"]","id":"t_9cb7e391","title":"상품 상세 카피","assignee":"noah","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_aa6d88cf\"]","id":"t_aa6d88cf","title":"HeoBrain 첫 유료 PDF 런칭 준비 패키지 (자격증)","assignee":"oliver","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_b41df7ef\"]","id":"t_b41df7ef","title":"자격증 런칭 준비 패키지 검증","assignee":"ethan","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_c0cd88f1\"]","id":"t_c0cd88f1","title":"자격증 암기 PDF 가격 점검","assignee":"ada","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_c7ac4e14\"]","id":"t_c7ac4e14","title":"자격증 수험 트렌드 조사","assignee":"mybots-sage","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_018ab62a\"]","id":"t_018ab62a","title":"상품 상세 카피 초안 작성","assignee":"noah","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_29669d35\"]","id":"t_29669d35","title":"초안 저장 및 README 목차 갱신","assignee":"sophie","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_d665a47d\"]","id":"t_d665a47d","title":"초안 검토 및 미확정 항목 정리","assignee":"mia","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-launch-3\", \"t_e48f6fc7\"]","id":"t_e48f6fc7","title":"역할별 근거·제약 검토","assignee":"ethan","status":"done","board":"heobrain-launch-3","teams":["marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_b107ba37\"]","id":"t_b107ba37","title":"[EC2 실증] 루미 업무 접수와 팀 인계 시작","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_da245ec0\"]","id":"t_da245ec0","title":"[EC2 실증] 업무 카드 작성 양식 초안","assignee":"ethan","status":"done","board":"heobrain-office","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_da204176\"]","id":"t_da204176","title":"[EC2 실증] 업무 양식 독립 검토","assignee":"ada","status":"done","board":"heobrain-office","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_84e28aeb\"]","id":"t_84e28aeb","title":"[EC2 실증] 검토 반영 및 최종 보고","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_81bea139\"]","id":"t_81bea139","title":"[Slack 실증] 루미 카드 결과 알림","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_d4ee54ed\"]","id":"t_d4ee54ed","title":"[HITL 검증] Ada 스킬 검토와 사람 결정 대기","assignee":"ada","status":"blocked","board":"heobrain-office","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_e62c497c\"]","id":"t_e62c497c","title":"[Goal 제한 검증] Sam 승인 대기 증거 교차검사","assignee":"sam","status":"done","board":"heobrain-office","teams":["data","development"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_909ee75d\"]","id":"t_909ee75d","title":"3D 비서 요청","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_410fe53a\"]","id":"t_410fe53a","title":"연결 검증 · Ethan 덧셈","assignee":"ethan","status":"done","board":"heobrain-office","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_ead764ba\"]","id":"t_ead764ba","title":"연결 검증 · Mia 곱셈","assignee":"mia","status":"done","board":"heobrain-office","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_57f86db9\"]","id":"t_57f86db9","title":"연결 검증 · Ada 독립 재계산","assignee":"ada","status":"done","board":"heobrain-office","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_4973b33b\"]","id":"t_4973b33b","title":"연결 검증 · Lumi 최종 보고","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_28d02f7b\"]","id":"t_28d02f7b","title":"3D 비서 요청","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_75630322\"]","id":"t_75630322","title":"콘텐츠 제작 · 일을 마무리하는 5분 루틴","assignee":"noah","status":"done","board":"heobrain-office","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_81d794db\"]","id":"t_81d794db","title":"콘텐츠 독립 검토 · 원고·문자수·시간 배분","assignee":"ada","status":"done","board":"heobrain-office","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_1d74d4ed\"]","id":"t_1d74d4ed","title":"콘텐츠 완료 · Lumi 최종 보고","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_21132d57\"]","id":"t_21132d57","title":"3D 비서 요청","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_9a7ec5e5\"]","id":"t_9a7ec5e5","title":"[연결 검증 2026-11-03] Lumi EC2 칸반 단건","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_527e422f\"]","id":"t_527e422f","title":"3D 비서 요청","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_e6b93119\"]","id":"t_e6b93119","title":"벤치마킹 조사 · 세이지 공개 관측 분석","assignee":"mybots-sage","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_bd0f35e5\"]","id":"t_bd0f35e5","title":"벤치마킹 조사 · Ada 독립 근거 검토","assignee":"ada","status":"done","board":"heobrain-office","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_3c74478c\"]","id":"t_3c74478c","title":"벤치마킹 조사 · Lumi 최종 보고","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_8a549177\"]","id":"t_8a549177","title":"MAGMA 가격 포지셔닝 확정","assignee":"ada","status":"archived","board":"heobrain-office","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_e8097fd7\"]","id":"t_e8097fd7","title":"MAGMA 사업영역 확정","assignee":"ethan","status":"archived","board":"heobrain-office","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_d5c44cb5\"]","id":"t_d5c44cb5","title":"네이밍·슬로건","assignee":"noah","status":"archived","board":"heobrain-office","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_b606de45\"]","id":"t_b606de45","title":"[고객 문의] 제목 비공개","assignee":"lumi","status":"archived","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_68ef4cfa\"]","id":"t_68ef4cfa","title":"[고객 문의] 제목 비공개","assignee":"lumi","status":"blocked","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_701d7c20\"]","id":"t_701d7c20","title":"[고객 문의] 제목 비공개","assignee":"lumi","status":"archived","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_21d9c503\"]","id":"t_21d9c503","title":"3D 비서 요청","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_94c368bc\"]","id":"t_94c368bc","title":"갤럭시 접속 체크리스트 · Noah 작성","assignee":"noah","status":"done","board":"heobrain-office","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_c5b12e0f\"]","id":"t_c5b12e0f","title":"갤럭시 접속 체크리스트 · Ada 독립 검수","assignee":"ada","status":"done","board":"heobrain-office","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_cdbf2496\"]","id":"t_cdbf2496","title":"갤럭시 접속 협업 시험 · Lumi 최종 보고","assignee":"lumi","status":"done","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-office\", \"t_c7d6c9e2\"]","id":"t_c7d6c9e2","title":"3D 비서 요청","assignee":"lumi","status":"blocked","board":"heobrain-office","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-opic-research\", \"t_8c5f4159\"]","id":"t_8c5f4159","title":"오픽 IM→IH 반복 학습 사례 수집 준비","assignee":"oliver","status":"done","board":"heobrain-opic-research","teams":["content","data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-opic-research\", \"t_8c86d62e\"]","id":"t_8c86d62e","title":"오픽 조사 CSV 검증·적재 승인 검토","assignee":"ada","status":"done","board":"heobrain-opic-research","teams":["content","data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-swarm\", \"t_305b8a6d\"]","id":"t_305b8a6d","title":"블로그·SNS 문체 기준과 도입부 초안","assignee":"noah","status":"done","board":"heobrain-swarm","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-swarm\", \"t_3d350a55\"]","id":"t_3d350a55","title":"Swarm: HeoBrain 주 1편 콘텐츠 첫 회분 파생 패키지 초안 (설계와 초안만 작성, 발행과 외부 전송 금지)","assignee":"default","status":"done","board":"heobrain-swarm","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-swarm\", \"t_566268ba\"]","id":"t_566268ba","title":"학습 카드뉴스 구성안과 가독성 기준","assignee":"mia","status":"done","board":"heobrain-swarm","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-swarm\", \"t_5e71730c\"]","id":"t_5e71730c","title":"Synthesize swarm outputs","assignee":"sophie","status":"done","board":"heobrain-swarm","teams":[],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-swarm\", \"t_8f089e8c\"]","id":"t_8f089e8c","title":"공통 원고 주제 후보 3개와 근거 자료 목록 정리","assignee":"ada","status":"done","board":"heobrain-swarm","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-swarm\", \"t_e4de85fc\"]","id":"t_e4de85fc","title":"Verify swarm outputs","assignee":"ethan","status":"done","board":"heobrain-swarm","teams":["content","marketing"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"},{"key":"[\"heobrain-test-2\", \"t_5818958f\"]","id":"t_5818958f","title":"편입 영어 어휘 PDF 가격 비교 대상 정리","assignee":"ada","status":"done","board":"heobrain-test-2","teams":["data"],"classification":"관측 보드·담당자에 따른 화면 분류; 실제 배정 변경 없음"}],"features":[{"id":"C01","name":"회사·서비스·목표","description":"회사 설정, 서비스 등록·수정·삭제, 목표 및 관련 정보 관리","product":"Connect AI","category":"운영센터","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"회사 설정·서비스 목록 · 연결 후 제공 예정","teams":[]},{"id":"C02","name":"역할별 직원·위임","description":"전문 역할, 이름·성격, 담당별 모델, 대표 에이전트의 전문 동료 위임","product":"Connect AI","category":"팀 공간","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"팀 공간·직원 상세 · 연결 후 제공 예정","teams":[]},{"id":"C03","name":"오늘의 제안","description":"회사 현황을 읽어 오늘 제안과 다음 작업 사이클을 준비","product":"Connect AI","category":"운영센터","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"오늘 할 일 · 연결 후 제공 예정","teams":[]},{"id":"C04","name":"사람·AI 업무 분담","description":"작업별 사람 또는 AI 담당 지정","product":"Connect AI","category":"작업관리","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"작업 상세의 담당자 · 연결 후 제공 예정","teams":[]},{"id":"C05","name":"순차·선택 실행·건너뛰기","description":"선택 작업 실행, 한 단계 실행·완료·건너뛰기, 실행 중단","product":"Connect AI","category":"작업관리","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"워크플로·칸반 · 연결 후 제공 예정","teams":[]},{"id":"C06","name":"일반 할 일","description":"할 일 조회·추가·완료·취소와 도구를 통한 동일 작업","product":"Connect AI","category":"작업관리","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"할 일 · 연결 후 제공 예정","teams":[]},{"id":"C07","name":"승인함·실행 검토","description":"승인 요청·조회·수정·승인·반려·연결 시험","product":"Connect AI","category":"작업관리","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"내 승인 대기 · 연결 후 제공 예정","teams":[]},{"id":"C08","name":"대화·실행 피드","description":"회사 에이전트 대화 실행·중지·새 실행 상태 관리","product":"Connect AI","category":"작업관리","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"실행 로그·루미 · 연결 후 제공 예정","teams":[]},{"id":"C09","name":"산출물 검토","description":"생성 파일 열기 및 완료 산출물 이력 관리","product":"Connect AI","category":"작업관리","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"산출물 · 연결 후 제공 예정","teams":[]},{"id":"C10","name":"매출 대시보드","description":"매출 화면·갱신·설정과 수익 자료 조회","product":"Connect AI","category":"사업분석","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"사업 분석 · 연결 후 제공 예정","teams":["marketing","data"]},{"id":"C11","name":"회사·프로젝트 통계","description":"회사 통계, 프로젝트/사업별 현황","product":"Connect AI","category":"사업분석","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"사업 분석·전체 현황 · 연결 후 제공 예정","teams":["marketing","data"]},{"id":"C12","name":"채널 지표","description":"YouTube 등 연결 채널의 공개·인증 지표","product":"Connect AI","category":"사업분석","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"채널 분석 · 연결 후 제공 예정","teams":["content","marketing","data"]},{"id":"C13","name":"개발 활동·저장소","description":"저장소 활동 조회 및 파일 읽기·수정","product":"Connect AI","category":"사업분석","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"개발팀·저장소 · 연결 후 제공 예정","teams":["development"]},{"id":"C14","name":"사업 진단·아이디어","description":"사업 실적 진단과 신규 아이디어 제안","product":"Connect AI","category":"사업분석","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"사업 분석·아이디어 · 연결 후 제공 예정","teams":["marketing","data"]},{"id":"C15","name":"마케팅·발행","description":"홍보 작업 및 콘텐츠·YouTube 메타데이터 발행","product":"Connect AI","category":"콘텐츠","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"마케팅·발행 검토 · 연결 후 제공 예정","teams":["content","marketing"]},{"id":"C16","name":"지식·검색·RAG","description":"지식 목록·통계·관계·검색·기억·내보내기·삭제","product":"Connect AI","category":"지식","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"지식함 · 연결 후 제공 예정","teams":[]},{"id":"C17","name":"피드백·사람 결과","description":"작업 결과 피드백과 사람이 만든 결과 등록","product":"Connect AI","category":"지식","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"작업 회고 · 연결 후 제공 예정","teams":[]},{"id":"C18","name":"데이터셋·훈련·모델 병합","description":"데이터셋·선호 데이터 생성, HF 업로드, 로컬/클라우드 훈련, 중단·병합","product":"Connect AI","category":"연구실","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"연구실·고급 · 연결 후 제공 예정","teams":["data","development"]},{"id":"C19","name":"로컬 모델·다운로드","description":"모델 탐지·시작·중지·설정·삭제, HF 검색과 다운로드","product":"Connect AI","category":"모델관리","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"모델·연결 · 연결 후 제공 예정","teams":["development"]},{"id":"C20","name":"MCP·웹·파일·터미널","description":"MCP 서버·도구 조회·시험, 웹 검색·읽기, 허용 폴더·명령·앱·화면 도구","product":"Connect AI","category":"도구","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"도구·연결 · 연결 후 제공 예정","teams":[]},{"id":"C21","name":"브리핑·감시·예약","description":"브리핑 실행과 보고·감시 흐름","product":"Connect AI","category":"운영센터","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"브리핑 · 연결 후 제공 예정","teams":[]},{"id":"C22","name":"모바일·원격 제어","description":"모바일 브리지·연결 정보·Telegram 시험 및 메시지 전송","product":"Connect AI","category":"도구","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"모바일 연결 · 연결 후 제공 예정","teams":[]},{"id":"C23","name":"이메일","description":"연결 메일 읽기 및 메일 업무 도구","product":"Connect AI","category":"도구","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"메일 연결 · 연결 후 제공 예정","teams":[]},{"id":"C24","name":"음성·사무실 연출","description":"사무실 창, 캐릭터 대화, 음성 보고와 역할별 읽기","product":"Connect AI","category":"오피스","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"오피스·접근성 · 연결 후 제공 예정","teams":[]},{"id":"C25","name":"광장·외부 공유","description":"광장 프로필·입퇴장·메시지·봇·실험·토론·평가·아카이브","product":"Connect AI","category":"협업","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"협업 광장·고급 · 연결 후 제공 예정","teams":[]},{"id":"C26","name":"백업·동기화","description":"GitHub push·pull 및 저장소 동기화","product":"Connect AI","category":"설정","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"백업·동기화 · 연결 후 제공 예정","teams":[]},{"id":"C27","name":"계정·OAuth","description":"회원 가입·로그인·로그아웃·현재 계정·암호 재설정·YouTube 인증","product":"Connect AI","category":"설정","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"계정·연결 · 연결 후 제공 예정","teams":[]},{"id":"C28","name":"시스템·진단·안전","description":"안전 모드, 재시작, 업데이트, 진단과 메모리 상태","product":"Connect AI","category":"설정","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"시스템 상태 · 연결 후 제공 예정","teams":[]},{"id":"C29","name":"작업 폴더·자원","description":"작업 폴더 선택, 보유 자원 목록 및 연결 서비스 조사","product":"Connect AI","category":"설정","status":"not_verified_in_heobrain","statusLabel":"연결 준비","entryHref":null,"entryLabel":"작업 공간 · 연결 후 제공 예정","teams":[]},{"id":"D01","name":"사무실 목록·선택","description":"참여할 사무실을 찾아 열고, 공간별로 업무를 살펴봅니다.","product":"DeskRPG","category":"공간","status":"verified_local","statusLabel":"기존 로컬 검증","entryHref":"/channels","entryLabel":"사무실 목록","teams":[]},{"id":"D02","name":"다섯 오피스 맵 선택","description":"다섯 가지 원본 맵 중에서 사무실 분위기와 배치를 선택합니다.","product":"DeskRPG","category":"공간","status":"verified_local","statusLabel":"기존 로컬 검증","entryHref":null,"entryLabel":"3D 오피스 → 사무실 환경","teams":[]},{"id":"D03","name":"3D 이동·카메라·보기 설정","description":"캐릭터와 카메라를 움직이고 화면을 보기 편하게 조정합니다.","product":"DeskRPG","category":"공간","status":"verified_local","statusLabel":"기존 로컬 검증","entryHref":null,"entryLabel":"3D 오피스 → 보기 설정","teams":[]},{"id":"D04","name":"오피스 물체·타일 편집","description":"사무실 물체와 바닥을 편집하고 배치를 저장하는 원본 기능입니다.","product":"DeskRPG","category":"공간","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"3D 오피스 → 사무실 편집","teams":[]},{"id":"D05","name":"직원 좌석·호출·복귀·이동","description":"직원의 공간상 좌석과 이동을 관리합니다. 실제 AI 업무 실행과는 별개입니다.","product":"DeskRPG","category":"공간","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"3D 오피스 → 직원·좌석","teams":[]},{"id":"D06","name":"내 캐릭터·직원 외형","description":"내 캐릭터와 직원의 외형을 선택합니다.","product":"DeskRPG","category":"공간","status":"verified_local","statusLabel":"기존 로컬 검증","entryHref":"/characters","entryLabel":"캐릭터 목록 · 직원 목록","teams":[]},{"id":"D07","name":"사무실 생성·초대 코드·참여","description":"사무실을 만들고 초대 코드로 참여하는 원본 기능입니다.","product":"DeskRPG","category":"공간","status":"source_preserved","statusLabel":"원본 화면","entryHref":"/channels","entryLabel":"사무실 목록 → 만들기·참여","teams":[]},{"id":"D08","name":"그룹 접근·회원별 권한","description":"공간에 참여할 구성원과 접근 범위를 관리하는 원본 기능입니다.","product":"DeskRPG","category":"공간","status":"source_preserved","statusLabel":"원본 화면","entryHref":"/admin/groups","entryLabel":"그룹 관리 → 구성원·권한","teams":[]},{"id":"D09","name":"로그인·로그아웃·비밀번호 변경","description":"DeskRPG 계정의 로그인과 비밀번호를 관리합니다. HeoBrain 고객 계정과는 구분됩니다.","product":"DeskRPG","category":"계정","status":"source_preserved","statusLabel":"원본 화면","entryHref":"/account/password","entryLabel":"계정 → 비밀번호 변경","teams":[]},{"id":"D10","name":"언어 전환","description":"원본 화면의 표시 언어를 바꿉니다.","product":"DeskRPG","category":"계정","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"공용 메뉴 → 언어","teams":[]},{"id":"D11","name":"게이트웨이 목록·등록·접속 시험","description":"업무 서버 연결을 관리합니다. 현재 검토본의 연결은 실행 가능한 운영 연결과 다릅니다.","product":"DeskRPG","category":"연결","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":"/gateways","entryLabel":"게이트웨이 목록","teams":[]},{"id":"D12","name":"로컬 탐색·SSH 설치 안내","description":"기존 로컬·원격 업무 서버를 찾거나 설정하는 안내입니다.","product":"DeskRPG","category":"연결","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"게이트웨이 → 설정 마법사","teams":["development"]},{"id":"D13","name":"연결 진단·요건 점검·복구 안내","description":"서버 연결 요건과 오류를 점검하는 원본 진단 화면입니다.","product":"DeskRPG","category":"연결","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"게이트웨이 → 연결 진단 · 현재 진단 조회는 연결 확인 필요","teams":["development"]},{"id":"D14","name":"게이트웨이 공유","description":"업무 서버를 공유할 구성원과 범위를 지정하는 원본 기능입니다.","product":"DeskRPG","category":"연결","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"게이트웨이 상세 → 공유","teams":["development"]},{"id":"D15","name":"직원 목록·기존 프로필 가져오기","description":"확인된 기존 직원과 프로필을 살펴봅니다. 새 직원 생성·가져오기는 별도 연결이 필요합니다.","product":"DeskRPG","category":"직원","status":"snapshot_connected","statusLabel":"기록 조회","entryHref":"/profiles","entryLabel":"직원 목록","teams":[]},{"id":"D16","name":"직원 채용·생성·수정","description":"직원 프로필을 만들거나 수정하는 원본 기능입니다. 현재 검토에서는 실행하지 않습니다.","product":"DeskRPG","category":"직원","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":"/profiles","entryLabel":"직원 목록 → 채용·수정","teams":[]},{"id":"D17","name":"직원 페르소나·정체성","description":"직원의 역할과 말투를 설정하는 원본 기능입니다.","product":"DeskRPG","category":"직원","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 상세 → 역할·정체성","teams":[]},{"id":"D18","name":"모델·추론·도구 묶음 설정","description":"직원별 모델과 도구 사용 범위를 설정하는 원본 기능입니다.","product":"DeskRPG","category":"직원","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 상세 → 모델·도구","teams":["development"]},{"id":"D19","name":"모델 공급자 인증·키·OAuth","description":"모델 제공자의 인증을 관리하는 원본 기능입니다. 비밀값은 이 목록에 포함되지 않습니다.","product":"DeskRPG","category":"직원","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 상세 → 모델 인증","teams":[]},{"id":"D20","name":"개인 대화·NPC 대화","description":"직원과 개별 대화를 나누는 원본 기능입니다. 현재 검토본에서는 전송이 차단됩니다.","product":"DeskRPG","category":"대화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"3D 오피스 → 직원 대화","teams":["content","marketing","data","development"]},{"id":"D21","name":"그룹 대화·초대·멘션·방 관리","description":"구성원을 초대해 대화방을 관리하는 원본 기능입니다. 업무 보드와 별도로 유지됩니다.","product":"DeskRPG","category":"대화","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"3D 오피스 → 대화방","teams":["content","marketing","data","development"]},{"id":"D22","name":"응답 진행·도구 이벤트·오류 상태","description":"대화 응답과 도구 실행의 진행·완료·오류를 보여줍니다. 현재 실시간 기록은 미연결입니다.","product":"DeskRPG","category":"대화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 대화 → 진행 표시","teams":[]},{"id":"D23","name":"대화 중단·취소·재설정","description":"실행 중인 대화를 중단하거나 초기화하는 원본 기능입니다.","product":"DeskRPG","category":"대화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 대화 → 중단·초기화","teams":[]},{"id":"D24","name":"원본 파일 첨부·진행·재시도·취소","description":"대화에 원본 파일을 첨부하고 전송 진행을 관리하는 원본 기능입니다.","product":"DeskRPG","category":"대화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 대화 → 파일 첨부","teams":[]},{"id":"D25","name":"완료·차단 보고·읽음 처리","description":"직원이 보낸 완료·차단 보고를 확인하는 원본 기능입니다. 현재 카드 상태와 구분됩니다.","product":"DeskRPG","category":"대화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"3D 오피스 → 보고함","teams":[]},{"id":"D26","name":"내 답변 대기·질문 선택","description":"내 답변을 기다리는 질문을 확인하는 원본 기능입니다. 현재 대기 건수는 미확인입니다.","product":"DeskRPG","category":"승인","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"3D 오피스 → 내 확인 대기","teams":[]},{"id":"D27","name":"도구 실행 승인·거절","description":"요청된 도구 실행을 승인하거나 거절하는 원본 기능입니다.","product":"DeskRPG","category":"승인","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"내 확인 대기 → 실행 승인","teams":[]},{"id":"D28","name":"프로필 승인 정책 관리","description":"직원별로 어떤 작업에 승인이 필요한지 관리하는 원본 기능입니다.","product":"DeskRPG","category":"승인","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 상세 → 승인 정책","teams":["development"]},{"id":"D29","name":"칸반 보드·상태별 카드","description":"저장된 보드와 카드 상태를 살펴봅니다. 현재는 마지막으로 확인한 기록을 표시합니다.","product":"DeskRPG","category":"업무","status":"snapshot_connected","statusLabel":"기록 조회","entryHref":null,"entryLabel":"3D 오피스 → 업무 보드","teams":["content","marketing","data","development"]},{"id":"D30","name":"리스트·타임라인·필터·지표 보기","description":"칸반·목록·타임라인 등으로 작업을 살펴봅니다. 수집되지 않은 날짜·비용은 미확인입니다.","product":"DeskRPG","category":"업무","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"업무 보드 → 보기 선택","teams":[]},{"id":"D31","name":"카드 생성·편집·작업폴더·담당·모델","description":"작업 지시·폴더·담당자를 지정하는 원본 기능입니다. 현재 새 작업 등록은 연결하지 않았습니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"업무 보드 → 새 작업·수정","teams":["content","marketing","data","development"]},{"id":"D32","name":"부모·자식 의존 관계","description":"선행 작업과 후속 작업의 의존 관계를 관리합니다. 현재 연결 관계는 수집되지 않았습니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"작업 상세 → 연결 작업","teams":[]},{"id":"D33","name":"댓글·공유 작업 메모·첨부","description":"작업별 댓글·공유 메모·첨부를 관리합니다. 현재 기록은 수집되지 않았습니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"작업 상세 → 댓글·공유 메모","teams":[]},{"id":"D34","name":"실행 이력·도구 로그·실패 근거","description":"작업의 실행 이력과 오류 근거를 확인합니다. 현재 상세 실행 기록은 미연결입니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"작업 상세 → 실행 이력","teams":["development"]},{"id":"D35","name":"시작·차단 해제·회수·담당 변경·종료","description":"작업 시작·차단 해제·회수 등을 수행하는 원본 기능입니다. 현재 원격 실행은 차단됩니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"작업 상세 → 작업 관리","teams":[]},{"id":"D36","name":"작업 검토 승인·수정 요청","description":"작업 검토를 승인하거나 수정을 요청하는 원본 기능입니다. 현재 승인 기록은 미수집입니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"작업 상세 → 검토","teams":[]},{"id":"D37","name":"업무 분해·견적·Swarm·제안 확정","description":"업무를 나누고 담당자와 실행안을 제안하는 원본 기능입니다. 모델 호출이 필요할 수 있습니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"업무 보드 → 작업 분해·협업 제안","teams":["development"]},{"id":"D38","name":"보드 설정·worker·디스패처 상태","description":"보드의 실행 담당과 자동 배정 상태를 확인하는 원본 기능입니다.","product":"DeskRPG","category":"업무","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"업무 보드 → 설정·실행 상태","teams":["development"]},{"id":"D39","name":"프로젝트·하위 프로젝트·목표일·보관","description":"프로젝트와 하위 프로젝트를 묶고 목표일을 관리하는 원본 기능입니다.","product":"DeskRPG","category":"업무","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"업무 보드 → 프로젝트 선택","teams":[]},{"id":"D40","name":"회의실 입장·자리·발언 순서","description":"사무실 회의 공간으로 이동하고 참석자의 자리를 살펴봅니다.","product":"DeskRPG","category":"회의","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"3D 오피스 → 회의실","teams":[]},{"id":"D41","name":"회의 주제·참석자·발언 진행","description":"회의 주제와 참석자를 정하고 발언을 진행하는 원본 기능입니다. 실제 모델 회의는 미연결입니다.","product":"DeskRPG","category":"회의","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"회의실 → 주제·참석자","teams":[]},{"id":"D42","name":"회의 결과·결정·후속 작업","description":"회의의 결정과 후속 작업을 정리하는 원본 기능입니다.","product":"DeskRPG","category":"회의","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"회의실 → 결과·후속 작업","teams":[]},{"id":"D43","name":"회의록·요약·내보내기","description":"회의록을 읽거나 요약·내보내기하는 원본 기능입니다. 생성과 열람은 구분됩니다.","product":"DeskRPG","category":"회의","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"회의실 → 회의록","teams":[]},{"id":"D44","name":"예약 작업 목록·실행 이력","description":"예약된 업무와 실행 기록을 확인하는 원본 기능입니다. 현재 예약 현황은 미수집입니다.","product":"DeskRPG","category":"자동화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"3D 오피스 → 예약 작업","teams":[]},{"id":"D45","name":"예약 생성·편집·중지·재개·즉시 실행","description":"예약을 만들고 중지·재개하는 원본 기능입니다. 현재 예약 변경은 연결하지 않았습니다.","product":"DeskRPG","category":"자동화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"예약 작업 → 일정 관리","teams":[]},{"id":"D46","name":"반복 업무 청사진·템플릿 적용","description":"반복 업무의 템플릿을 고르고 적용하는 원본 기능입니다.","product":"DeskRPG","category":"자동화","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"3D 오피스 → 업무 템플릿","teams":[]},{"id":"D47","name":"산출물 목록·검색·카드 연결","description":"작업 산출물을 검색하고 관련 카드를 확인합니다. 현재 산출물 목록은 미수집입니다.","product":"DeskRPG","category":"산출물","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"3D 오피스 → 산출물","teams":["content","marketing","data","development"]},{"id":"D48","name":"HTML·코드·PDF·미디어·CSV·SVG 미리보기","description":"문서·이미지·영상·코드 등 산출물을 미리 보는 원본 기능입니다.","product":"DeskRPG","category":"산출물","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"산출물 → 미리보기","teams":[]},{"id":"D49","name":"산출물 편집·버전·근거 추적","description":"산출물의 수정 버전과 생성 근거를 추적하는 원본 기능입니다.","product":"DeskRPG","category":"산출물","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"산출물 상세 → 버전·근거","teams":[]},{"id":"D50","name":"직원별 스킬 목록·상세·파일","description":"직원별로 사용할 수 있는 스킬을 확인하는 원본 기능입니다.","product":"DeskRPG","category":"스킬·기억","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 상세 → 스킬","teams":[]},{"id":"D51","name":"스킬 생성·편집·켜기·핀·보관·복원","description":"스킬을 편집하고 보관·복원하는 원본 기능입니다.","product":"DeskRPG","category":"스킬·기억","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 스킬 → 편집·보관","teams":[]},{"id":"D52","name":"스킬 허브 검색·미리보기·설치·갱신·제거","description":"공개 스킬을 찾고 설치·갱신하는 원본 기능입니다. 현재 설치는 실행하지 않습니다.","product":"DeskRPG","category":"스킬·기억","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"스킬 관리 → 스킬 허브","teams":[]},{"id":"D53","name":"Curator 상태·일시중지·실행","description":"기억과 스킬을 정리하는 자동 작업의 상태를 관리하는 원본 기능입니다.","product":"DeskRPG","category":"스킬·기억","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"스킬 관리 → 자동 정리","teams":[]},{"id":"D54","name":"학습 그래프·파일 기억 조회/편집","description":"직원의 학습 관계와 파일 기억을 살펴보고 편집하는 원본 기능입니다.","product":"DeskRPG","category":"스킬·기억","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 상세 → 학습 그래프·기억","teams":[]},{"id":"D55","name":"대화에서 스킬 지정 호출","description":"대화에서 사용할 스킬을 지정하는 원본 기능입니다. 실제 호출에는 연결 확인이 필요합니다.","product":"DeskRPG","category":"스킬·기억","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 대화 → 스킬 선택","teams":[]},{"id":"D56","name":"직원별 MCP 목록·상세·등록·수정·삭제","description":"직원별 외부 도구 연결을 관리하는 원본 기능입니다. 기존 EC2 설정과 자동 동기화되지는 않습니다.","product":"DeskRPG","category":"도구","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"직원 상세 → 도구 연결","teams":[]},{"id":"D57","name":"MCP 사용·신뢰·도구 허용/제외","description":"외부 연결을 신뢰할 범위와 허용할 도구를 지정하는 원본 기능입니다.","product":"DeskRPG","category":"도구","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"도구 연결 상세 → 사용 범위","teams":["development"]},{"id":"D58","name":"MCP 비밀값·OAuth·콜백","description":"외부 도구의 인증과 비밀값을 등록하는 원본 기능입니다. 실제 비밀값은 표시하지 않습니다.","product":"DeskRPG","category":"도구","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"도구 연결 상세 → 인증","teams":[]},{"id":"D59","name":"MCP 연결 시험·도구 목록·적용","description":"연결 시험과 도구 목록을 확인하는 원본 기능입니다. 도구의 실제 실행 검증은 별도입니다.","product":"DeskRPG","category":"도구","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"도구 연결 상세 → 연결 시험","teams":[]},{"id":"D60","name":"MCP 카탈로그·JSON 가져오기·직원 간 복사","description":"도구 설정을 찾거나 다른 직원에게 복사하는 원본 기능입니다. 대상 권한 확인이 필요합니다.","product":"DeskRPG","category":"도구","status":"requires_remote_connection","statusLabel":"연결 확인 필요","entryHref":null,"entryLabel":"도구 연결 → 추가·가져오기·복사","teams":[]},{"id":"D61","name":"버그 신고·설문·업데이트·지원 링크","description":"원본 제품의 도움말·업데이트·지원 경로를 확인합니다.","product":"DeskRPG","category":"지원","status":"source_preserved","statusLabel":"원본 화면","entryHref":null,"entryLabel":"3D 오피스 → 도움말·지원","teams":[]},{"id":"D62","name":"연결·스냅샷 관측 시각과 갱신","description":"마지막으로 확인한 EC2 기록과 관측 시각을 살펴봅니다. 실시간 상태와 구분됩니다.","product":"DeskRPG","category":"HeoBrain","status":"snapshot_connected","statusLabel":"기록 조회","entryHref":null,"entryLabel":"3D 오피스 → EC2 팀과 작업 기록","teams":[]},{"id":"D63","name":"기술용 프로필 숨김·운영 원본 보존","description":"기술 점검용 프로필을 업무 표시에서 구분합니다. 운영 서버의 프로필은 삭제하지 않습니다.","product":"DeskRPG","category":"HeoBrain","status":"snapshot_connected","statusLabel":"기록 조회","entryHref":null,"entryLabel":"회사 화면 → 직원 목록","teams":[]},{"id":"D64","name":"공중도시·사무실 통합 표시","description":"기존 도시와 사무실을 같은 3D 화면에서 봅니다. 차량 주행·저장 호환은 아직 연결하지 않았습니다.","product":"DeskRPG","category":"HeoBrain","status":"verified_local","statusLabel":"기존 로컬 검증","entryHref":null,"entryLabel":"3D 오피스 → 도시·전체 보기","teams":[]},{"id":"D65","name":"읽기 검토 경계·원격 실행 차단","description":"현재 검토 모드에서는 원격 실행·게시·발송을 차단합니다.","product":"DeskRPG","category":"HeoBrain","status":"verified_local","statusLabel":"기존 로컬 검증","entryHref":null,"entryLabel":"전체 화면 → 검토 모드","teams":["development"]},{"id":"D66","name":"모바일·키보드·포커스 복귀","description":"키보드·모바일에서 메뉴와 맵 선택을 이용합니다. 모든 원본 화면의 검증을 뜻하지는 않습니다.","product":"DeskRPG","category":"접근성","status":"verified_local","statusLabel":"기존 로컬 검증","entryHref":null,"entryLabel":"기본 메뉴 · 맵 선택 · 설정","teams":[]}]}
+{
+  "capturedAt": null,
+  "cardCapturedAt": null,
+  "isLive": false,
+  "boardCount": 1,
+  "teams": [
+    {
+      "id": "content",
+      "name": "콘텐츠",
+      "color": "#bf784f",
+      "profileIds": [
+        "demo-content"
+      ],
+      "leadProfileIds": [
+        "demo-content"
+      ]
+    },
+    {
+      "id": "marketing",
+      "name": "마케팅·상품",
+      "color": "#ad6996",
+      "profileIds": [
+        "demo-marketing"
+      ],
+      "leadProfileIds": [
+        "demo-marketing"
+      ]
+    },
+    {
+      "id": "data",
+      "name": "데이터",
+      "color": "#658db9",
+      "profileIds": [
+        "demo-data"
+      ],
+      "leadProfileIds": [
+        "demo-data"
+      ]
+    },
+    {
+      "id": "development",
+      "name": "개발",
+      "color": "#a78b4f",
+      "profileIds": [
+        "demo-development"
+      ],
+      "leadProfileIds": [
+        "demo-development"
+      ]
+    }
+  ],
+  "profiles": [
+    {
+      "id": "demo-content",
+      "displayName": "콘텐츠 담당",
+      "role": "콘텐츠 업무 예시",
+      "visibleInOffice": true,
+      "teams": [
+        "content"
+      ],
+      "kind": "specialist"
+    },
+    {
+      "id": "demo-marketing",
+      "displayName": "마케팅 담당",
+      "role": "마케팅 업무 예시",
+      "visibleInOffice": true,
+      "teams": [
+        "marketing"
+      ],
+      "kind": "specialist"
+    },
+    {
+      "id": "demo-data",
+      "displayName": "데이터 담당",
+      "role": "데이터 업무 예시",
+      "visibleInOffice": true,
+      "teams": [
+        "data"
+      ],
+      "kind": "specialist"
+    },
+    {
+      "id": "demo-development",
+      "displayName": "개발 담당",
+      "role": "개발 업무 예시",
+      "visibleInOffice": true,
+      "teams": [
+        "development"
+      ],
+      "kind": "specialist"
+    }
+  ],
+  "cards": [
+    {
+      "key": "demo-1",
+      "id": "demo-1",
+      "title": "공개 출처를 검토하기",
+      "assignee": "demo-content",
+      "status": "pending",
+      "board": "공개 예시",
+      "teams": [
+        "content"
+      ],
+      "classification": "기능 설명용 예시"
+    },
+    {
+      "key": "demo-2",
+      "id": "demo-2",
+      "title": "콘텐츠 소개 문구 작성하기",
+      "assignee": "demo-marketing",
+      "status": "in_progress",
+      "board": "공개 예시",
+      "teams": [
+        "marketing"
+      ],
+      "classification": "기능 설명용 예시"
+    },
+    {
+      "key": "demo-3",
+      "id": "demo-3",
+      "title": "문단 검색 품질 비교하기",
+      "assignee": "demo-data",
+      "status": "done",
+      "board": "공개 예시",
+      "teams": [
+        "data"
+      ],
+      "classification": "기능 설명용 예시"
+    },
+    {
+      "key": "demo-4",
+      "id": "demo-4",
+      "title": "승인 뒤 재개 흐름 점검하기",
+      "assignee": "demo-development",
+      "status": "blocked",
+      "board": "공개 예시",
+      "teams": [
+        "development"
+      ],
+      "classification": "기능 설명용 예시"
+    }
+  ],
+  "features": [
+    {
+      "id": "C01",
+      "name": "회사·서비스·목표",
+      "description": "회사 설정, 서비스 등록·수정·삭제, 목표 및 관련 정보 관리",
+      "product": "Connect AI",
+      "category": "운영센터",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "회사 설정·서비스 목록 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C02",
+      "name": "역할별 직원·위임",
+      "description": "전문 역할, 이름·성격, 담당별 모델, 대표 에이전트의 전문 동료 위임",
+      "product": "Connect AI",
+      "category": "팀 공간",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "팀 공간·직원 상세 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C03",
+      "name": "오늘의 제안",
+      "description": "회사 현황을 읽어 오늘 제안과 다음 작업 사이클을 준비",
+      "product": "Connect AI",
+      "category": "운영센터",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "오늘 할 일 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C04",
+      "name": "사람·AI 업무 분담",
+      "description": "작업별 사람 또는 AI 담당 지정",
+      "product": "Connect AI",
+      "category": "작업관리",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "작업 상세의 담당자 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C05",
+      "name": "순차·선택 실행·건너뛰기",
+      "description": "선택 작업 실행, 한 단계 실행·완료·건너뛰기, 실행 중단",
+      "product": "Connect AI",
+      "category": "작업관리",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "워크플로·칸반 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C06",
+      "name": "일반 할 일",
+      "description": "할 일 조회·추가·완료·취소와 도구를 통한 동일 작업",
+      "product": "Connect AI",
+      "category": "작업관리",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "할 일 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C07",
+      "name": "승인함·실행 검토",
+      "description": "승인 요청·조회·수정·승인·반려·연결 시험",
+      "product": "Connect AI",
+      "category": "작업관리",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "내 승인 대기 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C08",
+      "name": "대화·실행 피드",
+      "description": "회사 에이전트 대화 실행·중지·새 실행 상태 관리",
+      "product": "Connect AI",
+      "category": "작업관리",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "실행 로그·루미 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C09",
+      "name": "산출물 검토",
+      "description": "생성 파일 열기 및 완료 산출물 이력 관리",
+      "product": "Connect AI",
+      "category": "작업관리",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "산출물 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C10",
+      "name": "매출 대시보드",
+      "description": "매출 화면·갱신·설정과 수익 자료 조회",
+      "product": "Connect AI",
+      "category": "사업분석",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "사업 분석 · 연결 후 제공 예정",
+      "teams": [
+        "marketing",
+        "data"
+      ]
+    },
+    {
+      "id": "C11",
+      "name": "회사·프로젝트 통계",
+      "description": "회사 통계, 프로젝트/사업별 현황",
+      "product": "Connect AI",
+      "category": "사업분석",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "사업 분석·전체 현황 · 연결 후 제공 예정",
+      "teams": [
+        "marketing",
+        "data"
+      ]
+    },
+    {
+      "id": "C12",
+      "name": "채널 지표",
+      "description": "YouTube 등 연결 채널의 공개·인증 지표",
+      "product": "Connect AI",
+      "category": "사업분석",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "채널 분석 · 연결 후 제공 예정",
+      "teams": [
+        "content",
+        "marketing",
+        "data"
+      ]
+    },
+    {
+      "id": "C13",
+      "name": "개발 활동·저장소",
+      "description": "저장소 활동 조회 및 파일 읽기·수정",
+      "product": "Connect AI",
+      "category": "사업분석",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "개발팀·저장소 · 연결 후 제공 예정",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "C14",
+      "name": "사업 진단·아이디어",
+      "description": "사업 실적 진단과 신규 아이디어 제안",
+      "product": "Connect AI",
+      "category": "사업분석",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "사업 분석·아이디어 · 연결 후 제공 예정",
+      "teams": [
+        "marketing",
+        "data"
+      ]
+    },
+    {
+      "id": "C15",
+      "name": "마케팅·발행",
+      "description": "홍보 작업 및 콘텐츠·YouTube 메타데이터 발행",
+      "product": "Connect AI",
+      "category": "콘텐츠",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "마케팅·발행 검토 · 연결 후 제공 예정",
+      "teams": [
+        "content",
+        "marketing"
+      ]
+    },
+    {
+      "id": "C16",
+      "name": "지식·검색·RAG",
+      "description": "지식 목록·통계·관계·검색·기억·내보내기·삭제",
+      "product": "Connect AI",
+      "category": "지식",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "지식함 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C17",
+      "name": "피드백·사람 결과",
+      "description": "작업 결과 피드백과 사람이 만든 결과 등록",
+      "product": "Connect AI",
+      "category": "지식",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "작업 회고 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C18",
+      "name": "데이터셋·훈련·모델 병합",
+      "description": "데이터셋·선호 데이터 생성, HF 업로드, 로컬/클라우드 훈련, 중단·병합",
+      "product": "Connect AI",
+      "category": "연구실",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "연구실·고급 · 연결 후 제공 예정",
+      "teams": [
+        "data",
+        "development"
+      ]
+    },
+    {
+      "id": "C19",
+      "name": "로컬 모델·다운로드",
+      "description": "모델 탐지·시작·중지·설정·삭제, HF 검색과 다운로드",
+      "product": "Connect AI",
+      "category": "모델관리",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "모델·연결 · 연결 후 제공 예정",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "C20",
+      "name": "MCP·웹·파일·터미널",
+      "description": "MCP 서버·도구 조회·시험, 웹 검색·읽기, 허용 폴더·명령·앱·화면 도구",
+      "product": "Connect AI",
+      "category": "도구",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "도구·연결 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C21",
+      "name": "브리핑·감시·예약",
+      "description": "브리핑 실행과 보고·감시 흐름",
+      "product": "Connect AI",
+      "category": "운영센터",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "브리핑 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C22",
+      "name": "모바일·원격 제어",
+      "description": "모바일 브리지·연결 정보·Telegram 시험 및 메시지 전송",
+      "product": "Connect AI",
+      "category": "도구",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "모바일 연결 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C23",
+      "name": "이메일",
+      "description": "연결 메일 읽기 및 메일 업무 도구",
+      "product": "Connect AI",
+      "category": "도구",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "메일 연결 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C24",
+      "name": "음성·사무실 연출",
+      "description": "사무실 창, 캐릭터 대화, 음성 보고와 역할별 읽기",
+      "product": "Connect AI",
+      "category": "오피스",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "오피스·접근성 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C25",
+      "name": "광장·외부 공유",
+      "description": "광장 프로필·입퇴장·메시지·봇·실험·토론·평가·아카이브",
+      "product": "Connect AI",
+      "category": "협업",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "협업 광장·고급 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C26",
+      "name": "백업·동기화",
+      "description": "GitHub push·pull 및 저장소 동기화",
+      "product": "Connect AI",
+      "category": "설정",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "백업·동기화 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C27",
+      "name": "계정·OAuth",
+      "description": "회원 가입·로그인·로그아웃·현재 계정·암호 재설정·YouTube 인증",
+      "product": "Connect AI",
+      "category": "설정",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "계정·연결 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C28",
+      "name": "시스템·진단·안전",
+      "description": "안전 모드, 재시작, 업데이트, 진단과 메모리 상태",
+      "product": "Connect AI",
+      "category": "설정",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "시스템 상태 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "C29",
+      "name": "작업 폴더·자원",
+      "description": "작업 폴더 선택, 보유 자원 목록 및 연결 서비스 조사",
+      "product": "Connect AI",
+      "category": "설정",
+      "status": "not_verified_in_heobrain",
+      "statusLabel": "연결 준비",
+      "entryHref": null,
+      "entryLabel": "작업 공간 · 연결 후 제공 예정",
+      "teams": []
+    },
+    {
+      "id": "D01",
+      "name": "사무실 목록·선택",
+      "description": "참여할 사무실을 찾아 열고, 공간별로 업무를 살펴봅니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "verified_local",
+      "statusLabel": "기존 로컬 검증",
+      "entryHref": "/channels",
+      "entryLabel": "사무실 목록",
+      "teams": []
+    },
+    {
+      "id": "D02",
+      "name": "다섯 오피스 맵 선택",
+      "description": "다섯 가지 원본 맵 중에서 사무실 분위기와 배치를 선택합니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "verified_local",
+      "statusLabel": "기존 로컬 검증",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 사무실 환경",
+      "teams": []
+    },
+    {
+      "id": "D03",
+      "name": "3D 이동·카메라·보기 설정",
+      "description": "캐릭터와 카메라를 움직이고 화면을 보기 편하게 조정합니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "verified_local",
+      "statusLabel": "기존 로컬 검증",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 보기 설정",
+      "teams": []
+    },
+    {
+      "id": "D04",
+      "name": "오피스 물체·타일 편집",
+      "description": "사무실 물체와 바닥을 편집하고 배치를 저장하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 사무실 편집",
+      "teams": []
+    },
+    {
+      "id": "D05",
+      "name": "직원 좌석·호출·복귀·이동",
+      "description": "직원의 공간상 좌석과 이동을 관리합니다. 실제 AI 업무 실행과는 별개입니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 직원·좌석",
+      "teams": []
+    },
+    {
+      "id": "D06",
+      "name": "내 캐릭터·직원 외형",
+      "description": "내 캐릭터와 직원의 외형을 선택합니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "verified_local",
+      "statusLabel": "기존 로컬 검증",
+      "entryHref": "/characters",
+      "entryLabel": "캐릭터 목록 · 직원 목록",
+      "teams": []
+    },
+    {
+      "id": "D07",
+      "name": "사무실 생성·초대 코드·참여",
+      "description": "사무실을 만들고 초대 코드로 참여하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": "/channels",
+      "entryLabel": "사무실 목록 → 만들기·참여",
+      "teams": []
+    },
+    {
+      "id": "D08",
+      "name": "그룹 접근·회원별 권한",
+      "description": "공간에 참여할 구성원과 접근 범위를 관리하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "공간",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": "/admin/groups",
+      "entryLabel": "그룹 관리 → 구성원·권한",
+      "teams": []
+    },
+    {
+      "id": "D09",
+      "name": "로그인·로그아웃·비밀번호 변경",
+      "description": "DeskRPG 계정의 로그인과 비밀번호를 관리합니다. HeoBrain 고객 계정과는 구분됩니다.",
+      "product": "DeskRPG",
+      "category": "계정",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": "/account/password",
+      "entryLabel": "계정 → 비밀번호 변경",
+      "teams": []
+    },
+    {
+      "id": "D10",
+      "name": "언어 전환",
+      "description": "원본 화면의 표시 언어를 바꿉니다.",
+      "product": "DeskRPG",
+      "category": "계정",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "공용 메뉴 → 언어",
+      "teams": []
+    },
+    {
+      "id": "D11",
+      "name": "게이트웨이 목록·등록·접속 시험",
+      "description": "업무 서버 연결을 관리합니다. 현재 검토본의 연결은 실행 가능한 운영 연결과 다릅니다.",
+      "product": "DeskRPG",
+      "category": "연결",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": "/gateways",
+      "entryLabel": "게이트웨이 목록",
+      "teams": []
+    },
+    {
+      "id": "D12",
+      "name": "로컬 탐색·SSH 설치 안내",
+      "description": "기존 로컬·원격 업무 서버를 찾거나 설정하는 안내입니다.",
+      "product": "DeskRPG",
+      "category": "연결",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "게이트웨이 → 설정 마법사",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D13",
+      "name": "연결 진단·요건 점검·복구 안내",
+      "description": "서버 연결 요건과 오류를 점검하는 원본 진단 화면입니다.",
+      "product": "DeskRPG",
+      "category": "연결",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "게이트웨이 → 연결 진단 · 현재 진단 조회는 연결 확인 필요",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D14",
+      "name": "게이트웨이 공유",
+      "description": "업무 서버를 공유할 구성원과 범위를 지정하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "연결",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "게이트웨이 상세 → 공유",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D15",
+      "name": "직원 목록·기존 프로필 가져오기",
+      "description": "확인된 기존 직원과 프로필을 살펴봅니다. 새 직원 생성·가져오기는 별도 연결이 필요합니다.",
+      "product": "DeskRPG",
+      "category": "직원",
+      "status": "snapshot_connected",
+      "statusLabel": "기록 조회",
+      "entryHref": "/profiles",
+      "entryLabel": "직원 목록",
+      "teams": []
+    },
+    {
+      "id": "D16",
+      "name": "직원 채용·생성·수정",
+      "description": "직원 프로필을 만들거나 수정하는 원본 기능입니다. 현재 검토에서는 실행하지 않습니다.",
+      "product": "DeskRPG",
+      "category": "직원",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": "/profiles",
+      "entryLabel": "직원 목록 → 채용·수정",
+      "teams": []
+    },
+    {
+      "id": "D17",
+      "name": "직원 페르소나·정체성",
+      "description": "직원의 역할과 말투를 설정하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "직원",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 상세 → 역할·정체성",
+      "teams": []
+    },
+    {
+      "id": "D18",
+      "name": "모델·추론·도구 묶음 설정",
+      "description": "직원별 모델과 도구 사용 범위를 설정하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "직원",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 상세 → 모델·도구",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D19",
+      "name": "모델 공급자 인증·키·OAuth",
+      "description": "모델 제공자의 인증을 관리하는 원본 기능입니다. 비밀값은 이 목록에 포함되지 않습니다.",
+      "product": "DeskRPG",
+      "category": "직원",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 상세 → 모델 인증",
+      "teams": []
+    },
+    {
+      "id": "D20",
+      "name": "개인 대화·NPC 대화",
+      "description": "직원과 개별 대화를 나누는 원본 기능입니다. 현재 검토본에서는 전송이 차단됩니다.",
+      "product": "DeskRPG",
+      "category": "대화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 직원 대화",
+      "teams": [
+        "content",
+        "marketing",
+        "data",
+        "development"
+      ]
+    },
+    {
+      "id": "D21",
+      "name": "그룹 대화·초대·멘션·방 관리",
+      "description": "구성원을 초대해 대화방을 관리하는 원본 기능입니다. 업무 보드와 별도로 유지됩니다.",
+      "product": "DeskRPG",
+      "category": "대화",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 대화방",
+      "teams": [
+        "content",
+        "marketing",
+        "data",
+        "development"
+      ]
+    },
+    {
+      "id": "D22",
+      "name": "응답 진행·도구 이벤트·오류 상태",
+      "description": "대화 응답과 도구 실행의 진행·완료·오류를 보여줍니다. 현재 실시간 기록은 미연결입니다.",
+      "product": "DeskRPG",
+      "category": "대화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 대화 → 진행 표시",
+      "teams": []
+    },
+    {
+      "id": "D23",
+      "name": "대화 중단·취소·재설정",
+      "description": "실행 중인 대화를 중단하거나 초기화하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "대화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 대화 → 중단·초기화",
+      "teams": []
+    },
+    {
+      "id": "D24",
+      "name": "원본 파일 첨부·진행·재시도·취소",
+      "description": "대화에 원본 파일을 첨부하고 전송 진행을 관리하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "대화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 대화 → 파일 첨부",
+      "teams": []
+    },
+    {
+      "id": "D25",
+      "name": "완료·차단 보고·읽음 처리",
+      "description": "직원이 보낸 완료·차단 보고를 확인하는 원본 기능입니다. 현재 카드 상태와 구분됩니다.",
+      "product": "DeskRPG",
+      "category": "대화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 보고함",
+      "teams": []
+    },
+    {
+      "id": "D26",
+      "name": "내 답변 대기·질문 선택",
+      "description": "내 답변을 기다리는 질문을 확인하는 원본 기능입니다. 현재 대기 건수는 미확인입니다.",
+      "product": "DeskRPG",
+      "category": "승인",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 내 확인 대기",
+      "teams": []
+    },
+    {
+      "id": "D27",
+      "name": "도구 실행 승인·거절",
+      "description": "요청된 도구 실행을 승인하거나 거절하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "승인",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "내 확인 대기 → 실행 승인",
+      "teams": []
+    },
+    {
+      "id": "D28",
+      "name": "프로필 승인 정책 관리",
+      "description": "직원별로 어떤 작업에 승인이 필요한지 관리하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "승인",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 상세 → 승인 정책",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D29",
+      "name": "칸반 보드·상태별 카드",
+      "description": "저장된 보드와 카드 상태를 살펴봅니다. 현재는 마지막으로 확인한 기록을 표시합니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "snapshot_connected",
+      "statusLabel": "기록 조회",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 업무 보드",
+      "teams": [
+        "content",
+        "marketing",
+        "data",
+        "development"
+      ]
+    },
+    {
+      "id": "D30",
+      "name": "리스트·타임라인·필터·지표 보기",
+      "description": "칸반·목록·타임라인 등으로 작업을 살펴봅니다. 수집되지 않은 날짜·비용은 미확인입니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "업무 보드 → 보기 선택",
+      "teams": []
+    },
+    {
+      "id": "D31",
+      "name": "카드 생성·편집·작업폴더·담당·모델",
+      "description": "작업 지시·폴더·담당자를 지정하는 원본 기능입니다. 현재 새 작업 등록은 연결하지 않았습니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "업무 보드 → 새 작업·수정",
+      "teams": [
+        "content",
+        "marketing",
+        "data",
+        "development"
+      ]
+    },
+    {
+      "id": "D32",
+      "name": "부모·자식 의존 관계",
+      "description": "선행 작업과 후속 작업의 의존 관계를 관리합니다. 현재 연결 관계는 수집되지 않았습니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "작업 상세 → 연결 작업",
+      "teams": []
+    },
+    {
+      "id": "D33",
+      "name": "댓글·공유 작업 메모·첨부",
+      "description": "작업별 댓글·공유 메모·첨부를 관리합니다. 현재 기록은 수집되지 않았습니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "작업 상세 → 댓글·공유 메모",
+      "teams": []
+    },
+    {
+      "id": "D34",
+      "name": "실행 이력·도구 로그·실패 근거",
+      "description": "작업의 실행 이력과 오류 근거를 확인합니다. 현재 상세 실행 기록은 미연결입니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "작업 상세 → 실행 이력",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D35",
+      "name": "시작·차단 해제·회수·담당 변경·종료",
+      "description": "작업 시작·차단 해제·회수 등을 수행하는 원본 기능입니다. 현재 원격 실행은 차단됩니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "작업 상세 → 작업 관리",
+      "teams": []
+    },
+    {
+      "id": "D36",
+      "name": "작업 검토 승인·수정 요청",
+      "description": "작업 검토를 승인하거나 수정을 요청하는 원본 기능입니다. 현재 승인 기록은 미수집입니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "작업 상세 → 검토",
+      "teams": []
+    },
+    {
+      "id": "D37",
+      "name": "업무 분해·견적·Swarm·제안 확정",
+      "description": "업무를 나누고 담당자와 실행안을 제안하는 원본 기능입니다. 모델 호출이 필요할 수 있습니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "업무 보드 → 작업 분해·협업 제안",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D38",
+      "name": "보드 설정·worker·디스패처 상태",
+      "description": "보드의 실행 담당과 자동 배정 상태를 확인하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "업무 보드 → 설정·실행 상태",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D39",
+      "name": "프로젝트·하위 프로젝트·목표일·보관",
+      "description": "프로젝트와 하위 프로젝트를 묶고 목표일을 관리하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "업무",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "업무 보드 → 프로젝트 선택",
+      "teams": []
+    },
+    {
+      "id": "D40",
+      "name": "회의실 입장·자리·발언 순서",
+      "description": "사무실 회의 공간으로 이동하고 참석자의 자리를 살펴봅니다.",
+      "product": "DeskRPG",
+      "category": "회의",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 회의실",
+      "teams": []
+    },
+    {
+      "id": "D41",
+      "name": "회의 주제·참석자·발언 진행",
+      "description": "회의 주제와 참석자를 정하고 발언을 진행하는 원본 기능입니다. 실제 모델 회의는 미연결입니다.",
+      "product": "DeskRPG",
+      "category": "회의",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "회의실 → 주제·참석자",
+      "teams": []
+    },
+    {
+      "id": "D42",
+      "name": "회의 결과·결정·후속 작업",
+      "description": "회의의 결정과 후속 작업을 정리하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "회의",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "회의실 → 결과·후속 작업",
+      "teams": []
+    },
+    {
+      "id": "D43",
+      "name": "회의록·요약·내보내기",
+      "description": "회의록을 읽거나 요약·내보내기하는 원본 기능입니다. 생성과 열람은 구분됩니다.",
+      "product": "DeskRPG",
+      "category": "회의",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "회의실 → 회의록",
+      "teams": []
+    },
+    {
+      "id": "D44",
+      "name": "예약 작업 목록·실행 이력",
+      "description": "예약된 업무와 실행 기록을 확인하는 원본 기능입니다. 현재 예약 현황은 미수집입니다.",
+      "product": "DeskRPG",
+      "category": "자동화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 예약 작업",
+      "teams": []
+    },
+    {
+      "id": "D45",
+      "name": "예약 생성·편집·중지·재개·즉시 실행",
+      "description": "예약을 만들고 중지·재개하는 원본 기능입니다. 현재 예약 변경은 연결하지 않았습니다.",
+      "product": "DeskRPG",
+      "category": "자동화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "예약 작업 → 일정 관리",
+      "teams": []
+    },
+    {
+      "id": "D46",
+      "name": "반복 업무 청사진·템플릿 적용",
+      "description": "반복 업무의 템플릿을 고르고 적용하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "자동화",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 업무 템플릿",
+      "teams": []
+    },
+    {
+      "id": "D47",
+      "name": "산출물 목록·검색·카드 연결",
+      "description": "작업 산출물을 검색하고 관련 카드를 확인합니다. 현재 산출물 목록은 미수집입니다.",
+      "product": "DeskRPG",
+      "category": "산출물",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 산출물",
+      "teams": [
+        "content",
+        "marketing",
+        "data",
+        "development"
+      ]
+    },
+    {
+      "id": "D48",
+      "name": "HTML·코드·PDF·미디어·CSV·SVG 미리보기",
+      "description": "문서·이미지·영상·코드 등 산출물을 미리 보는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "산출물",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "산출물 → 미리보기",
+      "teams": []
+    },
+    {
+      "id": "D49",
+      "name": "산출물 편집·버전·근거 추적",
+      "description": "산출물의 수정 버전과 생성 근거를 추적하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "산출물",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "산출물 상세 → 버전·근거",
+      "teams": []
+    },
+    {
+      "id": "D50",
+      "name": "직원별 스킬 목록·상세·파일",
+      "description": "직원별로 사용할 수 있는 스킬을 확인하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "스킬·기억",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 상세 → 스킬",
+      "teams": []
+    },
+    {
+      "id": "D51",
+      "name": "스킬 생성·편집·켜기·핀·보관·복원",
+      "description": "스킬을 편집하고 보관·복원하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "스킬·기억",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 스킬 → 편집·보관",
+      "teams": []
+    },
+    {
+      "id": "D52",
+      "name": "스킬 허브 검색·미리보기·설치·갱신·제거",
+      "description": "공개 스킬을 찾고 설치·갱신하는 원본 기능입니다. 현재 설치는 실행하지 않습니다.",
+      "product": "DeskRPG",
+      "category": "스킬·기억",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "스킬 관리 → 스킬 허브",
+      "teams": []
+    },
+    {
+      "id": "D53",
+      "name": "Curator 상태·일시중지·실행",
+      "description": "기억과 스킬을 정리하는 자동 작업의 상태를 관리하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "스킬·기억",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "스킬 관리 → 자동 정리",
+      "teams": []
+    },
+    {
+      "id": "D54",
+      "name": "학습 그래프·파일 기억 조회/편집",
+      "description": "직원의 학습 관계와 파일 기억을 살펴보고 편집하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "스킬·기억",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 상세 → 학습 그래프·기억",
+      "teams": []
+    },
+    {
+      "id": "D55",
+      "name": "대화에서 스킬 지정 호출",
+      "description": "대화에서 사용할 스킬을 지정하는 원본 기능입니다. 실제 호출에는 연결 확인이 필요합니다.",
+      "product": "DeskRPG",
+      "category": "스킬·기억",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 대화 → 스킬 선택",
+      "teams": []
+    },
+    {
+      "id": "D56",
+      "name": "직원별 MCP 목록·상세·등록·수정·삭제",
+      "description": "직원별 외부 도구 연결을 관리하는 원본 기능입니다. 기존 EC2 설정과 자동 동기화되지는 않습니다.",
+      "product": "DeskRPG",
+      "category": "도구",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "직원 상세 → 도구 연결",
+      "teams": []
+    },
+    {
+      "id": "D57",
+      "name": "MCP 사용·신뢰·도구 허용/제외",
+      "description": "외부 연결을 신뢰할 범위와 허용할 도구를 지정하는 원본 기능입니다.",
+      "product": "DeskRPG",
+      "category": "도구",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "도구 연결 상세 → 사용 범위",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D58",
+      "name": "MCP 비밀값·OAuth·콜백",
+      "description": "외부 도구의 인증과 비밀값을 등록하는 원본 기능입니다. 실제 비밀값은 표시하지 않습니다.",
+      "product": "DeskRPG",
+      "category": "도구",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "도구 연결 상세 → 인증",
+      "teams": []
+    },
+    {
+      "id": "D59",
+      "name": "MCP 연결 시험·도구 목록·적용",
+      "description": "연결 시험과 도구 목록을 확인하는 원본 기능입니다. 도구의 실제 실행 검증은 별도입니다.",
+      "product": "DeskRPG",
+      "category": "도구",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "도구 연결 상세 → 연결 시험",
+      "teams": []
+    },
+    {
+      "id": "D60",
+      "name": "MCP 카탈로그·JSON 가져오기·직원 간 복사",
+      "description": "도구 설정을 찾거나 다른 직원에게 복사하는 원본 기능입니다. 대상 권한 확인이 필요합니다.",
+      "product": "DeskRPG",
+      "category": "도구",
+      "status": "requires_remote_connection",
+      "statusLabel": "연결 확인 필요",
+      "entryHref": null,
+      "entryLabel": "도구 연결 → 추가·가져오기·복사",
+      "teams": []
+    },
+    {
+      "id": "D61",
+      "name": "버그 신고·설문·업데이트·지원 링크",
+      "description": "원본 제품의 도움말·업데이트·지원 경로를 확인합니다.",
+      "product": "DeskRPG",
+      "category": "지원",
+      "status": "source_preserved",
+      "statusLabel": "원본 화면",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 도움말·지원",
+      "teams": []
+    },
+    {
+      "id": "D62",
+      "name": "연결·스냅샷 관측 시각과 갱신",
+      "description": "마지막으로 확인한 EC2 기록과 관측 시각을 살펴봅니다. 실시간 상태와 구분됩니다.",
+      "product": "DeskRPG",
+      "category": "HeoBrain",
+      "status": "snapshot_connected",
+      "statusLabel": "기록 조회",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → EC2 팀과 작업 기록",
+      "teams": []
+    },
+    {
+      "id": "D63",
+      "name": "기술용 프로필 숨김·운영 원본 보존",
+      "description": "기술 점검용 프로필을 업무 표시에서 구분합니다. 운영 서버의 프로필은 삭제하지 않습니다.",
+      "product": "DeskRPG",
+      "category": "HeoBrain",
+      "status": "snapshot_connected",
+      "statusLabel": "기록 조회",
+      "entryHref": null,
+      "entryLabel": "회사 화면 → 직원 목록",
+      "teams": []
+    },
+    {
+      "id": "D64",
+      "name": "공중도시·사무실 통합 표시",
+      "description": "기존 도시와 사무실을 같은 3D 화면에서 봅니다. 차량 주행·저장 호환은 아직 연결하지 않았습니다.",
+      "product": "DeskRPG",
+      "category": "HeoBrain",
+      "status": "verified_local",
+      "statusLabel": "기존 로컬 검증",
+      "entryHref": null,
+      "entryLabel": "3D 오피스 → 도시·전체 보기",
+      "teams": []
+    },
+    {
+      "id": "D65",
+      "name": "읽기 검토 경계·원격 실행 차단",
+      "description": "현재 검토 모드에서는 원격 실행·게시·발송을 차단합니다.",
+      "product": "DeskRPG",
+      "category": "HeoBrain",
+      "status": "verified_local",
+      "statusLabel": "기존 로컬 검증",
+      "entryHref": null,
+      "entryLabel": "전체 화면 → 검토 모드",
+      "teams": [
+        "development"
+      ]
+    },
+    {
+      "id": "D66",
+      "name": "모바일·키보드·포커스 복귀",
+      "description": "키보드·모바일에서 메뉴와 맵 선택을 이용합니다. 모든 원본 화면의 검증을 뜻하지는 않습니다.",
+      "product": "DeskRPG",
+      "category": "접근성",
+      "status": "verified_local",
+      "statusLabel": "기존 로컬 검증",
+      "entryHref": null,
+      "entryLabel": "기본 메뉴 · 맵 선택 · 설정",
+      "teams": []
+    }
+  ]
+}
