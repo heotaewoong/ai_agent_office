@@ -481,7 +481,7 @@ test('공개 원문 문단 검색과 사용자 선택을 새 기획 판본에 �
   await expect(firstChoice).not.toBeChecked();
   await expect(secondChoice).not.toBeChecked();
   await firstChoice.check();
-  await panel.getByRole('button', { name: '공개 원문 근거 다시 찾기', exact: true }).click();
+  await panel.getByRole('button', { name: '저장된 공개 원문 후보 다시 찾기', exact: true }).click();
   await expect(firstChoice).toBeChecked();
   await expect(secondChoice).not.toBeChecked();
   await firstChoice.uncheck();

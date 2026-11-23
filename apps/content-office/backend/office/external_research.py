@@ -21,6 +21,7 @@ from urllib.parse import quote_plus, urljoin, urlsplit
 
 import requests
 
+from .evidence_relevance import is_topic_candidate
 from .feeds import fetch_public, normalize_url, parse_feed
 from .source_library import AREAS, LANES, _clean, _connect, _now, _safe_xml, library_path
 from .source_registry import load_sources
@@ -49,6 +50,13 @@ _AREA_HINTS = (
 _AREA_FACT = {"A": ("official",), "B": ("official", "github", "arxiv"), "C": ("pubmed", "openalex"),
               "D": ("pubmed", "openalex"), "E": ("official",)}
 _CLAIM_FACT = {"research": ("pubmed", "openalex"), "fresh": ("official", "github"), "schedule": ("official",)}
+# Stable starting points for known exam entities. These links are candidates until the relevant section is reviewed.
+_EXAM_OFFICIAL_PAGES = (
+    (re.compile(r"오픽|\bopic\b", re.I), "OPIc 공식 평가 등급체계",
+     "https://www.opic.co.kr/opics/servlet/controller.opic.site.about.AboutServlet?p_nav=3_1_1&p_process=move-page-valClass"),
+    (re.compile(r"정보처리\s*기사"), "Q-Net 정보처리기사 종목 안내",
+     "https://www.q-net.or.kr/crf005.do?id=crf00503&jmCd=1320&tabGbn=1"),
+)
 PROVIDERS = {"pubmed": "PubMed 논문", "openalex": "OpenAlex 공개 논문", "arxiv": "arXiv 논문", "github": "GitHub 저장소",
              "official": "공식 출처 새 글", "creator": "등록한 크리에이터"}
 # 한글 주제를 영어 논문·저장소 검색어로 옮길 때 쓰는 작은 낱말표. 여기에 없는 말은 운영자가 검색어를 직접 고친다.
@@ -368,8 +376,8 @@ def stored_urls(root) -> set[str]:
         return set()
 
 
-def library_fact_sources(root, title: str) -> int | None:
-    """자료 창고에서 이 주제에 맞는 사실 근거가 서로 다른 출처로 몇 개 있는지 센다. 검색을 못 하면 None."""
+def library_fact_sources(root, title: str, *, area=None) -> int | None:
+    """사실 근거용 자료에서 검색된 후보 URL 수로, 주장 확인 결과가 아니다."""
     try:
         from .public_evidence import PublicEvidenceUnavailable, find_library_evidence
         from .source_library import example_urls
@@ -377,26 +385,27 @@ def library_fact_sources(root, title: str) -> int | None:
         return None
     try:
         examples = example_urls(root)
-        return len({row["url"] for row in find_library_evidence(title, root=root, limit=6) if row["url"] not in examples})
+        return len({row["url"] for row in find_library_evidence(title, root=root, limit=6, area=area) if row["url"] not in examples})
     except PublicEvidenceUnavailable:
         return None
 
 
 def run_research(root, title: str, *, summary: str = "", area: str | None = None, experience_first: bool = False,
                  query: str | None = None, force: bool = False, fetch=None, fact_sources=library_fact_sources, translate=None) -> dict:
-    """기준에 따라 외부 후보를 찾는다. 창고 근거가 충분하거나 조사가 필요 없는 주제는 force가 아니면 밖으로 나가지 않는다."""
+    """외부 조사 필요 여부는 기획의 주장으로 결정한다. 창고 후보 수는 참고용이다."""
     title = _clean(title or "")[:300]
     if not title:
         raise WorkflowError("주제를 확인할 수 없습니다.")
     plan = research_plan(title, summary, area=area, experience_first=experience_first)
     queries = build_queries(title, query)
-    hits = fact_sources(root, title)
-    library = {"fact_sources": hits, "sufficient": hits is not None and hits >= 2}
+    library_query = f"{title} {query.strip()}" if query and query.strip() else title
+    hits = (library_fact_sources(root, library_query, area=plan["area"])
+            if fact_sources is library_fact_sources else fact_sources(root, library_query))
+    library = {"fact_sources": hits, "sufficient": False}
     result = {"plan": plan, "queries": queries, "library": library, "candidates": [], "notes": [], "searched": False}
+    if re.search(r"쿠폰|할인\s*코드|\bpromo\s*code\b", f"{title} {summary}", re.I):
+        result["notes"].append("쿠폰 발급·상품 적용·만료는 스토어 확인 항목이에요. 공개 자료로 확인 완료 처리하지 않아요.")
     if not force and plan["need"] == "none":
-        return result
-    if not force and library["sufficient"] and plan["example"]["need"] == "none":
-        result["notes"].append(f"자료 창고에서 서로 다른 출처의 근거 {hits}개가 맞아서 외부 조사를 건너뛰었어요.")
         return result
     if fetch is None:
         deadline = monotonic() + SEARCH_SECONDS
@@ -404,11 +413,13 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
         def fetch(url, *, maximum):
             return fetch_public(url, maximum=maximum, deadline=deadline)
     fact = list(plan["fact"]["providers"]) or (list(_AREA_FACT[plan["area"]]) if force else [])
-    if library["sufficient"] and not force:
-        fact = []
-        result["notes"].append(f"사실 근거는 자료 창고에 {hits}개가 맞아서 사례만 찾았어요.")
     trusted = list_trusted(root)
     jobs = {}
+    direct = [_candidate("fact", "official", label, url, source="공식 안내 페이지")
+              for match, label, url in _EXAM_OFFICIAL_PAGES
+              if "official" in fact and plan["area"] == "A" and match.search(title)]
+    if "official" in fact and plan["area"] == "A" and "편입" in title:
+        result["notes"].append("편입 일정은 지원 대학 입학처의 해당 학년도 모집요강을 출처 확인·보완에 저장해 주세요.")
     api = {"pubmed": _pubmed, "openalex": _openalex, "arxiv": _arxiv, "github": _github}
     if translate and not queries["custom"] and any(name in api for name in fact):
         made = translate(title)  # 한글 주제일 때만 영어 검색어를 만들어 온다. 못 만들면 낱말표 검색어를 그대로 쓴다.
@@ -436,12 +447,13 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
             jobs["creator"] = (_feeds, (fetch, creators, queries["terms"], "example", "creator"))
         else:
             result["notes"].append("사례·참고: 이 분야에 등록한 크리에이터가 없어요. 자료 창고의 '믿는 출처'에서 추가할 수 있어요.")
-    found, seen = [], set()
+    found = [row for row in direct if row]
+    seen = {value for row in found for value in (row["key"], re.sub(r"[\W_]+", "", row["title"].casefold()))}
     with ThreadPoolExecutor(max_workers=6) as pool:
         futures = {name: pool.submit(function, *arguments) for name, (function, arguments) in jobs.items()}
         for name, future in futures.items():
             try:
-                rows = [row for row in future.result() if row]
+                rows = [row for row in future.result() if row and is_topic_candidate(title, row["title"], row["snippet"])]
             except (*_ERRORS, SyntaxError):
                 result["notes"].append(f"{PROVIDERS[name]}: 지금 응답이 없어요. 잠시 뒤 다시 찾아 주세요.")
                 continue

@@ -156,7 +156,7 @@ def test_public_search_drops_weakly_related_passages_below_the_floor(tmp_path, m
     build_index(tmp_path, monkeypatch, [
         ('https://papers.example.org/unrelated', 8, '다른 주제의 논문 문단', .33),
         ('https://papers.example.org/borderline', 3, '경계 아래 문단', .39),
-        ('https://docs.example.org/relevant', 4, '질문과 맞는 공식 문서 문단', .52),
+        ('https://docs.example.org/relevant', 4, '정보처리기사 실기 계산 문제의 공식 안내 문단', .52),
     ])
     monkeypatch.setattr(public_evidence, '_query_vector', lambda *_: [1.0] + [0.0] * 383)
     results = public_evidence.find_public_evidence('정보처리기사 실기 계산 문제', limit=4)

@@ -836,23 +836,23 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
             {(idea.state === "candidate" || canReapprove || evidenceApproval?.ideaId === idea.id) && (
               <section className="idea-public-evidence" aria-label={`${idea.title} 공개 원문 근거`}>
                 <button className="button secondary" type="button" disabled={!canEdit} onClick={() => void searchPublicEvidence(idea)}>
-                  {origin || discovery || publicEvidence ? "공개 원문 근거 다시 찾기" : "공개 원문 근거 찾기"}
+                  {origin || discovery || publicEvidence ? "저장된 공개 원문 후보 다시 찾기" : "공개 원문 근거 찾기"}
                 </button>
                 {searching && <p role="status">{origin ? "이 기획에 맞는 공개 원문을 찾고 있습니다." : "저장된 공개 원문을 검색하고 있습니다."}</p>}
                 {evidenceFailure?.id === idea.id && <p role="alert">{evidenceFailure.message}</p>}
                 {!searching && discovery && <p role="status">
-                  {discovery.status === "ready" && "공개 원문에서 확인할 근거를 찾았습니다."}
+                  {discovery.status === "ready" && "공개 원문 후보를 찾았습니다. 인용할 내용을 직접 확인하세요."}
                   {discovery.status === "insufficient" && "공개 원문 근거가 더 필요합니다."}
                   {discovery.status === "unavailable" && "공개 원문 조회가 잠시 지연됩니다. 다시 찾아보세요."}
                   {" · "}{formatDate(discovery.checked_at, true)}{" · 유료 호출 "}{discovery.paid_calls}{"회"}
                 </p>}
-                {!searching && !discovery && publicEvidence?.length === 0 && <p role="status">현재 공개 원문에서 관련 근거를 찾지 못했습니다.</p>}
+                {!searching && !discovery && publicEvidence?.length === 0 && <p role="status">저장된 자료에서 관련 후보를 찾지 못했습니다. 외부 조사 또는 출처 확인·보완을 이용하세요.</p>}
                 {!searching && pendingClaims.length > 0 && <ul>
                   {pendingClaims.map((claim, index) => <li key={`${index}-${claim.label}`}>{claim.label} · 원문 근거 확인 필요</li>)}
                 </ul>}
                 {publicEvidence && publicEvidence.length > 0 && (
                   <fieldset disabled={!canEdit}>
-                    <legend>{canReapprove ? "기존 작업의 원고에 연결할 근거" : "기획 선택⓪에서 원고에 넘길 근거"}</legend>
+                    <legend>{canReapprove ? "기존 작업의 원고에 연결할 근거 후보" : "기획 선택⓪에서 원고에 넘길 근거 후보"}</legend>
                     {idea.blocked.includes("1차 출처 없음") && <p className="muted">관련 원문을 직접 확인한 뒤 위의 ‘출처 확인·보완’에 대표 출처를 저장하세요.</p>}
                     {[...evidenceGroups].map(([label, items]) => <div key={label}>
                       {label && <p><strong>{label}</strong></p>}

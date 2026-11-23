@@ -216,11 +216,11 @@ export function candidateMeta(candidate: Pick<ResearchCandidate, "provider_label
   return candidate.year ? `${candidate.provider_label} · ${candidate.year}년` : candidate.provider_label;
 }
 
-/** 창고에 이 주제에 맞는 사실 근거가 얼마나 있는지 한 줄로 알려 준다. */
+/** 검색된 후보 수이며, 확인된 주장 수와 구분한다. */
 export function libraryLine(library: ResearchResult["library"]): string {
-  if (library.fact_sources === null) return "자료 창고의 근거는 지금 확인하지 못했어요.";
-  if (library.fact_sources === 0) return "자료 창고에는 이 주제에 맞는 사실 근거가 아직 없어요.";
-  return `자료 창고에 이 주제에 맞는 사실 근거가 ${library.fact_sources}곳 있어요.` + (library.sufficient ? " 이미 충분해요." : " 2곳이 넘으면 충분해요.");
+  if (library.fact_sources === null) return "자료 창고 후보를 지금 조회하지 못했어요.";
+  if (library.fact_sources === 0) return "자료 창고에 관련 후보가 아직 없어요.";
+  return `자료 창고 후보 ${library.fact_sources}곳 · 원문이 주장을 직접 뒷받침하는지 확인해 주세요.`;
 }
 
 /** 후보를 창고에 넣은 결과를 카드에 보여 줄 한 줄로 바꾼다. */
