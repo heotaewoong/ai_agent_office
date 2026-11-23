@@ -3,7 +3,8 @@
 - 운영자가 허락한 소액 호출이다(한 번에 1원 미만). 같은 주제는 저장해 둔 결과를 다시 쓰고, 달마다 쓸 수 있는 금액에 한도를 둔다.
 - 전체 제작 예산(budget_cap)과 작업 시간 설정은 읽지도 바꾸지도 않는다. 대신 호출마다 운영 기록 이벤트와 자료 창고 DB에 금액을 남긴다.
 - 검증한 단가의 유효기간(price_valid_until)이 지나면 부르지 않는다. 실패하면 호출한 쪽이 낱말표 검색어를 그대로 쓴다.
-- 키가 있는 가장 싼 모델부터 쓴다. 키가 만료되거나 거절되면(401·403, 과금 없음) 다음 모델로 한 번 넘어간다.
+- 키가 있는 가장 싼 모델 하나만 부른다. 키가 만료되거나 거절돼도(401·403, 과금 없음) 다른 모델로 넘어가지 않고 낱말표 검색어를 쓴다(자동 대체 금지).
+  다른 모델을 쓰려면 운영자가 OFFICE_RESEARCH_QUERY_MODEL로 직접 고른다.
 """
 from __future__ import annotations
 
@@ -98,7 +99,7 @@ def english_queries(store, title: str, *, transport=None) -> dict:
     failed = "영어 검색어를 자동으로 만들지 못해 낱말표로 찾았어요."
     messages = [{"role": "system", "content": _SYSTEM}, {"role": "user", "content": title}]
     options = {"max_tokens": _MAX_TOKENS, "temperature": 0.2}
-    for model in models:
+    for model in models[:1]:  # 자동 대체 금지: 고른 모델 하나만 부른다.
         openai = provider_for(model) == "openai"
         client = Provider(store, model=model)
         build = client._openai_request if openai else client._gemini_request
@@ -114,7 +115,7 @@ def english_queries(store, title: str, *, transport=None) -> dict:
             return skipped(failed)
         if response.status_code in (401, 403):
             _record(store.root, title_hash, title, model, None, 0, "rejected")
-            continue  # 키가 만료됐거나 권한이 없다. 과금이 없으니 다음 모델로 넘어간다.
+            return skipped(f"{model} 키가 만료됐거나 거절돼서 영어 검색어를 자동으로 만들지 못했어요. 다른 모델로 넘어가지 않고 낱말표로 찾았어요.")
         if response.status_code >= 400:
             unknown = response.status_code >= 500
             _record(store.root, title_hash, title, model, None, maximum if unknown else 0, "unknown" if unknown else "rejected")

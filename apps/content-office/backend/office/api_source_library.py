@@ -1,7 +1,7 @@
 """자료 창고 API. office/api.py의 create_app에서 register(app, store)로 붙인다.
 
 저장·검색만 한다: 작업 시간을 열지 않는다. 유료 호출은 외부 조사에서 한글 주제를 영어 검색어로 바꿀 때 한 번뿐이다(research_query, 월 한도). 근거로 켠 링크 자료의 문단 벡터는
-public_evidence의 로컬 MiniLM 작업자가 따로 계산한다(공개 근거 검색과 같은 모델, 같은 잠금).
+public_evidence의 로컬 작업자가 자료 창고 전용 임베딩 모델로 따로 계산한다(질문 벡터 작업자와 같은 잠금).
 인증·CSRF는 api.py의 공통 미들웨어가, WorkflowError는 공통 핸들러가 409로 처리한다.
 """
 from __future__ import annotations

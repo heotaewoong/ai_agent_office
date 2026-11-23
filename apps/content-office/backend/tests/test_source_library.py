@@ -1,9 +1,12 @@
 """자료 창고: 링크·메모·파일을 문단으로 저장하고, 운영자가 켠 자료만 근거 후보로 쓴다."""
 import base64
 import fcntl
+import io
+import json
 import os
 import re
 import sqlite3
+import struct
 import sys
 from contextlib import closing
 from types import SimpleNamespace
@@ -194,12 +197,12 @@ def test_split_passages_joins_short_and_cuts_long_paragraphs():
 
 
 def add_vector(root, item_id, seq, score, start=0, end=None):
-    from office.public_evidence import PUBLIC_MODEL
+    from office.public_evidence import LIBRARY_MODEL
     from test_public_evidence import vector_blob
     with closing(sqlite3.connect(library_path(root))) as db, db:
         text = db.execute("SELECT text FROM passages WHERE item_id=? AND seq=?", (item_id, seq)).fetchone()[0]
         db.execute("INSERT OR REPLACE INTO passage_vectors VALUES (?,?,?,?,?,?,?)",
-                   (item_id, seq, 0, start, len(text) if end is None else end, PUBLIC_MODEL, vector_blob(score)))
+                   (item_id, seq, 0, start, len(text) if end is None else end, LIBRARY_MODEL, vector_blob(score)))
     return text
 
 
@@ -221,13 +224,13 @@ def test_checked_link_passages_join_the_public_evidence_search(tmp_path, monkeyp
     from office.ideas import _checked_public_references
     from test_public_evidence import build_index
     build_index(tmp_path, monkeypatch, [("https://docs.example.org/indexed", 2, "색인 문단", .5)])
-    monkeypatch.setattr(public_evidence, "_query_vector", lambda *_: [1.0] + [0.0] * 383)
+    monkeypatch.setattr(public_evidence, "_query_vector", lambda *_, **__: [1.0] + [0.0] * 383)
     strong = add_links(tmp_path, ["https://example.org/spacing"], area="C", fetch=page())[0]["item"]
     weak = add_links(tmp_path, ["https://example.org/weak"], area="C", fetch=page(PAGE.replace("복습은", "반복은")))[0]["item"]
     off = add_links(tmp_path, ["https://example.org/off"], area="C", fetch=page(PAGE.replace("복습은", "연습은")))[0]["item"]
     set_evidence(tmp_path, [strong["id"], weak["id"]], True)
     text = add_vector(tmp_path, strong["id"], 1, .9, 0, 80)
-    add_vector(tmp_path, weak["id"], 1, .35)
+    add_vector(tmp_path, weak["id"], 1, public_evidence._LIBRARY_MIN_SIMILARITY - .05)
     add_vector(tmp_path, off["id"], 1, .99)
     results = public_evidence.find_public_evidence("간격 복습", limit=4)
     assert [r["url"] for r in results] == ["https://example.org/spacing", "https://docs.example.org/indexed"]
@@ -238,19 +241,6 @@ def test_checked_link_passages_join_the_public_evidence_search(tmp_path, monkeyp
     assert public_evidence.find_library_evidence("간격 복습", root=tmp_path / "other", limit=4) == []
     add_vector(tmp_path, weak["id"], 1, .99, 0, 20)
     assert public_evidence.find_library_evidence("간격 복습", root=tmp_path, limit=4)[0]["url"] == "https://example.org/spacing"
-
-
-def test_short_tail_windows_overlap_the_previous_window():
-    from office.public_evidence import _windows
-
-    class Tokens:
-        def encode(self, text, add_special_tokens=False):
-            return SimpleNamespace(offsets=[(n, n + 1) for n in range(len(text))])
-
-    assert _windows(Tokens(), "가" * 100) == [(0, 100)]
-    assert _windows(Tokens(), "가" * 300) == [(0, 112), (112, 224), (224, 300)]
-    assert _windows(Tokens(), "가" * 240) == [(0, 112), (112, 224), (128, 240)]
-    assert _windows(Tokens(), "") == [(0, 0)]
 
 
 def test_platform_ideas_fill_free_evidence_slots_from_the_library(tmp_path, monkeypatch):
@@ -294,48 +284,43 @@ def test_vector_worker_starts_only_for_the_live_state_folder(tmp_path, monkeypat
     assert options["start_new_session"] is True and options["env"]["HF_HUB_OFFLINE"] == "1"
 
 
-def test_library_worker_embeds_each_pending_window_once(tmp_path, monkeypatch):
-    from office import public_evidence
+def library_model(tmp_path, monkeypatch, public_evidence):
     cache = tmp_path / "cache"
-    model_dir = cache / public_evidence._MODEL_CACHE_NAME / "snapshots" / public_evidence._MODEL_REVISION
+    model_dir = cache / public_evidence._LIBRARY_MODEL_DIR / public_evidence._LIBRARY_MODEL_REVISION
     model_dir.mkdir(parents=True)
-    for name in public_evidence._MODEL_FILES:
+    monkeypatch.setattr(public_evidence, "_LIBRARY_MODEL_FILES", {"model.onnx": 1, "tokenizer.json": 1})
+    for name in public_evidence._LIBRARY_MODEL_FILES:
         (model_dir / name).write_text("x")
     monkeypatch.setattr(public_evidence, "_mem_available_kib", lambda: 4 * 1024 * 1024)
+    return cache, model_dir
+
+
+def test_library_worker_embeds_each_pending_passage_once_with_the_library_model(tmp_path, monkeypatch):
+    from office import public_evidence
+    cache, model_dir = library_model(tmp_path, monkeypatch, public_evidence)
     item = add_links(tmp_path, ["https://example.org/spacing"], area="C", fetch=page())[0]["item"]
     memo = add_memo(tmp_path, "경험", "직접 해 본 공부 방법을 정리한 메모입니다. " * 5, area="D")
     set_evidence(tmp_path, [item["id"], memo["id"]], True)
-
-    class Tokenizer:
-        @staticmethod
-        def from_file(path):
-            return Tokenizer()
-
-        def no_truncation(self):
-            pass
-
-        def no_padding(self):
-            pass
-
-        def encode(self, text, add_special_tokens=False):
-            return SimpleNamespace(offsets=[(m.start(), m.end()) for m in re.finditer(r"\S+", text)])
-
+    with closing(sqlite3.connect(library_path(tmp_path))) as db, db:  # 예전 모델이 문단 하나를 두 구간으로 나눠 둔 흔적
+        db.executemany("INSERT INTO passage_vectors VALUES (?,?,?,?,?,?,?)",
+                       [(item["id"], 1, part, 0, 10, "old-model", b"x") for part in (0, 1)])
     embedded = []
-
-    class Model:
-        def __init__(self, **options):
-            assert options["local_files_only"] is True
-
-        def embed(self, texts, batch_size):
-            embedded.extend(texts)
-            return [SimpleNamespace(tolist=lambda: [1.0] + [0.0] * 383) for _ in texts]
-
-    monkeypatch.setitem(sys.modules, "fastembed", SimpleNamespace(TextEmbedding=Model))
-    monkeypatch.setitem(sys.modules, "tokenizers", SimpleNamespace(Tokenizer=Tokenizer))
+    monkeypatch.setattr(public_evidence, "_library_embedder",
+                        lambda path: (lambda text: embedded.append((path, text)) or [3.0] + [0.0] * 383))
     lock = tmp_path / "query.lock"
+    assert vector_status(tmp_path)["ready"] == 0
     assert public_evidence._run_library_worker(cache, lock, library_path(tmp_path)) == 0
     status = vector_status(tmp_path)
-    assert status["pending"] == 0 and status["ready"] == item["passages"] and embedded
+    assert status["pending"] == 0 and status["ready"] == item["passages"] == len(embedded)
+    with closing(sqlite3.connect(library_path(tmp_path))) as db:
+        rows = db.execute("SELECT v.seq, v.part, v.start_char, v.end_char, v.model, v.vector, p.text FROM passage_vectors v "
+                          "JOIN passages p ON p.item_id=v.item_id AND p.seq=v.seq ORDER BY v.seq, v.part").fetchall()
+    assert [(seq, part, start) for seq, part, start, *_ in rows] == [(n, 0, 0) for n in range(1, item["passages"] + 1)]
+    assert all(end == len(text) and model == public_evidence.LIBRARY_MODEL and struct.unpack("<384f", blob)[0] == 1.0
+               for _, _, _, end, model, blob, text in rows)
+    first = rows[0][-1]
+    wanted = f"간격 복습 안내 | {first}" if public_evidence._LIBRARY_TITLE_IN_PASSAGE else first
+    assert embedded[0] == (model_dir, public_evidence._LIBRARY_PASSAGE_PREFIX + wanted)
     count = len(embedded)
     assert public_evidence._run_library_worker(cache, lock, library_path(tmp_path)) == 0 and len(embedded) == count
     holder = os.open(lock, os.O_RDWR)
@@ -344,6 +329,49 @@ def test_library_worker_embeds_each_pending_window_once(tmp_path, monkeypatch):
         assert public_evidence._run_library_worker(cache, lock, library_path(tmp_path)) == public_evidence._BUSY_STATUS
     finally:
         os.close(holder)
+
+
+def test_library_workers_refuse_low_memory_and_a_model_that_is_not_the_pinned_one(tmp_path, monkeypatch, capsys):
+    from office import public_evidence
+    cache, model_dir = library_model(tmp_path, monkeypatch, public_evidence)
+    monkeypatch.setattr(public_evidence.os, "O_NOFOLLOW", 0, raising=False)
+    monkeypatch.setattr(public_evidence, "_library_embedder", lambda path: (lambda text: [0.0, 2.0] + [0.0] * 382))
+    lock = tmp_path / "query.lock"
+
+    def ask(text="간격 복습"):
+        monkeypatch.setattr(sys, "stdin", SimpleNamespace(buffer=io.BytesIO(text.encode("utf-8"))))
+        return public_evidence._run_worker(cache, lock, library=True)
+
+    monkeypatch.setattr(public_evidence, "_mem_available_kib", lambda: public_evidence._MIN_LIBRARY_WORKER_AVAILABLE_KIB - 1)
+    assert ask() == public_evidence._LOW_MEMORY_STATUS
+    assert public_evidence._run_library_worker(cache, lock, library_path(tmp_path)) == public_evidence._LOW_MEMORY_STATUS
+    monkeypatch.setattr(public_evidence, "_mem_available_kib", lambda: 4 * 1024 * 1024)
+    (model_dir / "model.onnx").write_text("다른 파일")  # 크기가 고정한 판과 다르면 쓰지 않는다
+    assert ask() == public_evidence._CACHE_MISSING_STATUS
+    assert public_evidence._run_library_worker(cache, lock, library_path(tmp_path)) == public_evidence._CACHE_MISSING_STATUS
+    assert capsys.readouterr().out == ""
+    (model_dir / "model.onnx").write_text("x")
+    assert ask() == 0 and json.loads(capsys.readouterr().out) == [0.0, 2.0] + [0.0] * 382  # 성공하면 잠금을 쥔 채 끝난다
+
+
+def test_library_question_uses_the_library_worker_and_never_another_model(tmp_path, monkeypatch):
+    public_evidence = runtime(tmp_path, monkeypatch)
+    commands = []
+
+    def worker(command, **options):
+        commands.append(command)
+        return SimpleNamespace(returncode=0, stdout=json.dumps([1.0] + [0.0] * 383))
+
+    monkeypatch.setattr(public_evidence.subprocess, "run", worker)
+    item = add_links(tmp_path, ["https://example.org/spacing"], area="C", fetch=page())[0]["item"]
+    set_evidence(tmp_path, [item["id"]], True)
+    text = add_vector(tmp_path, item["id"], 1, .9)
+    [found] = public_evidence.find_library_evidence("간격 복습", root=tmp_path, limit=4)
+    assert found["quote"] == text.strip() and found["paragraph"] == 1
+    assert [command[4] for command in commands] == ["--library-query"]
+    monkeypatch.setattr(public_evidence.subprocess, "run", lambda command, **options: SimpleNamespace(returncode=public_evidence._CACHE_MISSING_STATUS, stdout=""))
+    with pytest.raises(public_evidence.PublicEvidenceUnavailable):
+        public_evidence.find_library_evidence("간격 복습", root=tmp_path, limit=4)
 
 
 def test_import_inbox_maps_groups_and_skips_duplicates(tmp_path):

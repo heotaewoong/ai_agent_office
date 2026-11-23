@@ -152,13 +152,14 @@ def test_cheapest_model_with_a_key_goes_first(store, monkeypatch):
     assert english_queries(store, "수면이 학습에 주는 영향", transport=chosen)["source"] == "model" and chosen.calls == ["openai"]
 
 
-def test_an_expired_key_falls_through_to_the_next_model_without_cost(store, monkeypatch):
+def test_an_expired_key_stops_without_trying_another_provider(store, monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "g-key")
     post = by_host(GeminiReply(status=401), Reply())
-    made = english_queries(store, TITLE, transport=post)
-    assert made["source"] == "model" and post.calls == ["gemini", "openai"]
-    assert [(model, state, krw > 0) for _, _, model, krw, state in rows(store)] == [
-        ("gemini-3.5-flash-lite", "rejected", False), ("gpt-5.4-nano", "settled", True)]
-    both = by_host(GeminiReply(status=403), Reply(status=401))
-    refused = english_queries(store, "미루는 습관을 고치는 방법", transport=both)
-    assert refused["queries"] == [] and "키가 만료됐거나 거절돼서" in refused["note"] and both.calls == ["gemini", "openai"]
+    refused = english_queries(store, TITLE, transport=post)
+    assert refused["queries"] == [] and refused["source"] is None and post.calls == ["gemini"]
+    assert "gemini-3.5-flash-lite" in refused["note"] and "다른 모델로 넘어가지 않고" in refused["note"]
+    assert [(model, state, krw) for _, _, model, krw, state in rows(store)] == [("gemini-3.5-flash-lite", "rejected", 0)]
+    monkeypatch.setenv("OFFICE_RESEARCH_QUERY_MODEL", "gpt-5.4-nano")  # 다른 모델은 운영자가 직접 고를 때만 쓴다
+    chosen = by_host(GeminiReply(status=401), Reply())
+    assert english_queries(store, "미루는 습관을 고치는 방법", transport=chosen)["source"] == "model" and chosen.calls == ["openai"]
+

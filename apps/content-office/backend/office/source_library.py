@@ -591,13 +591,13 @@ def example_urls(root) -> frozenset[str]:
 
 def vector_status(root) -> dict:
     """근거로 켠 링크 자료 가운데 공개 근거 검색에 들어갈 준비(벡터 계산)가 끝난 문단 수."""
-    from .public_evidence import PUBLIC_MODEL, library_worker_available
+    from .public_evidence import LIBRARY_MODEL, library_worker_available
 
     with closing(_connect(root)) as db:
         total, ready = db.execute(
             "SELECT COUNT(*), COALESCE(SUM(EXISTS(SELECT 1 FROM passage_vectors v WHERE v.item_id=p.item_id AND v.seq=p.seq AND v.model=?)), 0) "
             "FROM passages p JOIN items i ON i.id=p.item_id WHERE i.status='done' AND i.use_as_evidence=1 AND i.kind='link'",
-            (PUBLIC_MODEL,)).fetchone()
+            (LIBRARY_MODEL,)).fetchone()
     return {"passages": total, "ready": ready, "pending": total - ready, "available": library_worker_available(root)}
 
 

@@ -1,4 +1,4 @@
-"""Search a public-only SQLite snapshot with the local multilingual MiniLM model."""
+"""Search public evidence with local models only: the legacy snapshot with MiniLM, the source library with its own embedder."""
 from __future__ import annotations
 
 import hashlib
@@ -42,15 +42,28 @@ _MODEL_CACHE_NAME = 'models--Qdrant--paraphrase-multilingual-MiniLM-L12-v2-onnx-
 _MODEL_FILES = ('model_optimized.onnx', 'config.json', 'tokenizer.json',
                 'tokenizer_config.json', 'special_tokens_map.json')
 PUBLIC_MODEL = _PUBLIC_MODEL
-# 자료 창고(source_library)에서 운영자가 '초안 근거로 사용'을 켠 링크 자료도 같은 모델·같은 하한으로 찾는다.
+# 자료 창고(source_library)에서 운영자가 '초안 근거로 사용'을 켠 링크 자료는 전용 임베딩 모델로 찾는다.
+# 2026-11-24 골든셋 v3(질문 100개, 문단 2,887개) 비교에서 고른 한국어와 영어 전용 e5-small 계열 모델이다. 실전 문제 40개 nDCG@10 0.635(MiniLM 0.520).
+# 문단을 512토큰까지 한 번에 읽으므로 112토큰 창으로 쪼개지 않고, 인용도 문단 전체를 쓴다. 실험 기록: EC2 ~/.local/state/heobrain-retriever-v3-20261124
+_LIBRARY_MODEL = 'exp-models/dragonkue-KoEn-E5-Tiny-ONNX'
+_LIBRARY_MODEL_REVISION = '5cf599a8cd6577f2f12a026130ad50132e472cfd'
+_LIBRARY_MODEL_DIR = 'dragonkue-KoEn-E5-Tiny-ONNX'
+_LIBRARY_MODEL_FILES = {'model.onnx': 149755303, 'tokenizer.json': 2931715}  # 고정한 판의 파일 크기(바이트)
+_LIBRARY_POOLING = 'mean'
+_LIBRARY_QUERY_PREFIX = 'query: '
+_LIBRARY_PASSAGE_PREFIX = 'passage: '
+_LIBRARY_TITLE_IN_PASSAGE = True
+_LIBRARY_MAX_TOKENS = 512
+_LIBRARY_MIN_SIMILARITY = 0.38
+_MIN_LIBRARY_WORKER_AVAILABLE_KIB = 600 * 1024
+LIBRARY_MODEL = _LIBRARY_MODEL
 _MAX_LIBRARY_VECTORS = 30_000
 _LIBRARY_BATCH = 32
-_LIBRARY_TOKENS = 112
-_MIN_LIBRARY_QUOTE = 60  # 제목 한 줄이나 문장 꼬리처럼 짧은 구간은 근거 후보로 내지 않는다.
+_MIN_LIBRARY_QUOTE = 60  # 제목 한 줄이나 문장 꼬리처럼 짧은 문단은 근거 후보로 내지 않는다.
 _SPAWN_INTERVAL = 15.0
 _last_spawn = [0.0]
 _PENDING_LIBRARY_SQL = (
-    "SELECT p.item_id, p.seq, p.text FROM passages p JOIN items i ON i.id=p.item_id "
+    "SELECT p.item_id, p.seq, p.text, i.title FROM passages p JOIN items i ON i.id=p.item_id "
     "WHERE i.status='done' AND i.use_as_evidence=1 AND i.kind='link' AND NOT EXISTS ("
     "SELECT 1 FROM passage_vectors v WHERE v.item_id=p.item_id AND v.seq=p.seq AND v.model=?) "
     "ORDER BY i.updated_at, p.item_id, p.seq LIMIT ?")
@@ -87,13 +100,14 @@ def _worker_environment() -> dict:
     }
 
 
-def _query_vector(query: str, python: Path, cache: Path, lock_path: Path) -> list[float]:
+def _query_vector(query: str, python: Path, cache: Path, lock_path: Path, *, library: bool = False) -> list[float]:
+    """질문을 벡터로 바꾼다. library=True면 자료 창고 전용 모델로, 아니면 예전 공개 색인의 MiniLM으로 계산한다. 다른 모델로 넘어가지 않는다."""
     if not python.is_file() or not cache.is_dir():
-        raise PublicEvidenceUnavailable('공개 근거의 로컬 MiniLM 실행 환경이 준비되지 않았습니다.')
+        raise PublicEvidenceUnavailable('공개 근거의 로컬 검색 모델 실행 환경이 준비되지 않았습니다.')
     environment = _worker_environment()
     try:
         result = subprocess.run(
-            [str(python), '-I', '-B', str(Path(__file__).resolve()), str(cache), str(lock_path)],
+            [str(python), '-I', '-B', str(Path(__file__).resolve()), *(['--library-query'] if library else []), str(cache), str(lock_path)],
             input=query, capture_output=True, encoding='utf-8', env=environment, timeout=12, check=False,
         )
     except (OSError, UnicodeError, subprocess.TimeoutExpired) as exc:
@@ -103,17 +117,17 @@ def _query_vector(query: str, python: Path, cache: Path, lock_path: Path) -> lis
     if result.returncode == _LOW_MEMORY_STATUS:
         raise PublicEvidenceUnavailable('EC2 메모리 여유가 부족해 공개 근거 검색을 잠시 보류했습니다.')
     if result.returncode == _CACHE_MISSING_STATUS:
-        raise PublicEvidenceUnavailable('공개 근거의 오프라인 MiniLM 모델 파일을 확인할 수 없습니다.')
+        raise PublicEvidenceUnavailable('공개 근거의 오프라인 검색 모델 파일을 확인할 수 없습니다.')
     if result.returncode:
-        raise PublicEvidenceUnavailable('공개 근거의 로컬 MiniLM 모델을 읽지 못했습니다.')
+        raise PublicEvidenceUnavailable('공개 근거의 로컬 검색 모델을 읽지 못했습니다.')
     try:
         values = json.loads(result.stdout)
         if not isinstance(values, list) or len(values) != 384:
-            raise ValueError('invalid MiniLM query vector')
+            raise ValueError('invalid query vector')
         vector = [float(value) for value in values]
         norm = math.hypot(*vector)
         if not math.isfinite(norm) or norm <= 0:
-            raise ValueError('invalid MiniLM query vector magnitude')
+            raise ValueError('invalid query vector magnitude')
         return [value / norm for value in vector]
     except (TypeError, ValueError, OverflowError) as exc:
         raise PublicEvidenceUnavailable('공개 근거 검색의 벡터를 확인할 수 없습니다.') from exc
@@ -193,13 +207,13 @@ def _library_has_vectors(path: Path) -> bool:
             return db.execute(
                 "SELECT 1 FROM passage_vectors v JOIN items i ON i.id=v.item_id "
                 "WHERE v.model=? AND i.status='done' AND i.use_as_evidence=1 AND i.kind='link' LIMIT 1",
-                (_PUBLIC_MODEL,)).fetchone() is not None
+                (_LIBRARY_MODEL,)).fetchone() is not None
     except sqlite3.Error:
         return False
 
 
 def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -> list[tuple]:
-    """자료 창고에서 '초안 근거로 사용'을 켠 링크 자료의 문단을 같은 모델 벡터로 비교한다. 인용은 맞은 구간만 쓴다."""
+    """자료 창고에서 '초안 근거로 사용'을 켠 링크 자료의 문단을 전용 모델 벡터로 비교한다. 인용은 벡터를 계산한 구간(문단 전체)을 쓴다."""
     excluded = set(exclude_urls)
     try:
         with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
@@ -208,7 +222,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
                 "FROM passage_vectors v JOIN passages p ON p.item_id=v.item_id AND p.seq=v.seq JOIN items i ON i.id=v.item_id "
                 "WHERE v.model=? AND i.status='done' AND i.use_as_evidence=1 AND i.kind='link' "
                 "AND (? IS NULL OR i.area=?) ORDER BY v.item_id, v.seq, v.part LIMIT ?",
-                (_PUBLIC_MODEL, area, area, _MAX_LIBRARY_VECTORS)).fetchall()
+                (_LIBRARY_MODEL, area, area, _MAX_LIBRARY_VECTORS)).fetchall()
     except sqlite3.Error:
         return []
     ranked = []
@@ -221,7 +235,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
         if len(quote) < _MIN_LIBRARY_QUOTE or len(quote) > 1800 or is_evidence_noise(quote):
             continue
         score = sum(a * b for a, b in zip(vector, _VECTOR.unpack(blob), strict=True))
-        if math.isfinite(score) and score >= _MIN_SIMILARITY:
+        if math.isfinite(score) and score >= _LIBRARY_MIN_SIMILARITY:
             ranked.append((-score, (1, item_id, seq, part), url, title.strip()[:500], seq, quote, source_hash))
     return ranked
 
@@ -233,7 +247,7 @@ def find_library_evidence(query: str, *, root, exclude_urls: tuple[str, ...] = (
     if not query or limit <= 0 or path is None or not _library_has_vectors(path):
         return []
     index, python, cache = _paths()
-    vector = _query_vector(query, python, cache, index.parent / 'query.lock')
+    vector = _query_vector(query, python, cache, index.parent / 'query.lock', library=True)
     return _select(_rank_library(path, vector, exclude_urls, area=area), exclude_urls, min(limit, _MAX_RESULTS), query=query)
 
 
@@ -288,12 +302,13 @@ def find_public_evidence(query: str, *, exclude_urls: tuple[str, ...] = (), limi
             indexed = db.execute('SELECT 1 FROM public_passages LIMIT 1').fetchone() is not None
             if not indexed and library is None:
                 return []
-            vector = _query_vector(query, python, cache, index.parent / 'query.lock')
-            ranked = _rank_index(db, vector, exclude_urls) if indexed else []
+            lock = index.parent / 'query.lock'
+            ranked = _rank_index(db, _query_vector(query, python, cache, lock), exclude_urls) if indexed else []
     except sqlite3.Error as exc:
         raise PublicEvidenceUnavailable('공개 근거 인덱스를 읽지 못했습니다.') from exc
     if library is not None:
-        ranked += _rank_library(library, vector, exclude_urls, area=area)
+        # 자료 창고 문단은 전용 모델로 따로 질문 벡터를 만든다. 모델이 달라 유사도 눈금도 다르므로 하한도 따로 둔다.
+        ranked += _rank_library(library, _query_vector(query, python, cache, lock, library=True), exclude_urls, area=area)
     return _select(ranked, exclude_urls, min(limit, _MAX_RESULTS), query=query)
 
 
@@ -319,7 +334,53 @@ def _pinned_model_dir(cache: Path) -> Path | None:
     return model_dir
 
 
-def _run_worker(cache: Path, lock_path: Path) -> int:
+def _pinned_library_model_dir(cache: Path) -> Path | None:
+    model_dir = cache / _LIBRARY_MODEL_DIR / _LIBRARY_MODEL_REVISION
+    for name, size in _LIBRARY_MODEL_FILES.items():
+        try:
+            entry = (model_dir / name).lstat()
+        except OSError:
+            return None
+        if not stat.S_ISREG(entry.st_mode) or entry.st_size != size:
+            return None
+    return model_dir
+
+
+def _library_embedder(model_dir: Path):
+    """자료 창고 모델로 글 하나를 벡터 하나로 바꾸는 함수를 돌려준다. 한 번에 한 글만 넣어 메모리 최고치를 낮게 둔다."""
+    import numpy as np
+    import onnxruntime as ort
+    from tokenizers import Tokenizer
+
+    tokenizer = Tokenizer.from_file(str(model_dir / 'tokenizer.json'))
+    tokenizer.enable_truncation(max_length=_LIBRARY_MAX_TOKENS)
+    tokenizer.no_padding()
+    options = ort.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+    options.enable_cpu_mem_arena = False
+    session = ort.InferenceSession(str(model_dir / 'model.onnx'), sess_options=options, providers=['CPUExecutionProvider'])
+    inputs = session.get_inputs()
+
+    def embed(text: str) -> list[float]:
+        encoded = tokenizer.encode(text)
+        data = {'input_ids': encoded.ids, 'attention_mask': encoded.attention_mask, 'token_type_ids': encoded.type_ids}
+        feed = {item.name: np.asarray([data[item.name]], dtype=np.int32 if item.type == 'tensor(int32)' else np.int64)
+                for item in inputs}
+        hidden = next(value for value in session.run(None, feed) if value.ndim == 3)[0]
+        return [float(value) for value in (hidden[0] if _LIBRARY_POOLING == 'cls' else hidden.mean(axis=0))]
+
+    return embed
+
+
+def _library_passage_text(title: str, text: str) -> str:
+    # 골든셋 실험과 같은 글 모양으로 넣는다. 제목을 붙이는 구성이면 "제목 | 문단".
+    body = f'{title.strip()} | {text}' if _LIBRARY_TITLE_IN_PASSAGE and isinstance(title, str) and title.strip() else text
+    return _LIBRARY_PASSAGE_PREFIX + body
+
+
+def _run_worker(cache: Path, lock_path: Path, *, library: bool = False) -> int:
     import fcntl
 
     query = sys.stdin.buffer.read(_MAX_QUERY_CHARS * 4 + 1).decode('utf-8')
@@ -332,13 +393,16 @@ def _run_worker(cache: Path, lock_path: Path) -> int:
     except BlockingIOError:
         os.close(lock)
         return _BUSY_STATUS
-    if _mem_available_kib() < _MIN_WORKER_AVAILABLE_KIB:
+    if _mem_available_kib() < (_MIN_LIBRARY_WORKER_AVAILABLE_KIB if library else _MIN_WORKER_AVAILABLE_KIB):
         os.close(lock)
         return _LOW_MEMORY_STATUS
-    model_dir = _pinned_model_dir(cache)
+    model_dir = _pinned_library_model_dir(cache) if library else _pinned_model_dir(cache)
     if model_dir is None:
         os.close(lock)
         return _CACHE_MISSING_STATUS
+    if library:
+        print(json.dumps(_library_embedder(model_dir)(_LIBRARY_QUERY_PREFIX + query), allow_nan=False))
+        return 0
 
     from fastembed import TextEmbedding
 
@@ -350,35 +414,20 @@ def _run_worker(cache: Path, lock_path: Path) -> int:
     return 0
 
 
-def _windows(tokenizer, text: str) -> list[tuple[int, int]]:
-    # MiniLM은 128토큰까지만 읽으므로 공개 색인을 만들 때처럼 112토큰 구간으로 나눠 계산한다.
-    # 마지막 구간이 짧으면 앞 구간과 겹치게 끝 112토큰을 잡는다. 몇 글자짜리 꼬리 구간은 아무 질문에나 비슷하게 나온다.
-    offsets = tokenizer.encode(text, add_special_tokens=False).offsets
-    if not offsets:
-        return [(0, min(len(text), 1800))]
-    starts = list(range(0, len(offsets), _LIBRARY_TOKENS))
-    if len(starts) > 1 and len(offsets) - starts[-1] < _LIBRARY_TOKENS // 2:
-        starts[-1] = len(offsets) - _LIBRARY_TOKENS
-    spans = []
-    for first in starts:
-        start, end = offsets[first][0], offsets[min(len(offsets), first + _LIBRARY_TOKENS) - 1][1]
-        if text[start:end].strip():
-            spans.append((start, end))
-    return spans or [(0, min(len(text), 1800))]
-
-
-def _store_library_vectors(db: sqlite3.Connection, embedder, batch: list[tuple]) -> None:
-    if not batch:
-        return
+def _store_library_vectors(db: sqlite3.Connection, embed, batch: list[tuple]) -> None:
     values = []
-    for (item_id, seq, part, start, end, _), vector in zip(batch, embedder.embed([row[5] for row in batch], batch_size=16), strict=True):
-        numbers = vector.tolist()
+    for item_id, seq, text, title in batch:
+        numbers = embed(_library_passage_text(title, text))
         norm = math.hypot(*numbers)
         if len(numbers) != 384 or not math.isfinite(norm) or norm <= 0:
             continue
-        values.append((item_id, seq, part, start, end, _PUBLIC_MODEL, _VECTOR.pack(*(number / norm for number in numbers))))
+        values.append((item_id, seq, 0, 0, len(text), _LIBRARY_MODEL, _VECTOR.pack(*(number / norm for number in numbers))))
+    if not values:
+        return
     try:
         with db:
+            # 예전 모델이 한 문단을 여러 구간으로 나눠 둔 벡터는 지운다. 문단마다 벡터 하나만 남긴다.
+            db.executemany('DELETE FROM passage_vectors WHERE item_id=? AND seq=?', [row[:2] for row in values])
             db.executemany('INSERT OR REPLACE INTO passage_vectors(item_id, seq, part, start_char, end_char, model, vector) '
                            'VALUES (?,?,?,?,?,?,?)', values)
     except sqlite3.IntegrityError:
@@ -395,48 +444,37 @@ def _run_library_worker(cache: Path, lock_path: Path, db_path: Path) -> int:
     except BlockingIOError:
         os.close(lock)
         return _BUSY_STATUS
-    if _mem_available_kib() < _MIN_WORKER_AVAILABLE_KIB:
+    if _mem_available_kib() < _MIN_LIBRARY_WORKER_AVAILABLE_KIB:
         os.close(lock)
         return _LOW_MEMORY_STATUS
-    model_dir = _pinned_model_dir(cache)
+    model_dir = _pinned_library_model_dir(cache)
     if model_dir is None:
         os.close(lock)
         return _CACHE_MISSING_STATUS
     try:
-        return _embed_library(cache, model_dir, db_path)
+        return _embed_library(model_dir, db_path)
     finally:
         os.close(lock)  # 계산을 마친 뒤에 풀어 다음 질문 검색이 바로 쓸 수 있게 한다.
 
 
-def _embed_library(cache: Path, model_dir: Path, db_path: Path) -> int:
+def _embed_library(model_dir: Path, db_path: Path) -> int:
     with closing(sqlite3.connect(db_path, timeout=20)) as db:
         db.execute('PRAGMA foreign_keys=ON')
         try:
-            rows = db.execute(_PENDING_LIBRARY_SQL, (_PUBLIC_MODEL, _MAX_LIBRARY_VECTORS)).fetchall()
+            rows = db.execute(_PENDING_LIBRARY_SQL, (_LIBRARY_MODEL, _MAX_LIBRARY_VECTORS)).fetchall()
         except sqlite3.Error:
             return 0
         if not rows:
             return 0
-        from fastembed import TextEmbedding
-        from tokenizers import Tokenizer
-
-        tokenizer = Tokenizer.from_file(str(model_dir / 'tokenizer.json'))
-        tokenizer.no_truncation()
-        tokenizer.no_padding()
-        embedder = TextEmbedding(model_name=_PUBLIC_MODEL, cache_dir=str(cache), threads=1,
-                                 providers=['CPUExecutionProvider'], local_files_only=True,
-                                 specific_model_path=str(model_dir))
-        batch = []
-        for position, (item_id, seq, text) in enumerate(rows):
-            batch.extend((item_id, seq, part, start, end, text[start:end])
-                         for part, (start, end) in enumerate(_windows(tokenizer, text)))
-            if len(batch) >= _LIBRARY_BATCH or position == len(rows) - 1:
-                _store_library_vectors(db, embedder, batch)
-                batch = []
+        embed = _library_embedder(model_dir)
+        for start in range(0, len(rows), _LIBRARY_BATCH):
+            _store_library_vectors(db, embed, rows[start:start + _LIBRARY_BATCH])
     return 0
 
 
 if __name__ == '__main__':
     if len(sys.argv) == 5 and sys.argv[1] == '--library':
         raise SystemExit(_run_library_worker(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])))
+    if len(sys.argv) == 4 and sys.argv[1] == '--library-query':
+        raise SystemExit(_run_worker(Path(sys.argv[2]), Path(sys.argv[3]), library=True))
     raise SystemExit(_run_worker(Path(sys.argv[1]), Path(sys.argv[2])))
