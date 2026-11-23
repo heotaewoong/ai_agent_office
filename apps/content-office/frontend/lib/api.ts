@@ -5,6 +5,7 @@ import type { ContentHistory } from "./version-history";
 import type { ClipEstimate } from "./types";
 import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
 import type { DailyCollectPatch, DailyCollectStatus } from "./daily-collect";
+import type { SourceEntry, SourceHit, SourceItem, SourceItemDetail, SourceLibrary, SourceLinkResult, SourcePatch } from "./source-library";
 import type { PublicLeadFormInfo } from "./public-lead";
 import type {
   Dashboard,
@@ -183,6 +184,20 @@ export const api = {
   updateChannel: (key: string, patch: ChannelPatch) =>
     request<Channel>(`/channels/${encodeURIComponent(key)}`, "PUT", patch),
   // 매일 아침 뉴스 자동 수집: 설정 저장만 하며 작업 시간을 열지 않습니다(실행은 서버 cron).
+  sourceLibrary: () => request<SourceLibrary>("/source-library"),
+  searchSourceLibrary: (q: string, area = "", evidenceOnly = false) =>
+    request<{ query: string; results: SourceHit[] }>(`/source-library/search?${new URLSearchParams({ q, ...(area ? { area } : {}), ...(evidenceOnly ? { evidence_only: "true" } : {}) })}`),
+  sourceItem: (id: string) => request<SourceItemDetail>(`/source-library/items/${encodeURIComponent(id)}`),
+  addSourceLinks: (urls: string[], entry: SourceEntry, title?: string) =>
+    request<SourceLibrary & { results: SourceLinkResult[] }>("/source-library/links", "POST", { urls, ...(title ? { title } : {}), ...entry }),
+  addSourceMemo: (title: string, text: string, entry: SourceEntry) =>
+    request<SourceLibrary & { item: SourceItem }>("/source-library/memos", "POST", { title, text, ...entry }),
+  addSourceFile: (name: string, content_base64: string, entry: SourceEntry) =>
+    request<SourceLibrary & { item: SourceItem }>("/source-library/files", "POST", { name, content_base64, ...entry }),
+  updateSourceItem: (id: string, patch: SourcePatch) =>
+    request<SourceLibrary & { item: SourceItem }>(`/source-library/items/${encodeURIComponent(id)}`, "PATCH", patch),
+  retrySourceItem: (id: string) => request<SourceLibrary & { item: SourceItem }>(`/source-library/items/${encodeURIComponent(id)}/retry`, "POST"),
+  deleteSourceItem: (id: string) => request<SourceLibrary & { deleted: string }>(`/source-library/items/${encodeURIComponent(id)}`, "DELETE"),
   dailyCollect: () => request<DailyCollectStatus>("/settings/daily-collect"),
   updateDailyCollect: (patch: Partial<DailyCollectPatch>) =>
     request<DailyCollectStatus>("/settings/daily-collect", "PUT", patch),

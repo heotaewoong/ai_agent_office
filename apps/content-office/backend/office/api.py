@@ -1203,6 +1203,8 @@ def create_app(store: Store | None = None):
     register_assistant_requests(app, store)
     from .api_benchmarks import register as register_benchmarks
     register_benchmarks(app, store)
+    from .api_source_library import register as register_source_library
+    register_source_library(app, store)  # 자료 창고 — 저장·검색만, 모델 호출 없음
     return app
 
 

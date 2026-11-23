@@ -68,6 +68,9 @@ import { InstagramPreview } from './instagram-preview';
 import { OfferPanel } from "./offer-panel";
 import { QuestionsPanel } from "./questions-panel";
 import { OwnedSourceIntake } from "./owned-source-intake";
+import { SourceLibraryPanel } from "./source-library-panel";
+import { SaveToSourceLibrary } from "./save-to-source-library";
+import { areaForSegment } from "../lib/source-library";
 import { EditorialAssetsPanel } from "./editorial-assets-panel";
 import { VersionHistoryPanel } from "./version-history-panel";
 import { ImprovementPanel } from "./improvement-panel";
@@ -93,6 +96,7 @@ const views: { id: View; title: string; icon: string; en: string }[] = [
   { id: "home", title: "내 결정 대기", icon: "check", en: "DECISIONS" },
   { id: "plans", title: "기획·독자 질문", icon: "pen", en: "PLANNING" },
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
+  { id: "sources", title: "자료 창고", icon: "source", en: "SOURCE LIBRARY" },
   { id: "studio", title: "콘텐츠 작업실", icon: "pen", en: "CONTENT STUDIO" },
   {
     id: "delivery",
@@ -586,6 +590,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
                     ? "독자 질문과 근거를 살피고, 다음에 만들 기획을 고르세요."
                     : view === "news"
                   ? "공식 뉴스와 플랫폼 소식을 살펴보고 기획 후보를 정리하세요."
+                  : view === "sources"
+                  ? "글의 재료가 될 링크와 메모를 모으고, 초안 근거로 쓸 자료를 고르세요."
                   : view === "studio"
                     ? "근거를 살피고, 문장을 다듬고, 다음 제작을 결정하세요."
                     : view === "delivery"
@@ -1039,6 +1045,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
 
               {view === "architecture" && <ArchitectureView />}
 
+              <div hidden={view !== "sources"}><SourceLibraryPanel active={view === "sources"} /></div>
+
               {view === "activity" && (
                 <Activity
                   dashboard={dashboard}
@@ -1187,6 +1195,7 @@ function ArticleCard({
           원문 읽기
           <Icon name="external" size={14} />
         </a>
+        <SaveToSourceLibrary links={[article.url]} title={headline} origin="news" originRef={article.id} defaultArea={areaForSegment(article.segment)} />
       </div>
     </article>
   );
@@ -2269,6 +2278,7 @@ function Delivery({
           <Badge state={job.state} />
           <h2>{job.title}</h2>
           <p>{statusInfo(job.state).next}</p>
+          {job.source_packet?.body && <SaveToSourceLibrary memo={{ title: job.source_packet.title || job.title, text: job.source_packet.body }} origin="artifact" originRef={job.id} mine />}
         </div>
         <span className="count-pill">제작 {files.length}개 · 검토 {(job.drafts??[]).reduce((n,d)=>n+(d.assets?.length??0),0)}개</span>
       </div>

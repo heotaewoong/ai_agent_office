@@ -15,6 +15,7 @@ import { calendarSourceUrl, calendarTimeliness, dDayLabel, isVerifiedExam, timel
 import { Icon } from "./icons";
 import { IdeaIntake } from "./idea-intake";
 import { IdeaSourcesPanel } from "./idea-sources-panel";
+import { SaveToSourceLibrary } from "./save-to-source-library";
 import type { IdeaSourcesDraft } from "../lib/ideas";
 import { benchmarkPublicUrl } from "../lib/benchmarks";
 import { packagingRequired } from "../lib/packaging";
@@ -818,6 +819,7 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
               </> : <p className="muted">이 기획에 저장된 독자 기획이 없습니다.</p>}
             </details>
             {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
+            <SaveToSourceLibrary links={idea.source_urls?.length ? idea.source_urls : idea.source_url ? [idea.source_url] : []} origin="idea" originRef={idea.id} />
             <IdeaSourcesPanel
               idea={idea}
               cached={drafts[idea.id]}
