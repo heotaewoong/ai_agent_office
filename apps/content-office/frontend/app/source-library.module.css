@@ -106,3 +106,4 @@ textarea.input { resize: vertical; }
 .trustedList { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
 .trustedList li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #dce4d5; border-radius: 10px; background: #fff; }
 .trustedList a { color: #264735; font-size: 14px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.researchAlternatives { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 6px 0 0; font-size: 12px; line-height: 1.7; color: #53655a; }

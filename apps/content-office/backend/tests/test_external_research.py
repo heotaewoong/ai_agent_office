@@ -247,6 +247,7 @@ def test_api_plans_many_topics_without_network_and_runs_one_search(tmp_path, mon
     seen = {}
     monkeypatch.setattr("office.api_source_library.run_research", lambda root, title, **options: seen.update(title=title, **options) or {"candidates": []})
     run = api.post("/api/source-library/research", json={"title": "간격 복습", "area": "C", "query": "spacing effect", "force": True})
+    assert callable(seen.pop("translate"))
     assert run.status_code == 200 and seen == {"title": "간격 복습", "summary": "", "area": "C", "experience_first": False, "query": "spacing effect", "force": True}
     assert api.post("/api/source-library/research", json={"title": ""}).status_code == 422
     assert api.post("/api/source-library/research", json={"title": "a", "force": "yes"}).status_code == 422
@@ -270,3 +271,45 @@ def test_api_registers_trusted_sources_and_saves_a_chosen_candidate(tmp_path, mo
     assert saved.status_code == 200 and body["results"][0]["item"]["use_as_evidence"] is True and body["results"][0]["item"]["lane"] == "example"
     assert body["stats"]["evidence"] == 1 and started and body["lanes"] == [{"id": "fact", "label": "사실 근거"}, {"id": "example", "label": "사례·참고"}]
     assert api.patch(f"/api/source-library/items/{body['results'][0]['item']['id']}", json={"lane": "fact"}).json()["item"]["lane"] == "fact"
+
+
+def test_translated_queries_drive_paper_search_while_code_search_keeps_product_names(tmp_path):
+    asked = []
+
+    def translate(title):
+        asked.append(title)
+        return {"queries": ["agent framework comparison", "autonomous agent runtime"], "source": "model", "note": None}
+    fetch = routed({"https://api.github.com/": GITHUB, "https://export.arxiv.org/": (ARXIV, "application/atom+xml")})
+    result = run_research(tmp_path, "Hermes와 OpenClaw 차이", fetch=fetch, fact_sources=no_library, translate=translate)
+    assert asked == ["Hermes와 OpenClaw 차이"] and result["queries"]["english"] == "agent framework comparison"
+    assert result["queries"]["alternatives"] == ["autonomous agent runtime"] and result["queries"]["translated"] is True
+    assert any("all:agent+AND+all:framework+AND+all:comparison" in url for url in fetch.calls)
+    assert any("q=Hermes+in:name" in url for url in fetch.calls) and any("q=OpenClaw+in:name" in url for url in fetch.calls)
+
+
+def test_translation_is_skipped_for_own_queries_and_falls_back_with_a_note(tmp_path):
+    def never(title):
+        raise AssertionError("운영자가 검색어를 적었으면 자동으로 만들지 않는다")
+    fetch = routed({"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch": ESEARCH,
+                    "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary": ESUMMARY, "https://api.openalex.org/": OPENALEX})
+    own = run_research(tmp_path, "간격 복습이 기억에 미치는 효과", query="spacing effect", fetch=fetch, fact_sources=no_library, translate=never)
+    assert own["queries"]["english"] == "spacing effect" and "translated" not in own["queries"]
+    assert run_research(tmp_path, "회사를 그만두고 배운 것", area="D", experience_first=True, fetch=offline, fact_sources=no_library, translate=never)["searched"] is False
+    note = "이번 달 영어 검색어 자동 만들기 한도(300원)를 다 써서 낱말표로 찾았어요."
+    fallback = run_research(tmp_path, "간격 복습이 기억에 미치는 효과", fetch=fetch, fact_sources=no_library,
+                            translate=lambda title: {"queries": [], "source": None, "note": note})
+    assert fallback["queries"]["english"] == "spaced repetition memory" and note in fallback["notes"] and fallback["candidates"]
+
+
+def test_paper_search_moves_to_the_next_generated_query_when_the_first_finds_nothing(tmp_path):
+    calls = []
+
+    def fetch(url, *, maximum):
+        calls.append(url)
+        if "esearch" in url:
+            return (ESEARCH if "term=spacing+effect" in url else json.dumps({"esearchresult": {"idlist": []}})).encode(), url, "application/json"
+        return (ESUMMARY if "esummary" in url else '{"results": []}').encode(), url, "application/json"
+    result = run_research(tmp_path, "간격 복습이 기억에 미치는 효과", fetch=fetch, fact_sources=no_library,
+                          translate=lambda title: {"queries": ["spaced repetition memory retention benefit", "spacing effect"], "source": "model", "note": None})
+    assert [row["url"] for row in result["candidates"]] == ["https://pubmed.ncbi.nlm.nih.gov/111/", "https://pubmed.ncbi.nlm.nih.gov/222/"]
+    assert [("benefit" in url, "spacing+effect" in url) for url in calls if "esearch" in url] == [(True, False), (False, True)]

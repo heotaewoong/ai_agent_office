@@ -46,18 +46,19 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
     return () => { alive = false; };
   }, [open, areas.length]);
 
-  async function search(force: boolean) {
+  async function search(force: boolean, override?: string) {
     if (busy) return;
+    const text = (override ?? query).trim();
     setOpen(true);
     setBusy("search");
     setError("");
     try {
-      const found = await api.runResearch({ title, summary, ...(area ? { area } : {}), ...(query.trim() ? { query: query.trim() } : {}), force });
+      const found = await api.runResearch({ title, summary, ...(area ? { area } : {}), ...(text ? { query: text } : {}), force });
       setResult(found);
       setPicked([]);
       setSaved({});
       if (!area) setArea(found.plan.area);
-      if (!query.trim()) setQuery(found.queries.english);
+      setQuery(text || found.queries.english);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "후보를 찾지 못했습니다. 잠시 뒤 다시 눌러 주세요.");
     } finally {
@@ -141,7 +142,7 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
               ))}
             </select>
             <label htmlFor={`${id}-query`}>검색어</label>
-            <input id={`${id}-query`} value={query} maxLength={200} disabled={busy !== null} placeholder="논문과 저장소는 영어 낱말로 찾아요"
+            <input id={`${id}-query`} value={query} maxLength={200} disabled={busy !== null} placeholder="비워 두면 영어 검색어를 자동으로 만들어요"
               onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(true); } }} />
             <button className="button secondary small" type="button" disabled={busy !== null} onClick={() => void search(true)}>{busy === "search" ? "찾는 중…" : "다시 찾기"}</button>
             <button className="button text small" type="button" disabled={busy !== null} onClick={() => setOpen(false)}>접기</button>
@@ -152,6 +153,14 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
             {result && busy !== "search" && (
               <>
                 <p className={styles.hint}>{libraryLine(result.library)}</p>
+                {result.queries.translated && (
+                  <p className={styles.researchAlternatives}>
+                    <span>한글 주제에 맞는 영어 검색어를 자동으로 만들었어요.{result.queries.alternatives?.length ? " 다른 검색어로도 찾아볼 수 있어요." : ""}</span>
+                    {(result.queries.alternatives ?? []).map((choice) => (
+                      <button key={choice} className="button text small" type="button" disabled={busy !== null} onClick={() => void search(true, choice)}>{choice}</button>
+                    ))}
+                  </p>
+                )}
                 {result.notes.length > 0 && <ul className={styles.researchNotes}>{result.notes.map((note) => <li key={note}>{note}</li>)}</ul>}
                 {result.searched && result.candidates.length === 0 && <p className={styles.hint}>맞는 후보가 없어요. 검색어를 바꿔서 다시 찾아 보세요.</p>}
               </>

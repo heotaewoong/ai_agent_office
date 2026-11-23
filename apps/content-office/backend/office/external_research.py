@@ -1,6 +1,7 @@
 """외부 조사: 주제가 어떤 주장을 하는지 보고 외부 조사가 필요한지 정하고, 무료 공개 출처에서 후보를 찾는다.
 
-- 모델·유료 API를 부르지 않는다. PubMed, OpenAlex, arXiv, GitHub의 공개 검색 API와 등록된 RSS만 읽는다.
+- 후보는 PubMed, OpenAlex, arXiv, GitHub의 공개 검색 API와 등록된 RSS에서만 찾는다. 이 모듈은 모델을 부르지 않는다.
+  한글 주제의 영어 검색어는 호출한 쪽이 translate로 넘겨 준 함수(research_query)가 만들고, 없으면 낱말표를 쓴다.
 - 찾은 것은 후보일 뿐이다. 운영자가 고른 것만 자료 창고에 들어가고 근거로 켜진다. 승인⓪①②③을 만들거나 대신하지 않는다.
 - 자료는 두 칸으로 나눈다. fact(사실 근거: 공식 문서·논문·기관 공고)와 example(사례·참고: 운영자가 등록한 크리에이터).
 """
@@ -133,7 +134,9 @@ def build_queries(title: str, query: str | None = None) -> dict:
     for word in re.findall(r"[^\W_]{2,}", f"{text} {custom} {' '.join(translated)}".casefold()):
         stem = _PARTICLE.sub("", word)
         words.append(stem if len(stem) >= 2 else word)
-    return {"english": english_query, "terms": [word for word in dict.fromkeys(words) if word not in _STOP][:24], "custom": bool(custom)}
+    names = " ".join(dict.fromkeys(word for word in english if word.casefold() not in _STOP))[:200]  # 제목에 적힌 제품·도구 이름
+    return {"english": english_query, "names": names, "terms": [word for word in dict.fromkeys(words) if word not in _STOP][:24],
+            "custom": bool(custom)}
 
 
 def _candidate(lane, provider, title, url, snippet="", year=None, source=None) -> dict | None:
@@ -156,10 +159,14 @@ def _year(value) -> int | None:
     return int(text) if text.isdigit() else None
 
 
-def _pubmed(fetch, english):
+def _pubmed(fetch, english, alternatives=()):
     base = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
-    found = _json(fetch, f"{base}esearch.fcgi?db=pubmed&retmode=json&retmax={PER_PROVIDER}&sort=relevance&term={quote_plus(english)}")
-    ids = [value for value in found["esearchresult"].get("idlist", []) if str(value).isdigit()][:PER_PROVIDER]
+    ids = []
+    for query in (english, *alternatives[:2]):  # PubMed는 낱말을 모두 담은 논문만 찾는다. 없으면 같이 만든 다른 검색어로 넘어간다.
+        found = _json(fetch, f"{base}esearch.fcgi?db=pubmed&retmode=json&retmax={PER_PROVIDER}&sort=relevance&term={quote_plus(query)}")
+        ids = [value for value in found["esearchresult"].get("idlist", []) if str(value).isdigit()][:PER_PROVIDER]
+        if ids:
+            break
     if not ids:
         return []
     rows = _json(fetch, f"{base}esummary.fcgi?db=pubmed&retmode=json&id={','.join(ids)}")["result"]
@@ -376,7 +383,7 @@ def library_fact_sources(root, title: str) -> int | None:
 
 
 def run_research(root, title: str, *, summary: str = "", area: str | None = None, experience_first: bool = False,
-                 query: str | None = None, force: bool = False, fetch=None, fact_sources=library_fact_sources) -> dict:
+                 query: str | None = None, force: bool = False, fetch=None, fact_sources=library_fact_sources, translate=None) -> dict:
     """기준에 따라 외부 후보를 찾는다. 창고 근거가 충분하거나 조사가 필요 없는 주제는 force가 아니면 밖으로 나가지 않는다."""
     title = _clean(title or "")[:300]
     if not title:
@@ -403,10 +410,18 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
     trusted = list_trusted(root)
     jobs = {}
     api = {"pubmed": _pubmed, "openalex": _openalex, "arxiv": _arxiv, "github": _github}
+    if translate and not queries["custom"] and any(name in api for name in fact):
+        made = translate(title)  # 한글 주제일 때만 영어 검색어를 만들어 온다. 못 만들면 낱말표 검색어를 그대로 쓴다.
+        if made.get("queries"):
+            queries = {**queries, "english": made["queries"][0], "alternatives": made["queries"][1:], "translated": True}
+            result["queries"] = queries
+        elif made.get("note"):
+            result["notes"].append(made["note"])
     for name in fact:
         if name in api:
-            if queries["english"]:
-                jobs[name] = (api[name], (fetch, queries["english"]))
+            wanted = (queries["names"] or queries["english"]) if name == "github" else queries["english"]
+            if wanted:
+                jobs[name] = (api[name], (fetch, wanted, tuple(queries.get("alternatives") or ())) if name == "pubmed" else (fetch, wanted))
             else:
                 result["notes"].append(f"{PROVIDERS[name]}: 영어 검색어가 필요해요. 검색어 칸에 영어 낱말을 적고 다시 찾아 주세요.")
         else:

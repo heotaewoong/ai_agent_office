@@ -182,7 +182,8 @@ export type ResearchCandidate = {
 };
 export type ResearchResult = {
   plan: ResearchPlan;
-  queries: { english: string; terms: string[]; custom: boolean };
+  /** translated가 true면 english는 모델이 만든 영어 검색어이고, alternatives는 같이 만든 다른 검색어다. */
+  queries: { english: string; names?: string; terms: string[]; custom: boolean; alternatives?: string[]; translated?: boolean };
   library: { fact_sources: number | null; sufficient: boolean };
   candidates: ResearchCandidate[];
   notes: string[];

@@ -1,6 +1,6 @@
 """자료 창고 API. office/api.py의 create_app에서 register(app, store)로 붙인다.
 
-저장·검색만 한다: 작업 시간을 열거나 유료 API를 부르지 않는다. 근거로 켠 링크 자료의 문단 벡터는
+저장·검색만 한다: 작업 시간을 열지 않는다. 유료 호출은 외부 조사에서 한글 주제를 영어 검색어로 바꿀 때 한 번뿐이다(research_query, 월 한도). 근거로 켠 링크 자료의 문단 벡터는
 public_evidence의 로컬 MiniLM 작업자가 따로 계산한다(공개 근거 검색과 같은 모델, 같은 잠금).
 인증·CSRF는 api.py의 공통 미들웨어가, WorkflowError는 공통 핸들러가 409로 처리한다.
 """
@@ -12,6 +12,7 @@ from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from .external_research import add_trusted, delete_trusted, list_trusted, research_plan, run_research
+from .research_query import english_queries
 from .source_library import (
     add_file, add_links, add_memo, delete_item, fill_text, item_detail, library_overview, retry_item, search_library,
     set_evidence, update_item,
@@ -139,7 +140,7 @@ def register(app, store):
     @app.post("/api/source-library/research")
     def library_research(body: ResearchRun):
         return run_research(root, body.title, summary=body.summary, area=body.area, experience_first=body.experience_first,
-                            query=body.query, force=body.force)
+                            query=body.query, force=body.force, translate=lambda title: english_queries(store, title))
 
     @app.get("/api/source-library/trusted")
     def library_trusted():
