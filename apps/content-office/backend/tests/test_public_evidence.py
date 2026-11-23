@@ -167,3 +167,25 @@ def test_public_search_returns_nothing_when_every_passage_is_weak(tmp_path, monk
     build_index(tmp_path, monkeypatch, [('https://papers.example.org/unrelated', 8, '다른 주제의 논문 문단', .36)])
     monkeypatch.setattr(public_evidence, '_query_vector', lambda *_: [1.0] + [0.0] * 383)
     assert public_evidence.find_public_evidence('오픽 등급 올리기', limit=4) == []
+
+
+def test_worker_script_does_not_hide_standard_modules_behind_office_files():
+    """작업 프로세스처럼 파일을 직접 읽어도 office/calendar.py가 표준 calendar를 가리면 안 된다.
+
+    가려지면 requests를 쓰는 모델 로더가 뜨다가 죽어서 근거 검색이 전부 실패한다(2026-11-24 운영에서 실제로 일어난 일).
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(public_evidence.__file__).resolve()
+    probe = ("import importlib.util; "
+             f"spec = importlib.util.spec_from_file_location('worker_probe', {str(script)!r}); "
+             "module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); "
+             "import calendar, http.cookiejar; "
+             "print(calendar.__file__); print(callable(module.is_evidence_noise))")
+    result = subprocess.run([sys.executable, '-I', '-B', '-c', probe], capture_output=True, text=True, timeout=30, check=False)
+    assert result.returncode == 0, result.stderr[-600:]
+    calendar_file, noise_ready = result.stdout.split()
+    assert Path(calendar_file).parent != script.parent
+    assert noise_ready == 'True'

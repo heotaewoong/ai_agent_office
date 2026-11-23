@@ -19,9 +19,15 @@ from urllib.parse import urlsplit
 if __package__:
     from .evidence_relevance import is_evidence_noise, is_topic_candidate, looks_like_reference_list
 else:
-    # The isolated local embedding subprocess runs this file directly.
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from evidence_relevance import is_evidence_noise, is_topic_candidate, looks_like_reference_list
+    # 격리된 임베딩 작업 프로세스는 이 파일을 직접 실행한다. office 폴더를 sys.path에 넣으면 office/calendar.py가
+    # 표준 calendar를 가려서 requests를 쓰는 모델 로더(fastembed)가 뜨다가 죽는다. 필요한 모듈 하나만 파일 경로로 읽는다.
+    import importlib.util
+
+    _spec = importlib.util.spec_from_file_location('evidence_relevance', Path(__file__).resolve().with_name('evidence_relevance.py'))
+    _relevance = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(_relevance)
+    is_evidence_noise, is_topic_candidate, looks_like_reference_list = (
+        _relevance.is_evidence_noise, _relevance.is_topic_candidate, _relevance.looks_like_reference_list)
 
 
 _PUBLIC_MODEL = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
