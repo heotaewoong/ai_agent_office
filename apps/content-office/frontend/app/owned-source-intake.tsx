@@ -2,18 +2,22 @@
 import {useEffect,useId,useRef,useState} from "react";
 import {api} from "../lib/api";
 import {presetsByAxis} from "../lib/briefs";
+import {ownedSourceInput} from "../lib/owned-source";
+import {appendBody,importableSources,type SourceItem} from "../lib/source-library";
 import type {BriefPreset,Job} from "../lib/types";
 import styles from "./owned-source-intake.module.css";
 
 export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
   const id=useId();
   const [url,setUrl]=useState(""); const [title,setTitle]=useState("");
-  const [body,setBody]=useState(""); const [owned,setOwned]=useState(false);
+  const [body,setBody]=useState(""); const [owned,setOwned]=useState(false); const [experienceFirst,setExperienceFirst]=useState(false);
   const [busy,setBusy]=useState(false);const [error,setError]=useState("");
   const [notice,setNotice]=useState("");const revision=useRef(0);
   const [mode,setMode]=useState<"write"|"url">("write");
   const [preset,setPreset]=useState("");const [presets,setPresets]=useState<BriefPreset[]>([]);
+  const [stock,setStock]=useState<SourceItem[]>([]);const [pick,setPick]=useState("");
   useEffect(()=>{let alive=true;api.briefs().then(value=>{if(!Array.isArray(value.presets))throw new Error('Invalid presets');if(alive)setPresets(value.presets);}).catch(()=>{if(alive)setError("주제 설정을 불러오지 못했습니다. 다시 불러온 뒤 선택해 주세요.");});return()=>{alive=false;};},[]);
+  useEffect(()=>{let alive=true;api.sourceLibrary().then(library=>{if(alive)setStock(importableSources(library.items));}).catch(()=>{});return()=>{alive=false;};},[]);
   const bodyLength=body.trim().length;
   const ready=Boolean(owned&&title.trim()&&bodyLength>=100&&presets.some(row=>row.id===preset));
   const nextStep=!title.trim()?"제목을 입력해 주세요.":bodyLength<100?`본문을 ${100-bodyLength}자 더 적으면 다음으로 이동할 수 있어요.`:!preset?"콘텐츠의 주제·독자를 선택해 주세요.":!owned?"자료 사용 권한을 확인해 주세요.":"준비됐어요. 작업실에서 원고 검수를 이어가세요.";
@@ -24,10 +28,19 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
       if(current===revision.current){setTitle(value.title);setBody(value.body);setNotice(`본문을 가져왔습니다. 사진 ${value.image_count}개 · 표·코드·문단을 원문과 대조한 뒤 작업으로 저장하세요.`);}
     }catch(e){setError(e instanceof Error?e.message:"본문을 가져오지 못했습니다.");}finally{setBusy(false);}
   }
+  async function loadPick(){
+    if(busy||!pick)return;setBusy(true);setError("");
+    try{
+      const item=await api.sourceItem(pick);const next=appendBody(body,item.passage_texts.join("\n\n"));
+      revision.current++;setBody(next.body);if(!title.trim())setTitle(item.title.slice(0,200));
+      if(!url&&item.kind==="link"&&item.mine&&item.url)setUrl(item.url);
+      setNotice(`자료 창고의 '${item.title}'를 본문에 넣었어요.${next.cut?" 본문 한도 50,000자를 넘는 부분은 잘랐어요.":""} 원문과 대조한 뒤 저장하세요.`);
+    }catch(e){setError(e instanceof Error?e.message:"자료를 불러오지 못했습니다.");}finally{setBusy(false);}
+  }
   async function create(){
     if(busy)return;setBusy(true);setError("");
     if(!ready){setBusy(false);return;}
-    try{const job=await api.createOwnedSource({title,body,source_url:url,owner_confirmed:owned,brief_preset:preset});onCreated(job);}
+    try{const job=await api.createOwnedSource(ownedSourceInput({title,body,url,owned,preset,experienceFirst}));onCreated(job);}
     catch(e){setError(e instanceof Error?e.message:"작업을 저장하지 못했습니다.");}finally{setBusy(false);}
   }
   return <section className={styles.panel} aria-label="내 원고로 콘텐츠 만들기" aria-busy={busy}>
@@ -51,6 +64,7 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
       </div>
       {mode==="write"&&url&&<p className={styles.hint}>입력한 원문 링크도 함께 저장됩니다. <button type="button" onClick={()=>setMode("url")}>링크 확인</button></p>}
       {notice&&<p className={styles.success} role="status">{notice}</p>}
+      {stock.length>0&&<div className={styles.importBox}><label htmlFor={id+"-stock"}>자료 창고에서 불러오기</label><div className={styles.importRow}><select className={styles.input} id={id+"-stock"} value={pick} onChange={e=>setPick(e.target.value)}><option value="">근거로 켠 내 메모·파일·글을 고르세요</option>{stock.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select><button type="button" className={styles.importButton} disabled={!pick||busy} onClick={()=>void loadPick()}>본문에 넣기</button></div><p>쓰던 본문이 있으면 뒤에 이어 붙여요. 자료 창고에서 ‘초안 근거로 사용’을 켠 메모·파일과 내 글만 보여요.</p></div>}
       <div className={styles.field}>
         <div className={styles.labelRow}><label htmlFor={id+"-title"}>콘텐츠 제목 <span>필수</span></label><span>{title.length}/200</span></div>
         <input className={styles.input} id={id+"-title"} value={title} maxLength={200} placeholder="예: 퇴근 후 30분, 영어 단어를 오래 기억하는 방법" onChange={e=>setTitle(e.target.value)} />
@@ -61,6 +75,7 @@ export function OwnedSourceIntake({onCreated}:{onCreated:(job:Job)=>void}) {
         <div id={id+"-body-help"} className={styles.bodyHelp}><span>본문 100자 이상 · 최대 50,000자</span><span>사진·표·코드는 Markdown으로 보존해요.</span></div>
       </div>
       <div className={styles.field}><label htmlFor={id+"-preset"}>누구를 위한 주제인가요? · 필수</label><select className={styles.input} id={id+"-preset"} value={preset} onChange={e=>setPreset(e.target.value)}><option value="">주제·독자를 직접 선택해 주세요</option>{presetsByAxis(presets).map(group=>group.axis?<optgroup key={group.axis} label={group.label}>{group.presets.map(row=><option key={row.id} value={row.id}>{row.label}</option>)}</optgroup>:group.presets.map(row=><option key={row.id} value={row.id}>{row.label}</option>))}</select><p className={styles.hint}>{presets.find(row=>row.id===preset)?.reader??"알맞은 항목이 없으면 ‘내 원문 중심’을 선택하세요. AI 실무 주제를 자동으로 연결하지 않습니다."}</p></div>
+      <label className={styles.consent}><input type="checkbox" checked={experienceFirst} onChange={e=>setExperienceFirst(e.target.checked)} /><span>내 경험 중심 · 이 글의 경험과 주장을 1차 근거로 쓰고, 글에 없는 경험은 지어내지 않아요.</span></label>
       <label className={styles.consent}><input type="checkbox" checked={owned} onChange={e=>setOwned(e.target.checked)} /><span>내가 작성했거나 제작에 사용할 권한이 있는 자료입니다.</span></label>
       {error&&<p className={styles.error} role="alert">{error}</p>}
       <footer className={styles.footer}><div><strong id={id+"-next"}>{nextStep}</strong><p>저장 후에도 수정할 수 있어요. 원고 승인·유료 제작·공개 게시에는 별도 확인이 필요해요.</p></div><button className={styles.submit} type="button" aria-describedby={id+"-next"} disabled={busy||!ready} onClick={()=>void create()}>{busy?"처리 중…":"내 원고로 작업실 열기"}<span aria-hidden="true">→</span></button></footer>

@@ -204,6 +204,20 @@ PRESETS = {
 }
 
 
+EXPERIENCE_FIRST_TONE = ("내 경험 중심: 사용자가 준 원문의 경험·주장·수치를 1차 근거로 삼는다. "
+                         "원문에 없는 1인칭 경험·사례·수치를 만들어 넣지 않는다. 외부 근거는 원문을 보충할 때만 쓰고 출처를 밝힌다.")
+
+
+def experience_first_overrides(preset):
+    """'내 경험 중심' 스위치: 고른 프리셋은 그대로 두고 말투 칸에 원문 우선 규칙을 덧붙인다."""
+    if not isinstance(preset, str) or preset not in PRESETS:
+        raise WorkflowError(f"알 수 없는 독자 프리셋입니다: {preset!r}. 사용 가능: {', '.join(PRESETS)}")
+    tone = PRESETS[preset]["tone"].strip()
+    if EXPERIENCE_FIRST_TONE in tone:
+        return {"tone": tone}
+    return {"tone": (tone + " " + EXPERIENCE_FIRST_TONE).strip()[:MAX_FIELD_LENGTH]}
+
+
 def build_brief(preset, overrides=None):
     """프리셋에 덮어쓰기를 적용한 브리프를 돌려준다. 빈 문자열은 프리셋 값을 유지한다."""
     if not isinstance(preset, str) or preset not in PRESETS:

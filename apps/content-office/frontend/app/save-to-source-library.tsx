@@ -61,6 +61,7 @@ export function SaveToSourceLibrary({ links, memo, title, origin, originRef, def
         const failed = results.find((row) => row.result === "rejected" || (row.result === "added" && row.item?.status !== "done"));
         if (saved) setDone(saved === results.length ? `${saved}건을 넣었습니다.` : `${results.length}건 중 ${saved}건을 넣었습니다.`);
         if (failed) setError(failed.reason || failed.item?.note || "일부 주소를 읽지 못했습니다.");
+        if (!saved && failed) setDone("창고에 ‘확인 필요’로 남겼어요.");
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "넣지 못했습니다.");

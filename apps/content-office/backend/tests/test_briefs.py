@@ -221,3 +221,16 @@ def test_brief_compare_and_set_is_atomic_and_preserves_approvals(tmp_path):
     for key in ("source_hash", "source_approval", "release_approval", "manifest"):
         assert current[key] == original[key]
     assert len([event for event in store.events(job["id"]) if event["kind"] == "brief_set"]) == 1
+
+
+def test_experience_first_overrides_keep_preset_and_fit_every_tone():
+    from office.briefs import EXPERIENCE_FIRST_TONE, MAX_FIELD_LENGTH, PRESETS, build_brief, experience_first_overrides
+    for key in PRESETS:
+        overrides = experience_first_overrides(key)
+        assert set(overrides) == {"tone"} and len(overrides["tone"]) <= MAX_FIELD_LENGTH
+        assert overrides["tone"].endswith(EXPERIENCE_FIRST_TONE) and overrides["tone"].startswith(PRESETS[key]["tone"].strip())
+        brief = build_brief(key, overrides)
+        assert brief["preset"] == key and brief["reader"] == PRESETS[key]["reader"]
+    assert experience_first_overrides("exam-opic") == experience_first_overrides("exam-opic")
+    with pytest.raises(Exception):
+        experience_first_overrides("missing")

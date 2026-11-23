@@ -83,6 +83,19 @@ def test_owned_api_keeps_explicit_preset_and_rejects_unknown_before_creation(tmp
     assert client.post('/api/owned-source/jobs',json={**data,'title':'다른 글','brief_preset':'missing'},headers=headers).status_code==409
     assert len(store.jobs())==1 and store.tasks()==[]
 
+def test_experience_first_switch_keeps_topic_preset_and_adds_source_first_tone(tmp_path):
+    from office.briefs import EXPERIENCE_FIRST_TONE, PRESETS
+    store=Store(tmp_path);client=TestClient(create_app(store),base_url='http://localhost:8510')
+    headers={'Origin':'http://localhost:3110','X-Office-CSRF':client.get('/api/session').json()['csrf']}
+    data={'title':'오픽 IH 받은 연습법','body':BODY,'owner_confirmed':True,'brief_preset':'exam-opic','experience_first':True}
+    brief=client.post('/api/owned-source/jobs',json=data,headers=headers).json()['brief']
+    assert brief['preset']=='exam-opic' and brief['reader']==PRESETS['exam-opic']['reader']
+    assert brief['tone'].endswith(EXPERIENCE_FIRST_TONE) and brief['cta']==PRESETS['exam-opic']['cta']
+    assert client.post('/api/owned-source/jobs',json={**data,'title':'다른 글','experience_first':'yes'},headers=headers).status_code==422
+    assert client.post('/api/owned-source/jobs',json={**data,'title':'다른 글2','brief_preset':'missing'},headers=headers).status_code==409
+    assert len(store.jobs())==1 and store.tasks()==[]
+
+
 def test_reimport_cannot_silently_ignore_a_different_explicit_brief(tmp_path):
     from office.briefs import build_brief
     store=Store(tmp_path)

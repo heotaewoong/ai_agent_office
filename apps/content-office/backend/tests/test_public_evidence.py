@@ -150,3 +150,20 @@ def test_worker_checks_available_memory_and_pinned_cache_before_importing_model(
     monkeypatch.setitem(sys.modules, 'fastembed', SimpleNamespace(TextEmbedding=unexpected_model_load))
     assert public_evidence._run_worker(cache, lock_path) == expected_status
     assert lock_path.is_file()
+
+
+def test_public_search_drops_weakly_related_passages_below_the_floor(tmp_path, monkeypatch):
+    build_index(tmp_path, monkeypatch, [
+        ('https://papers.example.org/unrelated', 8, '다른 주제의 논문 문단', .33),
+        ('https://papers.example.org/borderline', 3, '경계 아래 문단', .39),
+        ('https://docs.example.org/relevant', 4, '질문과 맞는 공식 문서 문단', .52),
+    ])
+    monkeypatch.setattr(public_evidence, '_query_vector', lambda *_: [1.0] + [0.0] * 383)
+    results = public_evidence.find_public_evidence('정보처리기사 실기 계산 문제', limit=4)
+    assert [r['url'] for r in results] == ['https://docs.example.org/relevant']
+
+
+def test_public_search_returns_nothing_when_every_passage_is_weak(tmp_path, monkeypatch):
+    build_index(tmp_path, monkeypatch, [('https://papers.example.org/unrelated', 8, '다른 주제의 논문 문단', .36)])
+    monkeypatch.setattr(public_evidence, '_query_vector', lambda *_: [1.0] + [0.0] * 383)
+    assert public_evidence.find_public_evidence('오픽 등급 올리기', limit=4) == []

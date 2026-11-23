@@ -159,7 +159,7 @@ export const api = {
   learningToIdea: (jobId: string, observationId: string, sourceHash: string) => request(`/jobs/${encodeURIComponent(jobId)}/learning-observations/${encodeURIComponent(observationId)}/idea`, "POST", {source_hash:sourceHash}),
   saveChannelOutcome: (jobId: string, body: Record<string, unknown>) => request(`/jobs/${encodeURIComponent(jobId)}/channel-outcomes`, "POST", body),
   previewOwnedSource: (url:string) => request<{title:string;body:string;image_count:number}>("/owned-source/preview","POST",{url}),
-  createOwnedSource: (input:{title:string;body:string;source_url:string;owner_confirmed:boolean;brief_preset?:string}) => request<Job>("/owned-source/jobs","POST",input),
+  createOwnedSource: (input:{title:string;body:string;source_url:string;owner_confirmed:boolean;brief_preset?:string;experience_first?:true}) => request<Job>("/owned-source/jobs","POST",input),
   setProfile: (kind: "text" | "voice" | "image" | "clip", profile: string) =>
     request<ProfileSummaries>("/settings/profiles", "POST", { kind, profile }),
   startWindow: (minutes: number) =>
@@ -198,6 +198,10 @@ export const api = {
     request<SourceLibrary & { item: SourceItem }>(`/source-library/items/${encodeURIComponent(id)}`, "PATCH", patch),
   retrySourceItem: (id: string) => request<SourceLibrary & { item: SourceItem }>(`/source-library/items/${encodeURIComponent(id)}/retry`, "POST"),
   deleteSourceItem: (id: string) => request<SourceLibrary & { deleted: string }>(`/source-library/items/${encodeURIComponent(id)}`, "DELETE"),
+  fillSourceText: (id: string, text: string, title?: string) =>
+    request<SourceLibrary & { item: SourceItem }>(`/source-library/items/${encodeURIComponent(id)}/text`, "POST", { text, ...(title ? { title } : {}) }),
+  setSourceEvidence: (ids: string[], value: boolean) =>
+    request<SourceLibrary & { changed: number; skipped: number }>("/source-library/evidence", "POST", { ids, use_as_evidence: value }),
   dailyCollect: () => request<DailyCollectStatus>("/settings/daily-collect"),
   updateDailyCollect: (patch: Partial<DailyCollectPatch>) =>
     request<DailyCollectStatus>("/settings/daily-collect", "PUT", patch),

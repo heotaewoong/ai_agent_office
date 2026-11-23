@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import {
-  displayDay, fileToBase64, filterSources, sourceFilters, sourceKinds, sourceOrigins, sourceStatus, sourceSummary, splitLinks,
+  canPaste, displayDay, evidenceHint, fileToBase64, filterSources, sourceFilters, sourceKinds, sourceOrigins, sourceStatus, sourceSummary,
+  splitLinks, vectorSummary,
   type SourceFilter, type SourceHit, type SourceItem, type SourceLibrary, type SourceLinkResult, type SourcePatch,
 } from "../lib/source-library";
 import styles from "./source-library.module.css";
@@ -45,6 +46,9 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
   const [rowError, setRowError] = useState<{ id: string; text: string } | null>(null);
   const [opened, setOpened] = useState<{ id: string; passages: string[] } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState("");
+  const [paste, setPaste] = useState<{ id: string; text: string; title: string } | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkNote, setBulkNote] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -60,7 +64,15 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
     if (active) void load();
   }, [active, load]);
 
+  const preparing = !!library && library.vectors.pending > 0 && library.vectors.available;
+  useEffect(() => {
+    if (!active || !preparing) return;
+    const timer = window.setInterval(() => void load(), 8000);
+    return () => window.clearInterval(timer);
+  }, [active, preparing, load]);
+
   const visible = useMemo(() => filterSources(library?.items ?? [], listArea, filter, titleQuery), [library, listArea, filter, titleQuery]);
+  const visibleReady = visible.filter((item) => item.status === "done");
   const limits = library?.limits ?? { links: 10, file_mb: 8, memo_chars: 60_000 };
   const pasted = splitLinks(links);
   const ready =
@@ -77,6 +89,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
     const entry = { area, mine: method === "memo" ? true : mine };
     try {
       if (method === "link") {
+        // 한 요청에 한 주소씩 보내야 느린 사이트가 있어도 화면 요청 제한(30초)에 걸리지 않고 진행 상황이 보입니다.
         const results: SourceLinkResult[] = [];
         for (const url of pasted) {
           const response = await api.addSourceLinks([url], entry);
@@ -104,28 +117,44 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
     }
   }
 
-  async function change(item: SourceItem, patch: SourcePatch) {
-    setPending(item.id);
-    setRowError(null);
-    try {
-      setLibrary(await api.updateSourceItem(item.id, patch));
-    } catch (cause) {
-      setRowError({ id: item.id, text: message(cause, "바꾸지 못했습니다.") });
-    } finally {
-      setPending("");
-    }
-  }
-
   async function run(item: SourceItem, work: () => Promise<SourceLibrary>, fallback: string) {
     setPending(item.id);
     setRowError(null);
     try {
       setLibrary(await work());
       setConfirmDelete("");
+      return true;
     } catch (cause) {
       setRowError({ id: item.id, text: message(cause, fallback) });
+      return false;
     } finally {
       setPending("");
+    }
+  }
+
+  function change(item: SourceItem, patch: SourcePatch) {
+    void run(item, () => api.updateSourceItem(item.id, patch), "바꾸지 못했습니다.");
+  }
+
+  async function submitPaste(item: SourceItem) {
+    if (!paste || paste.id !== item.id || paste.text.trim().length < 80) return;
+    const ok = await run(item, () => api.fillSourceText(item.id, paste.text, paste.title.trim() || undefined), "본문을 저장하지 못했습니다.");
+    if (ok) setPaste(null);
+  }
+
+  async function bulk(value: boolean) {
+    const ids = (value ? visibleReady.filter((item) => !item.use_as_evidence) : visible.filter((item) => item.use_as_evidence)).map((item) => item.id);
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    setBulkNote("");
+    try {
+      const response = await api.setSourceEvidence(ids, value);
+      setLibrary(response);
+      setBulkNote(value ? `자료 ${response.changed}건을 초안 근거로 켰습니다.` : `자료 ${response.changed}건의 근거 사용을 껐습니다.`);
+    } catch (cause) {
+      setBulkNote(message(cause, "한 번에 바꾸지 못했습니다."));
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -155,12 +184,15 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
     }
   }
 
+  const vectorLine = library ? vectorSummary(library.vectors) : "";
+
   return (
     <div className={styles.page}>
       <section className={styles.summary} aria-label="자료 창고 현황">
         <div>
           <strong>{library ? sourceSummary(library.stats) : "자료 창고를 불러오는 중입니다."}</strong>
-          <p>넣은 자료는 문단으로 잘라 보관합니다. <b>초안 근거로 사용</b>을 켠 자료만 근거 후보가 됩니다. 꺼 둔 자료는 보관만 합니다.</p>
+          <p>넣은 자료는 문단으로 잘라 보관합니다. <b>초안 근거로 사용</b>을 켠 링크는 기획의 ‘공개 원문 근거 찾기’에 후보로 나오고, 켠 메모와 파일은 ‘내 글로 만들기’에서 불러올 수 있어요. 꺼 둔 자료는 보관만 합니다.</p>
+          {vectorLine && <p className={styles.vectorLine} role="status" data-pending={preparing}>{vectorLine}</p>}
         </div>
         <button className="button secondary small" type="button" onClick={() => void load()}>새로 고침</button>
       </section>
@@ -179,7 +211,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
 
         {method === "link" && (
           <label className={styles.field}>
-            주소 <span>한 줄에 하나씩, 한 번에 {limits.links}개까지</span>
+            주소 <span>한 줄에 하나씩, 한 번에 {limits.links}개까지 · 유튜브는 제목만 가져와요</span>
             <textarea className={styles.input} rows={4} value={links} placeholder="https://" spellCheck={false} disabled={saving} onChange={(event) => setLinks(event.target.value)} />
             {pasted.length > limits.links && <em className="field-error">{limits.links}개까지만 넣을 수 있습니다. 지금 {pasted.length}개입니다.</em>}
           </label>
@@ -251,7 +283,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
           </label>
           <button className="button secondary" type="submit" disabled={!query.trim() || searching}>{searching ? "찾는 중…" : "찾기"}</button>
         </form>
-        <p className={styles.hint}>아래 목록에서 고른 분야 안에서 문단을 찾습니다. 지금은 낱말이 맞는 문단을 찾고, 검색기 실험이 끝나면 뜻으로 찾는 방식으로 바꿉니다.</p>
+        <p className={styles.hint}>아래 목록에서 고른 분야 안에서 낱말이 맞는 문단을 찾습니다. 기획의 근거 찾기는 같은 문단을 뜻으로 찾습니다.</p>
         <div aria-live="polite">
           {searchError && <p className={styles.error} role="alert">{searchError}</p>}
           {hits && hits.length === 0 && <p className={styles.hint}>맞는 문단이 없습니다. 낱말을 바꾸거나 분야를 전체로 바꿔 보세요.</p>}
@@ -288,6 +320,14 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
             ))}
           </div>
           <input className={styles.input} value={titleQuery} placeholder="제목이나 주소로 거르기" aria-label="제목이나 주소로 거르기" onChange={(event) => setTitleQuery(event.target.value)} />
+          {visible.length > 0 && (
+            <div className={styles.bulk}>
+              <span>지금 보이는 자료 {visible.length}건</span>
+              <button className="button secondary small" type="button" disabled={bulkBusy || !visibleReady.some((item) => !item.use_as_evidence)} onClick={() => void bulk(true)}>모두 근거로 켜기</button>
+              <button className="button text small" type="button" disabled={bulkBusy || !visible.some((item) => item.use_as_evidence)} onClick={() => void bulk(false)}>모두 끄기</button>
+              <span aria-live="polite">{bulkNote}</span>
+            </div>
+          )}
         </div>
 
         {library && library.items.length === 0 && (
@@ -302,6 +342,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
           {visible.map((item) => {
             const state = sourceStatus[item.status];
             const busy = pending === item.id;
+            const pasting = paste?.id === item.id ? paste : null;
             return (
               <li key={item.id} className={styles.item} data-evidence={item.use_as_evidence}>
                 <div className={styles.itemMain}>
@@ -313,22 +354,41 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
                     <span className="badge neutral">{sourceKinds[item.kind]}</span>
                     <span className="badge neutral">{sourceOrigins[item.origin]}</span>
                     {item.mine && <span className="badge orange">내 자료</span>}
+                    {item.pasted && <span className="badge neutral">직접 붙여 넣은 본문</span>}
                     {item.status === "done" && <span>문단 {item.passages}개</span>}
                     <span>{displayDay(item.created_at)}</span>
                   </div>
                   {item.note && <p className={styles.note}>{item.note}</p>}
                   {rowError?.id === item.id && <p className={styles.error} role="alert">{rowError.text}</p>}
+                  {pasting && (
+                    <form className={styles.pasteForm} onSubmit={(event) => { event.preventDefault(); void submitPaste(item); }}>
+                      <label className={styles.field}>
+                        제목 <span>비워 두면 지금 제목을 그대로 써요</span>
+                        <input className={styles.input} value={pasting.title} maxLength={200} disabled={busy} onChange={(event) => setPaste({ ...pasting, title: event.target.value })} />
+                      </label>
+                      <label className={styles.field}>
+                        본문 <span>{pasting.text.trim().length.toLocaleString("ko-KR")}자 · 80자 이상 · 링크 주소는 출처로 그대로 남아요</span>
+                        <textarea className={styles.input} rows={8} value={pasting.text} disabled={busy} placeholder="원문에서 복사한 본문이나 영상 자막을 붙여 넣으세요." onChange={(event) => setPaste({ ...pasting, text: event.target.value })} />
+                      </label>
+                      <div className={styles.rowButtons}>
+                        <button className="button primary small" type="submit" disabled={busy || pasting.text.trim().length < 80}>{busy ? "저장하는 중…" : "본문 저장"}</button>
+                        <button className="button text small" type="button" disabled={busy} onClick={() => setPaste(null)}>취소</button>
+                      </div>
+                    </form>
+                  )}
                 </div>
                 <div className={styles.itemActions}>
                   <label className={styles.switch} data-on={item.use_as_evidence}>
-                    <input type="checkbox" role="switch" checked={item.use_as_evidence} disabled={busy || item.status !== "done"} onChange={(event) => void change(item, { use_as_evidence: event.target.checked })} />
+                    <input type="checkbox" role="switch" checked={item.use_as_evidence} disabled={busy || item.status !== "done"} onChange={(event) => change(item, { use_as_evidence: event.target.checked })} />
                     <span>초안 근거로 사용</span>
                   </label>
-                  <select className={styles.inputSmall} value={item.area} disabled={busy} aria-label={`${item.title} 분야`} onChange={(event) => void change(item, { area: event.target.value })}>
+                  {item.use_as_evidence && <small className={styles.switchHint}>{evidenceHint(item)}</small>}
+                  <select className={styles.inputSmall} value={item.area} disabled={busy} aria-label={`${item.title} 분야`} onChange={(event) => change(item, { area: event.target.value })}>
                     {library?.areas.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
                   </select>
                   <div className={styles.rowButtons}>
                     {item.status === "done" && <button className="button text small" type="button" disabled={busy} aria-expanded={opened?.id === item.id} onClick={() => void toggleOpen(item)}>{opened?.id === item.id ? "문단 닫기" : "문단 보기"}</button>}
+                    {canPaste(item) && !pasting && <button className="button text small" type="button" disabled={busy} onClick={() => setPaste({ id: item.id, text: "", title: item.title === item.url ? "" : item.title })}>본문 붙여넣기</button>}
                     {item.status === "needs_check" && item.kind === "link" && <button className="button text small" type="button" disabled={busy} onClick={() => void run(item, () => api.retrySourceItem(item.id), "다시 읽지 못했습니다.")}>다시 읽기</button>}
                     {confirmDelete === item.id ? (
                       <>

@@ -2,11 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { api } from "../lib/api.ts";
 import { officeHref, officeRoute } from "../lib/navigation.ts";
-import { areaForSegment, fileToBase64, filterSources, safeOriginRef, sourceSummary, splitLinks, type SourceItem } from "../lib/source-library.ts";
+import { ownedSourceInput } from "../lib/owned-source.ts";
+import {
+  appendBody, areaForSegment, canPaste, evidenceHint, fileToBase64, filterSources, importableSources, safeOriginRef, sourceSummary, splitLinks,
+  vectorSummary, type SourceItem,
+} from "../lib/source-library.ts";
 
 const item = (patch: Partial<SourceItem>): SourceItem => ({
   id: "a", kind: "link", area: "B", area_label: "AI 활용과 자동화", mine: false, title: "Hermes 공식 문서", url: "https://example.org/hermes",
-  status: "done", note: "", passages: 6, use_as_evidence: false, origin: "manual", origin_ref: null, file_name: null,
+  status: "done", note: "", passages: 6, use_as_evidence: false, pasted: false, origin: "manual", origin_ref: null, file_name: null,
   created_at: "2026-11-23T12:00:00+00:00", updated_at: "2026-11-23T12:00:00+00:00", ...patch,
 });
 
@@ -46,6 +50,39 @@ test("연결 항목 ID와 기본 분야, 요약 문장", () => {
   assert.match(sourceSummary({ items: 3, ready: 2, passages: 10, evidence: 0, needs_check: 2 }), /확인 필요 2건$/);
 });
 
+test("근거 연결 상태와 자료별 쓰임을 알려 준다", () => {
+  assert.equal(vectorSummary({ passages: 0, ready: 0, pending: 0, available: true }), "");
+  assert.match(vectorSummary({ passages: 1200, ready: 300, pending: 900, available: true }), /300\/1,200개 준비됨$/);
+  assert.match(vectorSummary({ passages: 12, ready: 12, pending: 0, available: true }), /12개가 기획 근거 찾기에 연결돼 있어요/);
+  assert.match(vectorSummary({ passages: 12, ready: 0, pending: 12, available: false }), /도구를 찾지 못해/);
+  assert.match(evidenceHint({ kind: "link" }), /근거 찾기/);
+  assert.match(evidenceHint({ kind: "memo" }), /내 글로 만들기/);
+  assert.equal(canPaste({ kind: "link", status: "needs_check" }), true);
+  assert.equal(canPaste({ kind: "file", status: "needs_check" }), true);
+  assert.equal(canPaste({ kind: "memo", status: "needs_check" }), false);
+  assert.equal(canPaste({ kind: "link", status: "done" }), false);
+});
+
+test("내 글로 만들기는 근거로 켠 메모·파일과 내 링크만 불러온다", () => {
+  const rows = [
+    item({ id: "link", use_as_evidence: true }),
+    item({ id: "mine-link", use_as_evidence: true, mine: true }),
+    item({ id: "memo", kind: "memo", url: null, use_as_evidence: true }),
+    item({ id: "memo-off", kind: "memo", url: null }),
+    item({ id: "broken", kind: "file", status: "needs_check", use_as_evidence: true }),
+  ];
+  assert.deepEqual(importableSources(rows).map((row) => row.id), ["mine-link", "memo"]);
+  assert.deepEqual(appendBody("", "새 글"), { body: "새 글", cut: false });
+  assert.deepEqual(appendBody("쓰던 글  ", "새 글"), { body: "쓰던 글\n\n새 글", cut: false });
+  assert.deepEqual(appendBody("가".repeat(8), "나".repeat(8), 10), { body: "가".repeat(8) + "\n\n", cut: true });
+});
+
+test("내 경험 중심은 켰을 때만 요청에 들어간다", () => {
+  const form = { title: "오픽", body: "본문", url: "", owned: true, preset: "exam-opic" };
+  assert.deepEqual(ownedSourceInput({ ...form, experienceFirst: false }), { title: "오픽", body: "본문", source_url: "", owner_confirmed: true, brief_preset: "exam-opic" });
+  assert.equal(ownedSourceInput({ ...form, experienceFirst: true }).experience_first, true);
+});
+
 test("파일은 base64로 바꿔 보낸다", async () => {
   assert.equal(await fileToBase64(new Blob(["자료 창고"])), Buffer.from("자료 창고").toString("base64"));
 });
@@ -65,6 +102,9 @@ test("자료 창고 요청은 정한 주소와 본문만 보낸다", async (t) =
   await api.addSourceMemo("경험", "본문", { area: "A", mine: true });
   await api.addSourceFile("a.md", "YQ==", { area: "B" });
   await api.updateSourceItem("id/1", { use_as_evidence: true });
+  await api.fillSourceText("id/1", "붙인 본문", "제목");
+  await api.fillSourceText("id/1", "붙인 본문");
+  await api.setSourceEvidence(["a", "b"], false);
   await api.retrySourceItem("id/1");
   await api.deleteSourceItem("id/1");
   await api.sourceItem("id/1");
@@ -75,6 +115,9 @@ test("자료 창고 요청은 정한 주소와 본문만 보낸다", async (t) =
     { url: "/api/source-library/memos", method: "POST", body: { title: "경험", text: "본문", area: "A", mine: true } },
     { url: "/api/source-library/files", method: "POST", body: { name: "a.md", content_base64: "YQ==", area: "B" } },
     { url: "/api/source-library/items/id%2F1", method: "PATCH", body: { use_as_evidence: true } },
+    { url: "/api/source-library/items/id%2F1/text", method: "POST", body: { text: "붙인 본문", title: "제목" } },
+    { url: "/api/source-library/items/id%2F1/text", method: "POST", body: { text: "붙인 본문" } },
+    { url: "/api/source-library/evidence", method: "POST", body: { ids: ["a", "b"], use_as_evidence: false } },
     { url: "/api/source-library/items/id%2F1/retry", method: "POST", body: undefined },
     { url: "/api/source-library/items/id%2F1", method: "DELETE", body: undefined },
     { url: "/api/source-library/items/id%2F1", method: "GET", body: undefined },

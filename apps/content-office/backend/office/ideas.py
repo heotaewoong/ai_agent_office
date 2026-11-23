@@ -185,6 +185,27 @@ def _reviewable_idea(db, idea_id, expected_hash, *, allow_selected=False):
     return stored, job
 
 
+def _with_library_references(store, title, references, claims):
+    """플랫폼에서 온 기획도 자료 창고에서 운영자가 근거로 켠 문단을 남은 자리에 함께 보여 준다."""
+    references, claims = _checked_public_references(references), list(claims)
+    room = PUBLIC_EVIDENCE_LIMIT - len(references)
+    if room <= 0:
+        return references, claims
+    try:
+        from .public_evidence import PublicEvidenceUnavailable, find_library_evidence
+    except ImportError:
+        return references, claims
+    try:
+        extra = find_library_evidence(title, root=store.root, exclude_urls=tuple(item["url"] for item in references), limit=room)
+    except PublicEvidenceUnavailable:
+        return references, claims
+    used = {item["url"] for item in references}
+    extra = [item for item in extra if isinstance(item, dict) and item.get("url") not in used][:room]
+    merged = _checked_public_references(references + extra)
+    claims += [{"label": "자료 창고에서 근거로 고른 문단", "evidence_ids": [item["id"]]} for item in merged[len(references):]]
+    return merged, claims
+
+
 def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
     from .public_evidence import PublicEvidenceUnavailable, find_public_evidence
 
@@ -211,9 +232,9 @@ def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
                 response.setdefault("public_discovery", {"status": "unavailable", "claims": [],
                                                          "checked_at": now(), "paid_calls": 0})
                 return response
-            references = _checked_public_references(result["references"])
+            references, claims = _with_library_references(store, candidate["title"], result["references"], result["claims"])
             public_discovery = {"status": "ready" if references else "insufficient",
-                                "claims": result["claims"], "checked_at": now(), "paid_calls": 0}
+                                "claims": claims, "checked_at": now(), "paid_calls": 0}
         else:
             references = _checked_public_references(find_public_evidence(candidate["title"], limit=PUBLIC_EVIDENCE_LIMIT))
     except PublicEvidenceUnavailable as error:
