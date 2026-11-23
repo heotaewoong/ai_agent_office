@@ -570,7 +570,7 @@ test('대표 출처 저장이 현재 응답에서 확인된 근거 체크만 유
 test('선택한 기획에서 근거만 다시 골라 같은 작업에 승인하고 재열람한다', async ({ page }) => {
   const { writes, job, idea } = await evidenceReviewHarness(page, true);
   await expect(idea.getByRole('button', { name: '선택됨' })).toBeDisabled();
-  await idea.getByRole('button', { name: /공개 원문 근거.*찾기/ }).click();
+  await idea.getByRole('button', { name: /공개 원문 (근거|후보).*찾기/ }).click();
   const evidence = idea.getByRole('checkbox', { name: '공식 문서 · 문단 2' });
   await expect(evidence).not.toBeChecked();
   const approve = idea.getByRole('button', { name: '선택한 근거를 승인⓪에 반영' });
