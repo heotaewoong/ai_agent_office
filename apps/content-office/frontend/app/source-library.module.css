@@ -76,3 +76,33 @@ textarea.input { resize: vertical; }
 .pasteForm { display: grid; gap: 4px; margin-top: 12px; padding: 14px; border: 1px dashed #b9c8b5; border-radius: 10px; background: #f8faf4; }
 .switchHint { max-width: 220px; text-align: right; font-size: 11px; line-height: 1.6; color: #53655a; }
 @media (max-width: 760px) { .switchHint { text-align: left; } }
+.research { display: grid; gap: 8px; margin: 10px 0; padding: 12px 14px; border: 1px solid #dce4d5; border-radius: 12px; background: #fafbf6; font-size: 13px; line-height: 1.7; color: #213b35; }
+.research[data-need=required] { border-color: #e5b898; background: #fff8f2; }
+.researchHead { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.researchReason { flex: 1 1 240px; min-width: 0; color: #3b4d42; word-break: keep-all; }
+.researchBody { display: grid; gap: 10px; }
+.researchControls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.researchControls label { font-size: 12px; font-weight: 650; color: #53655a; }
+.researchControls :is(select,input) { box-sizing: border-box; min-width: 0; padding: 7px 10px; border: 1px solid #c6d2c3; border-radius: 8px; background: #fff; color: #233d34; font: inherit; font-size: 13px; }
+.researchControls input { flex: 1 1 220px; }
+.researchNotes { display: grid; gap: 2px; margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: #6b5a4c; }
+.candidateGroup h4 { margin: 4px 0 8px; font-size: 14px; font-weight: 700; }
+.candidateGroup h4 span { margin-left: 6px; font-size: 12px; font-weight: 400; color: #647460; }
+.candidates { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.candidates li { padding: 10px 12px; border: 1px solid #dce4d5; border-radius: 10px; background: #fff; }
+.candidates li[data-picked=true] { border-color: #577b60; background: #f0f6ee; }
+.candidates label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.candidates label input { width: 18px; height: 18px; margin-top: 3px; accent-color: #386146; flex-shrink: 0; }
+.candidates label span { min-width: 0; }
+.candidates strong { display: block; font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.candidates small { display: block; font-size: 12px; color: #647460; }
+.candidates p { margin: 6px 0 0 28px; font-size: 12px; line-height: 1.8; color: #3b4d42; overflow-wrap: anywhere; }
+.candidateFlags { display: flex; flex-wrap: wrap; gap: 4px 12px; color: #6b5a4c; }
+.candidateFlags a { color: #264735; text-decoration: underline; text-underline-offset: 3px; }
+.researchSave { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.research :is(button,input,select,a):focus-visible { outline: 3px solid #c46a38; outline-offset: 3px; }
+.trustedForm { display: grid; gap: 4px; }
+.trustedForm .tags { align-items: flex-end; }
+.trustedList { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.trustedList li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #dce4d5; border-radius: 10px; background: #fff; }
+.trustedList a { color: #264735; font-size: 14px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }

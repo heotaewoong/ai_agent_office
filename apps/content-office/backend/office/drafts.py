@@ -103,7 +103,8 @@ def register_evidence_draft(store, job_id, *, title, body, expected_evidence_has
     references = approved_public_references(article)
     if not references or article.get("approved_public_evidence_hash") != expected_evidence_hash:
         raise WorkflowError("직접 승인한 근거의 현재 판본을 확인하세요")
-    evidence = _with_approved_public_references([], references)
+    from .source_library import example_urls
+    evidence = _with_approved_public_references([], references, example_urls(store.root))
     if not title.strip() or set(cited_evidence_ids(body)) != {item["id"] for item in evidence}:
         raise WorkflowError("원고 본문에 승인한 근거의 인용 번호를 모두 표시하세요")
     return store.add_draft(job_id, {

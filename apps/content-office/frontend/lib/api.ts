@@ -5,7 +5,10 @@ import type { ContentHistory } from "./version-history";
 import type { ClipEstimate } from "./types";
 import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
 import type { DailyCollectPatch, DailyCollectStatus } from "./daily-collect";
-import type { SourceEntry, SourceHit, SourceItem, SourceItemDetail, SourceLibrary, SourceLinkResult, SourcePatch } from "./source-library";
+import type {
+  ResearchRequest, ResearchResult, SourceEntry, SourceHit, SourceItem, SourceItemDetail, SourceLane, SourceLibrary, SourceLinkResult, SourcePatch,
+  TrustedSource,
+} from "./source-library";
 import type { PublicLeadFormInfo } from "./public-lead";
 import type {
   Dashboard,
@@ -202,6 +205,13 @@ export const api = {
     request<SourceLibrary & { item: SourceItem }>(`/source-library/items/${encodeURIComponent(id)}/text`, "POST", { text, ...(title ? { title } : {}) }),
   setSourceEvidence: (ids: string[], value: boolean) =>
     request<SourceLibrary & { changed: number; skipped: number }>("/source-library/evidence", "POST", { ids, use_as_evidence: value }),
+  // 외부 조사: 무료 공개 출처에서 후보만 찾는다. 고른 후보는 addSourceLinks로 창고에 넣는다.
+  runResearch: (body: ResearchRequest) => request<ResearchResult>("/source-library/research", "POST", body),
+  trustedSources: () => request<{ sources: TrustedSource[] }>("/source-library/trusted"),
+  addTrustedSource: (body: { url: string; area: string; lane: SourceLane; name?: string }) =>
+    request<{ source: TrustedSource; sources: TrustedSource[] }>("/source-library/trusted", "POST", body),
+  deleteTrustedSource: (id: string) =>
+    request<{ deleted: string; sources: TrustedSource[] }>(`/source-library/trusted/${encodeURIComponent(id)}`, "DELETE"),
   dailyCollect: () => request<DailyCollectStatus>("/settings/daily-collect"),
   updateDailyCollect: (patch: Partial<DailyCollectPatch>) =>
     request<DailyCollectStatus>("/settings/daily-collect", "PUT", patch),

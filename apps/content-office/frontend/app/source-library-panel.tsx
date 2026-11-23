@@ -7,6 +7,7 @@ import {
   splitLinks, vectorSummary,
   type SourceFilter, type SourceHit, type SourceItem, type SourceLibrary, type SourceLinkResult, type SourcePatch,
 } from "../lib/source-library";
+import { TrustedSources } from "./trusted-sources";
 import styles from "./source-library.module.css";
 
 type Method = "link" | "memo" | "file";
@@ -305,6 +306,8 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
         </div>
       </section>
 
+      <TrustedSources active={active} areas={library?.areas ?? []} />
+
       <section className={styles.card} aria-labelledby="source-list-title">
         <h2 id="source-list-title">보관 중인 자료</h2>
         <div className={styles.filters}>
@@ -354,6 +357,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
                     <span className="badge neutral">{sourceKinds[item.kind]}</span>
                     <span className="badge neutral">{sourceOrigins[item.origin]}</span>
                     {item.mine && <span className="badge orange">내 자료</span>}
+                    {item.lane === "example" && <span className="badge orange">사례·참고</span>}
                     {item.pasted && <span className="badge neutral">직접 붙여 넣은 본문</span>}
                     {item.status === "done" && <span>문단 {item.passages}개</span>}
                     <span>{displayDay(item.created_at)}</span>
@@ -387,6 +391,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
                     {library?.areas.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
                   </select>
                   <div className={styles.rowButtons}>
+                    {item.kind === "link" && <button className="button text small" type="button" disabled={busy} onClick={() => change(item, { lane: item.lane === "example" ? "fact" : "example" })}>{item.lane === "example" ? "사실 근거로 바꾸기" : "사례·참고로 바꾸기"}</button>}
                     {item.status === "done" && <button className="button text small" type="button" disabled={busy} aria-expanded={opened?.id === item.id} onClick={() => void toggleOpen(item)}>{opened?.id === item.id ? "문단 닫기" : "문단 보기"}</button>}
                     {canPaste(item) && !pasting && <button className="button text small" type="button" disabled={busy} onClick={() => setPaste({ id: item.id, text: "", title: item.title === item.url ? "" : item.title })}>본문 붙여넣기</button>}
                     {item.status === "needs_check" && item.kind === "link" && <button className="button text small" type="button" disabled={busy} onClick={() => void run(item, () => api.retrySourceItem(item.id), "다시 읽지 못했습니다.")}>다시 읽기</button>}

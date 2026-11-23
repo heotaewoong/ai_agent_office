@@ -4,13 +4,14 @@ import { api } from "../lib/api.ts";
 import { officeHref, officeRoute } from "../lib/navigation.ts";
 import { ownedSourceInput } from "../lib/owned-source.ts";
 import {
-  appendBody, areaForSegment, canPaste, evidenceHint, fileToBase64, filterSources, importableSources, safeOriginRef, sourceSummary, splitLinks,
-  vectorSummary, type SourceItem,
+  appendBody, areaForSegment, canPaste, candidateMeta, evidenceHint, fileToBase64, filterSources, importableSources, libraryLine, researchBadge,
+  safeOriginRef, savedCandidateNote, sourceSummary, splitCandidates, splitLinks, vectorSummary, type ResearchCandidate, type SourceItem,
 } from "../lib/source-library.ts";
 
 const item = (patch: Partial<SourceItem>): SourceItem => ({
   id: "a", kind: "link", area: "B", area_label: "AI 활용과 자동화", mine: false, title: "Hermes 공식 문서", url: "https://example.org/hermes",
-  status: "done", note: "", passages: 6, use_as_evidence: false, pasted: false, origin: "manual", origin_ref: null, file_name: null,
+  status: "done", note: "", passages: 6, use_as_evidence: false, pasted: false, origin: "manual", origin_ref: null, lane: "fact", lane_label: "사실 근거",
+  file_name: null,
   created_at: "2026-11-23T12:00:00+00:00", updated_at: "2026-11-23T12:00:00+00:00", ...patch,
 });
 
@@ -122,4 +123,48 @@ test("자료 창고 요청은 정한 주소와 본문만 보낸다", async (t) =
     { url: "/api/source-library/items/id%2F1", method: "DELETE", body: undefined },
     { url: "/api/source-library/items/id%2F1", method: "GET", body: undefined },
   ]);
+});
+
+const candidate = (patch: Partial<ResearchCandidate>): ResearchCandidate => ({
+  key: "k1", lane: "fact", provider: "pubmed", provider_label: "PubMed 논문", title: "Spacing", url: "https://pubmed.ncbi.nlm.nih.gov/1/", snippet: "",
+  year: 2021, needs_paste: false, in_library: false, ...patch,
+});
+
+test("외부 조사 기준은 필수, 권장, 안 함으로 보여 준다", () => {
+  assert.deepEqual(researchBadge("required"), { label: "외부 조사 필수", tone: "red" });
+  assert.deepEqual(researchBadge("recommended"), { label: "외부 조사 권장", tone: "orange" });
+  assert.deepEqual(researchBadge("none"), { label: "외부 조사 안 함", tone: "neutral" });
+});
+
+test("후보는 사실 근거와 사례·참고 두 칸으로 나눈다", () => {
+  const rows = [candidate({ key: "a" }), candidate({ key: "b", lane: "example", provider_label: "루틴 연구소", year: null })];
+  const groups = splitCandidates(rows);
+  assert.deepEqual([groups.fact.map((row) => row.key), groups.example.map((row) => row.key)], [["a"], ["b"]]);
+  assert.equal(candidateMeta(rows[0]), "PubMed 논문 · 2021년");
+  assert.equal(candidateMeta(rows[1]), "루틴 연구소");
+});
+
+test("창고 근거가 두 곳 이상이면 충분하다고 알려 준다", () => {
+  assert.match(libraryLine({ fact_sources: null, sufficient: false }), /확인하지 못했어요/);
+  assert.match(libraryLine({ fact_sources: 0, sufficient: false }), /아직 없어요/);
+  assert.match(libraryLine({ fact_sources: 1, sufficient: false }), /1곳 있어요. 2곳이 넘으면 충분해요/);
+  assert.match(libraryLine({ fact_sources: 3, sufficient: true }), /3곳 있어요. 이미 충분해요/);
+});
+
+test("고른 후보를 창고에 넣은 결과를 한 줄로 알려 준다", () => {
+  const on = item({ use_as_evidence: true, passages: 4 });
+  assert.deepEqual(savedCandidateNote({ url: on.url!, result: "added", item: on }), { ok: true, text: "문단 4개를 넣고 근거로 켰어요." });
+  assert.deepEqual(savedCandidateNote({ url: on.url!, result: "exists", item: on }), { ok: true, text: "이미 창고에 있던 자료를 근거로 켰어요." });
+  const unread = savedCandidateNote({ url: "https://youtu.be/x", result: "added", item: item({ status: "needs_check", note: "자막을 붙여 넣어 주세요." }) });
+  assert.equal(unread.ok, false);
+  assert.match(unread.text, /확인 필요.*자막을 붙여 넣어 주세요/);
+  assert.deepEqual(savedCandidateNote({ url: "http://x", result: "rejected", reason: "https만 됩니다." }), { ok: false, text: "https만 됩니다." });
+  assert.equal(savedCandidateNote(undefined).ok, false);
+});
+
+test("사례·참고 자료는 따로 골라 보고, 근거 안내도 다르게 보여 준다", () => {
+  const rows = [item({ id: "f" }), item({ id: "e", lane: "example", lane_label: "사례·참고" })];
+  assert.deepEqual(filterSources(rows, "", "example").map((row) => row.id), ["e"]);
+  assert.match(evidenceHint(rows[1]), /사례로만 소개돼요/);
+  assert.equal(evidenceHint(rows[0]), "기획의 근거 찾기에 후보로 나와요");
 });

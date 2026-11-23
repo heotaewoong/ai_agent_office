@@ -7,7 +7,7 @@ import { safeOriginRef, type SourceArea, type SourceLinkResult, type SourceOrigi
 import styles from "./source-library.module.css";
 
 let areasCache: Promise<SourceArea[]> | null = null;
-function loadAreas() {
+export function loadSourceAreas() {
   areasCache ??= api.sourceLibrary().then((library) => library.areas).catch((cause) => { areasCache = null; throw cause; });
   return areasCache;
 }
@@ -37,7 +37,7 @@ export function SaveToSourceLibrary({ links, memo, title, origin, originRef, def
   useEffect(() => {
     if (!open || areas.length) return;
     let alive = true;
-    loadAreas().then((list) => { if (alive) setAreas(list); }).catch(() => { if (alive) setError("분야 목록을 불러오지 못했습니다."); });
+    loadSourceAreas().then((list) => { if (alive) setAreas(list); }).catch(() => { if (alive) setError("분야 목록을 불러오지 못했습니다."); });
     return () => { alive = false; };
   }, [open, areas.length]);
 

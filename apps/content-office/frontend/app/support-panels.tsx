@@ -15,6 +15,7 @@ import { calendarSourceUrl, calendarTimeliness, dDayLabel, isVerifiedExam, timel
 import { Icon } from "./icons";
 import { IdeaIntake } from "./idea-intake";
 import { IdeaSourcesPanel } from "./idea-sources-panel";
+import { ResearchPanel } from "./research-panel";
 import { SaveToSourceLibrary } from "./save-to-source-library";
 import type { IdeaSourcesDraft } from "../lib/ideas";
 import { benchmarkPublicUrl } from "../lib/benchmarks";
@@ -820,6 +821,7 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
             </details>
             {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
             <SaveToSourceLibrary links={idea.source_urls?.length ? idea.source_urls : idea.source_url ? [idea.source_url] : []} origin="idea" originRef={idea.id} />
+            <ResearchPanel ideaId={idea.id} title={idea.title} summary={idea.platform_origin?.summary} plan={idea.research} />
             <IdeaSourcesPanel
               idea={idea}
               cached={drafts[idea.id]}

@@ -341,13 +341,16 @@ def deterministic_checks(packet, *, deferred_citation_ids=()):
 _APPROVED_PUBLIC_SOURCE = "approved_public_evidence"
 
 
-def _with_approved_public_references(evidence, references):
+def _with_approved_public_references(evidence, references, example_urls=frozenset()):
+    """example_urls에 있는 자료는 운영자가 사례·참고 칸에 둔 것이라, 사실 근거가 아닌 소개용 사례로 표시한다."""
     last = max((int(item["id"][1:]) for item in evidence
                 if re.fullmatch(r"E[0-9]{1,3}", str(item.get("id", "")))), default=0)
     return [*evidence, *(
         {"id": f"E{last + index}", "url": source["url"],
-         "title": source["title"], "claim": "기획 승인⓪에서 선택한 공개 원문 발췌",
-         "scope": "원문 해당 문단의 서술. 독립 검증 미실시",
+         "title": source["title"],
+         "claim": "기획 승인⓪에서 선택한 사례·참고 자료 발췌" if source["url"] in example_urls else "기획 승인⓪에서 선택한 공개 원문 발췌",
+         "scope": ("한 사람의 방법이나 경험. 출처를 밝혀 사례로만 소개하고 사실 주장의 근거로 쓰지 않음" if source["url"] in example_urls
+                   else "원문 해당 문단의 서술. 독립 검증 미실시"),
          "independent_source_checked": False, "numbers": [],
          "source_paragraph": source["paragraph"], "source_quote": source["quote"],
          "source_sha256": source["source_sha256"], "quote_sha256": source["quote_sha256"],
@@ -421,7 +424,8 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
         evidence = report["evidence"]
         article = {**article, "evidence": evidence, "limitations": report["limitations"], "hook": report["hook"], "evidence_source_kind": report["source_kind"], "evidence_checked_at": report["retrieved_at"], 'source_documents': report.get('source_documents', []), 'content_status': report.get('content_status')}
     if approved_references:
-        evidence = _with_approved_public_references(evidence, approved_references)
+        from .source_library import example_urls
+        evidence = _with_approved_public_references(evidence, approved_references, example_urls(store.root))
         article = {**article, "evidence": evidence}
     if report is not None or article != original_article:
         check_current()

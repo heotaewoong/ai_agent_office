@@ -462,6 +462,8 @@ export type Idea = {
   brief?: Brief | null;
   timeliness?: number;
   next_exam?: NextExam | null;
+  /** 이 주제에 외부 조사가 필요한지에 대한 서버 기준. 화면 표시용이며 저장된 기획에는 들어가지 않는다. */
+  research?: import("./source-library").ResearchPlan;
 };
 export type Lesson = {
   id: string;

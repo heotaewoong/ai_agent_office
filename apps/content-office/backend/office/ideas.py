@@ -202,7 +202,10 @@ def _with_library_references(store, title, references, claims):
     used = {item["url"] for item in references}
     extra = [item for item in extra if isinstance(item, dict) and item.get("url") not in used][:room]
     merged = _checked_public_references(references + extra)
-    claims += [{"label": "자료 창고에서 근거로 고른 문단", "evidence_ids": [item["id"]]} for item in merged[len(references):]]
+    from .source_library import example_urls
+    examples = example_urls(store.root)
+    claims += [{"label": "자료 창고의 사례·참고 문단(사실 근거로는 쓰지 않음)" if item["url"] in examples else "자료 창고에서 근거로 고른 문단",
+                "evidence_ids": [item["id"]]} for item in merged[len(references):]]
     return merged, claims
 
 

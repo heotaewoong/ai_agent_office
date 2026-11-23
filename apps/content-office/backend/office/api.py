@@ -1091,7 +1091,10 @@ def create_app(store: Store | None = None):
 
     @app.get("/api/ideas")
     def list_ideas():
-        return {"ideas": reviewable_ideas(store, lessons=store.lessons("approved"))}
+        from .external_research import research_plan
+        # 주제마다 외부 조사가 필요한지 기준만 계산해 붙인다. 밖으로 나가는 요청이 없고 저장된 기획도 바꾸지 않는다.
+        return {"ideas": [{**idea, "research": research_plan(str(idea.get("title") or ""), str((idea.get("platform_origin") or {}).get("summary") or ""))}
+                          for idea in reviewable_ideas(store, lessons=store.lessons("approved"))]}
 
     @app.post("/api/ideas")
     def add_idea(idea: IdeaInput):

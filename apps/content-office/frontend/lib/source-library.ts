@@ -1,5 +1,7 @@
 /** 자료 창고: 운영자가 넣은 링크·메모·파일과, 초안 근거로 쓸지에 대한 표시. */
-export type SourceOrigin = "manual" | "idea" | "news" | "artifact" | "import";
+export type SourceOrigin = "manual" | "idea" | "news" | "artifact" | "import" | "research";
+/** 자료의 쓰임새. fact는 사실 주장을 받치는 근거, example은 출처와 함께 소개만 하는 다른 사람의 방법·사례. */
+export type SourceLane = "fact" | "example";
 export type SourceStatus = "pending" | "working" | "done" | "needs_check" | "duplicate";
 export type SourceArea = { id: string; label: string; items: number };
 export type SourceItem = {
@@ -17,6 +19,8 @@ export type SourceItem = {
   pasted: boolean;
   origin: SourceOrigin;
   origin_ref: string | null;
+  lane: SourceLane;
+  lane_label: string;
   file_name: string | null;
   created_at: string;
   updated_at: string;
@@ -46,9 +50,9 @@ export type SourceHit = {
   score: number;
   matched: string[];
 };
-export type SourceEntry = { area: string; mine?: boolean; origin?: SourceOrigin; origin_ref?: string };
-export type SourcePatch = { use_as_evidence?: boolean; area?: string; mine?: boolean; title?: string };
-export type SourceFilter = "all" | "evidence" | "mine" | "check";
+export type SourceEntry = { area: string; mine?: boolean; origin?: SourceOrigin; origin_ref?: string; lane?: SourceLane; use_as_evidence?: boolean };
+export type SourcePatch = { use_as_evidence?: boolean; area?: string; mine?: boolean; title?: string; lane?: SourceLane };
+export type SourceFilter = "all" | "evidence" | "mine" | "example" | "check";
 
 export const sourceStatus: Record<SourceStatus, { label: string; tone: "green" | "orange" | "red" | "neutral" }> = {
   done: { label: "저장됨", tone: "green" },
@@ -63,12 +67,14 @@ export const sourceOrigins: Record<SourceOrigin, string> = {
   news: "뉴스에서",
   artifact: "내 제작물",
   import: "이전 자료함",
+  research: "외부 조사에서",
 };
 export const sourceKinds: Record<SourceItem["kind"], string> = { link: "링크", memo: "메모", file: "파일" };
 export const sourceFilters: { id: SourceFilter; label: string }[] = [
   { id: "all", label: "전체" },
   { id: "evidence", label: "근거로 사용" },
   { id: "mine", label: "내 경험·내 글" },
+  { id: "example", label: "사례·참고" },
   { id: "check", label: "확인 필요" },
 ];
 
@@ -83,6 +89,7 @@ export function filterSources(items: SourceItem[], area: string, filter: SourceF
     if (area && item.area !== area) return false;
     if (filter === "evidence" && !item.use_as_evidence) return false;
     if (filter === "mine" && !item.mine) return false;
+    if (filter === "example" && item.lane !== "example") return false;
     if (filter === "check" && item.status !== "needs_check" && item.status !== "duplicate") return false;
     const haystack = `${item.title} ${item.url ?? ""} ${item.file_name ?? ""}`.toLowerCase();
     return words.every((word) => haystack.includes(word));
@@ -113,7 +120,8 @@ export function vectorSummary(vectors: SourceVectors): string {
 }
 
 /** 근거로 켰을 때 그 자료가 어디에 쓰이는지. 링크는 출처가 있어 공개 근거 후보가 되고, 메모와 파일은 내 글의 재료가 된다. */
-export function evidenceHint(item: Pick<SourceItem, "kind">): string {
+export function evidenceHint(item: Pick<SourceItem, "kind"> & { lane?: SourceLane }): string {
+  if (item.kind === "link" && item.lane === "example") return "사례로만 소개돼요. 사실 주장의 근거로는 쓰이지 않아요";
   return item.kind === "link" ? "기획의 근거 찾기에 후보로 나와요" : "‘내 글로 만들기’에서 불러올 수 있어요";
 }
 
@@ -143,4 +151,84 @@ export async function fileToBase64(file: Blob): Promise<string> {
   let binary = "";
   for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
   return btoa(binary);
+}
+
+export const sourceLanes: Record<SourceLane, string> = { fact: "사실 근거", example: "사례·참고" };
+export type ResearchNeed = "required" | "recommended" | "none";
+/** 주제가 어떤 주장을 하는지 보고 서버가 정한 외부 조사 기준. */
+export type ResearchPlan = {
+  area: string;
+  area_label: string;
+  area_guessed: boolean;
+  experience_first: boolean;
+  claims: { id: string; label: string }[];
+  warning: string | null;
+  fact: { need: ResearchNeed; reason: string; providers: string[] };
+  example: { need: ResearchNeed; reason: string };
+  need: ResearchNeed;
+  summary: string;
+};
+export type ResearchCandidate = {
+  key: string;
+  lane: SourceLane;
+  provider: string;
+  provider_label: string;
+  title: string;
+  url: string;
+  snippet: string;
+  year: number | null;
+  needs_paste: boolean;
+  in_library: boolean;
+};
+export type ResearchResult = {
+  plan: ResearchPlan;
+  queries: { english: string; terms: string[]; custom: boolean };
+  library: { fact_sources: number | null; sufficient: boolean };
+  candidates: ResearchCandidate[];
+  notes: string[];
+  searched: boolean;
+};
+export type ResearchRequest = { title: string; summary?: string; area?: string; experience_first?: boolean; query?: string; force?: boolean };
+export type TrustedSource = {
+  id: string;
+  name: string;
+  url: string;
+  feed_url: string;
+  area: string;
+  area_label: string;
+  lane: SourceLane;
+  lane_label: string;
+  created_at: string;
+  recent?: number;
+};
+
+export function researchBadge(need: ResearchNeed): { label: string; tone: "red" | "orange" | "neutral" } {
+  if (need === "required") return { label: "외부 조사 필수", tone: "red" };
+  return need === "recommended" ? { label: "외부 조사 권장", tone: "orange" } : { label: "외부 조사 안 함", tone: "neutral" };
+}
+
+export function splitCandidates(candidates: ResearchCandidate[]): Record<SourceLane, ResearchCandidate[]> {
+  return { fact: candidates.filter((row) => row.lane !== "example"), example: candidates.filter((row) => row.lane === "example") };
+}
+
+export function candidateMeta(candidate: Pick<ResearchCandidate, "provider_label" | "year">): string {
+  return candidate.year ? `${candidate.provider_label} · ${candidate.year}년` : candidate.provider_label;
+}
+
+/** 창고에 이 주제에 맞는 사실 근거가 얼마나 있는지 한 줄로 알려 준다. */
+export function libraryLine(library: ResearchResult["library"]): string {
+  if (library.fact_sources === null) return "자료 창고의 근거는 지금 확인하지 못했어요.";
+  if (library.fact_sources === 0) return "자료 창고에는 이 주제에 맞는 사실 근거가 아직 없어요.";
+  return `자료 창고에 이 주제에 맞는 사실 근거가 ${library.fact_sources}곳 있어요.` + (library.sufficient ? " 이미 충분해요." : " 2곳이 넘으면 충분해요.");
+}
+
+/** 후보를 창고에 넣은 결과를 카드에 보여 줄 한 줄로 바꾼다. */
+export function savedCandidateNote(row: SourceLinkResult | undefined): { ok: boolean; text: string } {
+  const item = row?.item;
+  if (!row || row.result === "rejected" || !item) return { ok: false, text: row?.reason || "넣지 못했습니다." };
+  if (item.status === "done" && item.use_as_evidence) {
+    return { ok: true, text: row.result === "exists" ? "이미 창고에 있던 자료를 근거로 켰어요." : `문단 ${item.passages}개를 넣고 근거로 켰어요.` };
+  }
+  if (item.status === "duplicate") return { ok: false, text: item.note || "같은 내용이 이미 창고에 있어요." };
+  return { ok: false, text: `창고에 '확인 필요'로 남겼어요. ${item.note}`.trim() };
 }

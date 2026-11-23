@@ -33,7 +33,9 @@ from .feeds import fetch_public, normalize_url
 from .store import WorkflowError
 
 AREAS = {key: axis["label"] for key, axis in AXES.items() if key != "source"}
-ORIGINS = ("manual", "idea", "news", "artifact", "import")
+ORIGINS = ("manual", "idea", "news", "artifact", "import", "research")
+# 자료의 쓰임새. fact는 사실 주장을 받치는 근거, example은 출처와 함께 소개만 하는 다른 사람의 방법·사례다.
+LANES = {"fact": "사실 근거", "example": "사례·참고"}
 MAX_PAGE_BYTES = 3_000_000
 MAX_FILE_BYTES = 8_000_000
 MAX_MEMO_CHARS = 60_000
@@ -55,6 +57,7 @@ CREATE TABLE IF NOT EXISTS items(
   title TEXT NOT NULL, url TEXT, url_norm TEXT, status TEXT NOT NULL, note TEXT NOT NULL DEFAULT '',
   passages INTEGER NOT NULL DEFAULT 0, content_hash TEXT, file_name TEXT, body TEXT, pasted TEXT,
   origin TEXT NOT NULL DEFAULT 'manual', origin_ref TEXT, use_as_evidence INTEGER NOT NULL DEFAULT 0,
+  lane TEXT NOT NULL DEFAULT 'fact',
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS items_url ON items(url_norm);
 CREATE INDEX IF NOT EXISTS items_hash ON items(content_hash);
@@ -92,6 +95,11 @@ def _connect(root) -> sqlite3.Connection:
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA foreign_keys=ON")
     db.executescript(_SCHEMA)
+    if "lane" not in {row["name"] for row in db.execute("PRAGMA table_info(items)")}:
+        try:
+            db.execute("ALTER TABLE items ADD COLUMN lane TEXT NOT NULL DEFAULT 'fact'")
+        except sqlite3.OperationalError:
+            pass  # 다른 요청이 방금 같은 칸을 만들었다.
     return db
 
 
@@ -321,6 +329,7 @@ def _view(row: sqlite3.Row) -> dict:
         "mine": bool(row["mine"]), "title": row["title"], "url": row["url"], "status": row["status"],
         "note": row["note"], "passages": row["passages"], "use_as_evidence": bool(row["use_as_evidence"]),
         "pasted": row["pasted"] is not None, "origin": row["origin"], "origin_ref": row["origin_ref"],
+        "lane": row["lane"] if row["lane"] in LANES else "fact", "lane_label": LANES.get(row["lane"], LANES["fact"]),
         "file_name": row["file_name"], "created_at": row["created_at"], "updated_at": row["updated_at"],
     }
 
@@ -342,14 +351,16 @@ def _labels(area, origin, origin_ref) -> tuple[str, str, str | None]:
     return area, origin, origin_ref
 
 
-def _insert(db, *, kind, area, mine, title, url=None, file_name=None, body=None, origin="manual", origin_ref=None) -> str:
+def _insert(db, *, kind, area, mine, title, url=None, file_name=None, body=None, origin="manual", origin_ref=None, lane="fact") -> str:
+    if lane not in LANES:
+        raise WorkflowError("사실 근거용인지 사례·참고용인지 골라 주세요.")
     item_id = secrets.token_hex(10)
     stamp = _now()
     db.execute(
-        "INSERT INTO items(id, kind, area, mine, title, url, url_norm, status, file_name, body, origin, origin_ref, created_at, updated_at) "
-        "VALUES (?,?,?,?,?,?,?, 'pending', ?,?,?,?,?,?)",
+        "INSERT INTO items(id, kind, area, mine, title, url, url_norm, status, file_name, body, origin, origin_ref, lane, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?, 'pending', ?,?,?,?,?,?,?)",
         (item_id, kind, area, int(bool(mine)), title, url, normalize_url(url) if url else None, file_name, body,
-         origin, origin_ref, stamp, stamp))
+         origin, origin_ref, lane, stamp, stamp))
     return item_id
 
 
@@ -408,8 +419,18 @@ def _read_item(root, item_id: str, fetch=None) -> dict:
         return _view(_item(db, item_id))
 
 
-def add_links(root, urls, *, area, mine=False, origin="manual", origin_ref=None, title=None, fetch=None) -> list[dict]:
+def _turn_on(root, item_id: str) -> dict:
+    with closing(_connect(root)) as db, db:
+        db.execute("UPDATE items SET use_as_evidence=1, updated_at=? WHERE id=? AND status='done'", (_now(), item_id))
+        return _view(_item(db, item_id))
+
+
+def add_links(root, urls, *, area, mine=False, origin="manual", origin_ref=None, title=None, fetch=None,
+              lane="fact", use_as_evidence=False) -> list[dict]:
+    """use_as_evidence는 운영자가 외부 조사 후보에서 직접 고른 자료에만 쓴다. 본문을 읽은 자료만 근거로 켠다."""
     area, origin, origin_ref = _labels(area, origin, origin_ref)
+    if lane not in LANES:
+        raise WorkflowError("사실 근거용인지 사례·참고용인지 골라 주세요.")
     cleaned = list(dict.fromkeys(url.strip() for url in urls if isinstance(url, str) and url.strip()))
     if not cleaned:
         raise WorkflowError("링크를 한 개 이상 넣어 주세요.")
@@ -424,11 +445,13 @@ def add_links(root, urls, *, area, mine=False, origin="manual", origin_ref=None,
         with closing(_connect(root)) as db, db:
             existing = db.execute("SELECT * FROM items WHERE url_norm=? AND status IN ('done','working','pending')", (normalize_url(url),)).fetchone()
             item_id = None if existing else _insert(db, kind="link", area=area, mine=mine, url=url, origin=origin, origin_ref=origin_ref,
-                                                    title=_clean(title)[:200] if title and len(cleaned) == 1 else url)
+                                                    lane=lane, title=_clean(title)[:200] if title and len(cleaned) == 1 else url)
         if existing:
-            results.append({"url": url, "result": "exists", "item": _view(existing)})
+            item = _turn_on(root, existing["id"]) if use_as_evidence else _view(existing)
+            results.append({"url": url, "result": "exists", "item": item})
         else:
-            results.append({"url": url, "result": "added", "item": _read_item(root, item_id, fetch)})
+            item = _read_item(root, item_id, fetch)
+            results.append({"url": url, "result": "added", "item": _turn_on(root, item_id) if use_as_evidence else item})
     return results
 
 
@@ -487,7 +510,7 @@ def fill_text(root, item_id: str, text: str, title: str | None = None) -> dict:
 
 
 def update_item(root, item_id: str, changes: dict) -> dict:
-    allowed = {"use_as_evidence", "area", "mine", "title"}
+    allowed = {"use_as_evidence", "area", "mine", "title", "lane"}
     if not changes or set(changes) - allowed:
         raise WorkflowError("바꿀 수 없는 항목입니다.")
     with closing(_connect(root)) as db, db:
@@ -502,6 +525,10 @@ def update_item(root, item_id: str, changes: dict) -> dict:
             if changes["area"] not in AREAS:
                 raise WorkflowError("분야를 골라 주세요.")
             db.execute("UPDATE items SET area=? WHERE id=?", (changes["area"], item_id))
+        if "lane" in changes:
+            if changes["lane"] not in LANES:
+                raise WorkflowError("사실 근거용인지 사례·참고용인지 골라 주세요.")
+            db.execute("UPDATE items SET lane=? WHERE id=?", (changes["lane"], item_id))
         if "mine" in changes:
             if not isinstance(changes["mine"], bool):
                 raise WorkflowError("내 자료 여부를 확인할 수 없습니다.")
@@ -546,6 +573,18 @@ def item_detail(root, item_id: str) -> dict:
         return item
 
 
+def example_urls(root) -> frozenset[str]:
+    """사례·참고 칸에 둔 링크 주소. 초안에서 이 자료는 사실 근거가 아니라 소개할 사례로만 다룬다."""
+    path = library_path(root)
+    if not path.is_file():
+        return frozenset()
+    try:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2)) as db:
+            return frozenset(row[0] for row in db.execute("SELECT url FROM items WHERE lane='example' AND url IS NOT NULL"))
+    except sqlite3.Error:
+        return frozenset()
+
+
 def vector_status(root) -> dict:
     """근거로 켠 링크 자료 가운데 공개 근거 검색에 들어갈 준비(벡터 계산)가 끝난 문단 수."""
     from .public_evidence import PUBLIC_MODEL, library_worker_available
@@ -571,6 +610,7 @@ def library_overview(root) -> dict:
             "needs_check": sum(item["status"] == "needs_check" for item in items),
         },
         "vectors": vector_status(root),
+        "lanes": [{"id": key, "label": label} for key, label in LANES.items()],
         "limits": {"links": MAX_LINKS, "file_mb": MAX_FILE_BYTES // 1_000_000, "memo_chars": MAX_MEMO_CHARS},
     }
 

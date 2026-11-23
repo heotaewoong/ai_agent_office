@@ -11,12 +11,14 @@ from typing import Literal
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from .external_research import add_trusted, delete_trusted, list_trusted, research_plan, run_research
 from .source_library import (
     add_file, add_links, add_memo, delete_item, fill_text, item_detail, library_overview, retry_item, search_library,
     set_evidence, update_item,
 )
 
-Origin = Literal["manual", "idea", "news", "artifact", "import"]
+Origin = Literal["manual", "idea", "news", "artifact", "import", "research"]
+Lane = Literal["fact", "example"]
 
 
 class _Entry(BaseModel):
@@ -30,6 +32,8 @@ class _Entry(BaseModel):
 class LibraryLinks(_Entry):
     urls: list[str] = Field(min_length=1, max_length=10)
     title: str | None = Field(default=None, max_length=300)
+    lane: Lane = "fact"
+    use_as_evidence: bool = Field(default=False, strict=True)
 
 
 class LibraryMemo(_Entry):
@@ -49,6 +53,7 @@ class LibraryPatch(BaseModel):
     area: str | None = Field(default=None, max_length=8)
     mine: bool | None = Field(default=None, strict=True)
     title: str | None = Field(default=None, max_length=300)
+    lane: Lane | None = None
 
 
 class LibraryText(BaseModel):
@@ -61,6 +66,33 @@ class LibraryEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid")
     ids: list[str] = Field(min_length=1, max_length=1000)
     use_as_evidence: bool = Field(strict=True)
+
+
+class ResearchTopic(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = Field(default=None, max_length=160)
+    title: str = Field(min_length=1, max_length=300)
+    summary: str = Field(default="", max_length=2000)
+    area: str | None = Field(default=None, max_length=8)
+    experience_first: bool = Field(default=False, strict=True)
+
+
+class ResearchRun(ResearchTopic):
+    query: str | None = Field(default=None, max_length=200)
+    force: bool = Field(default=False, strict=True)
+
+
+class ResearchPlans(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    topics: list[ResearchTopic] = Field(min_length=1, max_length=80)
+
+
+class TrustedSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(max_length=2048)
+    area: str = Field(max_length=8)
+    lane: Lane
+    name: str | None = Field(default=None, max_length=120)
 
 
 def _prepare_vectors(root) -> None:
@@ -93,7 +125,33 @@ def register(app, store):
 
     @app.post("/api/source-library/links")
     def library_links(body: LibraryLinks):
-        return {"results": add_links(root, body.urls, title=body.title, **tags(body)), **library_overview(root)}
+        results = add_links(root, body.urls, title=body.title, lane=body.lane, use_as_evidence=body.use_as_evidence, **tags(body))
+        if body.use_as_evidence:
+            _prepare_vectors(root)
+        return {"results": results, **library_overview(root)}
+
+    @app.post("/api/source-library/research/plans")
+    def library_research_plans(body: ResearchPlans):
+        # 기준만 계산한다. 밖으로 나가는 요청은 없다.
+        return {"plans": [{"id": topic.id, **research_plan(topic.title, topic.summary, area=topic.area,
+                                                          experience_first=topic.experience_first)} for topic in body.topics]}
+
+    @app.post("/api/source-library/research")
+    def library_research(body: ResearchRun):
+        return run_research(root, body.title, summary=body.summary, area=body.area, experience_first=body.experience_first,
+                            query=body.query, force=body.force)
+
+    @app.get("/api/source-library/trusted")
+    def library_trusted():
+        return {"sources": list_trusted(root)}
+
+    @app.post("/api/source-library/trusted", status_code=201)
+    def library_trusted_add(body: TrustedSource):
+        return {"source": add_trusted(root, body.url, area=body.area, lane=body.lane, name=body.name), "sources": list_trusted(root)}
+
+    @app.delete("/api/source-library/trusted/{source_id}")
+    def library_trusted_delete(source_id: str):
+        return {**delete_trusted(root, source_id), "sources": list_trusted(root)}
 
     @app.post("/api/source-library/memos", status_code=201)
     def library_memo(body: LibraryMemo):

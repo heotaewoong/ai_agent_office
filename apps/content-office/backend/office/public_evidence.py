@@ -191,6 +191,16 @@ def _library_has_vectors(path: Path) -> bool:
         return False
 
 
+_CITED_YEAR = re.compile(r"\b(?:19|20)\d{2}[a-z]?\b")
+_CITATION_MARK = re.compile(r"et al\.?|\[\d{1,3}\]|arXiv|doi\.org|doi:|\bpp\. ?\d|\bvol\. ?\d|Proceedings|preprint|\b[A-Z]\. ?(?:[A-Z]\. ?)?[A-Z][a-z]+,", re.I)
+
+
+def looks_like_reference_list(text: str) -> bool:
+    """논문 끝의 참고문헌 목록처럼 저자·연도만 늘어선 문단. 주장을 받치는 문장이 없어 근거로 쓰지 않는다."""
+    years, marks = len(_CITED_YEAR.findall(text)), len(_CITATION_MARK.findall(text))
+    return years >= 2 and marks >= 4 and (years + marks) * 34 >= len(text)
+
+
 def _rank_library(path: Path, vector: list[float], exclude_urls) -> list[tuple]:
     """자료 창고에서 '초안 근거로 사용'을 켠 링크 자료의 문단을 같은 모델 벡터로 비교한다. 인용은 맞은 구간만 쓴다."""
     excluded = set(exclude_urls)
@@ -210,7 +220,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls) -> list[tuple]:
                 or not title.strip() or not isinstance(text, str) or type(start) is not int or type(end) is not int):
             continue
         quote = text[start:end].strip()
-        if len(quote) < _MIN_LIBRARY_QUOTE or len(quote) > 1800:
+        if len(quote) < _MIN_LIBRARY_QUOTE or len(quote) > 1800 or looks_like_reference_list(quote):
             continue
         score = sum(a * b for a, b in zip(vector, _VECTOR.unpack(blob), strict=True))
         if math.isfinite(score) and score >= _MIN_SIMILARITY:
