@@ -145,10 +145,10 @@ test("후보는 사실 근거와 사례·참고 두 칸으로 나눈다", () => 
 });
 
 test("창고 근거가 두 곳 이상이면 충분하다고 알려 준다", () => {
-  assert.match(libraryLine({ fact_sources: null, sufficient: false }), /확인하지 못했어요/);
+  assert.match(libraryLine({ fact_sources: null, sufficient: false }), /조회하지 못했어요/);
   assert.match(libraryLine({ fact_sources: 0, sufficient: false }), /아직 없어요/);
-  assert.match(libraryLine({ fact_sources: 1, sufficient: false }), /1곳 있어요. 2곳이 넘으면 충분해요/);
-  assert.match(libraryLine({ fact_sources: 3, sufficient: true }), /3곳 있어요. 이미 충분해요/);
+  assert.match(libraryLine({ fact_sources: 1, sufficient: false }), /후보 1곳/);
+  assert.match(libraryLine({ fact_sources: 3, sufficient: true }), /후보 3곳.*직접 뒷받침/);
 });
 
 test("고른 후보를 창고에 넣은 결과를 한 줄로 알려 준다", () => {

@@ -244,3 +244,36 @@ def test_selected_platform_idea_approves_evidence_on_existing_job_only(scope):
     current = result["idea"]["edit_hash"]
     assert client.post(route, headers=headers, json={"expected_hash": current}).status_code == 409
     assert client.post(route + "/approve", headers=headers, json={**request, "expected_hash": current}).status_code == 409
+
+@pytest.mark.parametrize("title,official_title,official_quote", [
+    ("오픽 IM2에서 막힌 분을 위한 첫 7일", "OPIc 공식 등급", "OPIc IM2는 한국에서 제공되는 Intermediate Mid 세부 등급입니다."),
+    ("편입 영어 단어 복습과 50% 쿠폰 캠페인", "2027학년도 일반편입 안내", "일반편입 원서접수의 해당 연도 일정과 편입 영어 전형 안내입니다."),
+])
+def test_noisy_saved_candidates_are_hidden_and_cannot_be_approved(scope, title, official_title, official_quote):
+    store, client, headers, old, _, _ = scope
+    idea = client.post("/api/ideas", headers=headers, json={
+        "title": title, "source_url": "https://primary.example.org/notice", "primary_sources": 1,
+    }).json()
+
+    def hit(number, heading, quote):
+        value = reference(number)
+        value.update(title=heading, quote=quote, quote_sha256=hashlib.sha256(quote.encode()).hexdigest())
+        value["id"] = evidence_id(value["url"], value["source_sha256"], number, value["quote_sha256"])
+        return value
+
+    wrong = [
+        hit(4, "Agentic AI and SETI", "Radio telescopes identify extraterrestrial signals."),
+        hit(5, official_title, "[28], [42], [43], [47], [72] Language Modeling WikiText-103 [147] [5], [29], [64], [71] StrategyQA [148]"),
+        hit(6, official_title, "공공질서 및 미풍양속에 위반되는 내용을 유포하거나 링크시키는 경우 영리를 목적으로 하는 광고"),
+    ]
+    right = hit(7, official_title, official_quote)
+    idea["public_evidence"] = [*wrong, right]
+    with store.connection(transaction=True) as db:
+        db.execute("UPDATE ideas SET data=? WHERE id=?", (json.dumps(idea), idea["id"]))
+    visible = next(card for card in client.get("/api/ideas").json()["ideas"] if card["id"] == idea["id"])
+    assert visible["public_evidence"] == [right]
+    assert visible["edit_hash"] == digest(idea)
+    path = f"/api/ideas/{idea['id']}/select"
+    for ref in wrong:
+        assert client.post(path, headers=headers, json={"expected_hash": visible["edit_hash"], "public_evidence_ids": [ref["id"]]}).status_code == 409
+    assert client.post(path, headers=headers, json={"expected_hash": visible["edit_hash"], "public_evidence_ids": [right["id"]]}).status_code == 200

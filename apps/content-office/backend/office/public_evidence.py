@@ -16,6 +16,13 @@ from contextlib import closing
 from pathlib import Path
 from urllib.parse import urlsplit
 
+if __package__:
+    from .evidence_relevance import is_evidence_noise, is_topic_candidate, looks_like_reference_list
+else:
+    # The isolated local embedding subprocess runs this file directly.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from evidence_relevance import is_evidence_noise, is_topic_candidate, looks_like_reference_list
+
 
 _PUBLIC_MODEL = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 _VECTOR = struct.Struct('<384f')
@@ -151,11 +158,11 @@ def _rank_index(db: sqlite3.Connection, vector: list[float], exclude_urls) -> li
     return ranked
 
 
-def _select(ranked: list[tuple], exclude_urls, limit: int) -> list[dict]:
+def _select(ranked: list[tuple], exclude_urls, limit: int, *, query: str = "") -> list[dict]:
     excluded = set(exclude_urls)
     matches = []
     for _, _, url, title, paragraph, quote, source_hash in sorted(ranked):
-        if url in excluded or not _safe_reference(url):
+        if url in excluded or not _safe_reference(url) or not is_topic_candidate(query, title, quote):
             continue
         quote_hash = hashlib.sha256(quote.encode('utf-8')).hexdigest()
         matches.append({
@@ -191,17 +198,7 @@ def _library_has_vectors(path: Path) -> bool:
         return False
 
 
-_CITED_YEAR = re.compile(r"\b(?:19|20)\d{2}[a-z]?\b")
-_CITATION_MARK = re.compile(r"et al\.?|\[\d{1,3}\]|arXiv|doi\.org|doi:|\bpp\. ?\d|\bvol\. ?\d|Proceedings|preprint|\b[A-Z]\. ?(?:[A-Z]\. ?)?[A-Z][a-z]+,", re.I)
-
-
-def looks_like_reference_list(text: str) -> bool:
-    """논문 끝의 참고문헌 목록처럼 저자·연도만 늘어선 문단. 주장을 받치는 문장이 없어 근거로 쓰지 않는다."""
-    years, marks = len(_CITED_YEAR.findall(text)), len(_CITATION_MARK.findall(text))
-    return years >= 2 and marks >= 4 and (years + marks) * 34 >= len(text)
-
-
-def _rank_library(path: Path, vector: list[float], exclude_urls) -> list[tuple]:
+def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -> list[tuple]:
     """자료 창고에서 '초안 근거로 사용'을 켠 링크 자료의 문단을 같은 모델 벡터로 비교한다. 인용은 맞은 구간만 쓴다."""
     excluded = set(exclude_urls)
     try:
@@ -209,8 +206,9 @@ def _rank_library(path: Path, vector: list[float], exclude_urls) -> list[tuple]:
             rows = db.execute(
                 "SELECT v.item_id, v.seq, v.part, v.start_char, v.end_char, v.vector, i.url, i.title, i.content_hash, p.text "
                 "FROM passage_vectors v JOIN passages p ON p.item_id=v.item_id AND p.seq=v.seq JOIN items i ON i.id=v.item_id "
-                "WHERE v.model=? AND i.status='done' AND i.use_as_evidence=1 AND i.kind='link' LIMIT ?",
-                (_PUBLIC_MODEL, _MAX_LIBRARY_VECTORS)).fetchall()
+                "WHERE v.model=? AND i.status='done' AND i.use_as_evidence=1 AND i.kind='link' "
+                "AND (? IS NULL OR i.area=?) ORDER BY v.item_id, v.seq, v.part LIMIT ?",
+                (_PUBLIC_MODEL, area, area, _MAX_LIBRARY_VECTORS)).fetchall()
     except sqlite3.Error:
         return []
     ranked = []
@@ -220,7 +218,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls) -> list[tuple]:
                 or not title.strip() or not isinstance(text, str) or type(start) is not int or type(end) is not int):
             continue
         quote = text[start:end].strip()
-        if len(quote) < _MIN_LIBRARY_QUOTE or len(quote) > 1800 or looks_like_reference_list(quote):
+        if len(quote) < _MIN_LIBRARY_QUOTE or len(quote) > 1800 or is_evidence_noise(quote):
             continue
         score = sum(a * b for a, b in zip(vector, _VECTOR.unpack(blob), strict=True))
         if math.isfinite(score) and score >= _MIN_SIMILARITY:
@@ -228,7 +226,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls) -> list[tuple]:
     return ranked
 
 
-def find_library_evidence(query: str, *, root, exclude_urls: tuple[str, ...] = (), limit: int = 4) -> list[dict]:
+def find_library_evidence(query: str, *, root, exclude_urls: tuple[str, ...] = (), limit: int = 4, area=None) -> list[dict]:
     """자료 창고의 근거 자료만 찾는다. 근거로 켠 링크의 벡터가 없으면 모델을 띄우지 않는다."""
     query = query.strip()[:_MAX_QUERY_CHARS]
     path = _library_db(root)
@@ -236,7 +234,7 @@ def find_library_evidence(query: str, *, root, exclude_urls: tuple[str, ...] = (
         return []
     index, python, cache = _paths()
     vector = _query_vector(query, python, cache, index.parent / 'query.lock')
-    return _select(_rank_library(path, vector, exclude_urls), exclude_urls, min(limit, _MAX_RESULTS))
+    return _select(_rank_library(path, vector, exclude_urls, area=area), exclude_urls, min(limit, _MAX_RESULTS), query=query)
 
 
 def library_worker_available(root) -> bool:
@@ -269,7 +267,7 @@ def start_library_vectors(root) -> bool:
     return True
 
 
-def find_public_evidence(query: str, *, exclude_urls: tuple[str, ...] = (), limit: int = 4) -> list[dict]:
+def find_public_evidence(query: str, *, exclude_urls: tuple[str, ...] = (), limit: int = 4, area=None) -> list[dict]:
     """Return at most one exact supporting excerpt per public URL."""
     query = query.strip()[:_MAX_QUERY_CHARS]
     if not query or limit <= 0:
@@ -295,8 +293,8 @@ def find_public_evidence(query: str, *, exclude_urls: tuple[str, ...] = (), limi
     except sqlite3.Error as exc:
         raise PublicEvidenceUnavailable('공개 근거 인덱스를 읽지 못했습니다.') from exc
     if library is not None:
-        ranked += _rank_library(library, vector, exclude_urls)
-    return _select(ranked, exclude_urls, min(limit, _MAX_RESULTS))
+        ranked += _rank_library(library, vector, exclude_urls, area=area)
+    return _select(ranked, exclude_urls, min(limit, _MAX_RESULTS), query=query)
 
 
 def _mem_available_kib() -> int:

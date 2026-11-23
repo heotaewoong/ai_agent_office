@@ -148,13 +148,11 @@ def test_topics_that_need_nothing_never_leave_the_server(tmp_path):
     assert result["candidates"] == [] and result["searched"] is False and result["plan"]["need"] == "none"
 
 
-def test_enough_library_evidence_skips_the_fact_search(tmp_path):
-    result = run_research(tmp_path, "간격 복습이 기억에 미치는 효과", fetch=offline, fact_sources=lambda root, title: 2)
-    assert result["searched"] is False and result["library"] == {"fact_sources": 2, "sufficient": True}
-    assert "외부 조사를 건너뛰었어요" in result["notes"][0]
-    forced = run_research(tmp_path, "간격 복습이 기억에 미치는 효과", force=True, fact_sources=lambda root, title: 2,
+def test_library_candidate_count_never_skips_fact_search(tmp_path):
+    result = run_research(tmp_path, "간격 복습이 기억에 미치는 효과", fact_sources=lambda root, title: 2,
                           fetch=routed({"https://eutils": ESEARCH.replace('"111", "222"', ""), "https://api.openalex.org/": '{"results": []}'}))
-    assert forced["searched"] is True and any("맞는 자료를 찾지 못했어요" in note for note in forced["notes"])
+    assert result["searched"] is True
+    assert result["library"] == {"fact_sources": 2, "sufficient": False}
 
 
 def test_korean_only_topics_ask_for_an_english_query_and_one_slow_source_does_not_hide_the_rest(tmp_path):
@@ -270,3 +268,15 @@ def test_api_registers_trusted_sources_and_saves_a_chosen_candidate(tmp_path, mo
     assert saved.status_code == 200 and body["results"][0]["item"]["use_as_evidence"] is True and body["results"][0]["item"]["lane"] == "example"
     assert body["stats"]["evidence"] == 1 and started and body["lanes"] == [{"id": "fact", "label": "사실 근거"}, {"id": "example", "label": "사례·참고"}]
     assert api.patch(f"/api/source-library/items/{body['results'][0]['item']['id']}", json={"lane": "fact"}).json()["item"]["lane"] == "fact"
+
+
+def test_exam_official_page_is_a_candidate_and_store_coupon_needs_separate_confirmation(tmp_path):
+    opic = run_research(tmp_path, "오픽 IM2에서 막힌 분을 위한 첫 7일", area="A", query="IM2",
+                        fetch=offline, fact_sources=no_library)
+    assert any("opic.co.kr/" in candidate["url"] for candidate in opic["candidates"])
+    assert opic["library"]["sufficient"] is False
+    transfer = run_research(tmp_path, "편입 영어 단어 복습과 50% 쿠폰 캠페인", area="A",
+                            fetch=offline, fact_sources=no_library)
+    assert any("스토어 확인" in note for note in transfer["notes"])
+    assert any("대학 입학처" in note for note in transfer["notes"])
+    assert not any("opic.co.kr/" in candidate["url"] for candidate in transfer["candidates"])

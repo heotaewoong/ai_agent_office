@@ -365,6 +365,10 @@ def _insert(db, *, kind, area, mine, title, url=None, file_name=None, body=None,
 
 
 def _store_passages(db, item_id: str, paragraphs, title: str | None = None) -> None:
+    from .evidence_relevance import is_evidence_noise
+
+    if db.execute("SELECT kind FROM items WHERE id=?", (item_id,)).fetchone()[0] == "link":
+        paragraphs = (text for text in paragraphs if not is_evidence_noise(text))
     passages = split_passages(paragraphs)
     if sum(map(len, passages)) < 80:
         raise WorkflowError("저장할 본문이 너무 짧습니다. 내용을 조금 더 넣어 주세요.")

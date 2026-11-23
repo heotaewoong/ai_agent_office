@@ -156,13 +156,27 @@ def _evidence_review_jobs(db, idea_id=None):
     }
 
 
+def _visible_evidence(card):
+    from .evidence_relevance import is_topic_candidate
+
+    references = card.get("public_evidence")
+    if references is None:
+        return card
+    allowed = [item for item in references if is_topic_candidate(card["title"], item["title"], item["quote"])]
+    result = {**card, "public_evidence": allowed}
+    discovery = card.get("public_discovery")
+    if not allowed and discovery and discovery.get("status") == "ready":
+        result["public_discovery"] = {**discovery, "status": "insufficient"}
+    return result
+
+
 def reviewable_ideas(store, *, lessons=()):
     with store.connection() as db:
         eligible = _evidence_review_jobs(db)
         cards = [json.loads(row[0]) for row in db.execute("SELECT data FROM ideas ORDER BY created_at")]
     return rank_ideas([
-        {**with_edit_hash(card), "public_evidence_reviewable": card["id"] in eligible}
-        if card.get("state") == "selected" else with_edit_hash(card)
+        {**_visible_evidence(with_edit_hash(card)), "public_evidence_reviewable": card["id"] in eligible}
+        if card.get("state") == "selected" else _visible_evidence(with_edit_hash(card))
         for card in cards
     ], lessons=lessons)
 
@@ -229,7 +243,7 @@ def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
             if result["status"] == "unavailable":
                 with store.connection() as db:
                     current, job = _reviewable_idea(db, idea_id, expected_hash, allow_selected=True)
-                response = score_idea(with_edit_hash(current), lessons=lessons)
+                response = score_idea(_visible_evidence(with_edit_hash(current)), lessons=lessons)
                 if job:
                     response["public_evidence_reviewable"] = True
                 response.setdefault("public_discovery", {"status": "unavailable", "claims": [],
@@ -239,7 +253,13 @@ def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
             public_discovery = {"status": "ready" if references else "insufficient",
                                 "claims": claims, "checked_at": now(), "paid_calls": 0}
         else:
-            references = _checked_public_references(find_public_evidence(candidate["title"], limit=PUBLIC_EVIDENCE_LIMIT))
+            from .external_research import guess_area
+            area = guess_area(candidate["title"])
+            scope = {"area": area} if area == "A" else {}
+            references = _checked_public_references(find_public_evidence(candidate["title"], limit=PUBLIC_EVIDENCE_LIMIT, **scope))
+        references = _visible_evidence({**candidate, "public_evidence": references})["public_evidence"]
+        if public_discovery is not None and not references:
+            public_discovery["status"] = "insufficient"
     except PublicEvidenceUnavailable as error:
         raise WorkflowError(str(error) or "공개 근거 검색을 실행할 수 없습니다. 잠시 후 다시 확인하세요") from error
     # External reads happen outside the write transaction. Re-check the candidate version on save.
@@ -266,7 +286,9 @@ def _selected_public_references(card, public_evidence_ids):
         raise WorkflowError("공개 근거는 화면에서 중복 없이 최대 4개를 고르세요")
     if not public_evidence_ids:
         return []
-    latest = {item["id"]: item for item in _checked_public_references(card.get("public_evidence", []))}
+    from .evidence_relevance import is_topic_candidate
+    latest = {item["id"]: item for item in _checked_public_references(card.get("public_evidence", []))
+              if is_topic_candidate(card["title"], item["title"], item["quote"])}
     if any(key not in latest for key in public_evidence_ids):
         raise WorkflowError("기획의 공개 근거가 변경되었습니다. 다시 확인한 뒤 선택하세요")
     return [latest[key] for key in public_evidence_ids]
@@ -320,7 +342,7 @@ def set_idea_sources(store, idea_id, source_urls, *, expected_hash, operator_ver
             raise WorkflowError("같은 제목과 대표 출처의 기획이 이미 있습니다. 기존 기획을 확인하세요")
         db.execute("UPDATE ideas SET dedup_key=?,data=?,updated_at=? WHERE id=?", (key, canonical(updated), now(), idea_id))
         store._event(db, "idea_sources_updated", {"idea_id": idea_id, "operator_verified_sources": len(urls), "source_urls_hash": digest(urls)})
-    return with_edit_hash(updated)
+    return _visible_evidence(with_edit_hash(updated))
 
 
 def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=(), public_evidence_ids=None):
@@ -348,7 +370,7 @@ def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=(), pu
         job = store._create_job(db, article, brief=selected.get("brief"))
         if references and approved_public_references(job["article"]) != references:
             raise WorkflowError("기존 작업과 기획의 승인 근거가 다릅니다. 기존 작업을 확인하세요")
-    return {"idea": selected, "job": job}
+    return {"idea": _visible_evidence(selected), "job": job}
 
 
 def approve_existing_idea_evidence(store, idea_id, *, expected_hash, actor, public_evidence_ids, lessons=()):
@@ -372,4 +394,4 @@ def approve_existing_idea_evidence(store, idea_id, *, expected_hash, actor, publ
                 "approved_public_evidence_ids": public_evidence_ids,
                 "previous_approved_public_evidence": previous,
             }, job["id"])
-    return {"idea": {**with_edit_hash(idea), "public_evidence_reviewable": True}, "job": job}
+    return {"idea": {**_visible_evidence(with_edit_hash(idea)), "public_evidence_reviewable": True}, "job": job}
