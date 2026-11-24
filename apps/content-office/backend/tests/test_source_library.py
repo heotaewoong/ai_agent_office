@@ -377,9 +377,9 @@ def test_library_question_uses_the_library_worker_and_never_another_model(tmp_pa
 def test_import_inbox_maps_groups_and_skips_duplicates(tmp_path):
     rows = [
         {"id": "a" * 20, "kind": "link", "grp": "뇌과학과 마인드셋", "title": "Spacing review", "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC1/",
-         "status": "done", "chunks": ["첫 문단 " * 20, "둘째 문단 " * 20], "created_at": 1795400000.0},
+         "status": "done", "chunks": ["첫 문단 " * 40, "둘째 문단 " * 40], "created_at": 1795400000.0},
         {"id": "b" * 20, "kind": "link", "grp": "AI와 자동화", "title": "Hermes", "url": "https://hermes.example.org/docs",
-         "status": "done", "chunks": ["Hermes 문단 " * 20]},
+         "status": "done", "chunks": ["Hermes 문단 " * 40]},
         {"id": "c" * 20, "kind": "memo", "grp": "내 경험과 아이디어", "title": "편입 경험", "url": None, "status": "done",
          "chunks": ["편입 경험 " * 30], "body": "편입 경험 " * 30},
         {"id": "d" * 20, "kind": "link", "grp": "AI와 자동화", "title": "막힌 글", "url": "https://x.example.org", "status": "needs_check", "chunks": []},
