@@ -46,6 +46,25 @@ def test_kind_is_guessed_from_the_title_and_the_experience_switch_counts_as_a_ch
     assert (switched["kind"], switched["kind_guessed"], switched["need"]) == ("W4", False, "none")
 
 
+@pytest.mark.parametrize("title, kind, area", [
+    ("ElevenLabs와 OpenAI TTS 무료 등급 비교", "W1", "B"), ("Gemini 새 모델 발표 해설", "W2", "B"),
+    ("2027년 정보처리기사 시험 일정과 응시료", "W2", "A"), ("OPIc IM2에서 막힐 때 공부법", "W3", "A"),
+    ("커피는 자기 몇 시간 전에 끊어야 하나", "W3", "C"), ("옵시디언 동기화가 안 될 때 해결 후기", "W4", "B"),
+    ("이 약 먹어도 되나요", "W5", None), ("Claude로 HTML 발표자료를 제작한 사례", "W3", "B"),
+])
+def test_default_guesses_follow_the_examples_in_design_v2(title, kind, area):
+    plan = research_plan(title)
+    assert (plan["kind"], plan["kind_guessed"]) == (kind, True)
+    assert area is None or plan["area"] == area
+
+
+def test_the_coffee_question_follows_the_brain_science_rules_once_chosen():
+    plan = research_plan("커피는 자기 몇 시간 전에 끊어야 하나", kind="W3", area="C")
+    assert plan["fact"]["need"] == "required" and plan["fact"]["providers"] == ["pubmed", "openalex"] and not plan["blocked"]
+    guessed_out_of_scope = research_plan("이 약 먹어도 되나요")
+    assert guessed_out_of_scope["kind"] == "W5" and guessed_out_of_scope["blocked"] is False  # 추측만으로는 막지 않는다.
+
+
 @pytest.mark.parametrize("title, area", [("퇴사하고 느낀 것들", "D"), ("정보처리기사 실기 접수 일정", None), ("Hermes와 OpenClaw 차이", None),
                                          ("아침 루틴 만드는 방법", None)])
 def test_a_guessed_kind_is_only_a_default_and_never_changes_what_to_search(title, area):
