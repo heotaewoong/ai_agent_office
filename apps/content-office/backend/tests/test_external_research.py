@@ -246,7 +246,7 @@ def test_api_plans_many_topics_without_network_and_runs_one_search(tmp_path, mon
     monkeypatch.setattr("office.api_source_library.run_research", lambda root, title, **options: seen.update(title=title, **options) or {"candidates": []})
     run = api.post("/api/source-library/research", json={"title": "간격 복습", "area": "C", "query": "spacing effect", "force": True})
     assert callable(seen.pop("translate"))
-    assert run.status_code == 200 and seen == {"title": "간격 복습", "summary": "", "area": "C", "experience_first": False, "query": "spacing effect", "force": True}
+    assert run.status_code == 200 and seen == {"title": "간격 복습", "summary": "", "area": "C", "kind": None, "experience_first": False, "query": "spacing effect", "force": True}
     assert api.post("/api/source-library/research", json={"title": ""}).status_code == 422
     assert api.post("/api/source-library/research", json={"title": "a", "force": "yes"}).status_code == 422
 

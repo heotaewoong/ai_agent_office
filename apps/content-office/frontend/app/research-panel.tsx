@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import {
-  candidateMeta, libraryLine, researchBadge, safeOriginRef, savedCandidateNote, splitCandidates,
-  type ResearchCandidate, type ResearchPlan, type ResearchResult, type SourceArea,
+  candidateMeta, choiceLine, confirmedKind, kindNotice, libraryLine, researchBadge, researchKinds, safeOriginRef, savedCandidateNote,
+  splitCandidates, type ResearchCandidate, type ResearchKind, type ResearchPlan, type ResearchResult, type SourceArea,
 } from "../lib/source-library";
 import { loadSourceAreas } from "./save-to-source-library";
 import styles from "./source-library.module.css";
@@ -19,45 +19,82 @@ type Props = {
 };
 
 /**
- * 기획 카드의 외부 조사 칸. 주제가 어떤 주장을 하는지에 따라 조사가 필요한지 알려 주고,
- * 누르면 무료 공개 출처에서 후보를 찾아 보여 줍니다. 운영자가 고른 후보만 자료 창고에 들어가고 근거로 켜집니다.
+ * 기획 카드의 외부 조사 칸. 글 유형과 분야는 사람이 고르고, 고르기 전에는 서버가 제목으로 추측한 값을 기본값으로만 보여 줍니다.
+ * 주제의 주장과 고른 유형에 따라 조사가 필요한지 알려 주고, 누르면 무료 공개 출처에서 후보를 찾아 보여 줍니다.
+ * 운영자가 고른 후보만 자료 창고에 들어가고 근거로 켜집니다.
  */
 export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
+  const [current, setCurrent] = useState<ResearchPlan | undefined>(plan);
   const [open, setOpen] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [draft, setDraft] = useState<{ kind: ResearchKind | ""; area: string }>({ kind: "", area: "" });
   const [result, setResult] = useState<ResearchResult | null>(null);
   const [areas, setAreas] = useState<SourceArea[]>([]);
-  const [area, setArea] = useState(plan?.area ?? "");
   const [query, setQuery] = useState("");
-  const [busy, setBusy] = useState<"search" | "save" | null>(null);
+  const [busy, setBusy] = useState<"search" | "save" | "choice" | null>(null);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [saved, setSaved] = useState<Record<string, { ok: boolean; text: string }>>({});
   const id = useId();
-  const shown = result?.plan ?? plan;
+  const shown = result?.plan ?? current;
+  const area = shown?.area ?? "";
   const badge = shown ? researchBadge(shown.need) : null;
+  const notice = shown ? kindNotice(shown) : null;
   const groups = splitCandidates(result?.candidates ?? []);
   const waiting = picked.filter((key) => !saved[key]);
   const savedAny = Object.values(saved).some((row) => row.ok);
 
+  // 기획 목록을 새로 받으면 서버가 저장된 선택으로 다시 계산한 기준을 씁니다.
+  useEffect(() => { setCurrent(plan); }, [plan]);
+
   useEffect(() => {
-    if (!open || areas.length) return;
+    if (!choosing || areas.length) return;
     let alive = true;
-    loadSourceAreas().then((list) => { if (alive) setAreas(list); }).catch(() => undefined);
+    loadSourceAreas().then((list) => { if (alive) setAreas(list); }).catch(() => { if (alive) setError("분야 목록을 불러오지 못했습니다."); });
     return () => { alive = false; };
-  }, [open, areas.length]);
+  }, [choosing, areas.length]);
+
+  function startChoosing() {
+    setDraft({ kind: shown?.kind ?? "", area: shown?.area ?? "" });
+    setError("");
+    setChoosing(true);
+  }
+
+  async function saveChoice(kind: ResearchKind | "", chosenArea: string) {
+    if (busy || !kind || !chosenArea) return;
+    setBusy("choice");
+    setError("");
+    try {
+      await api.saveResearchChoice(ideaId, { kind, area: chosenArea });
+      const [next] = (await api.researchPlans([{ id: ideaId, title, summary, kind, area: chosenArea }])).plans;
+      if (next) {
+        setCurrent(next);
+        setResult((value) => (value ? { ...value, plan: next } : value));
+      }
+      setChoosing(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "고른 값을 저장하지 못했습니다. 잠시 뒤 다시 눌러 주세요.");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function search(force: boolean, override?: string) {
-    if (busy) return;
+    if (busy || shown?.blocked) return;
     const text = (override ?? query).trim();
+    const kind = confirmedKind(shown);
     setOpen(true);
     setBusy("search");
     setError("");
     try {
-      const found = await api.runResearch({ title, summary, ...(area ? { area } : {}), ...(text ? { query: text } : {}), force });
+      // 사람이 고른 값만 보냅니다. 추측한 값은 서버가 같은 방법으로 다시 추측합니다.
+      const found = await api.runResearch({
+        id: safeOriginRef(ideaId), title, summary, ...(shown && !shown.area_guessed ? { area: shown.area } : {}), ...(kind ? { kind } : {}),
+        ...(text ? { query: text } : {}), force,
+      });
       setResult(found);
       setPicked([]);
       setSaved({});
-      if (!area) setArea(found.plan.area);
       setQuery(text || found.queries.english);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "후보를 찾지 못했습니다. 잠시 뒤 다시 눌러 주세요.");
@@ -74,16 +111,16 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
       try {
         const entry = { area, origin: "research" as const, origin_ref: safeOriginRef(ideaId), lane: candidate.lane, use_as_evidence: true as const };
         const [row] = (await api.addSourceLinks([candidate.url], entry, candidate.title)).results;
-        setSaved((current) => ({ ...current, [candidate.key]: savedCandidateNote(row) }));
+        setSaved((value) => ({ ...value, [candidate.key]: savedCandidateNote(row) }));
       } catch (cause) {
-        setSaved((current) => ({ ...current, [candidate.key]: { ok: false, text: cause instanceof Error ? cause.message : "넣지 못했습니다." } }));
+        setSaved((value) => ({ ...value, [candidate.key]: { ok: false, text: cause instanceof Error ? cause.message : "넣지 못했습니다." } }));
       }
     }
     setBusy(null);
   }
 
   function toggle(key: string, on: boolean) {
-    setPicked((current) => (on ? [...new Set([...current, key])] : current.filter((value) => value !== key)));
+    setPicked((value) => (on ? [...new Set([...value, key])] : value.filter((item) => item !== key)));
   }
 
   function list(heading: string, help: string, rows: ResearchCandidate[]) {
@@ -118,35 +155,69 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
     );
   }
 
+  const guessed = !!shown && (shown.kind_guessed || shown.area_guessed);
+  const help = researchKinds.find((choice) => choice.id === draft.kind)?.help;
   return (
     <div className={styles.research} data-need={shown?.need ?? "unknown"}>
       <div className={styles.researchHead}>
         {badge && <span className={`badge ${badge.tone}`}>{badge.label}</span>}
         {shown && <span className={styles.researchReason}>{shown.summary.replace(/^[^:]+:\s*/, "")}</span>}
-        {!open && (
+        {!open && !shown?.blocked && (
           <button className={shown && shown.need === "none" ? "button text small" : "button secondary small"} type="button" disabled={busy !== null}
             onClick={() => void search(shown?.need === "none")}>
             {shown?.need === "none" ? "그래도 찾아보기" : "외부 조사 후보 찾기"}
           </button>
         )}
       </div>
+      {shown && !choosing && (
+        <p className={styles.researchChoice}>
+          <span>{choiceLine(shown)}</span>
+          {guessed && (
+            <button className="button text small" type="button" disabled={busy !== null} onClick={() => void saveChoice(shown.kind, shown.area)}>
+              {busy === "choice" ? "저장 중…" : "이대로 확정"}
+            </button>
+          )}
+          <button className="button text small" type="button" disabled={busy !== null} onClick={startChoosing}>바꾸기</button>
+        </p>
+      )}
+      {choosing && (
+        <div className={styles.researchControls}>
+          <label htmlFor={`${id}-kind`}>글 유형</label>
+          <select id={`${id}-kind`} value={draft.kind} disabled={busy !== null} onChange={(event) => setDraft({ ...draft, kind: event.target.value as ResearchKind })}>
+            {!draft.kind && <option value="">글 유형을 고르세요</option>}
+            {researchKinds.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
+          </select>
+          <label htmlFor={`${id}-area`}>분야</label>
+          <select id={`${id}-area`} value={draft.area} disabled={busy !== null} onChange={(event) => setDraft({ ...draft, area: event.target.value })}>
+            {!draft.area && <option value="">분야를 고르세요</option>}
+            {(areas.length ? areas : shown ? [{ id: shown.area, label: shown.area_label, items: 0 }] : []).map((choice) => (
+              <option key={choice.id} value={choice.id}>{choice.label}</option>
+            ))}
+          </select>
+          <button className="button secondary small" type="button" disabled={busy !== null || !draft.kind || !draft.area}
+            onClick={() => void saveChoice(draft.kind, draft.area)}>{busy === "choice" ? "저장 중…" : "저장"}</button>
+          <button className="button text small" type="button" disabled={busy !== null} onClick={() => setChoosing(false)}>취소</button>
+          {help && <span className={styles.researchChoice}>{help}</span>}
+        </div>
+      )}
+      {notice && <p className={styles.saveError}>{notice}</p>}
       {shown?.warning && <p className={styles.saveError}>{shown.warning}</p>}
+      {error && !open && <p className={styles.saveError} role="alert">{error}</p>}
       {open && (
         <div className={styles.researchBody}>
           <div className={styles.researchControls}>
-            <label htmlFor={`${id}-area`}>분야</label>
-            <select id={`${id}-area`} value={area} disabled={busy !== null} onChange={(event) => setArea(event.target.value)}>
-              {!area && <option value="">분야를 고르세요</option>}
-              {(areas.length ? areas : shown ? [{ id: shown.area, label: shown.area_label, items: 0 }] : []).map((choice) => (
-                <option key={choice.id} value={choice.id}>{choice.label}</option>
-              ))}
-            </select>
             <label htmlFor={`${id}-query`}>검색어</label>
             <input id={`${id}-query`} value={query} maxLength={200} disabled={busy !== null} placeholder="비워 두면 영어 검색어를 자동으로 만들어요"
               onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(true); } }} />
-            <button className="button secondary small" type="button" disabled={busy !== null} onClick={() => void search(true)}>{busy === "search" ? "찾는 중…" : "다시 찾기"}</button>
+            <button className="button secondary small" type="button" disabled={busy !== null || !!shown?.blocked} onClick={() => void search(true)}>{busy === "search" ? "찾는 중…" : "다시 찾기"}</button>
             <button className="button text small" type="button" disabled={busy !== null} onClick={() => setOpen(false)}>접기</button>
           </div>
+          {shown && shown.blanks.length > 0 && (
+            <div className={styles.researchBlanks}>
+              <h4>{shown.kind_guessed ? "추측한 글 유형에서 채울 빈칸" : `${shown.kind_label} 글에서 채울 빈칸`}</h4>
+              <ul>{shown.blanks.map((blank) => <li key={blank}>{blank}</li>)}</ul>
+            </div>
+          )}
           <div aria-live="polite">
             {busy === "search" && <p className={styles.hint}>무료 공개 출처에서 찾고 있어요. 10초쯤 걸려요.</p>}
             {error && <p className={styles.saveError} role="alert">{error}</p>}

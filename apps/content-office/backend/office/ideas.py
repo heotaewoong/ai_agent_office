@@ -254,7 +254,9 @@ def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
                                 "claims": claims, "checked_at": now(), "paid_calls": 0}
         else:
             from .external_research import guess_area
-            area = guess_area(candidate["title"])
+            from .research_choices import load_choice
+            # 사람이 고른 분야가 있으면 그 값을, 없으면 제목으로 추측한 분야를 쓴다. 시험 분야일 때만 시험 자료로 좁힌다.
+            area = (load_choice(store.root, idea_id) or {}).get("area") or guess_area(candidate["title"])
             scope = {"area": area} if area == "A" else {}
             references = _checked_public_references(find_public_evidence(candidate["title"], limit=PUBLIC_EVIDENCE_LIMIT, **scope))
         references = _visible_evidence({**candidate, "public_evidence": references})["public_evidence"]

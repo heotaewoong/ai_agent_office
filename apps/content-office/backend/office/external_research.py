@@ -4,6 +4,7 @@
   한글 주제의 영어 검색어는 호출한 쪽이 translate로 넘겨 준 함수(research_query)가 만들고, 없으면 낱말표를 쓴다.
 - 찾은 것은 후보일 뿐이다. 운영자가 고른 것만 자료 창고에 들어가고 근거로 켜진다. 승인⓪①②③을 만들거나 대신하지 않는다.
 - 자료는 두 칸으로 나눈다. fact(사실 근거: 공식 문서·논문·기관 공고)와 example(사례·참고: 운영자가 등록한 크리에이터).
+- 글 유형(W1~W5)은 운영자가 고른다. 고르기 전에 제목으로 추측한 유형은 기본값으로만 보여 주고 조사 칸을 바꾸지 않는다.
 """
 from __future__ import annotations
 
@@ -85,8 +86,54 @@ def guess_area(text: str) -> str:
     return next((area for area, pattern in _AREA_HINTS if pattern.search(text)), "D")
 
 
-def research_plan(title: str, summary: str = "", *, area: str | None = None, experience_first: bool = False) -> dict:
-    """주제의 주장 종류와 분야를 보고 어느 칸을 조사해야 하는지 정한다. 네트워크를 쓰지 않는다."""
+# 글 유형. 사람이 기획 카드에서 고른다. 고르기 전에는 제목으로 추측한 값을 기본값으로만 보여 준다.
+KINDS = {"W1": "비교·벤치마킹", "W2": "공식 발표·공고 해설", "W3": "근거형 설명", "W4": "내 경험 후기", "W5": "범위 밖"}
+_KIND_HINTS = (
+    ("W1", re.compile(r"비교|차이|\bvs\b|대안|벤치마크|벤치마킹|순위|고르는 ?법|뭐가 ?(?:나을|좋을)|어떤 ?게 ?(?:나을|좋을)", re.I)),
+    ("W4", re.compile(r"후기|해 ?본|해 ?봤|써 ?본|써 ?보니|겪은|경험담|회고|수기|느낀 ?(?:것|점)|배운 ?것|그만두고"
+                      r"|(?<![가-힣])(?:내가|제가|나의|내)(?![가-힣])")),
+    ("W2", re.compile(r"발표|출시|공고|개정|시행|변경 ?사항|업데이트|새 ?기능|신기능|릴리스|\brelease\b|접수 ?일정|원서 ?접수|시험 ?일정", re.I)),
+)
+# 유형마다 글을 쓰기 전에 채울 빈칸. 조사 결과를 이 빈칸에 맞춰 보고, 보충 조사를 할 때도 이 빈칸만 묻는다.
+_KIND_BLANKS = {
+    "W1": ("비교할 대상과 버전", "비교 기준(가격, 기능, 난이도 등)", "대상마다 공식 문서나 원문", "가격과 버전을 확인한 날짜", "써 본 사람의 사례"),
+    "W2": ("발표나 공고 원문", "발표한 곳과 날짜", "무엇이 바뀌었는지", "누구에게 영향이 있는지", "언제부터 적용되는지"),
+    "W3": ("글의 핵심 주장", "주장을 받치는 연구나 공식 자료", "반대 근거나 한계", "독자가 따라 할 방법"),
+    "W4": ("내가 한 일", "기간과 조건", "결과(숫자는 내 기록이 있을 때만)", "막혔던 점과 바꾼 점"),
+    "W5": (),
+}
+
+
+def guess_kind(text: str) -> str:
+    return next((kind for kind, pattern in _KIND_HINTS if pattern.search(unicodedata.normalize("NFKC", text or ""))), "W3")
+
+
+def _apply_kind(plan: dict, kind: str) -> None:
+    """사람이 고른 글 유형에 맞게 조사 칸을 고친다. W3은 주장 기준 그대로이고, W4는 '내 경험 중심'과 같다."""
+    if kind == "W5":
+        reason = "범위 밖 주제로 골라서 조사하지 않아요."
+        plan.update(blocked=True, fact={"need": "none", "reason": reason, "providers": []}, example={"need": "none", "reason": reason})
+    elif kind == "W2":
+        plan["fact"] = {"need": "required", "reason": "발표나 공고를 풀어 쓰는 글이라 원문 확인이 꼭 필요해요.",
+                        "providers": list(dict.fromkeys(["official", *plan["fact"]["providers"]]))}
+        plan["example"] = {"need": "none", "reason": "원문이 먼저인 글이라 다른 사람 사례는 찾지 않아요."}
+    elif kind == "W1":
+        if plan["fact"]["need"] == "none":
+            plan["fact"] = {"need": "recommended", "reason": "비교 글은 대상마다 공식 자료를 한 번 확인하는 게 좋아요.",
+                            "providers": ["official", "github"] if plan["area"] == "B" else ["official"]}
+        if plan["example"]["need"] == "none":
+            plan["example"] = {"need": "recommended", "reason": "비교 글은 써 본 사람의 사례가 있으면 고르기 쉬워져요."}
+
+
+def research_plan(title: str, summary: str = "", *, area: str | None = None, kind: str | None = None,
+                  experience_first: bool = False) -> dict:
+    """주제의 주장 종류와 분야, 사람이 고른 글 유형을 보고 어느 칸을 조사해야 하는지 정한다. 네트워크를 쓰지 않는다."""
+    kind_guessed = kind not in KINDS
+    if kind_guessed and experience_first:
+        kind, kind_guessed = "W4", False  # '내 경험 중심' 스위치는 사람이 켠 것이라 고른 값으로 본다.
+    elif kind_guessed:
+        kind = guess_kind(f"{title or ''}\n{summary or ''}")
+    experience_first = bool(experience_first) or (kind == "W4" and not kind_guessed)
     text = unicodedata.normalize("NFKC", f"{title or ''}\n{summary or ''}")
     guessed = area not in AREAS
     area = guess_area(text) if guessed else area
@@ -95,6 +142,8 @@ def research_plan(title: str, summary: str = "", *, area: str | None = None, exp
     hard = [claim["label"] for claim in claims if claim["id"] != "howto"]
     plan = {"area": area, "area_label": AREAS[area], "area_guessed": guessed, "experience_first": bool(experience_first),
             "claims": claims, "warning": None}
+    plan.update(kind=kind, kind_label=KINDS[kind], kind_guessed=kind_guessed, blanks=list(_KIND_BLANKS[kind]), blocked=False,
+                needs_experience_source=kind == "W4" and not kind_guessed)
     if experience_first:
         if found & {"number", "research"}:
             plan["warning"] = "내 경험 중심 글이지만 수치나 연구 주장이 보여요. 그 부분은 근거를 붙이거나 내 경험으로 표현을 바꿔 주세요."
@@ -116,6 +165,8 @@ def research_plan(title: str, summary: str = "", *, area: str | None = None, exp
             plan["example"] = {"need": "recommended", "reason": "해 본 사람의 방법과 사례가 있으면 글이 살아나요."}
         else:
             plan["example"] = {"need": "none", "reason": "사례보다 정확한 근거가 중요한 주제예요."}
+    if not kind_guessed:
+        _apply_kind(plan, kind)
     order = ("none", "recommended", "required")
     plan["need"] = max(plan["fact"]["need"], plan["example"]["need"], key=order.index)
     label = {"required": "외부 조사 필수", "recommended": "외부 조사 권장", "none": "외부 조사 안 함"}[plan["need"]]
@@ -390,14 +441,17 @@ def library_fact_sources(root, title: str, *, area=None) -> int | None:
         return None
 
 
-def run_research(root, title: str, *, summary: str = "", area: str | None = None, experience_first: bool = False,
+def run_research(root, title: str, *, summary: str = "", area: str | None = None, kind: str | None = None, experience_first: bool = False,
                  query: str | None = None, force: bool = False, fetch=None, fact_sources=library_fact_sources, translate=None) -> dict:
     """외부 조사 필요 여부는 기획의 주장으로 결정한다. 창고 후보 수는 참고용이다."""
     title = _clean(title or "")[:300]
     if not title:
         raise WorkflowError("주제를 확인할 수 없습니다.")
-    plan = research_plan(title, summary, area=area, experience_first=experience_first)
+    plan = research_plan(title, summary, area=area, kind=kind, experience_first=experience_first)
     queries = build_queries(title, query)
+    if plan["blocked"]:  # 범위 밖으로 고른 주제는 '그래도 찾아보기'를 눌러도 창고와 바깥 모두 찾지 않는다.
+        return {"plan": plan, "queries": queries, "library": {"fact_sources": None, "sufficient": False}, "candidates": [],
+                "notes": ["범위 밖 주제로 골라서 밖으로 찾지 않았어요. 글 유형을 바꾸면 다시 찾을 수 있어요."], "searched": False}
     library_query = f"{title} {query.strip()}" if query and query.strip() else title
     hits = (library_fact_sources(root, library_query, area=plan["area"])
             if fact_sources is library_fact_sources else fact_sources(root, library_query))

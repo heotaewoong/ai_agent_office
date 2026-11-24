@@ -12,6 +12,7 @@ from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from .external_research import add_trusted, delete_trusted, list_trusted, research_plan, run_research
+from .research_choices import click_stats, log_click, save_choice
 from .research_query import english_queries
 from .source_library import (
     add_file, add_links, add_memo, delete_item, fill_text, item_detail, library_overview, retry_item, search_library,
@@ -20,6 +21,7 @@ from .source_library import (
 
 Origin = Literal["manual", "idea", "news", "artifact", "import", "research"]
 Lane = Literal["fact", "example"]
+Kind = Literal["W1", "W2", "W3", "W4", "W5"]
 
 
 class _Entry(BaseModel):
@@ -75,6 +77,7 @@ class ResearchTopic(BaseModel):
     title: str = Field(min_length=1, max_length=300)
     summary: str = Field(default="", max_length=2000)
     area: str | None = Field(default=None, max_length=8)
+    kind: Kind | None = None
     experience_first: bool = Field(default=False, strict=True)
 
 
@@ -86,6 +89,12 @@ class ResearchRun(ResearchTopic):
 class ResearchPlans(BaseModel):
     model_config = ConfigDict(extra="forbid")
     topics: list[ResearchTopic] = Field(min_length=1, max_length=80)
+
+
+class ResearchChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Kind
+    area: str = Field(max_length=8)
 
 
 class TrustedSource(BaseModel):
@@ -134,13 +143,28 @@ def register(app, store):
     @app.post("/api/source-library/research/plans")
     def library_research_plans(body: ResearchPlans):
         # 기준만 계산한다. 밖으로 나가는 요청은 없다.
-        return {"plans": [{"id": topic.id, **research_plan(topic.title, topic.summary, area=topic.area,
+        return {"plans": [{"id": topic.id, **research_plan(topic.title, topic.summary, area=topic.area, kind=topic.kind,
                                                           experience_first=topic.experience_first)} for topic in body.topics]}
 
     @app.post("/api/source-library/research")
     def library_research(body: ResearchRun):
-        return run_research(root, body.title, summary=body.summary, area=body.area, experience_first=body.experience_first,
-                            query=body.query, force=body.force, translate=lambda title: english_queries(store, title))
+        result = run_research(root, body.title, summary=body.summary, area=body.area, kind=body.kind,
+                              experience_first=body.experience_first,
+                              query=body.query, force=body.force, translate=lambda title: english_queries(store, title))
+        if body.id:
+            # 사람이 기획 카드에서 누른 조사만 센다. 추천과 실제로 누른 것이 얼마나 맞는지 보려는 기록이다.
+            log_click(root, body.id, result.get("plan") or {}, forced=body.force, searched=bool(result.get("searched")),
+                      candidates=len(result.get("candidates") or []))
+        return result
+
+    @app.put("/api/source-library/research/choices/{idea_id}")
+    def library_research_choice(idea_id: str, body: ResearchChoice):
+        # 사람이 고른 글 유형과 분야만 저장한다. 기획 카드와 승인은 바꾸지 않는다.
+        return {"choice": save_choice(root, idea_id, kind=body.kind, area=body.area)}
+
+    @app.get("/api/source-library/research/clicks")
+    def library_research_clicks():
+        return click_stats(root)
 
     @app.get("/api/source-library/trusted")
     def library_trusted():

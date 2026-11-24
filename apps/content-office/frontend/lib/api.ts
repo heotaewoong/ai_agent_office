@@ -6,7 +6,7 @@ import type { ClipEstimate } from "./types";
 import type { YoutubeOAuthChannel, YoutubeOAuthStatus } from "./youtube-oauth";
 import type { DailyCollectPatch, DailyCollectStatus } from "./daily-collect";
 import type {
-  ResearchRequest, ResearchResult, SourceEntry, SourceHit, SourceItem, SourceItemDetail, SourceLane, SourceLibrary, SourceLinkResult, SourcePatch,
+  ResearchChoice, ResearchKind, ResearchPlan, ResearchRequest, ResearchResult, ResearchTopic, SourceEntry, SourceHit, SourceItem, SourceItemDetail, SourceLane, SourceLibrary, SourceLinkResult, SourcePatch,
   TrustedSource,
 } from "./source-library";
 import type { PublicLeadFormInfo } from "./public-lead";
@@ -207,6 +207,12 @@ export const api = {
     request<SourceLibrary & { changed: number; skipped: number }>("/source-library/evidence", "POST", { ids, use_as_evidence: value }),
   // 외부 조사: 무료 공개 출처에서 후보만 찾는다. 고른 후보는 addSourceLinks로 창고에 넣는다.
   runResearch: (body: ResearchRequest) => request<ResearchResult>("/source-library/research", "POST", body),
+  // 조사 기준만 다시 계산한다. 밖으로 나가는 요청은 없다.
+  researchPlans: (topics: ResearchTopic[]) =>
+    request<{ plans: (ResearchPlan & { id: string | null })[] }>("/source-library/research/plans", "POST", { topics }),
+  // 사람이 고른 글 유형과 분야를 기획마다 저장한다. 기획 카드와 승인은 바꾸지 않는다.
+  saveResearchChoice: (ideaId: string, choice: { kind: ResearchKind; area: string }) =>
+    request<{ choice: ResearchChoice }>(`/source-library/research/choices/${encodeURIComponent(ideaId)}`, "PUT", choice),
   trustedSources: () => request<{ sources: TrustedSource[] }>("/source-library/trusted"),
   addTrustedSource: (body: { url: string; area: string; lane: SourceLane; name?: string }) =>
     request<{ source: TrustedSource; sources: TrustedSource[] }>("/source-library/trusted", "POST", body),

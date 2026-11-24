@@ -155,6 +155,15 @@ export async function fileToBase64(file: Blob): Promise<string> {
 
 export const sourceLanes: Record<SourceLane, string> = { fact: "사실 근거", example: "사례·참고" };
 export type ResearchNeed = "required" | "recommended" | "none";
+/** 글 유형. 사람이 고르고, 고르기 전에는 서버가 제목으로 추측한 값을 기본값으로만 보여 준다. 라벨은 서버 KINDS와 같다. */
+export type ResearchKind = "W1" | "W2" | "W3" | "W4" | "W5";
+export const researchKinds: { id: ResearchKind; label: string; help: string }[] = [
+  { id: "W1", label: "비교·벤치마킹", help: "여러 도구나 방법을 견줘 보는 글이에요." },
+  { id: "W2", label: "공식 발표·공고 해설", help: "발표, 공고, 업데이트 원문을 풀어 주는 글이에요. 원문을 먼저 확인해요." },
+  { id: "W3", label: "근거형 설명", help: "연구나 공식 자료로 방법을 설명하는 글이에요." },
+  { id: "W4", label: "내 경험 후기", help: "내가 해 본 일을 쓰는 글이에요. 밖에서 찾지 않고 내 원고나 메모로 써요." },
+  { id: "W5", label: "범위 밖", help: "다루지 않는 주제예요. 조사하지 않아요." },
+];
 /** 주제가 어떤 주장을 하는지 보고 서버가 정한 외부 조사 기준. */
 export type ResearchPlan = {
   area: string;
@@ -167,6 +176,15 @@ export type ResearchPlan = {
   example: { need: ResearchNeed; reason: string };
   need: ResearchNeed;
   summary: string;
+  kind: ResearchKind;
+  kind_label: string;
+  kind_guessed: boolean;
+  /** 이 글 유형에서 글을 쓰기 전에 채울 빈칸. */
+  blanks: string[];
+  /** 범위 밖으로 고른 주제. 그래도 찾아보기를 눌러도 찾지 않는다. */
+  blocked: boolean;
+  /** 내 경험 후기로 고른 주제. 내 원고나 메모가 있어야 초안을 쓴다. */
+  needs_experience_source: boolean;
 };
 export type ResearchCandidate = {
   key: string;
@@ -189,7 +207,12 @@ export type ResearchResult = {
   notes: string[];
   searched: boolean;
 };
-export type ResearchRequest = { title: string; summary?: string; area?: string; experience_first?: boolean; query?: string; force?: boolean };
+export type ResearchRequest = {
+  /** 기획 카드에서 누른 조사면 기획 ID. 추천과 실제로 누른 것을 세는 데만 쓴다. */
+  id?: string; title: string; summary?: string; area?: string; kind?: ResearchKind; experience_first?: boolean; query?: string; force?: boolean;
+};
+export type ResearchTopic = { id?: string; title: string; summary?: string; area?: string; kind?: ResearchKind; experience_first?: boolean };
+export type ResearchChoice = { idea_id: string; kind: ResearchKind; kind_label: string; area: string; area_label: string; updated_at: string };
 export type TrustedSource = {
   id: string;
   name: string;
@@ -206,6 +229,24 @@ export type TrustedSource = {
 export function researchBadge(need: ResearchNeed): { label: string; tone: "red" | "orange" | "neutral" } {
   if (need === "required") return { label: "외부 조사 필수", tone: "red" };
   return need === "recommended" ? { label: "외부 조사 권장", tone: "orange" } : { label: "외부 조사 안 함", tone: "neutral" };
+}
+
+/** 카드에 보여 줄 글 유형과 분야 한 줄. 사람이 아직 고르지 않은 값에는 '추측'을 붙인다. */
+export function choiceLine(plan: Pick<ResearchPlan, "kind_label" | "kind_guessed" | "area_label" | "area_guessed">): string {
+  const mark = (guessed: boolean) => (guessed ? " (추측)" : "");
+  return `글 유형 ${plan.kind_label}${mark(plan.kind_guessed)} · 분야 ${plan.area_label}${mark(plan.area_guessed)}`;
+}
+
+/** 고른 유형 때문에 조사 방식이 달라질 때 카드에 알릴 한 줄. 추측한 유형으로는 알리지 않는다. */
+export function kindNotice(plan: Pick<ResearchPlan, "blocked" | "needs_experience_source">): string | null {
+  if (plan.blocked) return "범위 밖 주제로 골라서 밖으로 찾지 않아요. 이 기획을 넘기거나 글 유형을 바꿔 주세요.";
+  if (plan.needs_experience_source) return "내 경험 후기는 내 원고나 메모가 있어야 초안을 써요. 경험 메모를 자료 창고에 넣거나 '내 글로 만들기'에서 시작해 주세요.";
+  return null;
+}
+
+/** 조사 요청에 실어 보낼 글 유형. 사람이 고른 값만 보내고, 추측한 값은 보내지 않는다. */
+export function confirmedKind(plan?: Pick<ResearchPlan, "kind" | "kind_guessed">): ResearchKind | undefined {
+  return plan && !plan.kind_guessed ? plan.kind : undefined;
 }
 
 export function splitCandidates(candidates: ResearchCandidate[]): Record<SourceLane, ResearchCandidate[]> {
