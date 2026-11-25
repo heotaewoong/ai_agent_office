@@ -1015,8 +1015,11 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                 </p>}
               </section>
             )}
-            <VerdictLabelPicker ideaId={idea.id} value={verdictLabels[idea.id]}
-              onChange={(label) => setVerdictLabels((previous) => ({ ...previous, [idea.id]: label }))} />
+            {/* 판정은 자동 조사를 하는 기획에만 생깁니다(조사 기준이 있고, 범위 밖이나 내 경험 글이 아닐 때). */}
+            {idea.research && !idea.research.blocked && !idea.research.experience_first && (
+              <VerdictLabelPicker ideaId={idea.id} value={verdictLabels[idea.id]}
+                onChange={(label) => setVerdictLabels((previous) => ({ ...previous, [idea.id]: label }))} />
+            )}
             <div className="idea-actionbar">
               <p>{idea.state === "selected" ? "이 기획으로 만든 작업이 있어요." : idea.blocked.length > 0 ? "막힌 이유를 먼저 해결하면 작업을 만들 수 있어요." : `근거 ${selectedIds.length + selectedBookIds.length}개를 골랐어요. 고르지 않아도 작업은 만들 수 있어요.`}</p>
               <button
