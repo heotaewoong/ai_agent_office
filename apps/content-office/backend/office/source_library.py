@@ -565,6 +565,32 @@ def _html_doc(markup: str, url: str) -> _Doc:
     return doc
 
 
+
+def page_text(markup: str, url: str) -> dict:
+    """자료 창고 밖에서도 같은 방식으로 웹 본문을 읽는 공용 함수(2026-11-25).
+
+    오늘의 뉴스 근거 수집(evidence), 기획 카드 공개 근거(public_discovery), 수집 때 읽기 확인(source_access)이 쓴다.
+    두 추출기(trafilatura, readability)를 함께 돌려 원문 HTML과 대조하고, 표와 코드는 한 문단으로 둔다(너무 길면 머리행을
+    되풀이해 나눈다). 문단은 빈 줄로 나눈다. 둘 다 관문에서 떨어지거나 본문을 못 읽으면 text를 비워 돌려주고,
+    부른 쪽은 자기 예전 파서로 읽는다. 그래서 새 추출기가 실패해도 예전보다 나빠지지 않는다.
+    """
+    try:
+        doc = _html_doc(markup, url or "")
+    except _Unreadable as error:
+        return {"text": "", "extractor": None, "note": str(error)[:300]}
+    except Exception as error:  # noqa: BLE001 - 추출기 오류는 예전 파서로 넘기는 사유일 뿐이다.
+        return {"text": "", "extractor": None, "note": f"구조 추출 오류: {type(error).__name__}"}
+    if doc.extractor == "html-parser":
+        return {"text": "", "extractor": None, "note": doc.note}
+    parts: list[str] = []
+    for block in doc.blocks:
+        if block.kind in ("table", "code"):
+            parts += [re.sub(r"\n\s*\n", "\n", piece) for piece in _split_block(block) if piece.strip()]
+        elif block.text.strip():
+            parts.append(re.sub(r"\n\s*\n", "\n", block.text.strip()))
+    return {"text": "\n\n".join(parts)[:60000], "extractor": doc.extractor, "note": doc.note}
+
+
 # ---------------------------------------------------------------- files
 def _pdf_doc(data: bytes) -> _Doc:
     """PDF를 쪽마다 읽어 쪽 번호를 남긴다. 여러 쪽에 되풀이되는 머리말·워터마크 줄과 쪽 번호만 있는 줄은 뺀다."""

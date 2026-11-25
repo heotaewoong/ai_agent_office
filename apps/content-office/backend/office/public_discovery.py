@@ -15,7 +15,7 @@ from urllib.robotparser import RobotFileParser
 
 import requests
 
-from .evidence import extract_article_text
+from .evidence import extract_article_text, extract_page_text
 from .feeds import DEFAULT_FEEDS, fetch_public, parse_date
 from .public_evidence import PublicEvidenceUnavailable, find_public_evidence, public_evidence_id
 
@@ -366,7 +366,8 @@ def _official_article(lookup, title, seed, entity):
     original_title = _plain(title_match[1]) if title_match else ''
     if not original_title or (entity and not _contains(entity, original_title)):
         return None
-    rows = _paragraphs(extract_article_text(markup))
+    # arXiv 초록 페이지는 'Abstract:' 문단 규칙이 예전 파서 기준이라 그대로 둔다. 나머지는 구조 추출(2026-11-25).
+    rows = _paragraphs(extract_article_text(markup) if seed.hostname == 'arxiv.org' else extract_page_text(markup, url)[0])
     if seed.hostname == 'arxiv.org':
         rows = [(number, re.sub(r'^Abstract:\s*', '', quote, flags=re.I)) for number, quote in rows
                 if quote.lower().startswith('abstract:')]

@@ -46,6 +46,17 @@ def extract_article_text(markup: str) -> str:
     return "\n\n".join(re.sub(r"\s+", " ", block).strip() for block in blocks if block.strip())[:60000]
 
 
+
+def extract_page_text(markup: str, url: str = "") -> tuple[str, str]:
+    """자료 창고와 같은 구조 추출(표, 소제목, 코드 보존)을 먼저 쓰고, 떨어지면 예전 파서로 읽는다. (본문, 추출기 이름)."""
+    from .source_library import page_text
+
+    found = page_text(markup, url)
+    if found["text"]:
+        return found["text"], found["extractor"]
+    return extract_article_text(markup), "html-parser"
+
+
 def reference_url(url):
     parsed = urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.port not in (None, 443):
@@ -87,6 +98,7 @@ def metadata_only_evidence(article):
 
 def collect_article_evidence(article, provider, output_dir: Path):
     source_documents = []
+    extractor = None  # 웹 본문을 읽었을 때만 추출기 이름이 들어간다(붙여 넣은 본문, 공고 첨부는 None).
     operator_text = article.get("operator_source_text")
     owned_text = (article.get("source_kind") == "owner_supplied" and
                   article.get("preserve_original") is True and
@@ -107,7 +119,7 @@ def collect_article_evidence(article, provider, output_dir: Path):
         if material:
             text, resolved, source_documents = material
         else:
-            text = extract_article_text(markup)
+            text, extractor = extract_page_text(markup, resolved)
         source_kind = "http_attachment_body" if source_documents else "http_article_body"
     if len(text) < (100 if owned_text else 200):
         raise DefiniteFailure("열어 본 원문이 너무 짧아요. 비용은 들지 않았어요. 다른 기사를 고르거나 원문을 직접 붙여 넣어 주세요")
@@ -144,6 +156,7 @@ def collect_article_evidence(article, provider, output_dir: Path):
         raise WorkflowError("확인 가능한 근거가 부족합니다")
     output = {"url": resolved, "source_kind": source_kind, "retrieved_at": now(), "source_sha256": hashlib.sha256(text.encode()).hexdigest(), "paragraphs": numbered, "evidence": evidence, "model_proposed_scopes": [claim['scope'] for claim in result.get('claims', [])], "limitations": result.get("limitations", []), "hook": result.get("hook", "")}
     output['source_documents'] = source_documents
+    output['extractor'] = extractor
     output['content_status'] = 'substantive_body'
     if selected_numbers:
         output["retrieval"] = {"method": "langchain_core_sqlite_fts5", "paragraph_numbers": selected_numbers}

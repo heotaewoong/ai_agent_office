@@ -38,8 +38,14 @@ def probe(articles, previous=None, *, fetch=None, extract=None, current=None):
     Network errors are not recorded, so the host stays selectable and is checked again next collection."""
     if fetch is None:
         from .feeds import fetch_public as fetch
-    if extract is None:
-        from .evidence import extract_article_text as extract
+    if extract is None:  # 원고 근거 수집과 같은 추출기로 판정해야 '읽힘'이 원고 단계에서 뒤집히지 않는다.
+        from .evidence import extract_page_text
+
+        def extract(markup, url=''):
+            return extract_page_text(markup, url)[0]
+        pass_url = True
+    else:
+        pass_url = False
     current = current or datetime.now(timezone.utc)
     previous = previous or {}
     samples = {}
@@ -57,7 +63,8 @@ def probe(articles, previous=None, *, fetch=None, extract=None, current=None):
             continue
         try:
             raw, _, _ = fetch(article["url"], maximum=2_000_000)
-            text = extract(raw.decode("utf-8", errors="replace"))
+            markup = raw.decode("utf-8", errors="replace")
+            text = extract(markup, article["url"]) if pass_url else extract(markup)
             readable = len(text) >= MINIMUM_TEXT
             reason = "" if readable else "원문 본문이 거의 없어 원고 근거로 쓸 수 없어요"
         except requests.HTTPError as error:
