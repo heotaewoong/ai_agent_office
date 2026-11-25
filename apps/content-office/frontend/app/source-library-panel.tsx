@@ -22,6 +22,9 @@ function message(cause: unknown, fallback: string) {
 }
 
 /** 자료 창고. 넣은 자료는 문단으로 저장되고, '초안 근거로 사용'을 켠 자료만 근거 후보가 됩니다. */
+type SourceTab = "list" | "add" | "search" | "trusted";
+const PAGE_SIZE = 15;
+
 export function SourceLibraryPanel({ active }: { active: boolean }) {
   const [library, setLibrary] = useState<SourceLibrary | null>(null);
   const [loadError, setLoadError] = useState("");
@@ -50,6 +53,8 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
   const [paste, setPaste] = useState<{ id: string; text: string; title: string } | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkNote, setBulkNote] = useState("");
+  const [tab, setTab] = useState<SourceTab>("list");
+  const [shown, setShown] = useState(PAGE_SIZE);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -73,6 +78,24 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
   }, [active, preparing, load]);
 
   const visible = useMemo(() => filterSources(library?.items ?? [], listArea, filter, titleQuery), [library, listArea, filter, titleQuery]);
+  useEffect(() => { setShown(PAGE_SIZE); }, [listArea, filter, titleQuery]);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("office-sources-tab");
+      if (saved === "list" || saved === "add" || saved === "search" || saved === "trusted") setTab(saved);
+    } catch { /* storage blocked: start on the saved list */ }
+  }, []);
+  function openTab(next: SourceTab) {
+    setTab(next);
+    try { localStorage.setItem("office-sources-tab", next); } catch { /* storage blocked */ }
+  }
+  const itemCount = library?.items.length ?? 0;
+  const tabs: { id: SourceTab; label: string; count?: number }[] = [
+    { id: "list", label: "보관 중인 자료", count: itemCount },
+    { id: "add", label: "자료 넣기" },
+    { id: "search", label: "창고에서 찾기" },
+    { id: "trusted", label: "믿는 출처" },
+  ];
   const visibleReady = visible.filter((item) => item.status === "done");
   const limits = library?.limits ?? { links: 10, file_mb: 8, memo_chars: 60_000 };
   const pasted = splitLinks(links);
@@ -200,7 +223,26 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
       </section>
       {loadError && <p className="notice error" role="alert"><span>{loadError}</span></p>}
 
-      <section className={styles.card} aria-labelledby="source-add-title">
+      <div className="source-tabs" role="tablist" aria-label="자료 창고 화면">
+        {tabs.map((item) => (
+          <button key={item.id} id={`source-tab-${item.id}`} type="button" role="tab" aria-selected={tab === item.id}
+            aria-controls={`source-panel-${item.id}`} tabIndex={tab === item.id ? 0 : -1}
+            onClick={() => openTab(item.id)}
+            onKeyDown={(event) => {
+              const order = tabs.map((entry) => entry.id);
+              const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+              if (!step) return;
+              event.preventDefault();
+              const next = order[(order.indexOf(tab) + step + order.length) % order.length];
+              openTab(next);
+              document.getElementById(`source-tab-${next}`)?.focus();
+            }}>
+            {item.label}{item.count !== undefined && <span>{item.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      <section className={styles.card} id="source-panel-add" role="tabpanel" aria-labelledby="source-add-title" hidden={tab !== "add"}>
         <h2 id="source-add-title">자료 넣기</h2>
         <div className={styles.methods} role="group" aria-label="넣는 방법">
           {methods.map((choice) => (
@@ -275,7 +317,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
         </div>
       </section>
 
-      <section className={styles.card} aria-labelledby="source-search-title">
+      <section className={styles.card} id="source-panel-search" role="tabpanel" aria-labelledby="source-search-title" hidden={tab !== "search"}>
         <h2 id="source-search-title">창고에서 찾기</h2>
         <form className={styles.search} onSubmit={(event) => { event.preventDefault(); void search(); }}>
           <input className={styles.input} value={query} maxLength={300} placeholder="예: Hermes OpenClaw 차이" aria-label="찾을 내용" onChange={(event) => setQuery(event.target.value)} />
@@ -285,7 +327,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
           </label>
           <button className="button secondary" type="submit" disabled={!query.trim() || searching}>{searching ? "찾는 중…" : "찾기"}</button>
         </form>
-        <p className={styles.hint}>아래 목록에서 고른 분야 안에서 낱말이 맞는 문단을 찾습니다. 기획의 근거 찾기는 같은 문단을 뜻으로 찾습니다.</p>
+        <p className={styles.hint}>‘보관 중인 자료’에서 고른 분야 안에서 낱말이 맞는 문단을 찾습니다. 기획의 근거 찾기는 같은 문단을 뜻으로 찾습니다.</p>
         <div aria-live="polite">
           {searchError && <p className={styles.error} role="alert">{searchError}</p>}
           {hits && hits.length === 0 && <p className={styles.hint}>맞는 문단이 없습니다. 낱말을 바꾸거나 분야를 전체로 바꿔 보세요.</p>}
@@ -307,9 +349,11 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
         </div>
       </section>
 
-      <TrustedSources active={active} areas={library?.areas ?? []} />
+      <div id="source-panel-trusted" role="tabpanel" aria-labelledby="source-tab-trusted" hidden={tab !== "trusted"}>
+        <TrustedSources active={active && tab === "trusted"} areas={library?.areas ?? []} />
+      </div>
 
-      <section className={styles.card} aria-labelledby="source-list-title">
+      <section className={styles.card} id="source-panel-list" role="tabpanel" aria-labelledby="source-list-title" hidden={tab !== "list"}>
         <h2 id="source-list-title">보관 중인 자료</h2>
         <div className={styles.filters}>
           <div className={styles.chips} role="group" aria-label="분야">
@@ -326,7 +370,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
           <input className={styles.input} value={titleQuery} placeholder="제목이나 주소로 거르기" aria-label="제목이나 주소로 거르기" onChange={(event) => setTitleQuery(event.target.value)} />
           {visible.length > 0 && (
             <div className={styles.bulk}>
-              <span>지금 보이는 자료 {visible.length}건</span>
+              <span>조건에 맞는 자료 {visible.length}건</span>
               <button className="button secondary small" type="button" disabled={bulkBusy || !visibleReady.some((item) => !item.use_as_evidence)} onClick={() => void bulk(true)}>모두 근거로 켜기</button>
               <button className="button text small" type="button" disabled={bulkBusy || !visible.some((item) => item.use_as_evidence)} onClick={() => void bulk(false)}>모두 끄기</button>
               <span aria-live="polite">{bulkNote}</span>
@@ -337,13 +381,14 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
         {library && library.items.length === 0 && (
           <div className="empty-state">
             <h3>아직 넣은 자료가 없어요</h3>
-            <p>위에서 링크나 메모를 넣거나, 오늘의 뉴스와 기획 카드의 ‘자료 창고에 넣기’를 눌러 보세요.</p>
+            <p>‘자료 넣기’에서 링크나 메모를 넣거나, 오늘의 뉴스와 기획 카드의 ‘자료 창고에 넣기’를 눌러 보세요.</p>
+            <button className="button primary small" type="button" onClick={() => openTab("add")}>자료 넣기</button>
           </div>
         )}
         {library && library.items.length > 0 && visible.length === 0 && <p className={styles.hint}>고른 조건에 맞는 자료가 없습니다.</p>}
 
         <ul className={styles.list}>
-          {visible.map((item) => {
+          {visible.slice(0, shown).map((item) => {
             const state = sourceStatus[item.status];
             const busy = pending === item.id;
             const pasting = paste?.id === item.id ? paste : null;
@@ -419,6 +464,14 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
             );
           })}
         </ul>
+        {visible.length > shown && (
+          <div className="source-more">
+            <span>{visible.length}건 중 {shown}건을 보고 있어요</span>
+            <button className="button secondary" type="button" onClick={() => setShown((count) => count + PAGE_SIZE)}>
+              {Math.min(PAGE_SIZE, visible.length - shown)}건 더 보기
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

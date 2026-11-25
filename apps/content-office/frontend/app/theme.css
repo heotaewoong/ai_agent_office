@@ -3,8 +3,9 @@
  * Loaded after globals.css. The first block defines every color the office uses,
  * so light and dark mode switch by changing tokens only. Everything below the
  * tokens restyles shared components (shell, headings, buttons, fields, panels).
- * Brand: oatmeal paper, bright blue for the next action, tangerine for things
- * that need the operator, Poor Story for page titles, Pretendard for reading.
+ * Brand: white paper, tangerine for the next action and the current place,
+ * blue only for links and neutral information, Poor Story for page titles,
+ * Pretendard for reading.
  */
 :root {
   color-scheme: light;
@@ -12,37 +13,41 @@
   --font-display: "Poor Story", "Pretendard Variable", Pretendard, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
-  --paper: #f6f0e6;
-  --surface: #fffdf9;
-  --surface-2: #f0e8db;
-  --surface-3: #e9dfcf;
-  --line: #e4d9c7;
-  --line-strong: #cbbda6;
-  --ink: #1e2430;
-  --muted: #555d6b;
-  --subtle: #606773;
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f6f6f7;
+  --surface-3: #eeeff1;
+  --line: #e6e7ea;
+  --line-strong: #cfd2d8;
+  --ink: #17191e;
+  --muted: #4b5160;
+  --subtle: #5d6370;
 
-  --primary: #2b63f2;
-  --primary-hover: #2253d6;
+  /* Tangerine is the one action color. The button fill is the deep shade so white text stays readable. */
+  --primary: #b94f0c;
+  --primary-hover: #9f430a;
   --on-primary: #ffffff;
-  --primary-ink: #1c49c2;
-  --primary-soft: #e9f0ff;
-  --primary-line: #bcd0ff;
+  --primary-ink: #9a4210;
+  --primary-soft: #fff1e6;
+  --primary-line: #ffcfaa;
   --accent: #ff8a3d;
-  --accent-ink: #a94c12;
-  --accent-strong: #b84f0c;
-  --accent-soft: #fff0e3;
-  --accent-line: #ffd2b0;
+  --accent-ink: #9a4210;
+  --accent-strong: #b94f0c;
+  --accent-soft: #fff1e6;
+  --accent-line: #ffcfaa;
+  /* Blue is kept only for links and neutral information. */
+  --info: #1c4fc4;
+  --info-soft: #eaf1ff;
   --success: #12704b;
-  --success-soft: #e5f5ed;
+  --success-soft: #e7f6ee;
   --danger: #b42f2f;
   --danger-soft: #fdeceb;
   --danger-line: #f3c4c1;
 
-  --strong-bg: #1e2430;
+  --strong-bg: #17191e;
   --on-strong: #ffffff;
-  --shadow-color: #3a2c17;
-  --focus: #2b63f2;
+  --shadow-color: #0f1115;
+  --focus: #ff8a3d;
 
   /* Names the older stylesheet still uses. */
   --white: var(--surface);
@@ -53,79 +58,83 @@
   --green: var(--primary);
   --green-light: var(--primary-soft);
   --red: var(--danger);
-  --shadow: 0 1px 2px color-mix(in srgb, var(--shadow-color) 7%, transparent), 0 6px 18px color-mix(in srgb, var(--shadow-color) 5%, transparent);
-  --shadow-lift: 0 2px 4px color-mix(in srgb, var(--shadow-color) 8%, transparent), 0 16px 40px color-mix(in srgb, var(--shadow-color) 10%, transparent);
+  --shadow: 0 1px 2px color-mix(in srgb, var(--shadow-color) 6%, transparent), 0 4px 14px color-mix(in srgb, var(--shadow-color) 4%, transparent);
+  --shadow-lift: 0 2px 6px color-mix(in srgb, var(--shadow-color) 8%, transparent), 0 18px 44px color-mix(in srgb, var(--shadow-color) 12%, transparent);
 
   --radius-s: 8px;
   --radius: 12px;
-  --radius-l: 18px;
+  --radius-l: 16px;
   --topbar-h: 58px;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: #13161c;
-  --surface: #1a1e26;
-  --surface-2: #20252f;
-  --surface-3: #282e3a;
-  --line: #2d3340;
-  --line-strong: #434b5b;
-  --ink: #eceef3;
-  --muted: #aab1be;
-  --subtle: #949bab;
-  --primary: #3567e8;
-  --primary-hover: #4a79ee;
+  --paper: #121418;
+  --surface: #181b21;
+  --surface-2: #1e2128;
+  --surface-3: #262a33;
+  --line: #2c3039;
+  --line-strong: #424754;
+  --ink: #ecedf0;
+  --muted: #aeb3be;
+  --subtle: #959ba8;
+  --primary: #b94f0c;
+  --primary-hover: #d0600f;
   --on-primary: #ffffff;
-  --primary-ink: #a9c4ff;
-  --primary-soft: #1c2742;
-  --primary-line: #34508c;
+  --primary-ink: #ffb27a;
+  --primary-soft: #3a2312;
+  --primary-line: #6e3a17;
   --accent: #ff9b58;
-  --accent-ink: #ffbb8c;
-  --accent-strong: #c2550f;
-  --accent-soft: #3a2616;
-  --accent-line: #6a4222;
+  --accent-ink: #ffb27a;
+  --accent-strong: #b94f0c;
+  --accent-soft: #3a2312;
+  --accent-line: #6e3a17;
+  --info: #a9c4ff;
+  --info-soft: #1c2742;
   --success: #4fd19a;
   --success-soft: #16302a;
   --danger: #ff7d7a;
   --danger-soft: #3a1d1f;
   --danger-line: #6b2f31;
-  --strong-bg: #2f3746;
+  --strong-bg: #2c3039;
   --on-strong: #ffffff;
   --shadow-color: #000000;
-  --focus: #8cb0ff;
+  --focus: #ff9b58;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --paper: #13161c;
-    --surface: #1a1e26;
-    --surface-2: #20252f;
-    --surface-3: #282e3a;
-    --line: #2d3340;
-    --line-strong: #434b5b;
-    --ink: #eceef3;
-    --muted: #aab1be;
-    --subtle: #949bab;
-    --primary: #3567e8;
-    --primary-hover: #4a79ee;
+    --paper: #121418;
+    --surface: #181b21;
+    --surface-2: #1e2128;
+    --surface-3: #262a33;
+    --line: #2c3039;
+    --line-strong: #424754;
+    --ink: #ecedf0;
+    --muted: #aeb3be;
+    --subtle: #959ba8;
+    --primary: #b94f0c;
+    --primary-hover: #d0600f;
     --on-primary: #ffffff;
-    --primary-ink: #a9c4ff;
-    --primary-soft: #1c2742;
-    --primary-line: #34508c;
+    --primary-ink: #ffb27a;
+    --primary-soft: #3a2312;
+    --primary-line: #6e3a17;
     --accent: #ff9b58;
-    --accent-ink: #ffbb8c;
-    --accent-strong: #c2550f;
-    --accent-soft: #3a2616;
-    --accent-line: #6a4222;
+    --accent-ink: #ffb27a;
+    --accent-strong: #b94f0c;
+    --accent-soft: #3a2312;
+    --accent-line: #6e3a17;
+    --info: #a9c4ff;
+    --info-soft: #1c2742;
     --success: #4fd19a;
     --success-soft: #16302a;
     --danger: #ff7d7a;
     --danger-soft: #3a1d1f;
     --danger-line: #6b2f31;
-    --strong-bg: #2f3746;
+    --strong-bg: #2c3039;
     --on-strong: #ffffff;
     --shadow-color: #000000;
-    --focus: #8cb0ff;
+    --focus: #ff9b58;
   }
 }
 
@@ -176,7 +185,7 @@ kbd {
   background: var(--primary); color: var(--on-primary); font-size: 28px; letter-spacing: 0; font-weight: 400;
   box-shadow: inset 0 -3px 0 color-mix(in srgb, #000 14%, transparent);
 }
-.brand-mark span { color: var(--accent); font-size: 20px; margin-left: 0; position: absolute; right: -3px; top: -9px; }
+.brand-mark span { color: var(--ink); font-size: 20px; margin-left: 0; position: absolute; right: -3px; top: -9px; }
 .brand-mark { position: relative; }
 .brand small { font-size: 12px; letter-spacing: 0; color: var(--muted); margin-top: 3px; font-weight: 500; }
 .workspace-label { display: none; }
@@ -468,6 +477,7 @@ blockquote {
   display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px;
   font-family: var(--font-display); font-size: 22px; line-height: 1; background: var(--primary-soft); color: var(--primary-ink);
 }
+.idea-score.tone-blue { background: var(--primary-soft); color: var(--primary-ink); }
 .idea-score.tone-red { background: var(--danger-soft); color: var(--danger); }
 .idea-score.tone-green { background: var(--success-soft); color: var(--success); }
 .idea-row-body { display: grid; gap: 4px; min-width: 0; }
@@ -476,7 +486,7 @@ blockquote {
 .idea-row-meta > span:not(.badge) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .idea-row-meta .badge { flex-shrink: 0; }
 .idea-row-meta .badge { padding: 0 8px; font-size: 12px; }
-.badge.blue { background: var(--primary-soft); color: var(--primary-ink); }
+.badge.blue { background: var(--info-soft); color: var(--info); }
 .idea-empty { color: var(--muted); padding: 16px; border: 1px dashed var(--line-strong); border-radius: var(--radius); background: var(--surface-2); }
 
 .idea-detail {
@@ -562,4 +572,52 @@ blockquote {
   .decision-queue { padding: 16px; }
   .decision-list a { grid-template-columns: 1fr; gap: 6px; }
   .decision-steps strong { font-size: 32px; }
+}
+
+/* ---------- Source library: one view at a time ---------- */
+.source-tabs {
+  display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface-2); overflow-x: auto; scrollbar-width: none;
+}
+.source-tabs::-webkit-scrollbar { display: none; }
+.source-tabs [role="tab"] {
+  display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; min-height: 42px; padding: 6px 16px;
+  border-radius: 10px; font-size: 14.5px; font-weight: 600; color: var(--muted); white-space: nowrap;
+}
+.source-tabs [role="tab"] span {
+  min-width: 24px; padding: 1px 8px; border-radius: 999px; background: var(--surface-3); color: var(--muted); font-size: 12.5px; text-align: center;
+}
+.source-tabs [role="tab"]:hover { color: var(--ink); }
+.source-tabs [role="tab"][aria-selected="true"] {
+  background: var(--surface); color: var(--ink); font-weight: 700;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--shadow-color) 10%, transparent), inset 0 -2px 0 var(--primary);
+}
+.source-tabs [role="tab"][aria-selected="true"] span { background: var(--primary-soft); color: var(--primary-ink); }
+.source-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+
+/* Plain text links read as links. */
+main p a:not([class]):not([href^="/"]) { color: var(--info); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- Phone menu ---------- */
+@media (max-width: 740px) {
+  .sidebar { padding: 12px 14px 0; background: var(--surface); }
+  .brand small { letter-spacing: 0; font-size: 12px; }
+  .sidebar nav {
+    gap: 2px; margin-top: 10px; scrollbar-width: none; scroll-padding-inline: 24px;
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  }
+  .sidebar nav::-webkit-scrollbar { display: none; }
+  .nav-item { color: var(--muted); }
+  .nav-item.active { background: transparent; color: var(--ink); box-shadow: inset 0 -3px 0 var(--primary); }
+  .nav-item.active > svg { color: var(--primary); }
+}
+
+/* Folded sections read as quiet gray rows, not tangerine slabs, so the one
+   primary button on the screen keeps the attention. */
+.studio-disclosure, .studio-disclosure[open] > summary { background: var(--surface); }
+.studio-disclosure > summary { background: var(--surface-2); }
+.studio-disclosure > summary:hover { background: var(--surface-3); }
+@media (max-width: 740px) {
+  .source-tabs { -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent); mask-image: linear-gradient(90deg, #000 85%, transparent); }
 }

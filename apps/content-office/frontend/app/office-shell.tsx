@@ -161,6 +161,12 @@ export default function Office({ children }: { children: React.ReactNode }) {
   const [plansVisited, setPlansVisited] = useState(view === "plans");
   const [benchmarkVisited, setBenchmarkVisited] = useState(benchmarkActive);
   useEffect(() => {
+    // On phones the menu is one sideways row; keep the current screen's tab in view.
+    if (!window.matchMedia("(max-width: 740px)").matches) return;
+    document.querySelector<HTMLElement>(".sidebar nav .nav-item.active")?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [view]);
+
+  useEffect(() => {
     if (view === "news") setNewsVisited(true);
     if (view === "plans") setPlansVisited(true);
     if (benchmarkActive) setBenchmarkVisited(true);
