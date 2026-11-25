@@ -186,7 +186,20 @@ def safe_fragment(body: str) -> str:
 
 
 def reference_lines(packet: dict) -> list[str]:
-    return [f"[{e.get('id', index)}] {e.get('claim', '')}\n{e['url']}" for index, e in enumerate(packet.get("evidence", []), 1) if isinstance(e, dict) and re.match(r"^https?://", str(e.get("url", "")))]
+    """공개 글 끝의 출처 목록. 웹 자료는 주소, 책과 강의 자료는 서지(저자, 제목, 쪽)만 적는다. 개인 DB의 원본 위치는 적지 않는다."""
+    from .private_books import is_traceable_book
+
+    lines = []
+    for index, e in enumerate(packet.get("evidence", []), 1):
+        if not isinstance(e, dict):
+            continue
+        if re.match(r"^https?://", str(e.get("url", ""))):
+            locator = str(e.get("source_locator") or "")
+            page = f" (PDF {locator[2:]}쪽)" if re.fullmatch(r"p\.\d{1,6}", locator) else ""
+            lines.append(f"[{e.get('id', index)}] {e.get('claim', '')}{page}\n{e['url']}")
+        elif is_traceable_book(e) and isinstance(e.get("citation"), str) and e["citation"].strip():
+            lines.append(f"[{e.get('id', index)}] {e['citation']}")
+    return lines
 
 
 def offer_line(offer) -> str:

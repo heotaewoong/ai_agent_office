@@ -139,6 +139,14 @@ def _query_vector(query: str, python: Path, cache: Path, lock_path: Path, *, lib
         raise PublicEvidenceUnavailable('공개 근거 검색의 벡터를 확인할 수 없습니다.') from exc
 
 
+def _place_text(value, limit: int) -> str | None:
+    """자료 창고 문단의 쪽(p.12)이나 소제목 경로. 한 줄짜리 짧은 글자만 내보낸다."""
+    if not isinstance(value, str):
+        return None
+    value = ' '.join(value.split())
+    return value[:limit] if value and not re.search(r'[\x00-\x1f]', value) else None
+
+
 def _hex_hash(value: str) -> bool:
     return isinstance(value, str) and re.fullmatch(r'[0-9a-f]{64}', value) is not None
 
@@ -181,15 +189,18 @@ def _rank_index(db: sqlite3.Connection, vector: list[float], exclude_urls) -> li
 def _select(ranked: list[tuple], exclude_urls, limit: int, *, query: str = "") -> list[dict]:
     excluded = set(exclude_urls)
     matches = []
-    for _, _, url, title, paragraph, quote, source_hash in sorted(ranked):
+    for _, _, url, title, paragraph, quote, source_hash, *place in sorted(ranked, key=lambda row: row[:2]):
         if url in excluded or not _safe_reference(url) or not is_topic_candidate(query, title, quote):
             continue
         quote_hash = hashlib.sha256(quote.encode('utf-8')).hexdigest()
-        matches.append({
+        match = {
             'id': public_evidence_id(url, source_hash, paragraph, quote_hash),
             'url': url, 'title': title, 'paragraph': paragraph, 'quote': quote,
             'source_sha256': source_hash, 'quote_sha256': quote_hash,
-        })
+        }
+        # 쪽(PDF)과 소제목 경로는 화면과 원고에 보여 줄 위치 정보다. 근거 ID는 예전처럼 문단 내용으로만 만든다.
+        match.update({key: value for key, value in (place[0] if place else {}).items() if value})
+        matches.append(match)
         excluded.add(url)
         if len(matches) == limit:
             break
@@ -224,7 +235,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
     try:
         with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
             rows = db.execute(
-                "SELECT v.item_id, v.seq, v.part, v.start_char, v.end_char, v.vector, i.url, i.title, i.content_hash, p.text "
+                "SELECT v.item_id, v.seq, v.part, v.start_char, v.end_char, v.vector, i.url, i.title, i.content_hash, p.text, p.locator, p.heading "
                 "FROM passage_vectors v JOIN passages p ON p.item_id=v.item_id AND p.seq=v.seq JOIN items i ON i.id=v.item_id "
                 "WHERE v.model=? AND i.status='done' AND i.use_as_evidence=1 AND i.kind='link' "
                 "AND (? IS NULL OR i.area=?) ORDER BY v.item_id, v.seq, v.part LIMIT ?",
@@ -232,7 +243,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
     except sqlite3.Error:
         return []
     ranked = []
-    for item_id, seq, part, start, end, blob, url, title, source_hash, text in rows:
+    for item_id, seq, part, start, end, blob, url, title, source_hash, text, locator, heading in rows:
         if (not isinstance(blob, bytes) or len(blob) != _VECTOR.size or not isinstance(url, str) or url in excluded
                 or type(seq) is not int or seq < 1 or not _hex_hash(source_hash) or not isinstance(title, str)
                 or not title.strip() or not isinstance(text, str) or type(start) is not int or type(end) is not int):
@@ -242,7 +253,8 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
             continue
         score = sum(a * b for a, b in zip(vector, _VECTOR.unpack(blob), strict=True))
         if math.isfinite(score) and score >= _LIBRARY_MIN_SIMILARITY:
-            ranked.append((-score, (1, item_id, seq, part), url, title.strip()[:500], seq, quote, source_hash))
+            ranked.append((-score, (1, item_id, seq, part), url, title.strip()[:500], seq, quote, source_hash,
+                           {'locator': _place_text(locator, 40), 'heading': _place_text(heading, 200)}))
     return ranked
 
 

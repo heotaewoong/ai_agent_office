@@ -1,0 +1,35 @@
+[Unit]
+Description=HeoBrain private book search bridge (read-only, local socket for the content office)
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# 개인 DB 주인(ihtwa)으로 돌고, 소켓은 ubuntu 그룹만 열 수 있다. 코드는 ihtwa 폴더의 사본만 쓴다.
+User=ihtwa
+Group=ubuntu
+Environment=HOME=/home/ihtwa
+Environment=XDG_RUNTIME_DIR=/run/user/1001
+Environment=HEOBRAIN_BOOK_ALLOWED_USERS=ubuntu
+ExecStart=/usr/bin/python3 -I -B /home/ihtwa/.local/share/heobrain-ai-agent-index/bridge/private_books_bridge.py
+RuntimeDirectory=heobrain-book-search
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=no
+UMask=0077
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+MemoryMax=256M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/ihtwa/.local/state/heobrain-index-embed /run/heobrain-book-search /run/user/1001
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+LockPersonality=true
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

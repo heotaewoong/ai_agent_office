@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
 import {
-  candidateMeta, choiceLine, confirmedKind, kindNotice, libraryLine, researchBadge, researchKinds, safeOriginRef, savedCandidateNote,
-  splitCandidates, type ResearchCandidate, type ResearchKind, type ResearchPlan, type ResearchResult, type SourceArea,
+  candidateMeta, choiceLine, confirmedKind, kindNotice, libraryLine, mergeTavily, researchBadge, researchKinds, safeOriginRef, savedCandidateNote,
+  splitCandidates, tavilyLabel, type ResearchCandidate, type ResearchKind, type ResearchPlan, type ResearchResult, type SourceArea,
+  type TavilyUsage,
 } from "../lib/source-library";
 import { loadSourceAreas } from "./save-to-source-library";
 import styles from "./source-library.module.css";
@@ -31,7 +32,8 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
   const [result, setResult] = useState<ResearchResult | null>(null);
   const [areas, setAreas] = useState<SourceArea[]>([]);
   const [query, setQuery] = useState("");
-  const [busy, setBusy] = useState<"search" | "save" | "choice" | null>(null);
+  const [busy, setBusy] = useState<"search" | "tavily" | "save" | "choice" | null>(null);
+  const [tavily, setTavily] = useState<TavilyUsage | null>(null);
   const [error, setError] = useState("");
   const [picked, setPicked] = useState<string[]>([]);
   const [saved, setSaved] = useState<Record<string, { ok: boolean; text: string }>>({});
@@ -46,6 +48,14 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
 
   // 기획 목록을 새로 받으면 서버가 저장된 선택으로 다시 계산한 기준을 씁니다.
   useEffect(() => { setCurrent(plan); }, [plan]);
+
+  // 조사 결과를 연 뒤에만 Tavily 사용량(키가 있는지와 이번 달 횟수)을 묻습니다. 키 자체는 오지 않습니다.
+  useEffect(() => {
+    if (!open || tavily) return;
+    let alive = true;
+    api.tavilyUsage().then((usage) => { if (alive) setTavily(usage); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [open, tavily]);
 
   useEffect(() => {
     if (!choosing || areas.length) return;
@@ -103,6 +113,23 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
     }
   }
 
+  async function searchTavily() {
+    if (busy || shown?.blocked || !result || !tavily?.has_key || tavily.remaining <= 0) return;
+    const text = query.trim();
+    setBusy("tavily");
+    setError("");
+    try {
+      // 사람이 누를 때만 1회 부릅니다. 검색어는 기획 제목이나 적어 둔 검색어뿐이고 개인 DB 문장은 보내지 않습니다.
+      const found = await api.runTavily({ id: safeOriginRef(ideaId), title, ...(text && text !== result.queries.english ? { query: text } : {}) });
+      setTavily(found.tavily);
+      setResult((value) => (value ? mergeTavily(value, found) : value));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Tavily로 찾지 못했습니다. 자동으로 다시 부르지 않아요.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function save() {
     if (busy || !area || !result) return;
     setBusy("save");
@@ -145,6 +172,7 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
                   <a href={row.url} target="_blank" rel="noopener noreferrer">원문 열기 ↗</a>
                   {row.in_library && <span>이미 창고에 있어요. 고르면 근거로 켜져요.</span>}
                   {row.needs_paste && <span>영상은 창고에서 자막을 붙여 넣어야 근거로 쓸 수 있어요.</span>}
+                  {row.idea_only && <span>Tavily로 찾은 글이에요. 사례로만 쓰고 사실 근거로 쓰려면 원문을 직접 확인해 주세요.</span>}
                 </p>
                 {outcome && <p className={outcome.ok ? styles.saveDone : styles.saveError} role={outcome.ok ? undefined : "alert"}>{outcome.text}</p>}
               </li>
@@ -210,6 +238,12 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
             <input id={`${id}-query`} value={query} maxLength={200} disabled={busy !== null} placeholder="비워 두면 영어 검색어를 자동으로 만들어요"
               onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void search(true); } }} />
             <button className="button secondary small" type="button" disabled={busy !== null || !!shown?.blocked} onClick={() => void search(true)}>{busy === "search" ? "찾는 중…" : "다시 찾기"}</button>
+            {result && (
+              <button className="button secondary small" type="button" title="사람이 누를 때만 한 번 찾아요. 자동으로 다시 부르지 않아요."
+                disabled={busy !== null || !!shown?.blocked || !tavily?.has_key || (tavily?.remaining ?? 0) <= 0} onClick={() => void searchTavily()}>
+                {busy === "tavily" ? "Tavily로 찾는 중…" : tavilyLabel(tavily)}
+              </button>
+            )}
             <button className="button text small" type="button" disabled={busy !== null} onClick={() => setOpen(false)}>접기</button>
           </div>
           {shown && shown.blanks.length > 0 && (

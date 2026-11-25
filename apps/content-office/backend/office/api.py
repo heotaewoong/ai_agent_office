@@ -249,6 +249,7 @@ class IdeaEvidenceRequest(BaseModel):
 
 class IdeaSelectionInput(IdeaEvidenceRequest):
     public_evidence_ids: list[str] = Field(default_factory=list, max_length=PUBLIC_EVIDENCE_LIMIT)
+    book_evidence_ids: list[str] = Field(default_factory=list, max_length=PUBLIC_EVIDENCE_LIMIT)
 
 
 class EvidenceDraftInput(BaseModel):
@@ -662,10 +663,13 @@ def create_app(store: Store | None = None):
         if current["state"] in ("drafting", "production_queued", "producing", "needs_reconciliation"):
             raise WorkflowError("처리 중에는 원고를 저장할 수 없습니다. 완료 후 다시 저장하세요")
         packet = {**edit.packet, "evidence": current["article"].get("evidence", []), "quality": {"status": "unverified", "critical": False, "reviews": [], "refine_count": 0}, "audience": (current.get("source_packet") or {}).get("audience", {})}
-        for field in ("editorial_copy", "original_source_hash", "approved_public_evidence_hash"):
+        for field in ("editorial_copy", "original_source_hash", "approved_public_evidence_hash", "approved_book_evidence_hash"):
             packet.pop(field, None)
         if approved_public_references(current["article"]):
             packet["approved_public_evidence_hash"] = current["article"]["approved_public_evidence_hash"]
+        from .ideas import approved_book_references
+        if approved_book_references(current["article"]):
+            packet["approved_book_evidence_hash"] = current["article"]["approved_book_evidence_hash"]
         if current["article"].get("preserve_original") is True:
             original = current["article"].get("operator_source_text")
             body = edit.packet.get("body")
@@ -1130,17 +1134,25 @@ def create_app(store: Store | None = None):
         return refresh_idea_public_evidence(store, idea_id, expected_hash=body.expected_hash,
                                             lessons=store.lessons("approved"))
 
+    @app.post("/api/ideas/{idea_id}/book-evidence")
+    def find_idea_book_evidence(idea_id: str, body: IdeaEvidenceRequest):
+        # 개인 DB(책, 강의 자료)는 사람이 누를 때만 찾는다. 같은 서버 안의 소켓으로만 묻고 밖으로 보내지 않는다.
+        from .ideas import refresh_idea_book_evidence
+        return refresh_idea_book_evidence(store, idea_id, expected_hash=body.expected_hash, lessons=store.lessons("approved"))
+
     @app.post("/api/ideas/{idea_id}/public-evidence/approve")
     def approve_idea_evidence(idea_id: str, body: IdeaSelectionInput):
         return approve_existing_idea_evidence(store, idea_id, expected_hash=body.expected_hash,
                                              actor="local-operator", lessons=store.lessons("approved"),
-                                             public_evidence_ids=body.public_evidence_ids)
+                                             public_evidence_ids=body.public_evidence_ids,
+                                             book_evidence_ids=body.book_evidence_ids)
 
     @app.post("/api/ideas/{idea_id}/select")
     def choose_idea(idea_id: str, body: IdeaSelectionInput):
         return select_reviewed_idea(store, idea_id, expected_hash=body.expected_hash,
                                     actor="local-operator", lessons=store.lessons("approved"),
-                                    public_evidence_ids=body.public_evidence_ids)
+                                    public_evidence_ids=body.public_evidence_ids,
+                                    book_evidence_ids=body.book_evidence_ids)
 
     @app.post("/api/jobs/{job_id}/packaging")
     def set_packaging(job_id: str, brief: PackagingInput):

@@ -229,7 +229,12 @@ export type ResearchCandidate = {
   year: number | null;
   needs_paste: boolean;
   in_library: boolean;
+  /** Tavily로 찾은 공식이 아닌 글. 사례·참고 칸이고 사실 근거로 쓰기 전에 원문을 확인한다. */
+  idea_only?: boolean;
 };
+/** Tavily 이번 달 사용량. 키 자체는 서버가 돌려주지 않는다. */
+export type TavilyUsage = { month: string; calls: number; cap: number; remaining: number; has_key: boolean };
+export type TavilyResult = { queries: { tavily: string }; candidates: ResearchCandidate[]; notes: string[]; searched: boolean; tavily: TavilyUsage };
 export type ResearchResult = {
   plan: ResearchPlan;
   /** translated가 true면 english는 모델이 만든 영어 검색어이고, alternatives는 같이 만든 다른 검색어다. */
@@ -279,6 +284,24 @@ export function kindNotice(plan: Pick<ResearchPlan, "blocked" | "needs_experienc
 /** 조사 요청에 실어 보낼 글 유형. 사람이 고른 값만 보내고, 추측한 값은 보내지 않는다. */
 export function confirmedKind(plan?: Pick<ResearchPlan, "kind" | "kind_guessed">): ResearchKind | undefined {
   return plan && !plan.kind_guessed ? plan.kind : undefined;
+}
+
+/** 사람이 누른 Tavily 1회 결과를 지금 보이는 외부 조사 결과 뒤에 붙인다. 같은 주소는 한 번만 보인다. */
+export function mergeTavily(result: ResearchResult, found: TavilyResult): ResearchResult {
+  const seen = new Set(result.candidates.map((row) => row.key));
+  return {
+    ...result,
+    candidates: [...result.candidates, ...found.candidates.filter((row) => !seen.has(row.key))],
+    notes: [...result.notes, ...found.notes.filter((note) => !result.notes.includes(note))],
+    searched: result.searched || found.searched,
+  };
+}
+
+export function tavilyLabel(usage: TavilyUsage | null): string {
+  if (!usage) return "Tavily로 한 번 더 찾기";
+  if (!usage.has_key) return "Tavily 키가 없어요";
+  if (usage.remaining <= 0) return `Tavily 이번 달 ${usage.cap}회를 다 썼어요`;
+  return `Tavily로 한 번 더 찾기 (무료, 이번 달 ${usage.calls}/${usage.cap}회)`;
 }
 
 export function splitCandidates(candidates: ResearchCandidate[]): Record<SourceLane, ResearchCandidate[]> {

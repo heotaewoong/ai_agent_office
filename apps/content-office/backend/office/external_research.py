@@ -11,12 +11,15 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import secrets
 import sqlite3
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
+from datetime import datetime, timezone
+from pathlib import Path
 from time import monotonic
 from urllib.parse import quote_plus, urljoin, urlsplit
 
@@ -60,7 +63,7 @@ _EXAM_OFFICIAL_PAGES = (
      "https://www.q-net.or.kr/crf005.do?id=crf00503&jmCd=1320&tabGbn=1"),
 )
 PROVIDERS = {"pubmed": "PubMed 논문", "openalex": "OpenAlex 공개 논문", "arxiv": "arXiv 논문", "github": "GitHub 저장소",
-             "official": "공식 출처 새 글", "creator": "등록한 크리에이터"}
+             "official": "공식 출처 새 글", "creator": "등록한 크리에이터", "tavily": "Tavily 검색"}
 # 한글 주제를 영어 논문·저장소 검색어로 옮길 때 쓰는 작은 낱말표. 여기에 없는 말은 운영자가 검색어를 직접 고친다.
 _GLOSSARY = {
     "간격 복습": "spaced repetition", "분산 학습": "distributed practice", "인출": "retrieval practice", "복습": "review learning",
@@ -523,4 +526,126 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
     stored = stored_urls(root) if found else set()
     result["candidates"] = [{**row, "in_library": normalize_url(row["url"]) in stored} for row in found]
     result["searched"] = bool(jobs)
+    return result
+
+
+# Tavily: 사람이 '한 번 더 찾기'를 누를 때만 1회 검색한다. 공식 주소를 찾는 길잡이로 쓰고, 공식이 아닌 블로그와
+# 크리에이터 글은 '사례·참고' 칸(사실 근거 아님)으로만 보여 준다. 검색어는 기획 제목이나 운영자가 적은 검색어뿐이고,
+# 개인 DB 문장은 넣지 않는다(Tavily가 입력을 보관할 수 있음). 자동 재시도와 유료 대체 경로는 없다.
+TAVILY_URL = "https://api.tavily.com/search"
+TAVILY_MONTHLY_CAP = 900       # 무료 월 1,000크레딧 중 여유를 남긴다. basic 검색 1회 = 1크레딧.
+TAVILY_MAX_RESULTS = 8
+TAVILY_SECONDS = 15
+_TAVILY_KEY_FILE = Path("~/.config/heobrain-content-office/tavily.key")
+_OFFICIAL_SUFFIX = (".go.kr", ".gov", ".or.kr", ".ac.kr", ".edu", ".int", ".re.kr", ".mil")
+_OFFICIAL_HOSTS = ("korea.kr", "arxiv.org", "pubmed.ncbi.nlm.nih.gov", "ncbi.nlm.nih.gov", "github.com", "openai.com",
+                   "anthropic.com", "ai.google.dev", "blog.google", "deepmind.google", "huggingface.co", "microsoft.com",
+                   "nvidia.com", "apple.com", "meta.com", "q-net.or.kr", "who.int", "nih.gov", "nature.com", "science.org")
+_OFFICIAL_PREFIX = ("docs.", "developer.", "developers.", "support.", "help.", "learn.", "platform.")
+
+
+def tavily_key() -> str | None:
+    """키는 환경 변수나 상태 폴더 밖의 0600 파일에서만 읽는다. 화면, 기록, 응답에는 넣지 않는다."""
+    value = os.environ.get("TAVILY_API_KEY", "").strip()
+    if not value:
+        path = Path(os.environ.get("TAVILY_KEY_FILE") or _TAVILY_KEY_FILE).expanduser()
+        try:
+            value = path.read_text(encoding="utf-8").strip() if path.is_file() and not path.stat().st_mode & 0o077 else ""
+        except OSError:
+            value = ""
+    return value if re.fullmatch(r"tvly-[A-Za-z0-9_-]{8,120}", value) else None
+
+
+def _usage_path(root) -> Path:
+    return Path(library_path(root)).parent / "tavily_usage.json"
+
+
+def tavily_usage(root) -> dict:
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    try:
+        data = json.loads(_usage_path(root).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    calls = data.get("calls") if isinstance(data, dict) and data.get("month") == month and type(data.get("calls")) is int else 0
+    return {"month": month, "calls": calls, "cap": TAVILY_MONTHLY_CAP, "remaining": max(0, TAVILY_MONTHLY_CAP - calls),
+            "has_key": tavily_key() is not None}
+
+
+def _count_tavily_call(root) -> dict:
+    usage = tavily_usage(root)
+    path = _usage_path(root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps({"month": usage["month"], "calls": usage["calls"] + 1}), encoding="utf-8")
+    os.replace(temp, path)
+    return {**usage, "calls": usage["calls"] + 1, "remaining": max(0, usage["remaining"] - 1)}
+
+
+def _official_host(host: str, trusted_hosts=frozenset()) -> bool:
+    host = host.lower().removeprefix("www.")
+    return (host in trusted_hosts or host.endswith(_OFFICIAL_SUFFIX) or host.startswith(_OFFICIAL_PREFIX)
+            or any(host == name or host.endswith("." + name) for name in _OFFICIAL_HOSTS))
+
+
+def _tavily(query: str, key: str, *, post=None, trusted_hosts=frozenset()) -> list[dict]:
+    post = post or requests.post
+    response = post(TAVILY_URL, json={"query": query[:400], "search_depth": "basic", "max_results": TAVILY_MAX_RESULTS,
+                                      "include_answer": False, "include_raw_content": False, "include_images": False},
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, timeout=TAVILY_SECONDS)
+    if response.status_code in (401, 403):
+        raise PermissionError("tavily key rejected")
+    if response.status_code in (429, 432, 433):
+        raise OverflowError("tavily limit")
+    response.raise_for_status()
+    rows = []
+    for item in (response.json().get("results") or [])[:TAVILY_MAX_RESULTS]:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "")
+        host = (urlsplit(url).hostname or "").lower()
+        official = _official_host(host, trusted_hosts)
+        row = _candidate("fact" if official else "example", "tavily", item.get("title"), url, item.get("content") or "",
+                         source="Tavily 검색: 공식으로 보이는 주소(원문 확인 필요)" if official else "Tavily 검색(사례·참고 칸, 사실 근거 아님)")
+        if row:
+            rows.append({**row, "idea_only": not official})
+    return rows
+
+
+def run_tavily(root, title: str, *, query: str | None = None, post=None) -> dict:
+    """사람이 누른 Tavily 1회 검색. 키가 없거나 이번 달 한도를 넘으면 부르지 않는다."""
+    title = _clean(title or "")[:300]
+    if not title:
+        raise WorkflowError("주제를 확인할 수 없습니다.")
+    wanted = _clean(query or "")[:200] or title
+    usage = tavily_usage(root)
+    result = {"queries": {"tavily": wanted}, "candidates": [], "notes": [], "searched": False, "tavily": usage}
+    key = tavily_key()
+    if key is None:
+        result["notes"].append("Tavily 키가 아직 없어요. 키를 넣으면 이 버튼으로 한 번 더 찾을 수 있어요.")
+        return result
+    if usage["remaining"] <= 0:
+        result["notes"].append(f"Tavily 이번 달 사용량({usage['cap']}회)을 다 써서 부르지 않았어요.")
+        return result
+    result["tavily"] = _count_tavily_call(root)  # 실패해도 1회로 센다(무료 한도를 넘지 않게 보수적으로).
+    trusted_hosts = frozenset((urlsplit(row["url"]).hostname or "").lower().removeprefix("www.")
+                              for row in list_trusted(root) if row.get("lane") == "fact")
+    try:
+        rows = _tavily(wanted, key, post=post, trusted_hosts=trusted_hosts)
+    except PermissionError:
+        result["notes"].append("Tavily가 키를 받지 않았어요. 키를 다시 확인해 주세요.")
+        return result
+    except OverflowError:
+        result["notes"].append("Tavily 사용 한도에 걸렸어요. 다음 달에 다시 쓸 수 있어요.")
+        return result
+    except (*_ERRORS, SyntaxError):
+        result["notes"].append("Tavily가 지금 응답이 없어요. 자동으로 다시 부르지 않아요. 잠시 뒤 다시 눌러 주세요.")
+        return result
+    rows = [row for row in rows if is_topic_candidate(title, row["title"], row["snippet"])]
+    stored = stored_urls(root) if rows else set()
+    result["candidates"] = [{**row, "in_library": normalize_url(row["url"]) in stored} for row in rows]
+    result["searched"] = True
+    if not rows:
+        result["notes"].append("Tavily: 주제에 맞는 자료를 찾지 못했어요.")
+    else:
+        result["notes"].append("Tavily 결과 중 공식 주소가 아닌 글은 사례·참고 칸이에요. 사실 근거로 쓰려면 원문을 직접 확인해 주세요.")
     return result

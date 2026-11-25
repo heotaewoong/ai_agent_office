@@ -21,6 +21,7 @@ import type { IdeaSourcesDraft } from "../lib/ideas";
 import { benchmarkPublicUrl } from "../lib/benchmarks";
 import { packagingRequired } from "../lib/packaging";
 import { officeHref } from "../lib/navigation";
+import { bookCitation, bookDiscoveryLine, bookPolicy, evidencePlace } from "../lib/book-evidence";
 
 export type IntakeDraft = {
   text: string;
@@ -631,9 +632,10 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
 }) {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState<{ id: string; action: "search" | "choose" } | null>(null);
+  const [busy, setBusy] = useState<{ id: string; action: "search" | "books" | "choose" } | null>(null);
   const [editingSources, setEditingSources] = useState<Record<string, boolean>>({});
   const [evidenceSelections, setEvidenceSelections] = useState<Record<string, { hash: string; ids: string[] }>>({});
+  const [bookSelections, setBookSelections] = useState<Record<string, { hash: string; ids: string[] }>>({});
   const [evidenceFailure, setEvidenceFailure] = useState<{ id: string; message: string } | null>(null);
   const [evidenceApproval, setEvidenceApproval] = useState<{ ideaId: string; jobId: string } | null>(null);
   const readTicket = useRef(0);
@@ -694,6 +696,31 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
       if (!prior || prior.hash !== previous.edit_hash) return selections;
       return { ...selections, [saved.id]: { hash, ids: prior.ids.filter((id) => currentIds.has(id)) } };
     });
+    const bookIds = new Set(saved.book_evidence?.map((item) => item.id));
+    setBookSelections((selections) => {
+      const prior = selections[saved.id];
+      if (!prior || prior.hash !== previous.edit_hash) return selections;
+      return { ...selections, [saved.id]: { hash, ids: prior.ids.filter((id) => bookIds.has(id)) } };
+    });
+  }
+
+  async function searchBookEvidence(idea: Idea) {
+    if (writing.current || !canReviewEvidence(idea)) return;
+    writing.current = true;
+    readTicket.current++;
+    setBusy({ id: idea.id, action: "books" });
+    setEvidenceFailure(null);
+    setEvidenceApproval(null);
+    try {
+      const saved = await api.searchIdeaBookEvidence(idea.id, idea.edit_hash!);
+      acceptSavedIdea(idea, saved);
+    } catch (cause) {
+      setEvidenceFailure({ id: idea.id, message: cause instanceof Error ? cause.message : "개인 DB에서 찾지 못했어요." });
+      await load();
+    } finally {
+      writing.current = false;
+      setBusy(null);
+    }
   }
 
   async function searchPublicEvidence(idea: Idea) {
@@ -715,9 +742,9 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
     }
   }
 
-  async function choose(idea: Idea, evidenceIds: string[]) {
+  async function choose(idea: Idea, evidenceIds: string[], bookIds: string[] = []) {
     const reviewing = idea.state === "selected";
-    if (writing.current || !canReviewEvidence(idea) || idea.blocked.length > 0 || (reviewing && evidenceIds.length === 0)) return;
+    if (writing.current || !canReviewEvidence(idea) || idea.blocked.length > 0 || (reviewing && evidenceIds.length + bookIds.length === 0)) return;
     writing.current = true;
     readTicket.current++;
     setBusy({ id: idea.id, action: "choose" });
@@ -726,11 +753,11 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
     setEvidenceApproval(null);
     try {
       if (reviewing) {
-        const result = await api.approveIdeaPublicEvidence(idea.id, idea.edit_hash!, evidenceIds);
+        const result = await api.approveIdeaPublicEvidence(idea.id, idea.edit_hash!, evidenceIds, bookIds);
         acceptSavedIdea(idea, result.idea);
         setEvidenceApproval({ ideaId: idea.id, jobId: result.job.id });
       } else {
-        const result = await api.selectIdea(idea.id, idea.edit_hash!, evidenceIds);
+        const result = await api.selectIdea(idea.id, idea.edit_hash!, evidenceIds, bookIds);
         onSelected?.(result.job);
         await load();
       }
@@ -777,9 +804,15 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
           const selectedIds = (storedSelection && storedSelection.hash === idea.edit_hash
             ? storedSelection.ids : idea.approved_public_evidence_ids ?? [])
             .filter((id) => publicEvidence?.some((item) => item.id === id));
+          const bookEvidence = idea.book_evidence;
+          const storedBooks = bookSelections[idea.id];
+          const selectedBookIds = (storedBooks && storedBooks.hash === idea.edit_hash
+            ? storedBooks.ids : idea.approved_book_evidence_ids ?? [])
+            .filter((id) => bookEvidence?.some((item) => item.id === id));
           const canEdit = canReviewEvidence(idea) && busy === null;
           const canReapprove = idea.state === "selected" && idea.public_evidence_reviewable === true;
           const searching = busy?.id === idea.id && busy.action === "search";
+          const searchingBooks = busy?.id === idea.id && busy.action === "books";
           return <li key={idea.id} id={idea.id} tabIndex={-1} className="outline-target">
             <strong>{idea.title}</strong> · {idea.score}점 · 이상치 {idea.outlier_band}
             {origin && <p className="muted">소재를 찾은 게시물 · {originUrl
@@ -865,7 +898,7 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                             const ids = event.target.checked ? [...selectedIds, item.id] : selectedIds.filter((id) => id !== item.id);
                             setEvidenceSelections((previous) => ({ ...previous, [idea.id]: { hash: idea.edit_hash!, ids } }));
                           }} />
-                          <span>{item.title} · 문단 {item.paragraph}</span>
+                          <span>{item.title} · 문단 {item.paragraph}{evidencePlace(item) ? ` · ${evidencePlace(item)}` : ""}</span>
                         </label>
                         {href && <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 열기`}>원문 열기 ↗</a>}
                         <blockquote>{item.quote}</blockquote>
@@ -874,9 +907,37 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                     </div>)}
                   </fieldset>
                 )}
+                <div className="idea-book-evidence" aria-label={`${idea.title} 개인 DB 책 근거`}>
+                  <button className="button secondary" type="button" disabled={!canEdit} onClick={() => void searchBookEvidence(idea)}>
+                    {bookEvidence ? "개인 DB(책과 강의 자료)에서 다시 찾기" : "개인 DB(책과 강의 자료)에서 찾기"}
+                  </button>
+                  {searchingBooks && <p role="status">개인 DB에서 책과 강의 자료 문단을 찾고 있어요. 처음 한 번은 20초쯤 걸릴 수 있어요.</p>}
+                  {!searchingBooks && idea.book_discovery && <p role="status">
+                    {bookDiscoveryLine(idea.book_discovery)}{" · "}{formatDate(idea.book_discovery.checked_at, true)}{" · 유료 호출 0회"}
+                  </p>}
+                  {bookEvidence && bookEvidence.length > 0 && (
+                    <fieldset disabled={!canEdit}>
+                      <legend>원고에 넘길 책 근거 후보 · 내 말로 풀어 쓰는 게 기본이고, 직접 인용은 근거 하나당 두 문장까지예요</legend>
+                      {bookEvidence.map((item) => {
+                        const checked = selectedBookIds.includes(item.id);
+                        return <div className="idea-public-evidence-item" key={item.id}>
+                          <label>
+                            <input type="checkbox" checked={checked} disabled={!checked && selectedBookIds.length >= 4} onChange={(event) => {
+                              const ids = event.target.checked ? [...selectedBookIds, item.id] : selectedBookIds.filter((id) => id !== item.id);
+                              setBookSelections((previous) => ({ ...previous, [idea.id]: { hash: idea.edit_hash!, ids } }));
+                            }} />
+                            <span>{bookCitation(item)}</span>
+                          </label>
+                          <span className="muted">{bookPolicy(item)}</span>
+                          <blockquote>{item.quote}</blockquote>
+                        </div>;
+                      })}
+                    </fieldset>
+                  )}
+                </div>
                 {canReapprove && <button className="button primary" type="button"
-                  disabled={!canEdit || idea.blocked.length > 0 || selectedIds.length === 0}
-                  onClick={() => void choose(idea, selectedIds)}>
+                  disabled={!canEdit || idea.blocked.length > 0 || selectedIds.length + selectedBookIds.length === 0}
+                  onClick={() => void choose(idea, selectedIds, selectedBookIds)}>
                   선택한 근거를 승인⓪에 반영
                 </button>}
                 {evidenceApproval?.ideaId === idea.id && <p role="status">
@@ -888,7 +949,7 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
               className="button secondary"
               type="button"
               disabled={idea.state === "selected" || idea.blocked.length > 0 || !canEdit}
-              onClick={() => void choose(idea, selectedIds)}
+              onClick={() => void choose(idea, selectedIds, selectedBookIds)}
             >
               {idea.state === "selected" ? "선택됨" : "이 기획으로 작업 만들기"}
             </button>

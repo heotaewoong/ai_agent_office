@@ -97,6 +97,8 @@ def with_edit_hash(card):
 PUBLIC_EVIDENCE_LIMIT = 4
 _PUBLIC_ID = re.compile(r"[0-9a-f]{64}")
 _PUBLIC_FIELDS = ("id", "url", "title", "paragraph", "quote", "source_sha256", "quote_sha256")
+# 자료 창고 문단의 위치 정보(PDF 쪽, 소제목 경로). 있으면 그대로 넘기고 승인 판본 해시에도 들어간다. 근거 ID와는 무관하다.
+_PUBLIC_PLACE_FIELDS = {"locator": 40, "heading": 200}
 
 
 def _checked_public_references(references):
@@ -109,6 +111,12 @@ def _checked_public_references(references):
         if not isinstance(entry, dict) or any(key not in entry for key in _PUBLIC_FIELDS):
             raise WorkflowError("공개 근거의 출처와 문단을 다시 확인하세요")
         item = {key: entry[key] for key in _PUBLIC_FIELDS}
+        for key, limit in _PUBLIC_PLACE_FIELDS.items():
+            if key in entry:
+                value = entry[key]
+                if not isinstance(value, str) or not value.strip() or len(value) > limit or re.search(r"[\x00-\x1f]", value):
+                    raise WorkflowError("공개 근거의 쪽이나 소제목 정보가 올바르지 않습니다")
+                item[key] = value
         if any(not isinstance(item[key], str) or not _PUBLIC_ID.fullmatch(item[key])
                for key in ("id", "source_sha256", "quote_sha256")):
             raise WorkflowError("공개 근거의 해시가 올바르지 않습니다")
@@ -279,6 +287,56 @@ def refresh_idea_public_evidence(store, idea_id, *, expected_hash, lessons=()):
     return response
 
 
+def refresh_idea_book_evidence(store, idea_id, *, expected_hash, lessons=()):
+    """개인 DB(책, 강의 자료)에서 기획 제목과 맞는 문단 후보를 찾는다. 사람이 누를 때만 돈다. 외부로 나가는 요청은 없다."""
+    from .private_books import BOOK_EVIDENCE_LIMIT, BookEvidenceUnavailable, find_book_evidence
+
+    with store.connection() as db:
+        candidate, job = _reviewable_idea(db, idea_id, expected_hash, allow_selected=True)
+    try:
+        references, mode = find_book_evidence(candidate["title"], limit=BOOK_EVIDENCE_LIMIT)
+    except BookEvidenceUnavailable as error:
+        raise WorkflowError(str(error) or "개인 DB 검색을 지금 쓸 수 없어요. 잠시 뒤 다시 찾아 주세요") from error
+    discovery = {"status": "ready" if references else "insufficient", "checked_at": now(), "mode": mode, "paid_calls": 0}
+    with store.connection(transaction=True) as db:
+        stored, job = _reviewable_idea(db, idea_id, expected_hash, allow_selected=True)
+        stored = {**stored, "book_evidence": references, "book_discovery": discovery}
+        db.execute("UPDATE ideas SET data=?,updated_at=? WHERE id=?", (canonical(stored), now(), idea_id))
+        store._event(db, "idea_book_evidence_refreshed", {"idea_id": idea_id, "matches": len(references), "mode": mode})
+    response = score_idea(with_edit_hash(stored), lessons=lessons)
+    if job:
+        response["public_evidence_reviewable"] = True
+    return response
+
+
+def _selected_book_references(card, book_evidence_ids):
+    from .private_books import BOOK_EVIDENCE_LIMIT, checked_book_references
+
+    if book_evidence_ids is None:
+        return []
+    if (not isinstance(book_evidence_ids, list) or len(book_evidence_ids) > BOOK_EVIDENCE_LIMIT
+            or any(not isinstance(key, str) or not _PUBLIC_ID.fullmatch(key) for key in book_evidence_ids)
+            or len(set(book_evidence_ids)) != len(book_evidence_ids)):
+        raise WorkflowError("책 근거는 화면에서 중복 없이 최대 4개를 고르세요")
+    if not book_evidence_ids:
+        return []
+    latest = {item["id"]: item for item in checked_book_references(card.get("book_evidence", []))}
+    if any(key not in latest for key in book_evidence_ids):
+        raise WorkflowError("기획의 책 근거 후보가 바뀌었습니다. 다시 확인한 뒤 선택하세요")
+    return [latest[key] for key in book_evidence_ids]
+
+
+def approved_book_references(article):
+    from .private_books import checked_book_references
+
+    if "approved_book_evidence" not in article and "approved_book_evidence_hash" not in article:
+        return []
+    references = checked_book_references(article.get("approved_book_evidence"))
+    if not references or digest(references) != article.get("approved_book_evidence_hash"):
+        raise WorkflowError("기획 승인⓪의 책 근거 판본이 일치하지 않습니다")
+    return references
+
+
 def _selected_public_references(card, public_evidence_ids):
     if public_evidence_ids is None:
         return []
@@ -347,7 +405,7 @@ def set_idea_sources(store, idea_id, source_urls, *, expected_hash, operator_ver
     return _visible_evidence(with_edit_hash(updated))
 
 
-def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=(), public_evidence_ids=None):
+def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=(), public_evidence_ids=None, book_evidence_ids=None):
     """읽은 기획 판본의 선택과 작업 생성을 한 번에 저장한다. 출처 편집과 같은 DB 잠금을 쓴다."""
     with store.connection(transaction=True) as db:
         stored, _ = _reviewable_idea(db, idea_id, expected_hash)
@@ -367,33 +425,61 @@ def select_reviewed_idea(store, idea_id, *, expected_hash, actor, lessons=(), pu
             article.update(approved_public_evidence=references, approved_public_evidence_hash=reference_hash)
             selected.update(approved_public_evidence_ids=public_evidence_ids, approved_public_evidence_hash=reference_hash)
             event.update(approved_public_evidence_count=len(references), approved_public_evidence_hash=reference_hash)
+        books = _selected_book_references(stored, book_evidence_ids)
+        if books:
+            book_hash = digest(books)
+            article.update(approved_book_evidence=books, approved_book_evidence_hash=book_hash)
+            selected.update(approved_book_evidence_ids=book_evidence_ids, approved_book_evidence_hash=book_hash)
+            event.update(approved_book_evidence_count=len(books), approved_book_evidence_hash=book_hash)
         db.execute("UPDATE ideas SET state='selected',data=?,updated_at=? WHERE id=?", (canonical(selected), now(), idea_id))
         store._event(db, "idea_selected", event)
         job = store._create_job(db, article, brief=selected.get("brief"))
         if references and approved_public_references(job["article"]) != references:
             raise WorkflowError("기존 작업과 기획의 승인 근거가 다릅니다. 기존 작업을 확인하세요")
+        if books and approved_book_references(job["article"]) != books:
+            raise WorkflowError("기존 작업과 기획의 승인 책 근거가 다릅니다. 기존 작업을 확인하세요")
     return {"idea": _visible_evidence(selected), "job": job}
 
 
-def approve_existing_idea_evidence(store, idea_id, *, expected_hash, actor, public_evidence_ids, lessons=()):
+def approve_existing_idea_evidence(store, idea_id, *, expected_hash, actor, public_evidence_ids, lessons=(), book_evidence_ids=None):
+    """원고가 없는 기존 작업의 근거 선택을 화면에서 고른 그대로 바꾼다(공개 원문 문단과 책 문단)."""
     with store.connection(transaction=True) as db:
         idea, job = _reviewable_idea(db, idea_id, expected_hash, allow_selected=True)
         if job is None or score_idea(idea, lessons=lessons)["blocked"]:
             raise WorkflowError("기존 작업의 기획 및 대표 출처를 확인하세요")
         references = _selected_public_references(idea, public_evidence_ids)
-        if not references:
-            raise WorkflowError("기존 작업에 넘길 공개 원문 문단을 한 개 이상 체크하세요")
-        article = job["article"]
+        books = _selected_book_references(idea, book_evidence_ids)
+        if not references and not books:
+            raise WorkflowError("기존 작업에 넘길 원문 문단이나 책 문단을 한 개 이상 체크하세요")
+        article = dict(job["article"])
         previous = approved_public_references(article)
-        if previous != references:
-            version = digest(references)
-            idea.update(approved_public_evidence_ids=public_evidence_ids, approved_public_evidence_hash=version)
-            job["article"] = {**article, "approved_public_evidence": references, "approved_public_evidence_hash": version}
+        previous_books = approved_book_references(article)
+        if previous != references or previous_books != books:
+            event = {"idea_id": idea_id, "actor": actor}
+            if references:
+                version = digest(references)
+                idea.update(approved_public_evidence_ids=public_evidence_ids, approved_public_evidence_hash=version)
+                article.update(approved_public_evidence=references, approved_public_evidence_hash=version)
+                event.update(approved_public_evidence_hash=version, approved_public_evidence_ids=public_evidence_ids)
+            else:
+                for key in ("approved_public_evidence_ids", "approved_public_evidence_hash"):
+                    idea.pop(key, None)
+                for key in ("approved_public_evidence", "approved_public_evidence_hash"):
+                    article.pop(key, None)
+            if books:
+                book_version = digest(books)
+                idea.update(approved_book_evidence_ids=book_evidence_ids, approved_book_evidence_hash=book_version)
+                article.update(approved_book_evidence=books, approved_book_evidence_hash=book_version)
+                event.update(approved_book_evidence_hash=book_version, approved_book_evidence_ids=book_evidence_ids)
+            else:
+                for key in ("approved_book_evidence_ids", "approved_book_evidence_hash"):
+                    idea.pop(key, None)
+                for key in ("approved_book_evidence", "approved_book_evidence_hash"):
+                    article.pop(key, None)
+            event.update(previous_approved_public_evidence=previous,
+                         previous_approved_book_evidence_ids=[item["id"] for item in previous_books])
+            job["article"] = article
             db.execute("UPDATE ideas SET data=?,updated_at=? WHERE id=?", (canonical(idea), now(), idea_id))
             store._write_job(db, job)
-            store._event(db, "idea_public_evidence_approved", {
-                "idea_id": idea_id, "actor": actor, "approved_public_evidence_hash": version,
-                "approved_public_evidence_ids": public_evidence_ids,
-                "previous_approved_public_evidence": previous,
-            }, job["id"])
+            store._event(db, "idea_public_evidence_approved", event, job["id"])
     return {"idea": {**_visible_evidence(with_edit_hash(idea)), "public_evidence_reviewable": True}, "job": job}

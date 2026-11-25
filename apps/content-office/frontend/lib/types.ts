@@ -435,6 +435,26 @@ export type IdeaPublicEvidence = {
   quote: string;
   source_sha256: string;
   quote_sha256: string;
+  /** 자료 창고 문단의 PDF 쪽(p.12)과 소제목 경로. 근거 ID와는 무관한 위치 정보다. */
+  locator?: string;
+  heading?: string;
+};
+
+/** 개인 DB(책, 강의 자료) 근거 후보. 원본 위치는 오지 않고 출처 ID(book_id)만 온다. */
+export type IdeaBookEvidence = {
+  id: string;
+  book_id: string;
+  kind: "book" | "course";
+  title: string;
+  author: string | null;
+  year: number | null;
+  printed_page: number | null;
+  file_page: number | null;
+  locator: string;
+  quote: string;
+  chunk_sha256: string;
+  quote_sha256: string;
+  quote_policy: "quote_ok" | "paraphrase_only";
 };
 
 export type Idea = {
@@ -446,6 +466,9 @@ export type Idea = {
   public_evidence?: IdeaPublicEvidence[];
   public_evidence_reviewable?: boolean;
   approved_public_evidence_ids?: string[];
+  book_evidence?: IdeaBookEvidence[];
+  book_discovery?: { status: "ready" | "insufficient"; checked_at: string; mode: string; paid_calls: 0 };
+  approved_book_evidence_ids?: string[];
   platform_origin?: { platform: string; url: string; title: string; summary: string; observed_at: string | null };
   public_discovery?: {
     status: "ready" | "insufficient" | "unavailable";

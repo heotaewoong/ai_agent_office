@@ -11,7 +11,7 @@ from typing import Literal
 from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from .external_research import add_trusted, delete_trusted, list_trusted, research_plan, run_research
+from .external_research import add_trusted, delete_trusted, list_trusted, research_plan, run_research, run_tavily, tavily_usage
 from .research_choices import click_stats, log_click, save_choice
 from .research_query import english_queries
 from .source_library import (
@@ -86,6 +86,13 @@ class ResearchRun(ResearchTopic):
     force: bool = Field(default=False, strict=True)
 
 
+class TavilyRun(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = Field(default=None, max_length=160)
+    title: str = Field(min_length=1, max_length=300)
+    query: str | None = Field(default=None, max_length=200)
+
+
 class ResearchPlans(BaseModel):
     model_config = ConfigDict(extra="forbid")
     topics: list[ResearchTopic] = Field(min_length=1, max_length=80)
@@ -154,6 +161,20 @@ def register(app, store):
         if body.id:
             # 사람이 기획 카드에서 누른 조사만 센다. 추천과 실제로 누른 것이 얼마나 맞는지 보려는 기록이다.
             log_click(root, body.id, result.get("plan") or {}, forced=body.force, searched=bool(result.get("searched")),
+                      candidates=len(result.get("candidates") or []))
+        return result
+
+    @app.get("/api/source-library/research/tavily")
+    def library_tavily_usage():
+        # 키 자체는 돌려주지 않는다. 있는지와 이번 달 사용 횟수만 보여 준다.
+        return tavily_usage(root)
+
+    @app.post("/api/source-library/research/tavily")
+    def library_tavily(body: TavilyRun):
+        # 사람이 누른 Tavily 1회 검색. 검색어는 기획 제목이나 운영자가 적은 검색어뿐이다.
+        result = run_tavily(root, body.title, query=body.query)
+        if body.id:
+            log_click(root, body.id, {"need": "tavily"}, forced=True, searched=bool(result.get("searched")),
                       candidates=len(result.get("candidates") or []))
         return result
 
