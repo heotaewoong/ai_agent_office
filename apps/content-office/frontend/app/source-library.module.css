@@ -57,6 +57,7 @@ textarea.input { resize: vertical; }
 .switch:has(input:disabled) { cursor: not-allowed; opacity: .55; }
 .passages { grid-column: 1 / -1; display: grid; gap: 8px; margin: 0; padding: 14px 16px 14px 34px; border-radius: 10px; background: #f4f7f0; font-size: 13px; line-height: 1.9; color: #3b4d42; }
 .passages li { white-space: pre-line; overflow-wrap: anywhere; }
+.place { display: block; margin-bottom: 2px; font-size: 11px; font-weight: 650; color: #647460; white-space: normal; }
 .save { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; }
 .save select { padding: 6px 10px; border: 1px solid #c6d2c3; border-radius: 8px; background: #fff; font: inherit; font-size: 13px; }
 .saveDone { color: #365d3e; font-weight: 600; }

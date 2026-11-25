@@ -7,7 +7,9 @@ from contextlib import closing
 import pytest
 
 from office import source_library as sl
-from office.source_library import add_file, add_links, fill_text, import_inbox, item_detail, library_overview, library_path, update_item
+from office.source_library import (
+    add_file, add_links, fill_text, import_inbox, item_detail, library_overview, library_path, reread_item, update_item,
+)
 from office.store import WorkflowError
 
 PROSE = "간격을 두고 다시 꺼내 보는 복습은 한 번에 몰아서 하는 공부보다 오래 남습니다. 시험 직전 벼락치기는 금방 잊힙니다. "
@@ -54,14 +56,31 @@ def test_web_page_keeps_tables_headings_code_and_dates(tmp_path):
 
 
 def test_structure_that_fails_the_source_check_falls_back_with_a_reason(tmp_path, monkeypatch):
-    def flat(markup, url):
-        return [sl._Block(PROSE * 12)], None
-    monkeypatch.setattr(sl, "_trafilatura_doc", flat)
+    monkeypatch.setattr(sl, "_trafilatura_doc", lambda markup, url: ([sl._Block(PROSE * 12)], None))
+    monkeypatch.setattr(sl, "_readability_doc", lambda markup, url: [sl._Block(PROSE * 12)])
     [result] = add_links(tmp_path, ["https://example.org/spacing"], area="C", fetch=page(ARTICLE))
     item = result["item"]
     assert item["status"] == "done" and item["extractor"] == "html-parser"
-    assert "예전 방식으로 저장" in item["note"] and "원문은 3개" in item["note"]
+    assert "예전 방식으로 저장" in item["note"] and "trafilatura: 소제목 0개, 원문은 3개" in item["note"] and "readability:" in item["note"]
     assert "복습은 한 번에" in "\n".join(item_detail(tmp_path, item["id"])["passage_texts"])
+
+
+def test_readability_is_used_when_trafilatura_loses_the_structure(tmp_path, monkeypatch):
+    monkeypatch.setattr(sl, "_trafilatura_doc", lambda markup, url: ([sl._Block(PROSE * 12)], "2026-10-03"))
+    [result] = add_links(tmp_path, ["https://example.org/spacing"], area="C", fetch=page(ARTICLE))
+    item = result["item"]
+    assert item["status"] == "done" and item["extractor"] == "readability-0.9" and item["note"] == ""
+    detail = item_detail(tmp_path, item["id"])
+    text = "\n".join(detail["passage_texts"])
+    assert "| 하루 | 62% |" in text and "def next_review(days):" in text and "[그림 설명] 그림 1." in text
+    assert any(place["heading"] and place["heading"].endswith("간격별 기억 유지율") for place in detail["passage_places"])
+
+
+def test_the_candidate_that_keeps_more_of_the_source_wins():
+    source = {"headings": 6, "tables": 1, "code": 0}
+    thin = [sl._Block("소제목", "heading", 2), sl._Block(PROSE * 8), sl._Block("| a | b |\n| --- | --- |\n| 1 | 2 |", "table")]
+    rich = [sl._Block(f"소제목 {n}", "heading", 2) for n in range(6)] + thin[1:]
+    assert sl._coverage(source, rich, 600) > sl._coverage(source, thin, 600)
 
 
 def test_gate_rules():
@@ -259,3 +278,53 @@ def test_dates_follow_the_source_order_and_reject_placeholders():
     assert sl._page_dates("<p>x</p>", "2026-05-06")["date_source"] == "htmldate"
     assert sl._page_dates("<p>x</p>", "2005-01-01")["published_at"] is None
     assert sl._valid_date("2999-01-01") is None and sl._valid_date("2026년 11월 3일") == "2026-11-03"
+
+
+def test_reread_replaces_imported_chunks_but_keeps_switches_and_never_shrinks(tmp_path):
+    rows = [{"id": "a" * 20, "kind": "link", "title": "가져온 글", "url": "https://example.org/spacing", "status": "done",
+             "chunks": [PROSE * 6, PROSE * 6]}]
+    import_inbox(tmp_path, rows)
+    item = library_overview(tmp_path)["items"][0]
+    update_item(tmp_path, item["id"], {"use_as_evidence": True, "lane": "example", "title": "내가 고친 제목"})
+    result = reread_item(tmp_path, item["id"], fetch=page(ARTICLE))
+    assert result["result"] == "updated" and result["extractor"] == "trafilatura-2.4.0"
+    after = item_detail(tmp_path, item["id"])
+    assert after["use_as_evidence"] and after["lane"] == "example" and after["title"] == "내가 고친 제목" and after["origin"] == "import"
+    assert after["published_at"] == "2026-10-03" and "| 하루 | 62% |" in "\n".join(after["passage_texts"])
+    tiny = "<html><head><title>x</title></head><body><article><p>" + PROSE * 5 + "</p></article></body></html>"
+    big = [{"id": "b" * 20, "kind": "link", "title": "긴 글", "url": "https://example.org/long", "status": "done", "chunks": [PROSE * 10] * 6}]
+    import_inbox(tmp_path, big)
+    long_id = next(i["id"] for i in library_overview(tmp_path)["items"] if i["title"] == "긴 글")
+    kept = reread_item(tmp_path, long_id, fetch=page(tiny))
+    assert kept["result"] == "kept" and "절반" in kept["reason"]
+    assert len(item_detail(tmp_path, long_id)["passage_texts"]) == 6
+
+    def broken(url, *, maximum):
+        raise OSError("down")
+    assert reread_item(tmp_path, long_id, fetch=broken)["result"] == "kept"
+    with pytest.raises(WorkflowError, match="본문이 저장된 링크만"):
+        reread_item(tmp_path, add_links(tmp_path, ["https://m.blog.naver.com/a/1"], area="B", fetch=page(ARTICLE))[0]["item"]["id"])
+
+
+KOREA = f"""<html><head><title>정책브리핑</title><meta property="article:published_time" content="2025-09-25"></head><body>
+<header><h2 class="blind">사이트 이동경로</h2><nav><h2>메뉴</h2><h3>정책뉴스</h3><h3>보도자료</h3></nav></header>
+<main><section><h2>콘텐츠 영역</h2><div class="article_head"><h2>2차 소비쿠폰 3일간 1858만 명 신청</h2></div>
+<div class="view_cont"><div class="article_body"><p>{PROSE * 3}</p><p>요일제 기준으로는 68.2%인 1858만 3000명이 신청했다. {PROSE}</p></div></div>
+<div class="side_row"><h2>실시간 인기뉴스</h2>""" + "".join(f"<p>인기 기사 제목 {n}번은 이렇게 길게 이어지는 다른 기사입니다.</p>" for n in range(40)) + """</div>
+<div class="comment_rules">""" + "".join(f"<p>{n}. 해당 기사나 게시글의 내용과 관련없는 의견을 게시하는 경우</p>" for n in range(13)) + """</div>
+</section></main><footer><h2>공지사항</h2></footer></body></html>"""
+
+
+def test_korea_kr_reads_only_the_article_region(tmp_path):
+    [result] = add_links(tmp_path, ["https://www.korea.kr/news/policyNewsView.do?newsId=1"], area="A", fetch=page(KOREA))
+    item = result["item"]
+    assert item["status"] == "done" and item["extractor"] != "html-parser" and item["published_at"] == "2025-09-25"
+    text = "\n".join(item_detail(tmp_path, item["id"])["passage_texts"])
+    assert "68.2%" in text and "인기 기사 제목" not in text and "관련없는 의견" not in text
+
+
+def test_source_counts_skip_menus_and_hidden_headings():
+    counts = sl._source_counts(KOREA)
+    assert counts["headings"] == 3  # 콘텐츠 영역, 기사 제목, 실시간 인기뉴스. 메뉴·머리말·꼬리말·숨긴 소제목은 빠진다
+    assert sl._main_region(KOREA, "https://m.korea.kr/x").count("view_cont") == 1
+    assert sl._main_region(KOREA, "https://example.org/x") is None

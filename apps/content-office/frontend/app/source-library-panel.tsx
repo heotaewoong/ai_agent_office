@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import {
-  canPaste, displayDay, evidenceHint, fileToBase64, filterSources, sourceFilters, sourceKinds, sourceOrigins, sourceStatus, sourceSummary,
-  splitLinks, vectorSummary,
-  type SourceFilter, type SourceHit, type SourceItem, type SourceLibrary, type SourceLinkResult, type SourcePatch,
+  canPaste, displayDay, evidenceHint, fileToBase64, filterSources, passagePlace, sourceDates, sourceFilters, sourceKinds, sourceOrigins,
+  sourceStatus, sourceSummary, splitLinks, vectorSummary,
+  type SourceFilter, type SourceHit, type SourceItem, type SourceLibrary, type SourceLinkResult, type SourcePatch, type SourcePlace,
 } from "../lib/source-library";
 import { TrustedSources } from "./trusted-sources";
 import styles from "./source-library.module.css";
@@ -45,7 +45,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
   const [searchError, setSearchError] = useState("");
   const [pending, setPending] = useState("");
   const [rowError, setRowError] = useState<{ id: string; text: string } | null>(null);
-  const [opened, setOpened] = useState<{ id: string; passages: string[] } | null>(null);
+  const [opened, setOpened] = useState<{ id: string; passages: string[]; places: SourcePlace[] } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState("");
   const [paste, setPaste] = useState<{ id: string; text: string; title: string } | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -164,7 +164,8 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
     setPending(item.id);
     setRowError(null);
     try {
-      setOpened({ id: item.id, passages: (await api.sourceItem(item.id)).passage_texts });
+      const detail = await api.sourceItem(item.id);
+      setOpened({ id: item.id, passages: detail.passage_texts, places: detail.passage_places ?? [] });
     } catch (cause) {
       setRowError({ id: item.id, text: message(cause, "문단을 불러오지 못했습니다.") });
     } finally {
@@ -361,6 +362,7 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
                     {item.pasted && <span className="badge neutral">직접 붙여 넣은 본문</span>}
                     {item.status === "done" && <span>문단 {item.passages}개</span>}
                     <span>{displayDay(item.created_at)}</span>
+                    {sourceDates(item) && <span>{sourceDates(item)}</span>}
                   </div>
                   {item.note && <p className={styles.note}>{item.note}</p>}
                   {rowError?.id === item.id && <p className={styles.error} role="alert">{rowError.text}</p>}
@@ -407,7 +409,10 @@ export function SourceLibraryPanel({ active }: { active: boolean }) {
                 </div>
                 {opened?.id === item.id && (
                   <ol className={styles.passages}>
-                    {opened.passages.map((text, index) => <li key={index}>{text}</li>)}
+                    {opened.passages.map((text, index) => {
+                      const place = passagePlace(opened.places[index]);
+                      return <li key={index}>{place && <small className={styles.place}>{place}</small>}{text}</li>;
+                    })}
                   </ol>
                 )}
               </li>

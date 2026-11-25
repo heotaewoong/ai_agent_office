@@ -4,8 +4,9 @@ import { api } from "../lib/api.ts";
 import { officeHref, officeRoute } from "../lib/navigation.ts";
 import { ownedSourceInput } from "../lib/owned-source.ts";
 import {
-  appendBody, areaForSegment, canPaste, candidateMeta, evidenceHint, fileToBase64, filterSources, importableSources, libraryLine, researchBadge,
-  safeOriginRef, savedCandidateNote, sourceSummary, splitCandidates, splitLinks, vectorSummary, type ResearchCandidate, type SourceItem,
+  appendBody, areaForSegment, canPaste, candidateMeta, evidenceHint, fileToBase64, filterSources, importableSources, libraryLine, passagePlace,
+  researchBadge, safeOriginRef, savedCandidateNote, sourceDates, sourceSummary, splitCandidates, splitLinks, vectorSummary,
+  type ResearchCandidate, type SourceItem,
 } from "../lib/source-library.ts";
 
 const item = (patch: Partial<SourceItem>): SourceItem => ({
@@ -167,4 +168,18 @@ test("사례·참고 자료는 따로 골라 보고, 근거 안내도 다르게 
   assert.deepEqual(filterSources(rows, "", "example").map((row) => row.id), ["e"]);
   assert.match(evidenceHint(rows[1]), /사례로만 소개돼요/);
   assert.equal(evidenceHint(rows[0]), "기획의 근거 찾기에 후보로 나와요");
+});
+
+test("발행일, 수정일, 읽은 날과 문단 위치를 보여 준다", () => {
+  assert.equal(sourceDates(item({})), "");
+  assert.equal(sourceDates(item({ published_at: "2026-10-03", modified_at: "2026-11-01", date_source: "json-ld", collected_at: "2026-11-25T00:16:03+00:00" })),
+    "발행 2026-10-03 · 수정 2026-11-01 · 읽은 날 11월 25일");
+  assert.equal(sourceDates(item({ published_at: "2026-04-09", date_source: "htmldate", collected_at: "2026-11-25T00:16:03+00:00" })),
+    "발행 2026-04-09(추정) · 읽은 날 11월 25일");
+  assert.equal(sourceDates(item({ collected_at: "2026-11-25T00:16:03+00:00" })), "발행일 모름 · 읽은 날 11월 25일");
+  assert.equal(sourceDates(item({ status: "needs_check", published_at: "2026-10-03" })), "");
+  assert.equal(passagePlace({ locator: "p.12", heading: null }), "PDF 12쪽");
+  assert.equal(passagePlace({ locator: null, heading: "복습 간격 > 간격별 기억" }), "복습 간격 > 간격별 기억");
+  assert.equal(passagePlace({ locator: null, heading: null }), "");
+  assert.equal(passagePlace(undefined), "");
 });

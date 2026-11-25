@@ -356,8 +356,45 @@ _MD_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
 _DIGITS = re.compile(r"\d+(?:[.,]\d+)*")
 
 
+# 본문 영역이 정해져 있는 사이트. 메뉴, 인기 기사, 댓글 규칙이 본문보다 길어 두 추출기와 대조 기준이 함께 흔들리는 곳이다.
+_MAIN_REGIONS = {"korea.kr": ("div.article_head", "div.view_cont")}
+_HIDDEN_HEADING = re.compile(r"\b(blind|sr-only|screen-reader-text|visually-hidden|hidden_chk|skip)\b", re.I)
+
+
+def _main_region(markup: str, url: str) -> str | None:
+    """정해 둔 사이트면 제목과 본문 영역만 남긴 HTML을 돌려준다(head는 제목과 날짜 때문에 그대로 둔다)."""
+    host = (urlsplit(url).hostname or "").lower()
+    selectors = next((value for site, value in _MAIN_REGIONS.items() if host == site or host.endswith("." + site)), None)
+    if not selectors:
+        return None
+    try:
+        import lxml.html
+
+        tree = lxml.html.fromstring(markup)
+        main = tree.cssselect(selectors[-1])
+        if not main or len(main[0].text_content().strip()) < 200:
+            return None
+        parts = [lxml.html.tostring(found[0], encoding="unicode") for found in (tree.cssselect(selector) for selector in selectors) if found]
+    except Exception:  # noqa: BLE001 - 영역을 못 찾으면 페이지 전체로 읽는다.
+        return None
+    head = re.search(r"<head\b.*?</head\s*>", markup, re.I | re.S)
+    return f"<html>{head.group(0) if head else ''}<body><article>{''.join(parts)}</article></body></html>"
+
+
 def _source_counts(markup: str) -> dict:
-    """원문 HTML의 본문 구조 수. 대조 관문의 기준이다."""
+    """원문 HTML의 본문 구조 수. 대조 관문의 기준이다. 메뉴, 머리말, 꼬리말, 옆 칸과 화면에 안 보이는 소제목은 세지 않는다."""
+    try:
+        import lxml.html
+
+        tree = lxml.html.fromstring(markup)
+        for node in tree.xpath("//script|//style|//noscript|//template|//svg|//nav|//header|//footer|//aside|//form"):
+            node.drop_tree()
+        headings = [node for node in tree.xpath("//h2|//h3|//h4")
+                    if node.text_content().strip() and not _HIDDEN_HEADING.search(f"{node.get('class') or ''} {(node.getparent().get('class') or '') if node.getparent() is not None else ''}")]
+        tables = [table for table in tree.xpath("//table") if len(table.xpath(".//tr")) >= 2 and table.xpath(".//td|.//th")]
+        return {"headings": len(headings), "tables": len(tables), "code": len(tree.xpath("//pre"))}
+    except Exception:  # noqa: BLE001 - 파싱이 안 되는 HTML은 예전 방식으로 센다.
+        pass
     body = _SKIP_HTML.sub(" ", markup)
     tables = [t for t in re.findall(r"<table\b.*?</table\s*>", body, re.I | re.S) if len(re.findall(r"<tr\b", t, re.I)) >= 2 and re.search(r"<t[dh]\b", t, re.I)]
     return {"headings": len(re.findall(r"<h[2-4][\s>]", body, re.I)), "tables": len(tables), "code": len(re.findall(r"<pre[\s>]", body, re.I))}
@@ -449,6 +486,34 @@ def _trafilatura_doc(markup: str, url: str) -> tuple[list[_Block] | None, str | 
     return (_markdown_blocks(markdown) if markdown else None), estimated
 
 
+def _readability_doc(markup: str, url: str) -> list[_Block] | None:
+    """두 번째 구조 추출기: readability-lxml로 본문 영역을 고르고 markdownify로 Markdown을 만든다.
+    trafilatura가 소제목이나 코드를 버리는 페이지(velog, 정부 보도자료 등)를 보완한다."""
+    try:
+        from markdownify import markdownify
+        from readability import Document
+    except ImportError:
+        return None
+    try:
+        summary = Document(_figures_to_paragraphs(markup), url=url).summary(html_partial=True)
+        markdown = markdownify(summary, heading_style="ATX", bullets="-", strip=["a"], table_infer_header=True,
+                               escape_asterisks=False, escape_underscores=False)
+    except Exception:  # noqa: BLE001 - 추출기 내부 오류는 다른 후보로 넘기는 사유일 뿐이다.
+        return None
+    return _markdown_blocks(markdown) if markdown and markdown.strip() else None
+
+
+def _coverage(source: dict, blocks: list[_Block], legacy_chars: int) -> float:
+    """원문 구조를 얼마나 살렸나(소제목, 표, 코드, 글자 각 0~1의 합). 두 추출기가 모두 관문을 통과하면 높은 쪽을 쓴다."""
+    found = _structure_counts(blocks)
+    return sum((
+        min(1.0, found["headings"] / source["headings"]) if source["headings"] else 1.0,
+        (1.0 if found["table_rows"] else 0.0) if source["tables"] else 1.0,
+        min(1.0, found["code"] / source["code"]) if source["code"] else 1.0,
+        min(1.0, found["chars"] / legacy_chars) if legacy_chars else 1.0,
+    ))
+
+
 def _gate(source: dict, blocks: list[_Block] | None, legacy_chars: int, legacy_numbers: int) -> str | None:
     """구조 추출 결과를 원문과 맞춰 본다. 떨어지면 이유를 돌려준다(기준값은 2026-11-24 점검의 출발점)."""
     if not blocks:
@@ -470,6 +535,7 @@ def _gate(source: dict, blocks: list[_Block] | None, legacy_chars: int, legacy_n
 
 
 def _html_doc(markup: str, url: str) -> _Doc:
+    original, markup = markup, (_main_region(markup, url) or markup)
     page = _PageText()
     page.feed(markup)
     page.close_block()
@@ -477,18 +543,25 @@ def _html_doc(markup: str, url: str) -> _Doc:
     title = _clean(page.social_title or page.title)[:200] or None
     if title and _BLOCKED_PAGE.search(title):
         raise _Unreadable("본문을 읽지 못했습니다. 로그인이 필요하거나 차단 안내 화면일 수 있습니다. 본문을 복사해 '본문 붙여넣기'로 넣어 주세요.")
-    blocks, estimated = _trafilatura_doc(markup, url)
+    structured, estimated = _trafilatura_doc(markup, url)
     legacy_chars = sum(map(len, legacy))
-    reason = _gate(_source_counts(markup), blocks, legacy_chars, sum(len(_DIGITS.findall(text)) for text in legacy))
-    dates = _page_dates(markup, estimated)
-    if reason is None:
-        return _Doc(title, blocks, "trafilatura-2.4.0", dates=dates)
+    legacy_numbers = sum(len(_DIGITS.findall(text)) for text in legacy)
+    source = _source_counts(markup)
+    dates = _page_dates(original, estimated)
+    # 미리 정한 한 번의 비교: 두 추출기를 함께 돌려 원문과 대조하고, 통과한 것 중 원문 구조를 더 살린 쪽을 쓴다.
+    candidates = [("trafilatura-2.4.0", structured), ("readability-0.9", _readability_doc(markup, url))]
+    judged = [(name, blocks, _gate(source, blocks, legacy_chars, legacy_numbers)) for name, blocks in candidates]
+    passing = [(name, blocks) for name, blocks, reason in judged if reason is None]
+    if passing:
+        name, blocks = max(passing, key=lambda pair: _coverage(source, pair[1], legacy_chars))  # 같으면 앞의 trafilatura
+        return _Doc(title, blocks, name, dates=dates)
     if legacy_chars < MIN_LINK_CHARS:
         raise _Unreadable("본문을 읽지 못했습니다. 로그인이 필요하거나 차단 안내 화면일 수 있습니다. 본문을 복사해 '본문 붙여넣기'로 넣어 주세요.",
                           title)
-    note = f"표와 소제목을 살리지 못해 예전 방식으로 저장했습니다({reason})." if blocks is not None else ""
+    tried = [f"{name.split('-')[0]}: {reason}" for name, blocks, reason in judged if blocks is not None]
+    note = f"표와 소제목을 살리지 못해 예전 방식으로 저장했습니다({'; '.join(tried)})." if tried else ""
     doc = _plain(legacy, "html-parser", title)
-    doc.note, doc.dates = note, dates
+    doc.note, doc.dates = note[:300], dates
     return doc
 
 
@@ -1020,6 +1093,36 @@ def retry_item(root, item_id: str, *, fetch=None) -> dict:
         if _item(db, item_id)["status"] != "needs_check":
             raise WorkflowError("확인이 필요한 자료만 다시 읽을 수 있습니다.")
     return _read_item(root, item_id, fetch)
+
+
+def reread_item(root, item_id: str, *, fetch=None) -> dict:
+    """이미 저장된 링크를 지금 규칙(구조 추출, 원문 대조, 날짜)으로 다시 읽는다.
+
+    새로 못 읽었거나, 새 본문이 예전 본문의 절반이 안 되면 예전 본문을 그대로 둔다(나빠지지 않게).
+    근거 사용 여부, 분야, 쓰임새, 제목은 바꾸지 않는다. 바뀐 문단의 벡터는 다시 계산해야 한다.
+    """
+    fetch = fetch or _bounded_fetch()
+    with closing(_connect(root)) as db:
+        row = _item(db, item_id)
+        if row["kind"] != "link" or row["status"] != "done":
+            raise WorkflowError("본문이 저장된 링크만 다시 읽을 수 있습니다.")
+        old_chars = db.execute("SELECT COALESCE(SUM(LENGTH(text)), 0) FROM passages WHERE item_id=?", (item_id,)).fetchone()[0]
+        old_hash = row["content_hash"]
+        try:
+            document = _read_link(row["url"], fetch)
+        except _READ_ERRORS as exc:
+            return {"id": item_id, "result": "kept", "reason": str(exc)[:200] if isinstance(exc, WorkflowError) else type(exc).__name__}
+        new_chars = sum(len(text) for text, _, _ in _chunk_blocks(document.blocks))
+        if old_chars >= 600 and new_chars < old_chars * 0.5:
+            return {"id": item_id, "result": "kept", "reason": f"새 본문 {new_chars:,}자가 예전 {old_chars:,}자의 절반이 안 됩니다"}
+        try:
+            with db:
+                _store_passages(db, item_id, document, None, minimum=MIN_LINK_CHARS)
+        except WorkflowError as exc:
+            return {"id": item_id, "result": "kept", "reason": str(exc)[:200]}
+        after = _item(db, item_id)
+        return {"id": item_id, "result": "same" if after["content_hash"] == old_hash else "updated", "status": after["status"],
+                "extractor": after["extractor"], "old_chars": old_chars, "new_chars": new_chars, "passages": after["passages"]}
 
 
 def fill_text(root, item_id: str, text: str, title: str | None = None) -> dict:

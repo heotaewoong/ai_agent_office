@@ -24,8 +24,16 @@ export type SourceItem = {
   file_name: string | null;
   created_at: string;
   updated_at: string;
+  /** 원문의 발행일·수정일(YYYY-MM-DD)과 이 자료를 읽은 시각. 예전에 들어온 자료는 비어 있을 수 있다. */
+  published_at?: string | null;
+  modified_at?: string | null;
+  collected_at?: string | null;
+  date_source?: string | null;
+  extractor?: string | null;
 };
-export type SourceItemDetail = SourceItem & { passage_texts: string[] };
+/** 문단이 원문 어디에 있었는지. locator는 PDF 쪽("p.3", 파일 기준), heading은 소제목 경로. */
+export type SourcePlace = { locator: string | null; heading: string | null };
+export type SourceItemDetail = SourceItem & { passage_texts: string[]; passage_places?: SourcePlace[] };
 /** 근거로 켠 링크 자료 가운데 기획 근거 검색에 들어갈 준비(벡터 계산)가 끝난 문단 수. */
 export type SourceVectors = { passages: number; ready: number; pending: number; available: boolean };
 export type SourceLibrary = {
@@ -144,6 +152,30 @@ export function appendBody(current: string, addition: string, limit = 50_000): {
 export function displayDay(value: string): string {
   const time = Date.parse(value);
   return Number.isFinite(time) ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric" }).format(new Date(time)) : "";
+}
+
+const dateSourceTags: Record<string, string> = { htmldate: "추정", "pdf-metadata": "파일 정보", "docx-core": "파일 정보" };
+
+/** 자료의 날짜를 한 줄로 보여 준다. 새 규칙으로 읽었는데 발행일을 못 찾았으면 '발행일 모름'이라고 적는다. */
+export function sourceDates(item: Pick<SourceItem, "kind" | "status" | "published_at" | "modified_at" | "collected_at" | "date_source">): string {
+  if (item.status !== "done") return "";
+  const parts: string[] = [];
+  if (item.published_at) {
+    const tag = dateSourceTags[item.date_source ?? ""];
+    parts.push(`발행 ${item.published_at}${tag ? `(${tag})` : ""}`);
+  } else if (item.kind === "link" && item.collected_at) {
+    parts.push("발행일 모름");
+  }
+  if (item.modified_at && item.modified_at !== item.published_at) parts.push(`수정 ${item.modified_at}`);
+  if (item.collected_at) parts.push(`읽은 날 ${displayDay(item.collected_at)}`);
+  return parts.join(" · ");
+}
+
+/** 문단 위치를 한 줄로. PDF는 파일 기준 쪽, 웹은 소제목 경로. 인용할 때 쪽이나 절을 밝히는 데 쓴다. */
+export function passagePlace(place?: SourcePlace | null): string {
+  if (!place) return "";
+  const page = place.locator && /^p\.\d+$/.test(place.locator) ? `PDF ${place.locator.slice(2)}쪽` : place.locator ?? "";
+  return [page, place.heading ?? ""].filter(Boolean).join(" · ");
 }
 
 export async function fileToBase64(file: Blob): Promise<string> {
