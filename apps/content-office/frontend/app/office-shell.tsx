@@ -4,7 +4,7 @@ import { JobTrash,jobTrashWorking,type JobTrashRequest } from './job-trash';
 import {DeliveryConsole} from "./delivery-console";
 import ArtifactLibrary from './artifact-library';
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { officeHref, officeRoute, type View } from "../lib/navigation";
@@ -46,6 +46,7 @@ import {
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { PageOutline } from "./page-outline";
+import { CommandPalette, ThemeSwitch } from "./command-palette";
 import deliveryStyles from "./delivery-view.module.css";
 import { WorldView } from "./world-view";
 import { reuseUnchangedJob } from "../lib/job-snapshot";
@@ -92,22 +93,17 @@ import {
 } from "./support-panels";
 
 type LocalDraft = { title: string; body: string; baseHash?: string };
-const views: { id: View; title: string; icon: string; en: string }[] = [
-  { id: "home", title: "내 결정 대기", icon: "check", en: "DECISIONS" },
-  { id: "plans", title: "기획·독자 질문", icon: "pen", en: "PLANNING" },
-  { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING" },
-  { id: "sources", title: "자료 창고", icon: "source", en: "SOURCE LIBRARY" },
-  { id: "studio", title: "콘텐츠 작업실", icon: "pen", en: "CONTENT STUDIO" },
-  {
-    id: "delivery",
-    title: "제작·출고함",
-    icon: "package",
-    en: "PRODUCTION & DELIVERY",
-  },
-  { id: "world", title: "오피스 월드", icon: "map", en: "OFFICE WORLD" },
-  { id: "settings", title: "제작 설정", icon: "grid", en: "SETTINGS & CONNECTIONS" },
-  { id: "activity", title: "운영 기록", icon: "activity", en: "OFFICE LOG" },
-  { id: "architecture", title: "파이프라인", icon: "grid", en: "PIPELINE" },
+const views: { id: View; title: string; icon: string; en: string; group: string; hint: string }[] = [
+  { id: "home", title: "내 결정 대기", icon: "inbox", en: "DECISIONS", group: "오늘", hint: "승인과 검토가 필요한 일" },
+  { id: "plans", title: "기획·독자 질문", icon: "idea", en: "PLANNING", group: "만들기", hint: "기획 은행과 독자 질문" },
+  { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING", group: "만들기", hint: "공식 뉴스와 플랫폼 소식" },
+  { id: "studio", title: "콘텐츠 작업실", icon: "studio", en: "CONTENT STUDIO", group: "만들기", hint: "원고 편집과 검수" },
+  { id: "delivery", title: "제작·출고함", icon: "package", en: "PRODUCTION & DELIVERY", group: "만들기", hint: "완성본 승인과 채널 전달" },
+  { id: "sources", title: "자료 창고", icon: "library", en: "SOURCE LIBRARY", group: "자료", hint: "근거로 쓸 링크와 메모" },
+  { id: "world", title: "오피스 월드", icon: "map", en: "OFFICE WORLD", group: "운영", hint: "팀과 진행 중인 작업 한눈에" },
+  { id: "settings", title: "제작 설정", icon: "sliders", en: "SETTINGS & CONNECTIONS", group: "운영", hint: "음성, 이미지, 키, 작업 시간" },
+  { id: "activity", title: "운영 기록", icon: "history", en: "OFFICE LOG", group: "운영", hint: "오피스가 실제로 한 일" },
+  { id: "architecture", title: "파이프라인", icon: "workflow", en: "PIPELINE", group: "운영", hint: "기획부터 출고까지 흐름" },
 ];
 const defaultSelections: Selections = {
   blog: true,
@@ -485,19 +481,15 @@ export default function Office({ children }: { children: React.ReactNode }) {
             h<span>•</span>
           </span>
           <span>
-            HeoBrain<small>CONTENT OFFICE</small>
+            HeoBrain<small>콘텐츠 오피스</small>
           </span>
         </button>
-        <div className="workspace-label">
-          <span className="tiny-square" /> 나의 콘텐츠 오피스{" "}
-          <span className="workspace-number">01</span>
-        </div>
         <nav aria-label="오피스 메뉴">
-          {views.map((item) => (
+          {views.map((item, index) => (<Fragment key={item.id}>
+            {item.group !== views[index - 1]?.group && <div className="nav-group-label" aria-hidden="true">{item.group}</div>}
             <Link
               href={officeHref(item.id, item.id === 'delivery' ? '' : activeId)}
               prefetch={false}
-              key={item.id}
               className={`nav-item ${view === item.id ? "active" : ""}`}
               aria-current={view === item.id ? "page" : undefined}
             >
@@ -508,8 +500,8 @@ export default function Office({ children }: { children: React.ReactNode }) {
               )}
               {view === item.id && <span className="nav-active-dot" />}
             </Link>
-          ))}
-          <a className="nav-item detail-lab-link" href="/detail-lab/" target="_blank" rel="noopener noreferrer"><Icon name="grid" /><span>상세페이지 제작실<small>별도 실험실 · 새 탭 ↗</small></span></a>
+          </Fragment>))}
+          <a className="nav-item detail-lab-link" href="/detail-lab/" target="_blank" rel="noopener noreferrer"><Icon name="grid" /><span>상세페이지 제작실<small>새 탭에서 열려요</small></span><Icon name="external" size={14} /></a>
         </nav>
         <div className="sidebar-bottom">
           <div className="local-status">
@@ -532,10 +524,11 @@ export default function Office({ children }: { children: React.ReactNode }) {
             <span>{remainingWindow(end, now)}</span>
             <small>설정</small>
           </button>
+          <ThemeSwitch />
           <div className="operator">
             <span className="avatar">H</span>
             <span>
-              나의 편집실<small>운영자 · 내 작업공간</small>
+              나의 편집실<small>운영자</small>
             </span>
             <span className="operator-dot">↗</span>
           </div>
@@ -545,7 +538,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
       <div className="main-shell">
         <header className="topbar">
           <div>
-            <span className="breadcrumb">워크스페이스</span>
+            <span className="breadcrumb">{currentView.group}</span>
             <span className="slash">/</span>
             <span>{currentView.title}</span>
           </div>
@@ -569,25 +562,20 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 뉴스레터 초안 {dashboard.newsletters.draft ?? 0} · ③ {dashboard.newsletters.approved ?? 0}
               </span>
             )}
-            <span className="local-chip">내 작업공간</span>
+            <CommandPalette views={views} jobs={jobs.map((item) => ({ id: item.id, title: item.title, state: item.state }))} />
           </div>
         </header>
         <main id="main-content" tabIndex={-1}>
           {view !== "architecture" && <div className="page-heading">
             <div>
-              <p className="eyebrow">
-                {currentView.en}
-                <span className="eyebrow-line" />
-              </p>
               <h1>
                 {libraryActive ? '산출물 보관함' : currentView.title}
-                <span className="orange-period">.</span>
               </h1>
               <p className="page-description">
                 {view === "home"
                   ? "내 검토가 필요한 작업과 다음 행동을 확인하세요."
                   : view === "plans"
-                    ? "독자 질문과 근거를 살피고, 다음에 만들 기획을 고르세요."
+                    ? "근거가 갖춰진 기획을 골라 작업으로 넘기고, 독자 질문과 내 글도 여기서 기획으로 만들어요."
                     : view === "news"
                   ? "공식 뉴스와 플랫폼 소식을 살펴보고 기획 후보를 정리하세요."
                   : view === "sources"
@@ -691,10 +679,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             <>
               {view === "home" && <DecisionHome dashboard={dashboard} />}
               <div hidden={view!=="plans"}>
-                <OwnedSourceIntake onCreated={(j)=>{openCreatedJobs([j]);void loadDashboard(true);}} />
               {(view === "plans" || plansVisited) && <>
-                  <p className="muted">독자 질문과 기획 후보를 정리하고, 근거가 갖춰진 기획을 선택하세요.</p>
-                  <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
                   <IdeaBank
                     active={view === "plans"}
                     drafts={ideaSourcesDrafts}
@@ -705,7 +690,9 @@ export default function Office({ children }: { children: React.ReactNode }) {
                       void loadDashboard(true);
                     }}
                   />
+                  <QuestionsPanel onConverted={() => setIdeaRefresh((n) => n + 1)} />
               </>}
+                <OwnedSourceIntake onCreated={(j)=>{openCreatedJobs([j]);void loadDashboard(true);}} />
               </div>
               {view === "news" && <nav className="news-segments" aria-label="소식 보기" style={{ marginBottom: 24 }}>
                 <Link href={search.has('seg') ? newsHref(segment, articleSort) : `/news?sort=${articleSort}`} scroll={false} prefetch={false} aria-current={officialNews ? 'page' : undefined}>공식 뉴스</Link>

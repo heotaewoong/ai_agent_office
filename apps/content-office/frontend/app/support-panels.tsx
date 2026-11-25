@@ -22,6 +22,7 @@ import { benchmarkPublicUrl } from "../lib/benchmarks";
 import { packagingRequired } from "../lib/packaging";
 import { officeHref } from "../lib/navigation";
 import { bookCitation, bookDiscoveryLine, bookPolicy, evidencePlace } from "../lib/book-evidence";
+import { countIdeas, filterIdeas, ideaFilters, ideaStatus, outlierLabel, type IdeaFilter } from "../lib/idea-bank";
 
 export type IntakeDraft = {
   text: string;
@@ -638,9 +639,13 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
   const [bookSelections, setBookSelections] = useState<Record<string, { hash: string; ids: string[] }>>({});
   const [evidenceFailure, setEvidenceFailure] = useState<{ id: string; message: string } | null>(null);
   const [evidenceApproval, setEvidenceApproval] = useState<{ ideaId: string; jobId: string } | null>(null);
+  const [selectedId, setSelectedId] = useState("");
+  const [filter, setFilter] = useState<IdeaFilter>("all");
+  const [query, setQuery] = useState("");
   const readTicket = useRef(0);
   const writing = useRef(false);
   const focusedFragment = useRef("");
+  const pendingFocus = useRef("");
   const sourceEditing = useCallback((id: string, pending: boolean) => {
     setEditingSources((previous) => {
       if (Boolean(previous[id]) === pending) return previous;
@@ -674,12 +679,28 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
     const fragment = window.location.hash;
     if (!fragment || focusedFragment.current === fragment) return;
     const idea = ideas.find((candidate) => `#${encodeURIComponent(candidate.id)}` === fragment);
-    const target = idea && document.getElementById(idea.id);
-    if (!target) return;
+    if (!idea) return;
     focusedFragment.current = fragment;
+    setFilter("all");
+    setQuery("");
+    setSelectedId(idea.id);
+    pendingFocus.current = idea.id;
+  }, [active, ideas]);
+  useEffect(() => {
+    if (!pendingFocus.current) return;
+    const target = document.getElementById(pendingFocus.current);
+    if (!target) return;
+    pendingFocus.current = "";
     target.focus({ preventScroll: true });
     target.scrollIntoView({ block: "start" });
-  }, [active, ideas]);
+  });
+  function openIdea(id: string) {
+    setSelectedId(id);
+    const fragment = `#${encodeURIComponent(id)}`;
+    focusedFragment.current = fragment;
+    history.replaceState(history.state, "", fragment);
+    if (window.matchMedia("(max-width: 900px)").matches) pendingFocus.current = id;
+  }
   function canReviewEvidence(idea: Idea) {
     return (idea.state === "candidate" || idea.public_evidence_reviewable === true)
       && !editingSources[idea.id] && !drafts[idea.id]?.dirty && /^[a-f0-9]{64}$/.test(idea.edit_hash ?? "");
@@ -774,19 +795,52 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
       setBusy(null);
     }
   }
+  const counts = countIdeas(ideas);
+  const visible = filterIdeas(ideas, filter, query);
+  const current = ideas.find((idea) => idea.id === selectedId && (visible.includes(idea) || pendingFocus.current === idea.id)) ?? visible[0];
   return (
-    <section className="news-section" aria-labelledby="idea-bank-heading">
+    <section className="news-section idea-bank" aria-labelledby="idea-bank-heading">
       <div className="section-heading">
         <div className="section-title">
-          <h2 id="idea-bank-heading">기획 은행 · ⓪ 기획 선택</h2>
+          <h2 id="idea-bank-heading">기획 은행</h2>
           <span className="count-pill">{ideas.length}</span>
         </div>
+        <p className="idea-bank-lead">근거가 갖춰진 기획을 골라 작업으로 넘겨요.</p>
       </div>
       <IdeaIntake onSaved={() => void load()} />
       {error && <p role="alert">{error}</p>}
-      {ideas.length === 0 && !error && <p>아직 점수를 매긴 기획이 없습니다. 아래에서 직접 등록하세요.</p>}
-      <ol>
-        {ideas.map((idea) => {
+      {ideas.length === 0 && !error && <p className="idea-empty">아직 점수를 매긴 기획이 없어요. 위의 ‘기획 직접 등록’에서 첫 기획을 넣어 보세요.</p>}
+      {ideas.length > 0 && <div className="idea-bank-layout">
+        <div className="idea-list-pane">
+          <div className="idea-filters" role="group" aria-label="기획 상태로 거르기">
+            {ideaFilters.map((item) => <button key={item.id} type="button" className="idea-filter" aria-pressed={filter === item.id} onClick={() => setFilter(item.id)}>
+              {item.label}<span>{counts[item.id]}</span>
+            </button>)}
+          </div>
+          <label className="idea-search"><Icon name="search" size={16} /><span className="visually-hidden">기획 제목 검색</span>
+            <input type="search" value={query} placeholder="제목으로 찾기" onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          {visible.length === 0 ? <p className="idea-empty">조건에 맞는 기획이 없어요. 필터를 ‘전체’로 바꿔 보세요.</p> :
+          <ul className="idea-list" aria-label="기획 목록">
+            {visible.map((idea) => {
+              const status = ideaStatus(idea);
+              return <li key={idea.id}>
+                <button type="button" className="idea-row" aria-pressed={current?.id === idea.id} onClick={() => openIdea(idea.id)}>
+                  <span className={`idea-score tone-${status.tone}`} aria-label={`${Math.round(idea.score)}점`}>{Math.round(idea.score)}</span>
+                  <span className="idea-row-body">
+                    <span className="idea-row-title">{idea.title}</span>
+                    <span className="idea-row-meta">
+                      <span className={`badge ${status.tone === "red" ? "red" : status.tone === "green" ? "green" : "blue"}`}>{status.label}</span>
+                      {idea.next_exam && <span>{dDayLabel(idea.next_exam)}</span>}
+                      {!idea.next_exam && idea.platform_origin && <span>{idea.platform_origin.platform}</span>}
+                    </span>
+                  </span>
+                </button>
+              </li>;
+            })}
+          </ul>}
+        </div>
+        {current && [current].map((idea) => {
           const storedSelection = evidenceSelections[idea.id];
           const publicEvidence = idea.public_evidence;
           const discovery = idea.public_discovery;
@@ -813,11 +867,20 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
           const canReapprove = idea.state === "selected" && idea.public_evidence_reviewable === true;
           const searching = busy?.id === idea.id && busy.action === "search";
           const searchingBooks = busy?.id === idea.id && busy.action === "books";
-          return <li key={idea.id} id={idea.id} tabIndex={-1} className="outline-target">
-            <strong>{idea.title}</strong> · {idea.score}점 · 이상치 {idea.outlier_band}
-            {origin && <p className="muted">소재를 찾은 게시물 · {originUrl
-              ? <a href={originUrl} target="_blank" rel="noopener noreferrer">{origin.title} ↗</a>
-              : origin.title}</p>}
+          const status = ideaStatus(idea);
+          const reaction = outlierLabel(idea.outlier_band);
+          return <article key={idea.id} id={idea.id} tabIndex={-1} className="idea-detail outline-target" data-outline-skip aria-labelledby={`${idea.id}-title`}>
+            <header className="idea-detail-head">
+              <div className="idea-detail-tags">
+                <span className={`badge ${status.tone === "red" ? "red" : status.tone === "green" ? "green" : "blue"}`}>{status.label}</span>
+                <span className="idea-detail-score">{Math.round(idea.score)}점</span>
+                {reaction && <span className="idea-detail-reaction">{reaction}</span>}
+              </div>
+              <h3 id={`${idea.id}-title`}><span className="visually-hidden">선택한 기획: </span>{idea.title}</h3>
+              {origin && <p className="muted">소재를 찾은 게시물 · {originUrl
+                ? <a href={originUrl} target="_blank" rel="noopener noreferrer">{origin.title} ↗</a>
+                : origin.title}</p>}
+            </header>
             {idea.next_exam && <>
               {isVerifiedExam(idea.next_exam) ? <span className="idea-dday" style={{ whiteSpace: "normal", maxWidth: "100%", overflowWrap: "anywhere" }}>{dDayLabel(idea.next_exam)}</span> : <p className="muted" style={{ overflowWrap: "anywhere" }}>{dDayLabel(idea.next_exam)}</p>}
               <p className="muted" style={{ overflowWrap: "anywhere" }}>
@@ -852,7 +915,8 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                 </dl>
               </> : <p className="muted">이 기획에 저장된 독자 기획이 없습니다.</p>}
             </details>
-            {idea.blocked.length > 0 && <p>막힌 이유: {idea.blocked.join(", ")}</p>}
+            {idea.blocked.length > 0 && <p className="idea-blocked" role="note"><Icon name="alert" size={16} />막힌 이유: {idea.blocked.join(", ")}</p>}
+            <h4 className="idea-step-title">근거와 출처</h4>
             <SaveToSourceLibrary links={idea.source_urls?.length ? idea.source_urls : idea.source_url ? [idea.source_url] : []} origin="idea" originRef={idea.id} />
             <ResearchPanel ideaId={idea.id} title={idea.title} summary={idea.platform_origin?.summary} plan={idea.research} />
             <IdeaSourcesPanel
@@ -945,17 +1009,20 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                 </p>}
               </section>
             )}
-            <button
-              className="button secondary"
-              type="button"
-              disabled={idea.state === "selected" || idea.blocked.length > 0 || !canEdit}
-              onClick={() => void choose(idea, selectedIds, selectedBookIds)}
-            >
-              {idea.state === "selected" ? "선택됨" : "이 기획으로 작업 만들기"}
-            </button>
-          </li>;
+            <div className="idea-actionbar">
+              <p>{idea.state === "selected" ? "이 기획으로 만든 작업이 있어요." : idea.blocked.length > 0 ? "막힌 이유를 먼저 해결하면 작업을 만들 수 있어요." : `근거 ${selectedIds.length + selectedBookIds.length}개를 골랐어요. 고르지 않아도 작업은 만들 수 있어요.`}</p>
+              <button
+                className="button primary"
+                type="button"
+                disabled={idea.state === "selected" || idea.blocked.length > 0 || !canEdit}
+                onClick={() => void choose(idea, selectedIds, selectedBookIds)}
+              >
+                {idea.state === "selected" ? "선택됨" : "이 기획으로 작업 만들기"}
+              </button>
+            </div>
+          </article>;
         })}
-      </ol>
+      </div>}
     </section>
   );
 }

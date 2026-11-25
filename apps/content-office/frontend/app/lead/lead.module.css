@@ -19,7 +19,7 @@
 }
 .brand {
   color: var(--orange);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 .title {
@@ -28,7 +28,7 @@
 }
 .description {
   color: var(--ink);
-  font-size: 15px;
+  font-size: 16px;
 }
 .muted {
   color: var(--muted);
@@ -44,9 +44,9 @@
   width: 100%;
   min-height: 46px;
   padding: 10px 12px;
-  border: 1px solid #c9cabd;
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
   font-size: 16px;
 }
 .input[aria-invalid="true"] {
@@ -56,7 +56,7 @@
   padding: 12px 14px;
   border-radius: 8px;
   background: var(--paper);
-  font-size: 13px;
+  font-size: 14px;
 }
 .consentText {
   white-space: pre-line;
@@ -64,13 +64,13 @@
 .version {
   margin-top: 6px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13.5px;
 }
 .check {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
 }
 .check input {
@@ -94,16 +94,16 @@
   min-height: 48px;
   border-radius: 8px;
   background: var(--orange);
-  color: #fff;
+  color: var(--on-strong);
   font-size: 16px;
   font-weight: 700;
 }
 .submit:hover:not(:disabled) {
-  background: #d65a2b;
+  background: var(--accent);
 }
 .note {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13.5px;
 }
 .choices {
   display: grid;

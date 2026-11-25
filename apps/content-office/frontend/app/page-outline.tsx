@@ -34,7 +34,7 @@ export function PageOutline({ scope, curated = false }: { scope: string; curated
     };
     const collect = () => {
       nodes = Array.from(root.querySelectorAll<HTMLElement>(curated ? "[data-outline-title]" : "h2, h3")).filter((node) =>
-        !node.closest(".page-outline, .job-sidebar, .job-heading, [hidden], details:not([open]), [role=dialog]") &&
+        !node.closest(".page-outline, .job-sidebar, .job-heading, [hidden], details:not([open]), [role=dialog], [data-outline-skip]") &&
         node.getClientRects().length > 0 && Boolean(node.textContent?.trim()),
       );
       const next = nodes.map((node) => {
