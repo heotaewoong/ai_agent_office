@@ -98,7 +98,9 @@ def content_review_checks(checks, packet, reviews):
     if not packet.get('news_review_required'):
         return checks
     issues = []
-    for role in ('critique', 'eval'):
+    # v2_harness는 교차 판정 1회(role=judge)가 비평과 평가를 대신한다.
+    roles = ('judge',) if any(r.get('role') == 'judge' for r in reviews) else ('critique', 'eval')
+    for role in roles:
         review = next((r for r in reviews if r.get('role') == role), {})
         result = review.get('content_checks')
         result = result if isinstance(result, dict) else {}
@@ -415,6 +417,18 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
             raise WorkflowError("기존 원고 언어가 미확인이거나 현재 브리프와 다릅니다. 언어를 바꾸려면 새 원고를 생성하세요. 재검수만으로 번역하지 않습니다")
     brand = load_brand()
     provider = provider or Provider(store, job_id=job_id)
+    from .harness import RoutingProvider, resolve_editorial_engine, resolve_judge_model
+    review_engine = resolve_editorial_engine(store)
+    gen_model, judge_model, w_type = getattr(provider, "model", None), None, None
+    if review_engine == "v2_harness":
+        judge_model = getattr(provider, "judge_model", None) or resolve_judge_model(store, gen_model)
+        if judge_model == gen_model:
+            raise WorkflowError("판정 모델이 생성 모델과 같아요. 교차 판정을 위해 다른 모델을 정해 주세요")
+        if not hasattr(provider, "judge_model"):
+            provider = RoutingProvider(provider, Provider(store, model=judge_model, job_id=job_id))
+        if article.get("origin") == "idea":
+            from .research_choices import load_choice
+            w_type = (load_choice(store.root, article["id"]) or {}).get("kind")
     check_current()
     store.begin_editorial(job_id, snapshot)
     original_article = article
@@ -446,8 +460,17 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
                     if (approved_references and item.get("source_kind") == _APPROVED_PUBLIC_SOURCE)
                     or (approved_books and item.get("source_kind") == BOOK_SOURCE_KIND)}
     initial_packet = copy.deepcopy(packet) if evaluate_only else None
+    harness_context = {}
+    if review_engine != "legacy":
+        from .harness import load_rubric
+        harness_context = {"review_engine": review_engine, "judge_model": judge_model, "w_type": w_type, "rubric": load_rubric()[1]}
     identity = graph_identity(snapshot, provider, brand=brand, experiences=experiences,
-                              evaluate_only=evaluate_only, initial_packet=initial_packet)
+                              evaluate_only=evaluate_only, initial_packet=initial_packet, **harness_context)
+    trace = None
+    if review_engine == "v2_harness":
+        from .harness_trace import TraceRecorder
+        trace = TraceRecorder(store.root, digest(identity)[:16], w_type=w_type,
+                              contains_private=bool(approved_books) or original_markdown is not None)
 
     def editorial_event(kind, data):
         if engine == "langgraph":
@@ -514,8 +537,12 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
             packet['channel_titles'] = selected_titles
         if 'channel_posts' in packet:
             packet['channel_policy_version'] = CHANNEL_POLICY_VERSION
-        packet = review_until_ready(packet, provider, event=editorial_event, checks_fn=review_checks, system=brand_system_prompt(BASE, brand) + topic_prompt + adaptation_prompt(packet), packaging=job.get("packaging"), brief=brief, offer=job.get("offer"), original_markdown=original_markdown, refine_limit=0 if evaluate_only and (packet.get('video') or {}).get('scenes') else 2, topic_prompt=topic_prompt)
-        return packet
+        review_options = dict(event=editorial_event, checks_fn=review_checks, system=brand_system_prompt(BASE, brand) + topic_prompt + adaptation_prompt(packet), packaging=job.get("packaging"), brief=brief, offer=job.get("offer"), original_markdown=original_markdown, refine_limit=0 if evaluate_only and (packet.get('video') or {}).get('scenes') else 2, topic_prompt=topic_prompt)
+        if review_engine == "v2_harness":
+            from .harness import review_until_ready_v2
+            return review_until_ready_v2(packet, provider, w_type=w_type, gen_model=gen_model, judge_model=judge_model,
+                                         trace=trace, **review_options)
+        return review_until_ready(packet, provider, **review_options)
 
     if engine == "langgraph":
         packet = run_editorial_graph(build_packet, provider,

@@ -2099,7 +2099,9 @@ function QualityPanel({ job }: { job: Job }) {
                       ? "EVAL · 평가"
                       : review.role === "korean"
                         ? "KOREAN · 국어 검수"
-                        : review.role}
+                        : review.role === "judge"
+                          ? "JUDGE · 교차 판정(6축)"
+                          : review.role}
                 </span>
                 {review.score != null && (
                   <strong>
