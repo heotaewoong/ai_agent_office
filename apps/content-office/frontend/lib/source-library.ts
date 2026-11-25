@@ -243,10 +243,33 @@ export type ResearchResult = {
   candidates: ResearchCandidate[];
   notes: string[];
   searched: boolean;
+  /** 자료 창고만 보고 붙인 판정. 내 경험, 범위 밖 글이거나 창고를 못 봤으면 없다. */
+  verdict?: ResearchVerdict | null;
+  /** 자동 조사에서만 온다: 창고와 바깥 모두 사실 근거가 없어 보류를 권하는 경우, 저장해 둔 결과인지, 자동으로 무엇을 했는지. */
+  hold?: boolean;
+  cached?: boolean;
+  auto?: ResearchAuto;
+  tavily?: TavilyUsage;
 };
+export type ResearchVerdictKey = "correct" | "ambiguous" | "incorrect";
+export type ResearchVerdict = { verdict: ResearchVerdictKey; label: string; top_score: number | null; reason: string };
+export type ResearchAuto = { ran: boolean; tavily: boolean; tavily_today: number; tavily_daily_cap: number };
+/** 승인⓪에서 사람이 매기는 답. 맞음과 틀림은 판정 채점에 쓰고 연습은 채점에서 뺀다. */
+export type VerdictLabel = "correct" | "wrong" | "practice";
+export type VerdictLabelState = {
+  idea_id: string; verdict: ResearchVerdictKey | null; verdict_label: string | null; top_score: number | null;
+  label: VerdictLabel | null; suggested: "correct" | "wrong" | null; saved_external: number;
+};
+export const verdictLabels: { id: VerdictLabel; label: string; help: string }[] = [
+  { id: "correct", label: "맞음", help: "판정대로였어요." },
+  { id: "wrong", label: "틀림", help: "판정이 빗나갔어요." },
+  { id: "practice", label: "연습", help: "연습으로 눌러 보는 거라 채점에서 빼요." },
+];
 export type ResearchRequest = {
   /** 기획 카드에서 누른 조사면 기획 ID. 추천과 실제로 누른 것을 세는 데만 쓴다. */
   id?: string; title: string; summary?: string; area?: string; kind?: ResearchKind; experience_first?: boolean; query?: string; force?: boolean;
+  /** 기획을 열 때 화면이 보내는 자동 조사. 서버가 창고 판정에 따라 대신 찾고 기획마다 결과를 저장한다. */
+  auto?: boolean;
 };
 export type ResearchTopic = { id?: string; title: string; summary?: string; area?: string; kind?: ResearchKind; experience_first?: boolean };
 export type ResearchChoice = { idea_id: string; kind: ResearchKind; kind_label: string; area: string; area_label: string; updated_at: string };
@@ -295,6 +318,20 @@ export function mergeTavily(result: ResearchResult, found: TavilyResult): Resear
     notes: [...result.notes, ...found.notes.filter((note) => !result.notes.includes(note))],
     searched: result.searched || found.searched,
   };
+}
+
+export function verdictBadge(verdict?: ResearchVerdict | null): { label: string; tone: "green" | "orange" | "red" } | null {
+  if (!verdict) return null;
+  return { label: `자료 창고 판정: ${verdict.label}`, tone: verdict.verdict === "correct" ? "green" : verdict.verdict === "ambiguous" ? "orange" : "red" };
+}
+
+/** 자동 조사가 무엇을 했는지 한 줄로 알려 준다. 사람이 누른 조사에는 줄이 없다. */
+export function autoLine(result: Pick<ResearchResult, "auto" | "cached" | "verdict">): string | null {
+  if (!result.auto) return null;
+  const did = !result.auto.ran ? "밖으로 찾지 않았어요."
+    : result.auto.tavily ? `무료 공개 출처와 Tavily를 자동으로 찾아봤어요(오늘 자동 ${result.auto.tavily_today}/${result.auto.tavily_daily_cap}회).`
+    : "무료 공개 출처를 자동으로 찾아봤어요.";
+  return `${result.cached ? "저장해 둔 자동 조사 결과예요. " : ""}${did}`;
 }
 
 export function tavilyLabel(usage: TavilyUsage | null): string {

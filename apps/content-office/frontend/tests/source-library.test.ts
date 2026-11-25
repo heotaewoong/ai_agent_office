@@ -5,7 +5,8 @@ import { officeHref, officeRoute } from "../lib/navigation.ts";
 import { ownedSourceInput } from "../lib/owned-source.ts";
 import {
   appendBody, areaForSegment, canPaste, candidateMeta, evidenceHint, fileToBase64, filterSources, importableSources, libraryLine, passagePlace,
-  researchBadge, safeOriginRef, savedCandidateNote, sourceDates, sourceSummary, splitCandidates, splitLinks, vectorSummary,
+  autoLine, researchBadge, safeOriginRef, savedCandidateNote, sourceDates, sourceSummary, splitCandidates, splitLinks, vectorSummary, verdictBadge,
+  verdictLabels,
   type ResearchCandidate, type SourceItem,
 } from "../lib/source-library.ts";
 
@@ -182,4 +183,17 @@ test("발행일, 수정일, 읽은 날과 문단 위치를 보여 준다", () =>
   assert.equal(passagePlace({ locator: null, heading: "복습 간격 > 간격별 기억" }), "복습 간격 > 간격별 기억");
   assert.equal(passagePlace({ locator: null, heading: null }), "");
   assert.equal(passagePlace(undefined), "");
+});
+
+test("자료 창고 판정과 자동 조사 줄: 맞음은 초록, 애매는 주황, 틀림은 빨강이고 사람이 누른 조사에는 자동 줄이 없다", () => {
+  assert.equal(verdictBadge(null), null);
+  assert.deepEqual(verdictBadge({ verdict: "correct", label: "맞음", top_score: 0.7, reason: "" }), { label: "자료 창고 판정: 맞음", tone: "green" });
+  assert.equal(verdictBadge({ verdict: "ambiguous", label: "애매", top_score: 0.5, reason: "" })?.tone, "orange");
+  assert.equal(verdictBadge({ verdict: "incorrect", label: "틀림", top_score: 0.1, reason: "" })?.tone, "red");
+  assert.equal(autoLine({}), null);
+  assert.equal(autoLine({ auto: { ran: false, tavily: false, tavily_today: 0, tavily_daily_cap: 30 } }), "밖으로 찾지 않았어요.");
+  assert.equal(autoLine({ auto: { ran: true, tavily: false, tavily_today: 3, tavily_daily_cap: 30 } }), "무료 공개 출처를 자동으로 찾아봤어요.");
+  assert.equal(autoLine({ cached: true, auto: { ran: true, tavily: true, tavily_today: 4, tavily_daily_cap: 30 } }),
+    "저장해 둔 자동 조사 결과예요. 무료 공개 출처와 Tavily를 자동으로 찾아봤어요(오늘 자동 4/30회).");
+  assert.deepEqual(verdictLabels.map((choice) => choice.id), ["correct", "wrong", "practice"]);
 });

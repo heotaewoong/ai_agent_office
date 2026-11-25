@@ -446,9 +446,47 @@ def library_fact_sources(root, title: str, *, area=None) -> int | None:
         return None
 
 
+# 자료 창고 판정(CRAG의 맞음, 애매, 틀림). 2026-11-25 골든셋 v4 Dev 50문항을 운영 창고(근거 링크 38건)에 돌려 정했다.
+# 정답 문서가 창고에 있는 23문항의 1등 유사도는 0.42~0.78(가운데 0.60), 없는 27문항은 0.38~0.61(가운데 0.49)이었다.
+# 0.62 이상을 '맞음'으로 두면 정답이 없는데 '맞음'이라 한 문항이 0/27이고, 0.48 미만 '틀림'에는 정답이 있는 문항이 1/23 들어간다.
+# 하한을 넘은 후보 수는 두 집단이 갈리지 않아 쓰지 않는다. 문항이 50개뿐이라 사람이 누른 맞음, 틀림 기록으로 다시 본다.
+VERDICT_CORRECT_SCORE = 0.62
+VERDICT_INCORRECT_SCORE = 0.48
+VERDICTS = {"correct": "맞음", "ambiguous": "애매", "incorrect": "틀림"}
+
+
+def library_judgement(root, title: str, *, area=None) -> dict:
+    """창고 후보 주소 수와 1등 후보의 유사도. 창고를 지금 볼 수 없으면 둘 다 None이다."""
+    unknown = {"fact_sources": None, "top_score": None}
+    try:
+        from .public_evidence import PublicEvidenceUnavailable, find_library_evidence_scored
+        from .source_library import example_urls
+    except ImportError:
+        return unknown
+    try:
+        rows, top = find_library_evidence_scored(title, root=root, exclude_urls=tuple(example_urls(root)), limit=6, area=area)
+    except PublicEvidenceUnavailable:
+        return unknown
+    return {"fact_sources": len({row["url"] for row in rows}), "top_score": top}
+
+
+def library_verdict(hits: int | None, top_score: float | None) -> dict | None:
+    """창고 검색 결과만 보고 붙이는 딱지다. 모델을 부르지 않는다. 창고를 못 봤으면 None이고 예전 기준(주장 종류)을 따른다."""
+    if hits is None:
+        return None
+    if not hits or top_score is None or top_score < VERDICT_INCORRECT_SCORE:
+        key, reason = "incorrect", "자료 창고에 이 주제와 가까운 근거가 없어요."
+    elif top_score >= VERDICT_CORRECT_SCORE:
+        key, reason = "correct", "자료 창고에 이 주제와 아주 가까운 근거가 있어요."
+    else:
+        key, reason = "ambiguous", "자료 창고에 비슷한 근거는 있지만 충분한지 애매해요."
+    return {"verdict": key, "label": VERDICTS[key], "top_score": top_score, "reason": reason}
+
+
 def run_research(root, title: str, *, summary: str = "", area: str | None = None, kind: str | None = None, experience_first: bool = False,
-                 query: str | None = None, force: bool = False, fetch=None, fact_sources=library_fact_sources, translate=None) -> dict:
-    """외부 조사 필요 여부는 기획의 주장으로 결정한다. 창고 후보 수는 참고용이다."""
+                 query: str | None = None, force: bool = False, fetch=None, fact_sources=library_fact_sources, translate=None,
+                 auto: bool = False) -> dict:
+    """외부 조사 필요 여부는 기획의 주장으로 결정한다. auto면 자료 창고 판정(맞음, 애매, 틀림)이 먼저다."""
     title = _clean(title or "")[:300]
     if not title:
         raise WorkflowError("주제를 확인할 수 없습니다.")
@@ -456,14 +494,25 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
     queries = build_queries(title, query)
     if plan["blocked"]:  # 범위 밖으로 고른 주제는 '그래도 찾아보기'를 눌러도 창고와 바깥 모두 찾지 않는다.
         return {"plan": plan, "queries": queries, "library": {"fact_sources": None, "sufficient": False}, "candidates": [],
-                "notes": ["범위 밖 주제로 골라서 밖으로 찾지 않았어요. 글 유형을 바꾸면 다시 찾을 수 있어요."], "searched": False}
+                "notes": ["범위 밖 주제로 골라서 밖으로 찾지 않았어요. 글 유형을 바꾸면 다시 찾을 수 있어요."], "searched": False, "verdict": None}
     library_query = f"{title} {query.strip()}" if query and query.strip() else title
-    hits = (library_fact_sources(root, library_query, area=plan["area"])
-            if fact_sources is library_fact_sources else fact_sources(root, library_query))
+    if fact_sources is library_fact_sources:
+        judged = library_judgement(root, library_query, area=plan["area"])
+        hits = judged["fact_sources"]
+        # 내 경험 중심 글은 외부 조사를 하지 않으므로 창고 판정도 붙이지 않는다.
+        verdict = None if plan["experience_first"] else library_verdict(hits, judged["top_score"])
+    else:
+        hits, verdict = fact_sources(root, library_query), None
     library = {"fact_sources": hits, "sufficient": False}
-    result = {"plan": plan, "queries": queries, "library": library, "candidates": [], "notes": [], "searched": False}
+    result = {"plan": plan, "queries": queries, "library": library, "candidates": [], "notes": [], "searched": False, "verdict": verdict}
     if re.search(r"쿠폰|할인\s*코드|\bpromo\s*code\b", f"{title} {summary}", re.I):
         result["notes"].append("쿠폰 발급·상품 적용·만료는 스토어 확인 항목이에요. 공개 자료로 확인 완료 처리하지 않아요.")
+    if auto and verdict:
+        # 자동 조사: 창고 판정이 '맞음'이면 밖으로 찾지 않는다. 발표·공고 글(W2)은 창고에 있어도 최신 원문을 확인한다.
+        if verdict["verdict"] == "correct" and not (plan["kind"] == "W2" and not plan["kind_guessed"]):
+            result["notes"].append("자료 창고에 맞는 근거가 있어서 밖으로 찾지 않았어요. 부족하면 '다시 찾기'를 눌러 주세요.")
+            return result
+        force = force or verdict["verdict"] != "correct"
     if not force and plan["need"] == "none":
         return result
     if fetch is None:

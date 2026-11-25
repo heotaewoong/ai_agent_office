@@ -269,6 +269,23 @@ def find_library_evidence(query: str, *, root, exclude_urls: tuple[str, ...] = (
     return _select(_rank_library(path, vector, exclude_urls, area=area), exclude_urls, min(limit, _MAX_RESULTS), query=query)
 
 
+def find_library_evidence_scored(query: str, *, root, exclude_urls: tuple[str, ...] = (), limit: int = 4, area=None) -> tuple[list[dict], float | None]:
+    """find_library_evidence와 같은 후보에 1등 후보의 유사도를 붙여 돌려준다. 근거로 켠 벡터가 없으면 ([], None)이다."""
+    query = query.strip()[:_MAX_QUERY_CHARS]
+    path = _library_db(root)
+    if not query or limit <= 0 or path is None or not _library_has_vectors(path):
+        return [], None
+    index, python, cache = _paths()
+    vector = _query_vector(query, python, cache, index.parent / 'query.lock', library=True)
+    ranked = _rank_library(path, vector, exclude_urls, area=area)
+    matches = _select(ranked, exclude_urls, min(limit, _MAX_RESULTS), query=query)
+    if not matches:
+        return [], 0.0
+    first = matches[0]
+    top = max((-row[0] for row in ranked if row[2] == first['url'] and row[4] == first['paragraph']), default=0.0)
+    return matches, round(top, 4)
+
+
 def library_worker_available(root) -> bool:
     """벡터 계산은 실행 중인 서버 상태 폴더의 자료 창고에만 한다. 테스트 폴더나 사본은 건드리지 않는다."""
     _, python, cache = _paths()

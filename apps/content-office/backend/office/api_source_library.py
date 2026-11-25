@@ -12,7 +12,8 @@ from fastapi import Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from .external_research import add_trusted, delete_trusted, list_trusted, research_plan, run_research, run_tavily, tavily_usage
-from .research_choices import click_stats, log_click, save_choice
+from .research_auto import run_auto_research
+from .research_choices import click_stats, load_label, log_click, save_choice, save_label, verdict_stats
 from .research_query import english_queries
 from .source_library import (
     add_file, add_links, add_memo, delete_item, fill_text, item_detail, library_overview, retry_item, search_library,
@@ -84,6 +85,12 @@ class ResearchTopic(BaseModel):
 class ResearchRun(ResearchTopic):
     query: str | None = Field(default=None, max_length=200)
     force: bool = Field(default=False, strict=True)
+    auto: bool = Field(default=False, strict=True)
+
+
+class ResearchLabel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: Literal["correct", "wrong", "practice"]
 
 
 class TavilyRun(BaseModel):
@@ -155,13 +162,21 @@ def register(app, store):
 
     @app.post("/api/source-library/research")
     def library_research(body: ResearchRun):
+        if body.auto and body.id and not body.force and not body.query:
+            # 기획을 열 때 화면이 보내는 자동 조사. 자료 창고 판정(맞음, 애매, 틀림)에 따라 서버가 대신 찾고 결과를 기획마다 저장한다.
+            result = run_auto_research(root, body.id, body.title, summary=body.summary, area=body.area, kind=body.kind,
+                                       experience_first=body.experience_first, translate=lambda title: english_queries(store, title))
+            if not result.get("cached"):
+                log_click(root, body.id, result.get("plan") or {}, forced=False, searched=bool(result.get("searched")),
+                          candidates=len(result.get("candidates") or []), verdict=result.get("verdict"), auto=True)
+            return result
         result = run_research(root, body.title, summary=body.summary, area=body.area, kind=body.kind,
                               experience_first=body.experience_first,
                               query=body.query, force=body.force, translate=lambda title: english_queries(store, title))
         if body.id:
             # 사람이 기획 카드에서 누른 조사만 센다. 추천과 실제로 누른 것이 얼마나 맞는지 보려는 기록이다.
             log_click(root, body.id, result.get("plan") or {}, forced=body.force, searched=bool(result.get("searched")),
-                      candidates=len(result.get("candidates") or []))
+                      candidates=len(result.get("candidates") or []), verdict=result.get("verdict"))
         return result
 
     @app.get("/api/source-library/research/tavily")
@@ -186,6 +201,19 @@ def register(app, store):
     @app.get("/api/source-library/research/clicks")
     def library_research_clicks():
         return click_stats(root)
+
+    @app.get("/api/source-library/research/labels")
+    def library_research_label_stats():
+        return verdict_stats(root)
+
+    @app.get("/api/source-library/research/labels/{idea_id}")
+    def library_research_label(idea_id: str):
+        return load_label(root, idea_id)
+
+    @app.put("/api/source-library/research/labels/{idea_id}")
+    def library_research_label_save(idea_id: str, body: ResearchLabel):
+        # 판정이 맞았는지 사람이 매긴 답만 저장한다. 기획 카드와 승인은 바꾸지 않는다.
+        return save_label(root, idea_id, body.label)
 
     @app.get("/api/source-library/trusted")
     def library_trusted():

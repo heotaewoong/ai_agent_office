@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../lib/api";
 import {
-  candidateMeta, choiceLine, confirmedKind, kindNotice, libraryLine, mergeTavily, researchBadge, researchKinds, safeOriginRef, savedCandidateNote,
-  splitCandidates, tavilyLabel, type ResearchCandidate, type ResearchKind, type ResearchPlan, type ResearchResult, type SourceArea,
+  autoLine, candidateMeta, choiceLine, confirmedKind, kindNotice, libraryLine, mergeTavily, researchBadge, researchKinds, safeOriginRef, savedCandidateNote,
+  splitCandidates, tavilyLabel, verdictBadge, type ResearchCandidate, type ResearchKind, type ResearchPlan, type ResearchResult, type SourceArea,
   type TavilyUsage,
 } from "../lib/source-library";
 import { loadSourceAreas } from "./save-to-source-library";
@@ -22,6 +22,7 @@ type Props = {
 /**
  * 기획 카드의 외부 조사 칸. 글 유형과 분야는 사람이 고르고, 고르기 전에는 서버가 제목으로 추측한 값을 기본값으로만 보여 줍니다.
  * 주제의 주장과 고른 유형에 따라 조사가 필요한지 알려 주고, 누르면 무료 공개 출처에서 후보를 찾아 보여 줍니다.
+ * 기획을 열면 서버가 자료 창고를 먼저 보고 판정(맞음, 애매, 틀림)에 따라 바깥 후보를 대신 찾아 둡니다(기획마다 한 번, 결과 저장).
  * 운영자가 고른 후보만 자료 창고에 들어가고 근거로 켜집니다.
  */
 export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
@@ -45,6 +46,9 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
   const groups = splitCandidates(result?.candidates ?? []);
   const waiting = picked.filter((key) => !saved[key]);
   const savedAny = Object.values(saved).some((row) => row.ok);
+  const verdict = verdictBadge(result?.verdict);
+  const autoNote = result ? autoLine(result) : null;
+  const autoStarted = useRef(false);
 
   // 기획 목록을 새로 받으면 서버가 저장된 선택으로 다시 계산한 기준을 씁니다.
   useEffect(() => { setCurrent(plan); }, [plan]);
@@ -89,7 +93,7 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
     }
   }
 
-  async function search(force: boolean, override?: string) {
+  async function search(force: boolean, override?: string, auto = false) {
     if (busy || shown?.blocked) return;
     const text = (override ?? query).trim();
     const kind = confirmedKind(shown);
@@ -100,9 +104,10 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
       // 사람이 고른 값만 보냅니다. 추측한 값은 서버가 같은 방법으로 다시 추측합니다.
       const found = await api.runResearch({
         id: safeOriginRef(ideaId), title, summary, ...(shown && !shown.area_guessed ? { area: shown.area } : {}), ...(kind ? { kind } : {}),
-        ...(text ? { query: text } : {}), force,
+        ...(text ? { query: text } : {}), ...(auto ? { auto: true } : { force }),
       });
       setResult(found);
+      if (found.tavily) setTavily(found.tavily);
       setPicked([]);
       setSaved({});
       setQuery(text || found.queries.english);
@@ -112,6 +117,13 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
       setBusy(null);
     }
   }
+
+  // 기획을 열면 한 번 자동 조사를 부릅니다. 범위 밖(W5)과 내 경험 글, 기획 ID가 없는 카드는 부르지 않습니다.
+  useEffect(() => {
+    if (autoStarted.current || !plan || plan.blocked || plan.experience_first || !safeOriginRef(ideaId)) return;
+    autoStarted.current = true;
+    void search(false, undefined, true);
+  }, [plan, ideaId]);
 
   async function searchTavily() {
     if (busy || shown?.blocked || !result || !tavily?.has_key || tavily.remaining <= 0) return;
@@ -258,6 +270,12 @@ export function ResearchPanel({ ideaId, title, summary = "", plan }: Props) {
             {result && busy !== "search" && (
               <>
                 <p className={styles.hint}>{libraryLine(result.library)}</p>
+                {verdict && (
+                  <p className={styles.hint}>
+                    <span className={`badge ${verdict.tone}`}>{verdict.label}</span> {result.verdict?.reason}
+                    {autoNote ? ` ${autoNote}` : ""}
+                  </p>
+                )}
                 {result.queries.translated && (
                   <p className={styles.researchAlternatives}>
                     <span>한글 주제에 맞는 영어 검색어를 자동으로 만들었어요.{result.queries.alternatives?.length ? " 다른 검색어로도 찾아볼 수 있어요." : ""}</span>

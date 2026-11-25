@@ -216,6 +216,11 @@ export const api = {
   // 사람이 고른 글 유형과 분야를 기획마다 저장한다. 기획 카드와 승인은 바꾸지 않는다.
   saveResearchChoice: (ideaId: string, choice: { kind: ResearchKind; area: string }) =>
     request<{ choice: ResearchChoice }>(`/source-library/research/choices/${encodeURIComponent(ideaId)}`, "PUT", choice),
+  // 자료 창고 판정이 맞았는지 사람이 승인⓪에서 매긴 답(맞음, 틀림, 연습). 기획 카드와 승인은 바꾸지 않는다.
+  researchLabel: (ideaId: string) =>
+    request<import("./source-library").VerdictLabelState>(`/source-library/research/labels/${encodeURIComponent(ideaId)}`),
+  saveResearchLabel: (ideaId: string, label: import("./source-library").VerdictLabel) =>
+    request<import("./source-library").VerdictLabelState>(`/source-library/research/labels/${encodeURIComponent(ideaId)}`, "PUT", { label }),
   trustedSources: () => request<{ sources: TrustedSource[] }>("/source-library/trusted"),
   addTrustedSource: (body: { url: string; area: string; lane: SourceLane; name?: string }) =>
     request<{ source: TrustedSource; sources: TrustedSource[] }>("/source-library/trusted", "POST", body),

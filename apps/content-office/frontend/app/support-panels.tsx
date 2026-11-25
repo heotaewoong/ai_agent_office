@@ -16,6 +16,8 @@ import { Icon } from "./icons";
 import { IdeaIntake } from "./idea-intake";
 import { IdeaSourcesPanel } from "./idea-sources-panel";
 import { ResearchPanel } from "./research-panel";
+import { VerdictLabelPicker } from "./verdict-label";
+import type { VerdictLabel } from "../lib/source-library";
 import { SaveToSourceLibrary } from "./save-to-source-library";
 import type { IdeaSourcesDraft } from "../lib/ideas";
 import { benchmarkPublicUrl } from "../lib/benchmarks";
@@ -639,6 +641,7 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
   const [bookSelections, setBookSelections] = useState<Record<string, { hash: string; ids: string[] }>>({});
   const [evidenceFailure, setEvidenceFailure] = useState<{ id: string; message: string } | null>(null);
   const [evidenceApproval, setEvidenceApproval] = useState<{ ideaId: string; jobId: string } | null>(null);
+  const [verdictLabels, setVerdictLabels] = useState<Record<string, VerdictLabel>>({});
   const [selectedId, setSelectedId] = useState("");
   const [filter, setFilter] = useState<IdeaFilter>("all");
   const [query, setQuery] = useState("");
@@ -772,6 +775,9 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
     setError("");
     setEvidenceFailure(null);
     setEvidenceApproval(null);
+    // 자료 창고 판정이 맞았는지(맞음, 틀림, 연습)는 기록일 뿐이라, 저장하지 못해도 기획 선택⓪은 그대로 진행합니다.
+    const verdictLabel = verdictLabels[idea.id];
+    if (verdictLabel) void api.saveResearchLabel(idea.id, verdictLabel).catch(() => undefined);
     try {
       if (reviewing) {
         const result = await api.approveIdeaPublicEvidence(idea.id, idea.edit_hash!, evidenceIds, bookIds);
@@ -1009,6 +1015,8 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                 </p>}
               </section>
             )}
+            <VerdictLabelPicker ideaId={idea.id} value={verdictLabels[idea.id]}
+              onChange={(label) => setVerdictLabels((previous) => ({ ...previous, [idea.id]: label }))} />
             <div className="idea-actionbar">
               <p>{idea.state === "selected" ? "이 기획으로 만든 작업이 있어요." : idea.blocked.length > 0 ? "막힌 이유를 먼저 해결하면 작업을 만들 수 있어요." : `근거 ${selectedIds.length + selectedBookIds.length}개를 골랐어요. 고르지 않아도 작업은 만들 수 있어요.`}</p>
               <button
