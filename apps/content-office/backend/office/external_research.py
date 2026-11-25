@@ -581,13 +581,42 @@ def _count_tavily_call(root) -> dict:
     return {**usage, "calls": usage["calls"] + 1, "remaining": max(0, usage["remaining"] - 1)}
 
 
-def _official_host(host: str, trusted_hosts=frozenset()) -> bool:
+# 이름이 제품명과 같아도 공식이 아닌 곳(영상, SNS, 블로그, 커뮤니티).
+_SOCIAL_HOSTS = ("youtube.com", "youtu.be", "instagram.com", "threads.com", "threads.net", "tiktok.com", "facebook.com", "x.com",
+                 "twitter.com", "reddit.com", "medium.com", "tistory.com", "naver.com", "daum.net", "velog.io", "brunch.co.kr")
+_SECOND_LEVEL = ("co", "or", "go", "ac", "ne", "re", "com", "org", "net", "gov", "edu")
+# 한글로 적는 제품, 서비스 이름과 그 회사 주소 이름. 제목에 한글 이름만 있어도 공식 사이트를 알아보게 한다.
+_PRODUCT_NAMES = {"옵시디언": ("obsidian",), "노션": ("notion",), "챗gpt": ("openai", "chatgpt"), "오픈ai": ("openai",),
+                  "클로드": ("anthropic", "claude"), "제미나이": ("google", "gemini"), "커서": ("cursor",), "슬랙": ("slack",),
+                  "피그마": ("figma",), "캔바": ("canva",), "깃허브": ("github",), "허깅페이스": ("huggingface",),
+                  "오픽": ("opic",), "토익": ("toeic", "ets"), "엔비디아": ("nvidia",), "앤트로픽": ("anthropic",)}
+
+
+def _site_name(host: str) -> str:
+    """example.co.kr → example, obsidian.md → obsidian, docs.anthropic.com → anthropic."""
+    parts = host.lower().removeprefix("www.").split(".")
+    if len(parts) >= 3 and parts[-2] in _SECOND_LEVEL and len(parts[-1]) == 2:
+        return parts[-3]
+    return parts[-2] if len(parts) >= 2 else host
+
+
+def _official_host(host: str, trusted_hosts=frozenset(), title: str = "") -> bool:
     host = host.lower().removeprefix("www.")
-    return (host in trusted_hosts or host.endswith(_OFFICIAL_SUFFIX) or host.startswith(_OFFICIAL_PREFIX)
-            or any(host == name or host.endswith("." + name) for name in _OFFICIAL_HOSTS))
+    if (host in trusted_hosts or host.endswith(_OFFICIAL_SUFFIX) or host.startswith(_OFFICIAL_PREFIX)
+            or any(host == name or host.endswith("." + name) for name in _OFFICIAL_HOSTS)):
+        return True
+    if any(host == name or host.endswith("." + name) for name in _SOCIAL_HOSTS):
+        return False
+    # 기획 제목의 제품, 서비스 이름과 주소 이름이 같으면 그 회사의 공식 사이트로 본다(예: 옵시디언 글의 obsidian.md).
+    name = _site_name(host)
+    text = unicodedata.normalize("NFKC", title or "")
+    words = {word.casefold() for word in re.findall(r"[A-Za-z][A-Za-z0-9]{3,}", text)}
+    folded = text.casefold().replace(" ", "")
+    words.update(alias for korean, aliases in _PRODUCT_NAMES.items() if korean in folded for alias in aliases)
+    return len(name) >= 4 and name in words
 
 
-def _tavily(query: str, key: str, *, post=None, trusted_hosts=frozenset()) -> list[dict]:
+def _tavily(query: str, key: str, *, post=None, trusted_hosts=frozenset(), title: str = "") -> list[dict]:
     post = post or requests.post
     response = post(TAVILY_URL, json={"query": query[:400], "search_depth": "basic", "max_results": TAVILY_MAX_RESULTS,
                                       "include_answer": False, "include_raw_content": False, "include_images": False},
@@ -603,7 +632,7 @@ def _tavily(query: str, key: str, *, post=None, trusted_hosts=frozenset()) -> li
             continue
         url = str(item.get("url") or "")
         host = (urlsplit(url).hostname or "").lower()
-        official = _official_host(host, trusted_hosts)
+        official = _official_host(host, trusted_hosts, title or query)
         row = _candidate("fact" if official else "example", "tavily", item.get("title"), url, item.get("content") or "",
                          source="Tavily 검색: 공식으로 보이는 주소(원문 확인 필요)" if official else "Tavily 검색(사례·참고 칸, 사실 근거 아님)")
         if row:
@@ -616,7 +645,8 @@ def run_tavily(root, title: str, *, query: str | None = None, post=None) -> dict
     title = _clean(title or "")[:300]
     if not title:
         raise WorkflowError("주제를 확인할 수 없습니다.")
-    wanted = _clean(query or "")[:200] or title
+    # 운영자가 검색어를 안 적었으면 제목 뒤에 '공식'을 붙여 공식 안내를 먼저 찾게 한다(2026-11-25 시험: 옵시디언 공식 도움말 0건 → 4건).
+    wanted = _clean(query or "")[:200] or f"{title} 공식"
     usage = tavily_usage(root)
     result = {"queries": {"tavily": wanted}, "candidates": [], "notes": [], "searched": False, "tavily": usage}
     key = tavily_key()
@@ -630,7 +660,7 @@ def run_tavily(root, title: str, *, query: str | None = None, post=None) -> dict
     trusted_hosts = frozenset((urlsplit(row["url"]).hostname or "").lower().removeprefix("www.")
                               for row in list_trusted(root) if row.get("lane") == "fact")
     try:
-        rows = _tavily(wanted, key, post=post, trusted_hosts=trusted_hosts)
+        rows = _tavily(wanted, key, post=post, trusted_hosts=trusted_hosts, title=f"{title} {wanted}")
     except PermissionError:
         result["notes"].append("Tavily가 키를 받지 않았어요. 키를 다시 확인해 주세요.")
         return result
@@ -641,6 +671,11 @@ def run_tavily(root, title: str, *, query: str | None = None, post=None) -> dict
         result["notes"].append("Tavily가 지금 응답이 없어요. 자동으로 다시 부르지 않아요. 잠시 뒤 다시 눌러 주세요.")
         return result
     rows = [row for row in rows if is_topic_candidate(title, row["title"], row["snippet"])]
+    from .source_library import _blocked_reason
+    readable = [row for row in rows if not _blocked_reason(row["url"])]
+    if len(readable) < len(rows):
+        result["notes"].append(f"네이버 블로그와 뉴스 같은 robots.txt 차단 주소 {len(rows) - len(readable)}건은 근거로 쓸 수 없어서 뺐어요.")
+    rows = readable
     stored = stored_urls(root) if rows else set()
     result["candidates"] = [{**row, "in_library": normalize_url(row["url"]) in stored} for row in rows]
     result["searched"] = True

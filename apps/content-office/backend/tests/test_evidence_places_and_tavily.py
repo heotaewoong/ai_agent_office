@@ -85,7 +85,7 @@ def test_tavily_sorts_official_and_idea_results_and_counts_one_call(tmp_path, ke
         ]})
     result = external_research.run_tavily(tmp_path, "간격 복습 효과", post=post)
     assert len(calls) == 1 and calls[0][0] == external_research.TAVILY_URL
-    assert calls[0][1]["query"] == "간격 복습 효과" and calls[0][1]["search_depth"] == "basic" and calls[0][2].startswith("Bearer tvly-")
+    assert calls[0][1]["query"] == "간격 복습 효과 공식" and calls[0][1]["search_depth"] == "basic" and calls[0][2].startswith("Bearer tvly-")
     lanes = {row["url"]: (row["lane"], row["idea_only"]) for row in result["candidates"]}
     assert lanes == {"https://pubmed.ncbi.nlm.nih.gov/123/": ("fact", False), "https://someblog.example.com/post": ("example", True),
                      "https://docs.example.dev/guide": ("fact", False)}
@@ -118,3 +118,22 @@ def test_tavily_api_reports_usage_without_the_key(tmp_path, key):
     client = TestClient(create_app(store), base_url="http://localhost:8510")
     usage = client.get("/api/source-library/research/tavily").json()
     assert usage["has_key"] is True and usage["calls"] == 0 and "tvly" not in json.dumps(usage)
+
+
+def test_tavily_treats_the_product_site_as_official_and_drops_robots_blocked_hosts(tmp_path, key):
+    key.write_text("tvly-" + "e" * 32)
+    os.chmod(key, 0o600)
+
+    def post(url, *, json, headers, timeout):
+        return Response(200, {"results": [
+            {"title": "Obsidian Sync 문제 해결", "url": "https://obsidian.md/help/sync/troubleshoot", "content": "동기화 문제"},
+            {"title": "옵시디언 동기화 후기", "url": "https://m.blog.naver.com/someone/1", "content": "후기"},
+            {"title": "Obsidian 영상", "url": "https://www.youtube.com/watch?v=1", "content": "영상"},
+            {"title": "옵시디언 동기화 방법", "url": "https://goldenrabbit.co.kr/obsidian", "content": "출판사 블로그"},
+        ]})
+    result = external_research.run_tavily(tmp_path, "옵시디언 Up to Date인데 휴대폰 동기화가 안 될 때", post=post)
+    lanes = {row["url"]: row["lane"] for row in result["candidates"]}
+    assert lanes == {"https://obsidian.md/help/sync/troubleshoot": "fact", "https://www.youtube.com/watch?v=1": "example",
+                     "https://goldenrabbit.co.kr/obsidian": "example"}
+    assert any("robots.txt" in note for note in result["notes"])
+    assert external_research._site_name("docs.anthropic.com") == "anthropic" and external_research._site_name("goldenrabbit.co.kr") == "goldenrabbit"
