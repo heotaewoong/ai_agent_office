@@ -19,8 +19,10 @@ def test_bracketed_evidence_groups_link_all_exact_ids(markers):
 
 @pytest.mark.parametrize("markers", ["(E10, E2)", "[E10] [E2]", "E1 E2", "(E1, E2]", "(E1 설명) (E2)"])
 def test_prefixes_bare_ids_and_malformed_groups_do_not_link_missing_id(markers):
-    issues = deterministic_checks(packet_with_markers(markers))["issues"]
-    assert "모든 핵심 근거 ID를 원고에 연결해야 합니다" in issues
+    checks = deterministic_checks(packet_with_markers(markers))
+    issues = checks["issues"]
+    # P2(2026-11-27): 안 쓴 근거는 고치기로 보내지 않고 목록으로만 보여 줘요.
+    assert "E1" in checks["unused_evidence_ids"]
     if "E10" in markers:
         assert "존재하지 않는 근거 ID가 인용되었습니다" in issues
 

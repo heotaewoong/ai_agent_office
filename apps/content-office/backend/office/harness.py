@@ -8,7 +8,7 @@ legacy 검수(같은 모델 3명이 최대 3라운드, 80점 기준)를 바꾸�
    범위 밖 글)는 모델이 고칠 수 없으므로 그 자리에서 멈춘다.
 2. 규칙 위반이 있으면 유료 판정을 부르지 않고 바로 고친다(판정 호출 0회). 다만 마지막 고치기 한 번은 남겨 둔다.
    그 직전 라운드에는 규칙 위반이 있어도 판정을 불러서, 마지막 고치기가 규칙 위반과 판정 지적을 함께 고치게 한다.
-3. Judge: 생성 모델과 다른 모델 1회. 6축 통과/실패와 근거 없는 문장, 국어 교정만 받는다(점수 없음).
+3. Judge: 생성 모델과 다른 모델 1회. 7축 통과/실패와 근거 없는 문장, 국어 교정만 받는다(점수 없음).
    판정자는 작성자 프롬프트(BASE)를 쓰지 않고 전용 프롬프트(JUDGE_SYSTEM)를 쓰며, 축마다 이유를 먼저 쓴 뒤 판정한다.
 4. Refine: 밖에서 온 신호(규칙 위반, 실패한 축의 이유, 근거 없는 문장, 국어 교정)만 넘긴다. 자기 비평은 하지 않는다.
 5. 단조 보호: 고친 판에서 통과하던 규칙이나 축이 하나라도 실패로 바뀌면 직전 판으로 되돌리고 멈춘다.
@@ -28,9 +28,10 @@ from .store import WorkflowError, canonical, digest
 
 HARNESS_VERSION = "v2-harness-2026-11-26"
 ENGINES = ("legacy", "v2_harness")
-BINARY_AXES = ("accuracy", "groundedness", "completeness", "safety_policy", "abstention_scope", "reader_value_korean")
+# 축 이름은 출력 골든셋 채점표(evals/rubric.md)의 판정 축과 같아요(P8, 2026-11-27: 보류 판단을 더해 7축).
+BINARY_AXES = ("accuracy", "groundedness", "completeness", "safety_policy", "abstention_scope", "reader_value_korean", "hold_decision")
 AXIS_LABELS = {"accuracy": "정확성", "groundedness": "근거 연결", "completeness": "완결성", "safety_policy": "안전과 정책",
-               "abstention_scope": "범위 지키기", "reader_value_korean": "독자 가치와 한국어"}
+               "abstention_scope": "범위 지키기", "reader_value_korean": "독자 가치와 한국어", "hold_decision": "보류 판단"}
 _RUBRIC_PATH = Path(__file__).with_name("harness_rubric.md")
 # 판정자 전용 시스템 프롬프트. 작성자 프롬프트(editorial.BASE)와 상수를 같이 쓰지 않는다(생성과 평가의 문맥 분리).
 JUDGE_SYSTEM = (
@@ -102,7 +103,7 @@ class RoutingProvider:
 
 
 def run_binary_judge(packet, provider, *, w_type, gen_model, judge_model, brief, extra_prompt="", style_reference="") -> dict:
-    """교차 모델 6축 판정 1회. 판정 모델이 생성 모델과 같으면 부르지 않는다."""
+    """교차 모델 7축 판정 1회. 판정 모델이 생성 모델과 같으면 부르지 않는다."""
     from .editorial import content_context
     if not judge_model or judge_model == gen_model:
         raise WorkflowError("판정 모델이 생성 모델과 같아요. 교차 판정을 위해 다른 모델을 정해 주세요")
@@ -116,7 +117,7 @@ def run_binary_judge(packet, provider, *, w_type, gen_model, judge_model, brief,
                                JUDGE_SCHEMA, {"max_tokens": 4096, "temperature": 0.1})
     axes = result.get("axes") if isinstance(result, dict) else None
     if not isinstance(axes, dict) or any(not isinstance((axes.get(axis) or {}).get("passed"), bool) for axis in BINARY_AXES):
-        raise WorkflowError("판정 모델의 6축 결과 형식이 올바르지 않습니다")
+        raise WorkflowError("판정 모델의 축별 결과 형식이 올바르지 않습니다")
     passed = {axis: axes[axis]["passed"] for axis in BINARY_AXES}
     return {"axes": passed, "reasons": {axis: str(axes[axis].get("reason", ""))[:400] for axis in BINARY_AXES},
             "ungrounded_sentences": [str(item)[:400] for item in result.get("ungrounded_sentences") or []][:20],
@@ -147,7 +148,7 @@ def _judge_review(judge: dict) -> dict:
     return {"role": "judge", "score": round(100 * passed_count / len(BINARY_AXES)), "passed": judge["passed"],
             "critical_issues": [f"{AXIS_LABELS[axis]}: {judge['reasons'][axis]}" for axis in failed],
             "minor_issues": judge["ungrounded_sentences"],
-            "summary": f"6축 중 {passed_count}축 통과" + (f"(실패: {', '.join(AXIS_LABELS[a] for a in failed)})" if failed else ""),
+            "summary": f"{len(BINARY_AXES)}축 중 {passed_count}축 통과" + (f"(실패: {', '.join(AXIS_LABELS[a] for a in failed)})" if failed else ""),
             "axes": judge["axes"], "content_checks": judge["content_checks"]}
 
 
@@ -156,7 +157,7 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
                           trace=None, public_sample=None, writer_checks="off"):
     from .briefs import DEFAULT_PRESET, build_brief
     from .channel_adaptation import adaptation_prompt, copy_schema, title_overrides
-    from .editorial import (BASE, DRAFT_SCHEMA, FORMAT_CONTRACT, ORIGINAL_MODE_PROMPT, SUMMARY_BODY_PROMPT, content_context,
+    from .editorial import (BASE, DRAFT_SCHEMA, FORMAT_CONTRACT, ORIGINAL_MODE_PROMPT, SUMMARY_BODY_PROMPT, content_context, format_contract,
                             format_targets, normalize_citations, packet_texts, style_issues)
     from .harness_rules import validate_packet
     from .harness_trace import assert_no_remote_tracing
@@ -252,6 +253,8 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
                         "axes": snapshot["axes"], "judge_skipped": judge is None and not validation["blocking"], "kept": True})
         if validation["blocking"] or last or (validation["passed"] and judge is not None and judge["passed"]):
             break
+        if judge is not None and judge["axes"].get("hold_decision") is False:
+            break  # 근거가 제목의 질문에 답하지 못하는 원고는 고쳐 쓰기로 해결되지 않아요. 사람이 보류를 정해요.
         if event:
             event("editorial_role", {"role": "refine", "round": round_no + 1})
         feedback = {"rule_issues": validation["issues"],
@@ -268,8 +271,8 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
         body_instruction = ("파생 제목, 영상, 설명만 수정하고 body는 빈 문자열로 반환하라. 서버가 저자 원문을 그대로 보존한다." + preserve_prompt
                             if original_markdown is not None else
                             "external_feedback에 적힌 문제만 고친다. 이미 통과한 소제목, 근거 연결, 사실, 숫자는 그대로 둔다. "
-                            "korean_corrections는 뜻과 근거 ID를 유지하며 반영한다. body는 1,500자±10%의 전체 원고이며 titles 3안과 hashtags 5개를 함께 고친다. "
-                            "format_targets의 현재 수치를 목표 범위로 맞춘다. " + FORMAT_CONTRACT + SUMMARY_BODY_PROMPT)
+                            "korean_corrections는 뜻과 근거 ID를 유지하며 반영한다. body는 format_targets의 목표 길이에 맞춘 전체 원고이며 titles 3안과 hashtags 5개를 함께 고친다. "
+                            "format_targets의 현재 수치를 목표 범위로 맞춘다. " + format_contract(w_type or packet.get("w_type")) + SUMMARY_BODY_PROMPT)
         started = time.monotonic()
         refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "밖에서 받은 지적만 해결하고 근거와 숫자를 임의로 바꾸지 말라." + writing_prompt + body_instruction},
                                                {"role": "user", "content": canonical(context)}], draft_schema, {"max_tokens": 8192, "temperature": 0.4})

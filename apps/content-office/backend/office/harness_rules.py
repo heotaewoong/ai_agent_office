@@ -20,9 +20,10 @@ _TABLE_RULE = re.compile(r"(?m)^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$
 _NUMBER_CLAIM = re.compile(r"\d[\d,.]*\s*(%|퍼센트|배|명|원|달러|점|시간|분|일|개월|년)")
 # deterministic_checks가 돌려주는 문구를 규칙 이름으로 묶는다(문구가 바뀌면 이 표도 함께 고친다).
 _CHECK_GROUPS = (
-    ("length", ("원고가 1,200자보다 짧아",)),
+    ("length", ("자보다 짧아 원문 주제의 구체적인 설명",)),
     ("headings", ("소제목으로 읽기 흐름",)),
-    ("citations", ("근거 ID를 원고에 연결", "근거 ID를 별도 참고 목록", "존재하지 않는 근거 ID", "근거 ID 목록의 형식")),
+    ("citations", ("근거 ID를 원고에 연결", "근거 ID가 하나도 연결되지", "근거 ID를 별도 참고 목록", "존재하지 않는 근거 ID", "근거 ID 목록의 형식")),
+    ("numbers", ("근거 묶음에 없는 숫자",)),
     ("scenes", ("숏폼은 3~7개", "내레이션이 너무 길어", "장면 제목이 한국어가 아니에요")),
     ("book_quotes", ("풀어 쓰기만 할 수 있어요", "두 문장까지만 인용", "저자를 확인해 출처에")),
 )
@@ -95,8 +96,10 @@ def validate_packet(packet: dict, *, base_checks: dict, w_type: str | None = Non
     if extra["w_scope"]:
         blocking = [*blocking, *extra["w_scope"]]
     all_issues = list(dict.fromkeys([*issues, *extra_issues]))
+    # 고치기로 보내지 않는 확인 의견(안 쓴 근거, warn 모드 숫자 경고)은 사람에게만 보여 줘요.
+    notes = [str(note) for note in base_checks.get("notes", []) if str(note) not in all_issues]
     result = {"passed": not all_issues, "blocking": list(dict.fromkeys(blocking)), "issues": all_issues,
-              "warnings": [issue for issue in all_issues if issue not in blocking], "rule_scores": scores}
+              "warnings": [issue for issue in all_issues if issue not in blocking] + notes, "notes": notes, "rule_scores": scores}
     if writer and writer.get("mode") in ("warn", "enforce"):
         # 글쓰기 0원 검사(인용, 방향, AI 상투 표현, 고친 뒤 사실 유지). off이거나 없으면 결과가 예전과 같다.
         from .writer_checks import apply_writer_checks

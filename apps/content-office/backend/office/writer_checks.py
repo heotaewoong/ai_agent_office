@@ -364,5 +364,5 @@ def apply_writer_checks(result, packet, *, mode, previous_body=None, allowed_sen
         scores = {**result["rule_scores"], **{name: not findings["issues"][name] for name in RULES}}
         issues = list(dict.fromkeys([*result["issues"], *problems]))
         result.update(rule_scores=scores, issues=issues, passed=not issues,
-                      warnings=[issue for issue in issues if issue not in result["blocking"]])
+                      warnings=[issue for issue in issues if issue not in result["blocking"]] + list(result.get("notes") or []))
     return result
