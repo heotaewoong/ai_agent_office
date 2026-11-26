@@ -17,9 +17,16 @@ FAILURE_LAYERS = frozenset({"input_contract", "retrieval", "ranking", "query", "
 _REMOTE_TRACING = ("LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING", "LANGSMITH_TRACING_V2", "LANGSMITH_TRACING")
 
 
-def assert_no_remote_tracing() -> None:
-    """원격 추적이 켜져 있으면 검수를 시작하지 않는다(원고와 개인 자료가 밖으로 나가지 않게)."""
+def assert_no_remote_tracing(*, public_sample=None) -> None:
+    """원격 추적이 켜져 있으면 검수를 시작하지 않는다(원고와 개인 자료가 밖으로 나가지 않게).
+
+    예외는 하나: 저장소에 커밋한 공개 샘플(office/public_samples)과 글자까지 같은 입력으로 하는 연결 실험이다.
+    """
     if any(os.environ.get(key, "").strip().lower() in ("1", "true", "yes") for key in _REMOTE_TRACING):
+        if public_sample is not None:
+            from .public_sample import require_public_sample
+            require_public_sample(public_sample)
+            return
         raise WorkflowError("검수 기록의 외부 추적 전송은 승인되지 않았습니다. 추적 환경 변수를 끄고 다시 실행하세요")
 
 

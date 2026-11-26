@@ -153,7 +153,7 @@ def _judge_review(judge: dict) -> dict:
 
 def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, system=None, packaging=None, brief=None, offer=None,
                           original_markdown=None, refine_limit=2, topic_prompt="", w_type=None, gen_model=None, judge_model=None,
-                          trace=None):
+                          trace=None, public_sample=None):
     from .briefs import DEFAULT_PRESET, build_brief
     from .channel_adaptation import adaptation_prompt, copy_schema, title_overrides
     from .editorial import (BASE, DRAFT_SCHEMA, FORMAT_CONTRACT, ORIGINAL_MODE_PROMPT, SUMMARY_BODY_PROMPT, content_context,
@@ -165,7 +165,7 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
     from .output_specs import output_issues
     from .writing_style import KOREAN_WRITING_PROMPT, POLICY_ID
 
-    assert_no_remote_tracing()
+    assert_no_remote_tracing(public_sample=public_sample)
     if original_markdown is not None and (not isinstance(original_markdown, str) or not original_markdown.strip()):
         raise WorkflowError("원문 보존 모드에는 직접 제공한 Markdown 본문이 필요합니다")
     gen_model = gen_model or getattr(provider, "model", None)
@@ -274,12 +274,17 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
     blocking = list(validation["blocking"])
     reviews = [_judge_review(judge)] if judge else []
     korean_ok = not korean_rules and (judge is None or judge["axes"]["reader_value_korean"])
+    judge_passed = bool(judge and judge["passed"])
+    # 되돌리기와 고치기 상한은 '가장 나은 판을 남기는' 규칙일 뿐 합격 판정이 아니다. 판정을 못 넘으면 검토 대기로 둔다.
+    pending = [] if blocking or judge_passed else (reviews[0]["critical_issues"] if reviews else ["판정을 받지 못했어요"])
     packet["quality"] = {
-        "status": "blocked" if blocking else "passed", "critical": bool(blocking),
-        "advisories": {"model_reviews_passed": bool(judge and judge["passed"]),
+        "status": "blocked" if blocking else ("passed" if judge_passed else "needs_review"), "critical": bool(blocking),
+        "review_pending": pending,
+        "advisories": {"model_reviews_passed": judge_passed,
                        "review_issues": reviews[0]["critical_issues"] if reviews else [],
                        "rule_warnings": list(validation["warnings"]) if not blocking else [],
-                       "note": "승인을 막지 않는 확인 의견입니다. 사실과 숫자 지적은 승인 전에 원고에서 확인하세요"},
+                       "note": ("판정 기준을 못 넘어 검토 대기예요. 지적을 고친 뒤 다시 검수해야 승인할 수 있어요" if pending else
+                                "승인을 막지 않는 확인 의견입니다. 사실과 숫자 지적은 승인 전에 원고에서 확인하세요")},
         "reviews": reviews, "history": history, "refine_count": refines, "rubric_version": f"{HARNESS_VERSION}:{rubric_sha[:12]}",
         "deterministic_checks": {key: validation[key] for key in ("passed", "issues", "blocking", "warnings")},
         "korean": {"writing_policy": POLICY_ID if writing_prompt else None, "passed": korean_ok, "score": None,

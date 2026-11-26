@@ -2029,7 +2029,9 @@ function QualityPanel({ job }: { job: Job }) {
               ? "검수 통과"
               : quality?.status === "blocked"
                 ? "수정 필요"
-                : "검수 미완료"}
+                : quality?.status === "needs_review"
+                  ? "검토 대기"
+                  : "검수 미완료"}
           </span>
         </div>
       </div>

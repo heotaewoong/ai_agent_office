@@ -230,3 +230,48 @@ def test_last_refine_is_kept_for_the_judge_so_its_feedback_can_be_fixed():
     harness = result["quality"]["harness"]
     assert harness["judge_calls"] == 2 and harness["judge_skipped_rounds"] == 1 and harness["refine_calls"] == 2
     assert result["quality"]["advisories"]["model_reviews_passed"] is True and harness["rolled_back"] is False
+
+
+def test_exhausted_refines_below_accuracy_stay_in_review_pending():
+    # 고치기를 다 써도 정확성이 기준에 못 미치면, 가장 나은 판은 남기되 통과로 올리지 않고 검토 대기로 둔다.
+    stub = Stub(judges=[verdict(accuracy="숫자가 원문과 다름") for _ in range(3)], refines=[good_body(), good_body()])
+    result = run(stub, packet(), w_type="W3")
+    assert stub.calls == ["judge", "refine", "judge", "refine", "judge"]
+    quality = result["quality"]
+    assert quality["refine_count"] == 2 and quality["harness"]["rolled_back"] is False
+    assert quality["status"] == "needs_review" and quality["critical"] is False
+    assert quality["advisories"]["model_reviews_passed"] is False
+    assert quality["review_pending"] == ["정확성: 숫자가 원문과 다름"]
+    assert "정확성" in quality["reviews"][0]["critical_issues"][0]
+
+
+def test_review_pending_draft_cannot_be_approved(tmp_path):
+    store = Store(tmp_path)
+    job = evidence_job(store)
+    pending = {**packet(), "quality": {"status": "needs_review", "critical": False}}
+    store.update_job(job["id"], state="source_review", source_packet=pending, source_hash="h1")
+    with pytest.raises(WorkflowError, match="미완료 검수"):
+        store.review_source(job["id"], "h1", "approved", "tester")
+
+
+def test_remote_tracing_only_for_checked_in_public_samples(monkeypatch):
+    from office.public_sample import load_public_sample, require_public_sample, run_public_probe
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    monkeypatch.setenv("LANGSMITH_TRACING", "true")
+    sample = load_public_sample()
+    with pytest.raises(WorkflowError):
+        assert_no_remote_tracing()
+    assert_no_remote_tracing(public_sample=sample)
+    changed = json.loads(json.dumps(sample))
+    changed["packet"]["body"] += " 개인 원고 문장"
+    with pytest.raises(WorkflowError, match="다릅니다"):
+        assert_no_remote_tracing(public_sample=changed)
+    book = json.loads(json.dumps(sample))
+    book["packet"]["evidence"][0]["source_kind"] = "approved_book_evidence"
+    with pytest.raises(WorkflowError):
+        require_public_sample(book)
+    with pytest.raises(WorkflowError, match="LANGSMITH_API_KEY"):
+        run_public_probe(send=True)
+    monkeypatch.delenv("LANGSMITH_TRACING")
+    summary = run_public_probe(send=False)
+    assert summary["sent"] is False and summary["calls"][-1] == "judge" and summary["status"] in ("passed", "needs_review")

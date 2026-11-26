@@ -11,9 +11,17 @@
 - 저장: `OFFICE_STATE_DIR/editorial-checkpoints/<job-id 해시>.sqlite3`와 OS 파일 잠금을 사용합니다. 체크포인트에는 비공개 원고·근거가 포함됩니다. POSIX 디렉터리 0700·DB 0600, 허용된 기본 타입만 역직렬화하고 pickle fallback은 끕니다. 다중 서버의 공유 파일시스템을 전제로 한 구성은 아닙니다.
 - 재개: 기존 작업자의 재시도 요청이 같은 `prepare_source(store, job_id)`로 들어오면 자동으로 같은 입력 판본의 체크포인트를 찾습니다. 재개는 작업 시간·예산·승인을 새로 부여하지 않습니다. 입력·모델·구현 계약이 바뀌면 이전 체크포인트를 같은 결과로 재사용하지 않습니다. 검수 로그에는 `editorial_run`을 남기고 재생으로 중복 기록하지 않습니다.
 
-직접 의존성은 `langgraph==1.2.12`, `langgraph-checkpoint-sqlite==3.1.3`입니다. [LangGraph 공식 저장소](https://github.com/langchain-ai/langgraph)의 MIT 라이선스와 [Functional API 문서](https://docs.langchain.com/oss/python/langgraph/functional-api)를 기준으로 선정했습니다. 사용 예는 `prepare_source(store, job_id)`이며, 검증은 `tests/test_editorial_graph.py`와 `tests/test_provider_dispatch.py`에서 합성 Provider 및 외부 통신을 차단한 실제 Provider로 수행합니다. 정확한 통과 수·서버 호환성과 배포 여부는 별도 검증 결과에 기록합니다.
+직접 의존성은 `langgraph==1.2.24`(2026-11-26에 1.2.12에서 올림), `langgraph-checkpoint-sqlite==3.1.3`입니다. [LangGraph 공식 저장소](https://github.com/langchain-ai/langgraph)의 MIT 라이선스와 [Functional API 문서](https://docs.langchain.com/oss/python/langgraph/functional-api)를 기준으로 선정했습니다. 사용 예는 `prepare_source(store, job_id)`이며, 검증은 `tests/test_editorial_graph.py`와 `tests/test_provider_dispatch.py`에서 합성 Provider 및 외부 통신을 차단한 실제 Provider로 수행합니다. 정확한 통과 수·서버 호환성과 배포 여부는 별도 검증 결과에 기록합니다.
 
 제거·롤백은 검증된 이전 코드와 Python 환경을 함께 복구하는 방식으로 수행합니다. `engine="legacy"`는 명시적인 로컬 비교용 경로이며 API의 우회 설정으로 노출하지 않습니다. 체크포인트·미정산 비용·승인 기록은 제거하거나 초기화하지 않습니다.
+
+## v2 검수의 검토 대기와 LangSmith 공개 샘플 실험 — 2026-11-27
+
+- **검토 대기:** v2 검수(`v2_harness`)에서 고치기 상한(2회)을 다 써도 판정을 못 넘은 원고는 `quality.status = "needs_review"`예요. 되돌리기와 상한은 "가장 나은 판을 남기는" 규칙일 뿐 합격이 아니라서, 남긴 판에 통과를 붙이지 않아요. 못 넘은 축은 `quality.review_pending`에 남고, 화면 뱃지는 "검토 대기"예요. 승인⓪①은 기존 규칙(`status != "passed"`면 거부)대로 막혀요. 지적을 고쳐 다시 검수해야 승인할 수 있어요. 시험: `tests/test_harness.py`의 `test_exhausted_refines_below_accuracy_stay_in_review_pending`, `test_review_pending_draft_cannot_be_approved`. 기본 실행기는 여전히 `legacy`예요.
+- **LangSmith 연결 실험:** 운영 원고와 개인 자료는 지금처럼 로컬(`events`, `traces/*.jsonl`)에만 남겨요. 원격 추적 환경 변수가 켜지면 검수는 시작하지 않아요. 예외는 저장소에 커밋한 공개 샘플(`backend/office/public_samples/*.json`)과 글자까지 같은 입력뿐이에요(`office/public_sample.py`의 `require_public_sample`: 파일과 해시 일치, `https://` 근거만, 책이나 개인 자료 표시 없음, 원문 보존 모드 아님). 모델은 0원 가짜 모델이에요.
+  - 확인 실행(아무것도 안 보냄): `backend/.venv/bin/python scripts/langsmith_public_probe.py`
+  - 실제 전송: `LANGSMITH_API_KEY`를 넣은 셸에서 `... scripts/langsmith_public_probe.py --send` (프로젝트 `heobrain-public-probe`). 키는 운영 `office.env`에 넣지 않아요.
+  - 시험: `test_remote_tracing_only_for_checked_in_public_samples`
 
 ## 오늘의 뉴스에 모은 소식·경쟁사·아이디어 · 2026-11-07
 
