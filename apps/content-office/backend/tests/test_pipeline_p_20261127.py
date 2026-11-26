@@ -221,3 +221,20 @@ def test_hold_gate_off_writes_as_before(scope, monkeypatch):
     provider = OffTopicScope("AI 도구 비교")
     prepare_source(store, job["id"], provider=provider)
     assert "scope" not in provider.roles and "gen" in provider.roles
+
+
+
+def test_scattered_hedges_go_to_refine_but_one_limit_paragraph_does_not():
+    from office.claim_checks import hedge_spread
+    scattered = ("## 사례\n회사가 소개한 사례예요. 다만 데모 결과라 일반화하면 안 돼요.\n## 로봇\n실제 로봇에 맞춘 보정이 아니라 시뮬레이션이에요.\n"
+                 "## 수치\n이 수치는 데모 결과라 일반 성과로 보면 안 돼요.\n## 정리\n독립 검증은 없어요.")
+    assert hedge_spread(scattered)["sections"] >= 3
+    packet = _packet(FullProvider("x")._packet()["body"] + "\n" + scattered)
+    assert any("한계, 단서 문장이" in issue for issue in deterministic_checks(packet)["issues"])
+    gathered = FullProvider("x")._packet()["body"] + "\n## 한계\n회사가 소개한 데모 결과라 일반화하기 어렵고, 독립 검증은 아직 없어요 [E1]."
+    assert not any("한계, 단서 문장이" in issue for issue in deterministic_checks(_packet(gathered))["issues"])
+
+
+def test_base_prompt_gathers_limits_in_one_place():
+    from office.editorial import BASE
+    assert "한 곳(한 소제목이나 한 문단)에 1~3문장으로 모은다" in BASE and "일반 주의 문구" in BASE and "한계를 숨기지 않는다." not in BASE
