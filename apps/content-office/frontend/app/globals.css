@@ -4590,3 +4590,68 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .delivery-flow [aria-current="step"] { background:var(--primary-soft); border-color:var(--line-strong); font-weight:700; }
 .output-choices details { margin-top:12px; }
 .output-choices summary { min-height:44px; padding:10px 0; cursor:pointer; }
+
+/* ---------- 뇌리(HeoBrain 캐릭터)와 그림 기억 이야기, 가져온 방법·판단 (2026-11-27) ---------- */
+.noeri { display: block; flex: none; overflow: visible; }
+.noeri-busy { animation: noeri-bob 1.6s ease-in-out infinite; }
+.noeri-thinking .noeri-dots circle { animation: noeri-dot 1.4s ease-in-out infinite; }
+.noeri-thinking .noeri-dots circle:nth-child(2) { animation-delay: .2s; }
+.noeri-thinking .noeri-dots circle:nth-child(3) { animation-delay: .4s; }
+@keyframes noeri-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes noeri-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .noeri-busy, .noeri-thinking .noeri-dots circle { animation: none; } }
+
+.pipeline-studio-noeri { display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 10px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); max-width: 420px; }
+.pipeline-studio-noeri strong { font-size: 15px; color: var(--ink); }
+.pipeline-studio-noeri p { margin: 2px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); word-break: keep-all; }
+
+.story-panel .story-heading { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; }
+.story-panel .story-heading h2 { margin: 2px 0 6px; font-size: 20px; letter-spacing: -.03em; }
+.story-panel .story-heading p { margin: 0; line-height: 1.7; word-break: keep-all; }
+.story-why { margin-top: 14px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--surface-2); }
+.story-why ul { margin: 10px 0 2px; padding-left: 20px; display: grid; gap: 6px; font-size: 14px; line-height: 1.75; color: var(--muted); word-break: keep-all; }
+.story-why strong { color: var(--ink); }
+.story-strip { list-style: none; margin: 16px 0 0; padding: 0 0 6px; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 180px); gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; }
+.story-card { scroll-snap-align: start; display: grid; gap: 6px; }
+.story-thumb { padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface-2); cursor: zoom-in; aspect-ratio: 3 / 4; }
+.story-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.story-thumb:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.story-thumb.missing { display: grid; place-items: center; color: var(--muted); font-size: 13px; cursor: default; }
+.story-kind { font-size: 12.5px; color: var(--muted); }
+.story-anchor { font-size: 13px; color: var(--ink); word-break: keep-all; }
+.story-anchor b { color: var(--accent-ink); }
+.story-recall { margin-top: 14px; padding: 14px 16px; border-radius: 12px; background: var(--accent-soft); border: 1px solid var(--accent-line); }
+.story-recall h3 { margin: 0 0 8px; font-size: 16px; }
+.story-recall ol { margin: 0 0 8px; padding-left: 22px; display: grid; gap: 6px; line-height: 1.7; }
+.story-answer { color: var(--accent-ink); }
+.story-lightbox { position: fixed; inset: 0; z-index: 60; background: rgba(15, 17, 21, .78); display: grid; place-items: center; gap: 12px; padding: 24px; }
+.story-lightbox img { max-height: 84vh; max-width: 92vw; border-radius: 12px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+@media (max-width: 720px) { .story-panel .story-heading { grid-template-columns: auto 1fr; } .story-panel .story-heading .derived-actions { grid-column: 1 / -1; } }
+
+.arch-adoption-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.arch-adoption-filters button { border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 13px; font-size: 13.5px; cursor: pointer; }
+.arch-adoption-filters button b { margin-left: 4px; color: var(--muted); }
+.arch-adoption-filters button[aria-pressed="true"] { background: var(--strong-bg); color: var(--on-strong); border-color: var(--strong-bg); }
+.arch-adoption-filters button[aria-pressed="true"] b { color: var(--on-strong); }
+.arch-adoption-filters .arch-filter-clear { border-style: dashed; color: var(--accent-ink); }
+.arch-adoptions { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.arch-adoption { border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; background: var(--surface); display: grid; gap: 10px; border-top: 4px solid var(--line-strong); }
+.arch-adoption header { display: grid; gap: 8px; }
+.arch-adoption h3 { margin: 0; font-size: 16px; line-height: 1.6; word-break: keep-all; overflow-wrap: anywhere; }
+.arch-adoption dl { margin: 0; display: grid; gap: 8px; }
+.arch-adoption dl > div { display: grid; grid-template-columns: 64px 1fr; gap: 8px; font-size: 14px; line-height: 1.7; }
+.arch-adoption dt { color: var(--muted); font-weight: 600; }
+.arch-adoption dd { margin: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.arch-adoption.adopt-built { border-top-color: var(--success); }
+.arch-adoption.adopt-adapted { border-top-color: var(--accent); }
+.arch-adoption.adopt-exists { border-top-color: var(--info); }
+.arch-adoption.adopt-next { border-top-color: var(--line-strong); }
+.arch-adoption.adopt-skip { border-top-color: var(--danger); background: var(--surface-2); }
+.arch-pill.adopt-built { background: var(--success-soft); color: var(--success); }
+.arch-pill.adopt-adapted { background: var(--accent-soft); color: var(--accent-ink); }
+.arch-pill.adopt-exists { background: var(--info-soft); color: var(--info); }
+.arch-pill.adopt-next { background: var(--surface-2); color: var(--muted); }
+.arch-pill.adopt-skip { background: var(--danger-soft); color: var(--danger); }
+.arch-repo-filter { border: 0; background: none; padding: 0; font: inherit; color: var(--info); text-decoration: underline; cursor: pointer; }
+.arch-repo-filter[aria-pressed="true"] { color: var(--accent-ink); font-weight: 700; }
+.window-row select{min-width:130px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--surface);color:var(--ink)}

@@ -423,7 +423,9 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
     brand = load_brand()
     provider = provider or Provider(store, job_id=job_id)
     from .harness import RoutingProvider, resolve_editorial_engine, resolve_judge_model
+    from .writer_checks import resolve_writer_checks
     review_engine = resolve_editorial_engine(store)
+    writer_mode = resolve_writer_checks(store) if review_engine == "v2_harness" else "off"
     gen_model, judge_model, w_type = getattr(provider, "model", None), None, None
     if review_engine == "v2_harness":
         judge_model = getattr(provider, "judge_model", None) or resolve_judge_model(store, gen_model)
@@ -469,6 +471,8 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
     if review_engine != "legacy":
         from .harness import load_rubric
         harness_context = {"review_engine": review_engine, "judge_model": judge_model, "w_type": w_type, "rubric": load_rubric()[1]}
+        if writer_mode != "off":
+            harness_context["writer_checks"] = writer_mode
     identity = graph_identity(snapshot, provider, brand=brand, experiences=experiences,
                               evaluate_only=evaluate_only, initial_packet=initial_packet, **harness_context)
     trace = None
@@ -546,7 +550,7 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
         if review_engine == "v2_harness":
             from .harness import review_until_ready_v2
             return review_until_ready_v2(packet, provider, w_type=w_type, gen_model=gen_model, judge_model=judge_model,
-                                         trace=trace, **review_options)
+                                         trace=trace, writer_checks=writer_mode, **review_options)
         return review_until_ready(packet, provider, **review_options)
 
     if engine == "langgraph":

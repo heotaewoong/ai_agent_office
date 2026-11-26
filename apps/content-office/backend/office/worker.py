@@ -82,6 +82,14 @@ def process_task(store, task):
             raise WorkflowError("대기 중인 퀴즈·카드 작업의 원고 버전이 변경되었습니다")
         result = generate_quiz(store, job_id) if task["kind"] == "quiz" else plan_cards(store, job_id, images=task["payload"].get("images"))
         return {"job_id": job_id, "source_hash": current["source_hash"], "version": result["version"], "passed": result["checks"]["passed"], "issues": len(result["checks"]["issues"])}
+    if task["kind"] == "story":
+        # 그림 기억 이야기: 글은 모델, 그림은 코드(0원). 퀴즈·카드처럼 부가 산출물이라 실패해도 출고 흐름을 막지 않는다.
+        from .memory_story import generate_story
+        current = store.require_source_approval(job_id)
+        if payload.get("source_hash") != current["source_hash"]:
+            raise WorkflowError("대기 중인 그림 기억 이야기 작업의 원고 버전이 변경되었습니다")
+        result = generate_story(store, job_id)
+        return {"job_id": job_id, "source_hash": current["source_hash"], "version": result["version"], "passed": result["checks"]["passed"], "issues": len(result["checks"]["issues"])}
     raise WorkflowError("등록되지 않은 작업입니다")
 
 
@@ -111,7 +119,7 @@ def run_once(store, owner):
         store.finish_task(task["id"], owner, {"error": message, "automatic_retry": False}, state="unknown" if uncertain else "failed")
         job_id = task["payload"].get("job_id")
         # 퀴즈·카드뉴스는 부가 산출물이라 실패해도 작업 상태(출고 흐름)를 막지 않는다. 실패 기록은 작업·이벤트에 남는다.
-        if job_id and task["kind"] not in ("quiz", "cards", "private_delivery", "thumbnail_artwork"):
+        if job_id and task["kind"] not in ("quiz", "cards", "story", "private_delivery", "thumbnail_artwork"):
             with store.connection(transaction=True) as db:
                 current = store._job(db, job_id)
                 newer_editorial_state = (task["kind"] in ("draft", "evaluate")

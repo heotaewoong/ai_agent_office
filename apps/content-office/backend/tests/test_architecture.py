@@ -84,3 +84,19 @@ def test_pipeline_document_distinguishes_parallel_outputs_offers_and_consent():
     assert "미연결" in lanes["audience"]["boundary"]
     assert any(s["state"] == "off" and "Hermes" in s["text"] for s in doc["status"])
     assert {"작업 시간", "예산 상한", "자동 재시도·대체 없음", "사람만 승인", "키와 개인정보", "버전 고정", "부분 성공 보존", "발급·발송 경계"} <= {rail["title"] for rail in doc["rails"]}
+
+
+def test_adoptions_record_source_judgment_and_a_known_state():
+    from office.architecture import load_doc
+    doc = load_doc()
+    repos = {row["repo"] for row in doc["adoption_repos"]}
+    assert {"connect-ai-writer", "connect-ai-marketer", "reversebusiness"} <= repos
+    ids = [row["id"] for row in doc["adoptions"]]
+    assert len(ids) == len(set(ids))
+    for row in doc["adoptions"]:
+        assert row["state"] in ("built", "adapted", "exists", "next", "skip"), row["id"]
+        assert row["repo"] in repos and row["took"] and row["here"] and row["why"], row["id"]
+        assert "—" not in row["why"] + row["took"] + row["here"]  # 문체 규칙: 줄표를 쓰지 않는다
+    states = {row["id"]: row["state"] for row in doc["adoptions"]}
+    # 사용자가 꼭 넣으라고 한 세 가지는 HeoBrain에 맞게 바꿔서 넣었다
+    assert states["memory-story"] == states["noeri"] == states["frame-focus"] == "adapted"

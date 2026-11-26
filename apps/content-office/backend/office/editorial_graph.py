@@ -119,6 +119,8 @@ def graph_identity(snapshot, provider, **context):
                "codex_text_provider", "content_api_mode", "text_selection", "bilingual_captions")
     if context.get("review_engine") == "v2_harness":
         modules += ("harness", "harness_rules", "harness_trace", "private_books")
+    if context.get("writer_checks") not in (None, "off"):
+        modules += ("writer_checks",)
     contract = digest({name: (folder / (name + ".py")).read_text(encoding="utf-8") for name in modules})
     return {"version": VERSION, "snapshot": snapshot, "model": getattr(provider, "model", None),
             "contract": contract, **context}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { COLLECT_MAX_KRW, COLLECT_MINUTES, parseDailyCollectForm, runSummary, validCollectMaxKrw, validCollectMinutes, validTimeKst, type DailyCollectStatus } from "../lib/daily-collect";
+import { COLLECT_MAX_KRW, COLLECT_MINUTES, DAY_LABELS, parseDailyCollectForm, runSummary, validCollectMaxKrw, validCollectMinutes, validTimeKst, type CollectDays, type DailyCollectStatus } from "../lib/daily-collect";
 import type { Action } from "../lib/types";
 import { Icon } from "./icons";
 
@@ -14,6 +14,7 @@ export function DailyCollectPanel({ busy, action }: { busy: boolean; action: Act
   const [time, setTime] = useState("07:00");
   const [minutes, setMinutes] = useState("15");
   const [maxKrw, setMaxKrw] = useState("100");
+  const [days, setDays] = useState<CollectDays>("everyday");
 
   const apply = useCallback((next: DailyCollectStatus) => {
     setStatus(next);
@@ -21,6 +22,7 @@ export function DailyCollectPanel({ busy, action }: { busy: boolean; action: Act
     setTime(next.settings.time_kst);
     setMinutes(String(next.settings.minutes));
     setMaxKrw(String(next.settings.max_krw));
+    setDays(next.settings.days ?? "everyday");
   }, []);
 
   const load = useCallback(async () => {
@@ -36,10 +38,10 @@ export function DailyCollectPanel({ busy, action }: { busy: boolean; action: Act
     void load();
   }, [load]);
 
-  const parsed = parseDailyCollectForm({ enabled, time, minutes, maxKrw });
+  const parsed = parseDailyCollectForm({ enabled, time, minutes, maxKrw, days });
   const saved = status?.settings;
   const changed =
-    parsed.ok && (!saved || saved.enabled !== parsed.patch.enabled || saved.time_kst !== parsed.patch.time_kst || saved.minutes !== parsed.patch.minutes || saved.max_krw !== parsed.patch.max_krw);
+    parsed.ok && (!saved || saved.enabled !== parsed.patch.enabled || saved.time_kst !== parsed.patch.time_kst || saved.minutes !== parsed.patch.minutes || saved.max_krw !== parsed.patch.max_krw || (saved.days ?? "everyday") !== parsed.patch.days);
 
   async function save() {
     if (!parsed.ok) return;
@@ -51,7 +53,7 @@ export function DailyCollectPanel({ busy, action }: { busy: boolean; action: Act
         next = await api.updateDailyCollect(patch);
       },
       patch.enabled
-        ? `매일 ${patch.time_kst}(한국 시간)에 ${patch.minutes}분 동안 뉴스만 수집·요약합니다. 1회 비용 상한 ${patch.max_krw}원.`
+        ? `${patch.days === "weekdays" ? "평일(월~금)" : "매일"} ${patch.time_kst}(한국 시간)에 ${patch.minutes}분 동안 뉴스만 수집·요약합니다. 1회 비용 상한 ${patch.max_krw}원.`
         : "매일 자동 수집을 껐습니다.",
     );
     if (ok === true && next) apply(next);
@@ -69,6 +71,12 @@ export function DailyCollectPanel({ busy, action }: { busy: boolean; action: Act
         {enabled ? "매일 자동 수집 켜짐" : "꺼짐"}
       </label>
       <div className="window-row">
+        <label>
+          요일
+          <select value={days} disabled={busy} onChange={(e) => setDays(e.target.value as CollectDays)}>
+            {(Object.keys(DAY_LABELS) as CollectDays[]).map((key) => <option key={key} value={key}>{DAY_LABELS[key]}</option>)}
+          </select>
+        </label>
         <label>
           시각(한국 시간)
           <input value={time} inputMode="numeric" placeholder="07:00" aria-invalid={validTimeKst(time) == null} disabled={busy} onChange={(e) => setTime(e.target.value)} />

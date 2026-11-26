@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { costRows, flowStages, imageRoute, pipelineSvg, shortCommit, testSummary, type ArchitectureOverview } from "../lib/architecture";
+import { ADOPTION_LABELS, ADOPTION_STATES, adoptionCounts, costRows, filterAdoptions, flowStages, imageRoute, pipelineSvg, shortCommit, testSummary, type AdoptionState, type ArchitectureOverview } from "../lib/architecture";
 import { formatDate } from "../lib/workflow";
 
 /** 공정 정의와 실행 사실을 분리해 읽는, 제작을 실행하지 않는 안내 화면. */
@@ -49,6 +49,7 @@ export function ArchitectureView() {
           <h2 id="pipeline-title">{data.doc.headline}</h2>
           <button className="arch-export" onClick={downloadMap}>전체 공정도 SVG 내려받기 <span aria-hidden="true">↗</span></button>
         </div>
+
         <p>{data.doc.summary}</p>
         <div className="arch-intro-facts"><span>{stages.length}개 공정</span><span>{gates.length}개 사람 승인</span><span>선택 제작 · 완료 출력별 출고</span><span>실행과 안내를 구분</span></div>
         <nav className="arch-jump" aria-label="파이프라인 내용 바로가기">
@@ -131,8 +132,40 @@ export function ArchitectureView() {
         <div className="arch-status">{data.doc.status.map((item) => <div className="arch-status-row" key={item.text}><span className={`arch-pill ${item.state}`}>{item.label}</span><p>{item.text} <span className="muted">· {item.note}</span></p></div>)}</div>
         <details className="arch-audit"><summary>최근 커밋과 문서 원본 확인</summary><ol className="arch-commits">{data.git.recent.map((c) => <li key={c.commit}><span className="mono">{c.commit}</span><span>{c.subject}</span><span className="muted">{c.author} · {formatDate(c.at, true)}</span></li>)}</ol><p className="arch-footnote">공정 정의는 backend/config/architecture.json, 운영 기록은 서버에서 읽습니다. 30초마다 갱신하며 SVG도 같은 정의에서 만듭니다.</p></details>
       </section>
+
     </div>
   );
+}
+
+/** 저장소에서 가져온 방법과 그 판단. 파이프라인 화면의 '가져온 방법·판단' 탭이 쓴다. */
+export function AdoptionSection({ doc }: { doc: ArchitectureOverview["doc"] }) {
+  const [state, setState] = useState<AdoptionState | "all">("all");
+  const [repo, setRepo] = useState<string>("all");
+  const rows = doc.adoptions ?? [];
+  const counts = adoptionCounts(rows);
+  const shown = filterAdoptions(rows, state, repo);
+  return <section id="pipeline-adoptions" className="arch-section" tabIndex={-1} aria-labelledby="pipeline-adoptions-title">
+    <div className="arch-section-heading"><span className="arch-index">판단</span><div><h2 id="pipeline-adoptions-title" tabIndex={-1}>가져온 방법과 기술 판단</h2><p>{doc.adoptions_note}</p></div></div>
+    {!!doc.adoption_repos?.length && <div className="arch-table" role="region" aria-label="읽은 저장소 표 · 좁은 화면에서는 가로로 이동" tabIndex={0}><table>
+      <caption>CONNECT AI LAB 저장소 중 콘텐츠 자동화와 관련된 6개. 커밋을 고정해 읽었고 코드는 옮기지 않았습니다.</caption>
+      <thead><tr><th scope="col">저장소</th><th scope="col">읽은 커밋</th><th scope="col">라이선스</th><th scope="col">무엇을 하나</th><th scope="col">판단 수</th></tr></thead>
+      <tbody>{doc.adoption_repos.map((row) => <tr key={row.repo}><th scope="row"><button type="button" className="arch-repo-filter" aria-pressed={repo === row.repo} onClick={() => setRepo(repo === row.repo ? "all" : row.repo)}>{row.repo}</button></th><td className="mono">{row.commit}</td><td>{row.license}</td><td>{row.what}</td><td className="num">{rows.filter((r) => r.repo === row.repo).length}</td></tr>)}</tbody>
+    </table></div>}
+    <div className="arch-adoption-filters" role="group" aria-label="판단 상태로 걸러 보기">
+      <button type="button" aria-pressed={state === "all"} onClick={() => setState("all")}>전체 <b>{rows.length}</b></button>
+      {ADOPTION_STATES.map((key) => <button type="button" key={key} className={`adopt-${key}`} aria-pressed={state === key} onClick={() => setState(state === key ? "all" : key)}>{ADOPTION_LABELS[key]} <b>{counts[key]}</b></button>)}
+      {repo !== "all" && <button type="button" className="arch-filter-clear" onClick={() => setRepo("all")}>{repo}만 보는 중 · 해제</button>}
+    </div>
+    <div className="arch-adoptions">{shown.map((row) => <article key={row.id} className={`arch-adoption adopt-${row.state}`}>
+      <header><span className={`arch-pill adopt-${row.state}`}>{ADOPTION_LABELS[row.state]}</span><h3>{row.took}</h3></header>
+      <dl>
+        <div><dt>어디서</dt><dd><span className="mono">{row.repo}</span> · {row.source}</dd></div>
+        <div><dt>여기서는</dt><dd>{row.here}</dd></div>
+        <div><dt>판단</dt><dd>{row.why}</dd></div>
+      </dl>
+    </article>)}</div>
+    {!shown.length && <p className="muted">이 조건에 맞는 판단이 없습니다.</p>}
+  </section>;
 }
 
 function RuntimeMap({ data }: { data: ArchitectureOverview }) {

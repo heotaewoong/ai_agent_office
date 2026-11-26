@@ -620,6 +620,28 @@ export type QuizQuestion = {
   evidence: string[];
 };
 export type Checks = { passed: boolean; issues: string[] };
+export type MemoryStoryPage = {
+  anchor: string;
+  text: string;
+  evidence: string[];
+  scene: { backdrop: string; props: { name: string; place: string }[]; hero: { mood: string; place: string } };
+};
+export type MemoryStoryFile = { kind: "cover" | "page" | "recall" | "answers"; index: number | null; artifact_id: string; truncated?: boolean; url: string | null };
+export type MemoryStory = {
+  version: number;
+  generated_at: string;
+  source_hash: string;
+  title: string;
+  pages: MemoryStoryPage[];
+  recall: { question: string; answer: string }[];
+  checks: Checks;
+  refined: boolean;
+  note: string;
+  artifact_id: string | null;
+  files: MemoryStoryFile[];
+  sheet_url: string | null;
+  current: boolean;
+};
 export type Quiz = {
   version: string;
   generated_at: string;
