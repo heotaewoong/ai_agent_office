@@ -20,8 +20,10 @@ test("작업 시간은 5~30분, 비용 상한은 10~1000원의 정수", () => {
 test("폼 값이 모두 맞을 때만 저장할 설정을 만든다", () => {
   assert.deepEqual(parseDailyCollectForm({ enabled: true, time: "06:30", minutes: "20", maxKrw: "200" }), {
     ok: true,
-    patch: { enabled: true, time_kst: "06:30", minutes: 20, max_krw: 200 },
+    patch: { enabled: true, time_kst: "06:30", minutes: 20, max_krw: 200, days: "everyday" },
   });
+  const weekdays = parseDailyCollectForm({ enabled: true, time: "07:10", minutes: "15", maxKrw: "100", days: "weekdays" });
+  assert.ok(weekdays.ok && weekdays.patch.days === "weekdays");
   const bad = parseDailyCollectForm({ enabled: false, time: "6:30", minutes: "45", maxKrw: "5" });
   assert.equal(bad.ok, false);
   if (!bad.ok) assert.equal(bad.errors.length, 3);
@@ -33,5 +35,6 @@ test("마지막 실행은 상태·기사·비용을 한국어로 요약한다", 
   assert.ok(done.includes("2026-10-30") && done.includes("완료") && done.includes("새 기사 7건") && done.includes("12원"));
   assert.ok(runSummary({ date: "2026-10-30", status: "stopped_cost_cap", articles: 40, new_articles: 3, spent_krw: 96, max_krw: 100 }).includes("비용 상한"));
   assert.ok(runSummary({ date: "2026-10-30", status: "skipped", reason: "operator_window_open" }).includes("운영자"));
+  assert.ok(runSummary({ date: "2026-11-28", status: "skipped", reason: "weekend" }).includes("주말"));
   assert.ok(runSummary({ date: "2026-10-30", status: "mystery" }).includes("mystery"));
 });

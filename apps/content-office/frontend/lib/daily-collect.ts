@@ -6,6 +6,7 @@ export type DailyCollectSettings = {
   time_kst: string;
   minutes: number;
   max_krw: number;
+  days?: CollectDays;
   updated_by?: string;
   updated_at?: string;
 };
@@ -31,7 +32,9 @@ export type DailyCollectStatus = {
   source: string;
 };
 
-export type DailyCollectPatch = Pick<DailyCollectSettings, "enabled" | "time_kst" | "minutes" | "max_krw">;
+export type CollectDays = "everyday" | "weekdays";
+export type DailyCollectPatch = Pick<DailyCollectSettings, "enabled" | "time_kst" | "minutes" | "max_krw"> & { days: CollectDays };
+export const DAY_LABELS: Record<CollectDays, string> = { everyday: "매일", weekdays: "평일만(월~금)" };
 
 export const COLLECT_MINUTES = [5, 30] as const;
 export const COLLECT_MAX_KRW = [10, 1000] as const;
@@ -56,7 +59,7 @@ export function validCollectMaxKrw(value: string): number | null {
   return integerIn(value, COLLECT_MAX_KRW);
 }
 
-export function parseDailyCollectForm(form: { enabled: boolean; time: string; minutes: string; maxKrw: string }):
+export function parseDailyCollectForm(form: { enabled: boolean; time: string; minutes: string; maxKrw: string; days?: CollectDays }):
   | { ok: true; patch: DailyCollectPatch }
   | { ok: false; errors: string[] } {
   const time = validTimeKst(form.time);
@@ -67,7 +70,7 @@ export function parseDailyCollectForm(form: { enabled: boolean; time: string; mi
   if (minutes == null) errors.push(`작업 시간은 ${COLLECT_MINUTES[0]}~${COLLECT_MINUTES[1]}분의 정수로 입력하세요.`);
   if (maxKrw == null) errors.push(`1회 비용 상한은 ${COLLECT_MAX_KRW[0]}~${COLLECT_MAX_KRW[1]}원의 정수로 입력하세요.`);
   if (time == null || minutes == null || maxKrw == null) return { ok: false, errors };
-  return { ok: true, patch: { enabled: form.enabled, time_kst: time, minutes, max_krw: maxKrw } };
+  return { ok: true, patch: { enabled: form.enabled, time_kst: time, minutes, max_krw: maxKrw, days: form.days ?? "everyday" } };
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -80,6 +83,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const SKIP_REASONS: Record<string, string> = {
+  weekend: "평일만 수집이라 주말은 건너뜀",
   operator_window_open: "운영자 작업 시간이 열려 있어 건너뜀",
   window_unavailable: "작업자·배포가 실행 중이어서 작업 시간을 열지 못해 건너뜀",
   services_running: "작업자 또는 감시가 실행 중이어서 건너뜀",

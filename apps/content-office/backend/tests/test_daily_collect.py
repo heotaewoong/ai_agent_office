@@ -65,12 +65,12 @@ def run(store, at=AT_0703, refresh=None, provider=None, **kw):
 def test_defaults_are_off_and_settings_are_validated_and_recorded(tmp_path):
     from office.daily_collect import daily_collect_settings, update_daily_collect_settings
     store = Store(tmp_path)
-    assert daily_collect_settings(store) == {"enabled": False, "time_kst": "07:00", "minutes": 15, "max_krw": 100}
+    assert daily_collect_settings(store) == {"enabled": False, "time_kst": "07:00", "minutes": 15, "max_krw": 100, "days": "everyday"}
     saved = update_daily_collect_settings(store, {"enabled": True, "time_kst": "06:30", "minutes": 20, "max_krw": 200}, actor="local-operator")
     assert saved["enabled"] is True and saved["time_kst"] == "06:30" and saved["updated_by"] == "local-operator" and saved["updated_at"]
     assert [e for e in store.events(limit=5) if e["kind"] == "daily_collect_updated"][0]["data"]["time_kst"] == "06:30"
     for bad in ({"time_kst": "7:00"}, {"time_kst": "24:00"}, {"time_kst": "07:60"}, {"minutes": 4}, {"minutes": 31}, {"minutes": 15.5},
-                {"max_krw": 9}, {"max_krw": 1001}, {"enabled": "yes"}, {"minutes": True}, {"budget": 1}):
+                {"max_krw": 9}, {"max_krw": 1001}, {"enabled": "yes"}, {"minutes": True}, {"budget": 1}, {"days": "weekends"}):
         with pytest.raises(WorkflowError):
             update_daily_collect_settings(store, bad, actor="local-operator")
     assert daily_collect_settings(store)["time_kst"] == "06:30"
@@ -112,6 +112,20 @@ def test_happy_path_opens_scheduled_window_collects_and_closes_it(tmp_path):
     # 수집·요약만: 작업·작업자 할 일·기획·승인은 만들지 않는다
     assert store.jobs() == [] and store.tasks() == [] and store.ideas() == []
     assert not any(e["kind"].endswith("approved") or e["kind"].startswith("task_") for e in store.events(limit=200))
+
+
+def test_weekdays_only_skips_weekends_without_opening_a_window(tmp_path):
+    store = Store(tmp_path)
+    enabled(store, time_kst="07:10", days="weekdays")
+    saturday = datetime(2026, 11, 28, 7, 15, tzinfo=KST)  # 2026-11-28은 토요일
+    refresh = FakeRefresh()
+    assert run(store, at=saturday, refresh=refresh) == {"status": "skipped", "reason": "weekend", "date": "2026-11-28"}
+    assert refresh.windows == [] and store.setting("work_window") is None and not store.setting("daily_collect_runs")
+    friday = datetime(2026, 11, 27, 7, 15, tzinfo=KST)
+    assert run(store, at=friday)["status"] == "completed"
+    # 매일로 돌려 두면 주말에도 돈다(예전 설정은 days가 없어도 매일로 읽는다)
+    enabled(store, days="everyday")
+    assert run(store, at=saturday)["status"] == "completed"
 
 
 def test_second_run_on_the_same_day_skips(tmp_path):

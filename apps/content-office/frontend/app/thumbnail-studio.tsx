@@ -2,11 +2,12 @@
 
 import {useCallback, useEffect, useRef, useState} from "react";
 import {api} from "../lib/api";
+import {frameNote, parseAt, type FrameProvenance} from "../lib/frame-pick";
 import type {Action, Job} from "../lib/types";
 import styles from "./thumbnail-studio.module.css";
 
 export type ThumbnailFormat = "landscape"|"shorts";
-type Candidate = {id:string; title:string; angle:string; url:string; portrait_url?:string|null; parent_id?:string|null; instruction?:string; provenance?:{provider?:string; model?:string}};
+type Candidate = {id:string; title:string; angle:string; url:string; portrait_url?:string|null; parent_id?:string|null; instruction?:string; provenance?:FrameProvenance};
 export type ThumbnailState = {revision:string; current_source_hash?:string; source_hash?:string; title?:string; stale:boolean; candidates:Candidate[]; selected_id?:string|null; finalized_id?:string|null; selected_format?:ThumbnailFormat; finalized_format?:ThumbnailFormat|null; default_format?:ThumbnailFormat; task?:{id:string; state:string; result?:{error?:string}}|null};
 
 export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedReason?:string; action:Action}) {
@@ -18,6 +19,11 @@ export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedRe
   const [instruction,setInstruction]=useState("");
   const [format,setFormat]=useState<ThumbnailFormat>("landscape");
   const [large,setLarge]=useState<string|null>(null);
+  const videos=(job.manifest?.files??[]).filter(f=>f.kind==="video");
+  const [videoId,setVideoId]=useState("");
+  const [at,setAt]=useState("0:03");
+  const [manualX,setManualX]=useState(false);
+  const [x,setX]=useState(0.7);
   const requestId=useRef(0);
   const dialog=useRef<HTMLDialogElement>(null);
   const previewOpener=useRef<HTMLButtonElement|null>(null);
@@ -36,6 +42,9 @@ export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedRe
   async function run(fn:()=>Promise<unknown>){setBusy(true);setError("");try{await fn();await load();}catch(e){setError(e instanceof Error?e.message:"요청을 완료하지 못했습니다. 자동 재시도하지 않습니다");}finally{setBusy(false);}}
   async function generate(edit=false){if(!data||!job.source_hash)return;await run(()=>api.generateThumbnails(job.id,{source_hash:job.source_hash!,revision:data.revision,confirm_paid:paid,...(edit&&selected?{edit_id:selected.id,instruction}: {})}));}
   const disabled=busy||pending||!!data?.stale;
+  const seconds=parseAt(at);
+  const chosenVideo=videos.find(v=>v.id===videoId)??videos[0];
+  async function fromFrame(){if(!data||!job.source_hash||!chosenVideo||seconds==null)return;await run(()=>action("내 영상 장면으로 썸네일 후보 만들기",()=>api.thumbnailFrame(job.id,{source_hash:job.source_hash!,revision:data.revision,video_id:chosenVideo.id,at:seconds,...(manualX?{x}:{})}),"영상에서 가장 선명한 장면을 골라 후보에 넣었습니다. 비용은 0원이에요."));}
   return <section className={styles.root} aria-labelledby={`thumbnail-studio-${job.id}`}>
     <header><div><p className="eyebrow">원고 기반 이미지 · 최종 결정은 내가</p><h2 id={`thumbnail-studio-${job.id}`}>썸네일 3장을 비교하고 다듬으세요</h2></div><span className="count-pill">{data?.finalized_id&&!data.stale&&(data.finalized_format??"landscape")===format?"최종 확정":"검토 중"}</span></header>
     <p>같은 원고와 제목으로 서로 다른 이미지 3장을 만듭니다. 한 장을 고른 뒤 원하는 부분을 수정하고 최종 확정하세요. 원고 승인①·출고 승인②와 외부 발행은 별도입니다.</p>
@@ -52,11 +61,19 @@ export function ThumbnailStudio({job, blockedReason, action}:{job:Job; blockedRe
     {!!data?.candidates.length&&<div className={styles.grid}>{data.candidates.map((c,i)=><article key={c.id} className={sameFormat&&c.id===data.selected_id?styles.selected:styles.card}>
       <button type="button" className={styles.image} onClick={e=>{previewOpener.current=e.currentTarget;setLarge(c.id);}} aria-label={`${c.parent_id?"수정본":"후보"} ${i+1} 크게 보기`}><img src={picture(c)} alt={`${c.angle} — ${c.title}`} /></button>
       <h3>{c.parent_id?"선택 이미지 수정본":`후보 ${i+1}`} · {c.angle}</h3>
-      <p>{c.provenance?.provider||"생성 이미지"}{c.parent_id&&" · 원본 보존"}</p>
+      <p>{frameNote(c.provenance)??(c.provenance?.provider||"생성 이미지")}{c.parent_id&&" · 원본 보존"}</p>
       <button type="button" className="button secondary" disabled={disabled} aria-pressed={sameFormat&&c.id===data.selected_id} onClick={()=>void run(()=>action("썸네일 비교 선택",()=>api.chooseStudioThumbnail(job.id,c.id,data.revision,false,format),"이미지를 선택했습니다. 필요하면 수정본을 만든 뒤 최종 확정하세요."))}>{sameFormat&&c.id===data.selected_id?"현재 비교 선택":"이 이미지 선택"}</button>
     </article>)}</div>}
     {large&&<dialog ref={dialog} className={styles.dialog} aria-label="썸네일 크게 보기" onCancel={e=>{e.preventDefault();closePreview();}}><button type="button" className="button secondary" autoFocus onClick={closePreview}>확대 닫기</button><img src={picture(data?.candidates.find(c=>c.id===large))} alt="확대한 썸네일 후보" /></dialog>}
     {before&&selected&&<div className={styles.comparison}><figure><img src={picture(before)} alt="수정 전 선택 이미지"/><figcaption>수정 전</figcaption></figure><figure><img src={picture(selected)} alt="수정한 이미지"/><figcaption>수정 후 · {selected.instruction}</figcaption></figure></div>}
+    {videos.length>0&&<fieldset className={styles.formats}><legend>내 영상 장면으로 후보 만들기 · 0원</legend>
+      <p>고른 시각 앞뒤 1초 안에서 흔들림 없고 너무 어둡지 않은 장면을 고른 뒤, 얼굴을 오른쪽에 두고 잘라요. 얼굴을 못 찾으면 가운데를 지키고, 위치를 직접 정할 수도 있어요. 사진은 서버 밖으로 나가지 않아요.</p>
+      {videos.length>1&&<label>영상 <select value={chosenVideo?.id??""} onChange={e=>setVideoId(e.target.value)} disabled={disabled}>{videos.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select></label>}
+      <label>시각(초 또는 분:초) <input value={at} onChange={e=>setAt(e.target.value)} inputMode="numeric" aria-invalid={seconds==null} disabled={disabled} placeholder="1:15"/></label>
+      <label><input type="checkbox" checked={manualX} onChange={e=>setManualX(e.target.checked)} disabled={disabled}/> 사람 위치를 직접 정하기</label>
+      {manualX&&<label>사람이 있는 가로 위치 {Math.round(x*100)}% <input type="range" min={0} max={1} step={0.01} value={x} onChange={e=>setX(Number(e.target.value))} disabled={disabled}/></label>}
+      <button type="button" className="button secondary" disabled={disabled||seconds==null||!job.source_hash} onClick={()=>void fromFrame()}>이 시각 근처 장면으로 후보 만들기</button>
+    </fieldset>}
     <div className={styles.controls}>
       <label><input type="checkbox" checked={paid} onChange={e=>setPaid(e.target.checked)} disabled={busy||pending}/> OpenAI 이미지 비용 확인: 새 후보 최대 3장 × 200원 예약, 수정 1회 200원 예약 · 같은 작업 합산 최대 2,000원 · 기존 예산 안에서만 호출</label>
       {blockedReason&&<p className="notice">{blockedReason} {data?.stale?"이전 후보의 확대 비교는 계속할 수 있습니다.":"비교·선택·최종 확정은 계속할 수 있습니다."}</p>}

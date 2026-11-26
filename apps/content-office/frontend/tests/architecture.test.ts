@@ -55,7 +55,7 @@ test("parallel outputs, independent coupon offers and consent/mail boundaries re
   assert.match(document.lanes![1].boundary, /발급.*가격\/주문/);
   assert.match(document.lanes![2].boundary, /미연결/);
   assert.ok(document.status.some((item) => item.text.includes("Hermes") && item.state === "off"));
-  assert.deepEqual(document.unit_costs.map((row) => row.role), ["card_ko", "gen", "critique", "eval", "korean", "cards", "cards_review", "quiz", "card_image", "image"]);
+  assert.deepEqual(document.unit_costs.map((row) => row.role), ["card_ko", "gen", "critique", "eval", "korean", "cards", "cards_review", "quiz", "card_image", "image", "story"]);
   assert.equal(imageRoute("codex-subscription"), "Codex 구독 로그인");
   assert.equal(imageRoute("none"), "생성 이미지 끔");
   assert.equal(imageRoute("unknown-selection"), "unknown-selection");
@@ -89,4 +89,17 @@ test("CI 검증형·누락·부분 배포 기록을 안전하게 표시하고 �
   assert.deepEqual(testSummary({...base,tests:{}}),{text:"검사 결과 미기록",failed:false});
   const partial=testSummary({...base,tests:{backend:{passed:4,failed:1}}});
   assert.equal(partial.failed,true);assert.match(partial.text,/화면 건수 미기록/);
+});
+
+test("adoptionCounts fills every state and filterAdoptions keeps the recorded order", async () => {
+  const { adoptionCounts, filterAdoptions } = await import("../lib/architecture.ts");
+  const rows = [
+    { id: "a", state: "built", repo: "connect-ai-writer", source: "", took: "", here: "", why: "" },
+    { id: "b", state: "adapted", repo: "connect-ai-writer", source: "", took: "", here: "", why: "" },
+    { id: "c", state: "skip", repo: "connect-ai-marketer", source: "", took: "", here: "", why: "" },
+  ] as const;
+  const counts = adoptionCounts([...rows]);
+  assert.deepEqual(counts, { built: 1, adapted: 1, exists: 0, next: 0, skip: 1 });
+  assert.deepEqual(filterAdoptions([...rows], "all", "connect-ai-writer").map((r) => r.id), ["a", "b"]);
+  assert.deepEqual(filterAdoptions([...rows], "skip", "all").map((r) => r.id), ["c"]);
 });

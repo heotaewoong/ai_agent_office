@@ -63,6 +63,7 @@ import type { IdeaSourcesDraft } from "../lib/ideas";
 import { PerformancePanel } from "./performance-panel";
 import { PackagingPanel } from "./packaging-panel";
 import { QuizPanel } from "./quiz-panel";
+import { MemoryStoryPanel } from "./memory-story-panel";
 import { CardsPanel } from "./cards-panel";
 import { ContentDiagnosticsPanel } from './content-diagnostics-panel';
 import { InstagramPreview } from './instagram-preview';
@@ -1907,8 +1908,12 @@ function Studio({
         <header className="studio-section-heading"><span className="studio-section-number">05</span><div><h2 id={`studio-quiz-${job.id}`} data-outline-title="퀴즈">퀴즈</h2><p>승인 원고를 바탕으로 만든 문제와 정답·해설을 확인하세요.</p></div></header>
         <QuizPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
       </section>
+      <section className="studio-section" aria-labelledby={`studio-story-${job.id}`}>
+        <header className="studio-section-heading"><span className="studio-section-number">06</span><div><h2 id={`studio-story-${job.id}`} data-outline-title="그림 기억 이야기">그림 기억 이야기</h2><p>승인 원고에서 기억할 것을 골라 뇌리가 주인공인 장면으로 그려요. 그림은 코드로 그려 이미지 비용이 없어요.</p></div></header>
+        <MemoryStoryPanel job={job} busy={locked || Boolean(requestBlockedReason)} action={action} />
+      </section>
       <section className="studio-section" aria-labelledby={`studio-history-${job.id}`}>
-        <header className="studio-section-heading"><span className="studio-section-number">06</span><div><h2 id={`studio-history-${job.id}`} data-outline-title="버전·작업 기록">버전·작업 기록</h2><p>이전 원고와 새 편집본, 개선 요청 및 진행 상태를 확인하세요.</p></div></header>
+        <header className="studio-section-heading"><span className="studio-section-number">07</span><div><h2 id={`studio-history-${job.id}`} data-outline-title="버전·작업 기록">버전·작업 기록</h2><p>이전 원고와 새 편집본, 개선 요청 및 진행 상태를 확인하세요.</p></div></header>
       <VersionHistoryPanel key={`history-${job.id}`} job={job} />
       <EditorialAssetsPanel job={job} editLocked={locked || dirty} onLoadDraft={(draft) => {
         if (locked || dirty) return;

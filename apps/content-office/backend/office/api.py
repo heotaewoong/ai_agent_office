@@ -196,6 +196,14 @@ class ThumbnailArtworkRequest(BaseModel):
     confirm_paid: bool = Field(default=False, strict=True)
 
 
+class ThumbnailFrameRequest(BaseModel):
+    source_hash: str = Field(pattern=r'^[0-9a-f]{64}$')
+    revision: str = Field(pattern=r'^[0-9a-f]{64}$')
+    video_id: str = Field(min_length=1, max_length=80)
+    at: float = Field(ge=0, le=36000)
+    x: float | None = Field(default=None, ge=0, le=1)
+
+
 class ThumbnailArtworkChoice(BaseModel):
     format: Literal['landscape', 'shorts'] = 'landscape'
     candidate_id: str = Field(min_length=1, max_length=80)
@@ -898,6 +906,31 @@ def create_app(store: Store | None = None):
         task = store.enqueue('thumbnail_artwork', payload, 'thumbnail-artwork:' + digest(payload), guard_unknown_scope=True)
         store.update_job(job_id, thumbnail_auto_enabled=True)
         return task
+
+    @app.post('/api/jobs/{job_id}/thumbnail-studio/frame')
+    def thumbnail_studio_frame(job_id: str, body: ThumbnailFrameRequest):
+        """내 영상의 한 장면을 썸네일 후보로 넣는다(0원). 요청 시각 앞뒤에서 가장 선명한 장면을 고르고,
+        얼굴(또는 운영자가 고른 위치)을 오른쪽에 두고 자른다. 방식: connect-ai-writer frames.mjs·focus.mjs."""
+        import tempfile
+        from pathlib import Path as _Path
+        from .api_quiz_cards import _verified_path
+        from .frame_focus import best_frame, fill_crop
+        from .thumbnail_studio import add_candidate, context, snapshot
+        job, _, _ = context(store, job_id, body.source_hash)
+        if snapshot(store, job_id)['revision'] != body.revision:
+            raise WorkflowError('썸네일 판본이 바뀌었습니다. 현재 비교를 다시 확인하세요')
+        file = next((f for f in (job.get('manifest') or {}).get('files', []) if f.get('id') == body.video_id and f.get('kind') == 'video'), None)
+        if not file:
+            raise WorkflowError('이 작업의 영상 파일을 찾지 못했습니다. 제작·가져오기가 끝난 영상만 고를 수 있어요')
+        video = _verified_path(store, file)
+        with tempfile.TemporaryDirectory(prefix='owner-frame-') as work:
+            frame = best_frame(str(video), body.at, _Path(work) / 'frame.jpg')
+            artwork = _Path(work) / 'artwork.png'
+            crop = fill_crop(frame['path'], 1280, 720, artwork, x=body.x, anchor=0.72)
+            add_candidate(store, job_id, body.source_hash, artwork, angle='내 영상 장면',
+                          provenance={'kind': 'owner_video_frame', 'video_id': body.video_id, 'requested_at': body.at, 't': frame['t'],
+                                      'sharpness': frame['sharpness'], 'brightness': frame['brightness'], 'crop_by': crop['by'], 'cost_krw': 0})
+        return snapshot(store, job_id)
 
     @app.post('/api/jobs/{job_id}/thumbnail-studio/choose')
     def thumbnail_studio_choose(job_id: str, body: ThumbnailArtworkChoice):

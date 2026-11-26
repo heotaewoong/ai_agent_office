@@ -120,8 +120,9 @@ def save_job_output(store, job_id, source_hash, key, record, event_kind, event_d
 
 
 def enqueue_output(store, job, kind, images=None):
-    """quiz/cards 작업을 넣는다. 대기·실행 중이면 같은 작업을 돌려주고, 끝난 뒤(성공·실패)나 새 버전 뒤에는 새 작업을 만든다."""
-    if kind not in ("quiz", "cards"):
+    """quiz/cards/story 작업을 넣는다. 대기·실행 중이면 같은 작업을 돌려주고, 끝난 뒤(성공·실패)나 새 버전 뒤에는 새 작업을 만든다.
+    story(그림 기억 이야기)는 운영자가 누를 때만 넣는다. 제작 때 자동으로 줄 세우는 것은 퀴즈와 카드뿐이다."""
+    if kind not in ("quiz", "cards", "story"):
         raise WorkflowError("퀴즈 또는 카드 작업만 넣을 수 있습니다")
     source_hash = job["source_hash"]
     version = int((job.get(kind) or {}).get("version", 0))

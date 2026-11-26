@@ -3,8 +3,10 @@
 import {useCallback, useEffect, useRef, useState, type SyntheticEvent, type KeyboardEvent} from "react";
 import {api} from "../lib/api";
 import type {ArchitectureOverview} from "../lib/architecture";
+import {noeriStatus} from "../lib/noeri";
 import {formatDate} from "../lib/workflow";
-import {ArchitectureView as LegacyArchitectureView} from "./architecture-view";
+import {AdoptionSection, ArchitectureView as LegacyArchitectureView} from "./architecture-view";
+import {Noeri} from "./noeri";
 import "./pipeline-studio.css";
 
 const MAP_URL="/api/pipeline-studio";
@@ -13,7 +15,7 @@ const money=(value:unknown)=>typeof value==="number" && Number.isFinite(value)?`
 
 /** Reads operating state and opens a browser-local review map; never issues a workflow write. */
 export function PipelineStudio() {
-  const [tab,setTab]=useState<"map"|"operations">("map");
+  const [tab,setTab]=useState<"map"|"operations"|"adoptions">("map");
   const [overview,setOverview]=useState<ArchitectureOverview|null>(null);
   const [liveError,setLiveError]=useState("");
   const [liveLoading,setLiveLoading]=useState(true);
@@ -110,7 +112,9 @@ export function PipelineStudio() {
   const navigateTabs=(event:KeyboardEvent<HTMLDivElement>)=>{
     if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
     event.preventDefault();
-    const next=event.key==="Home"?"map":event.key==="End"?"operations":tab==="map"?"operations":"map";
+    const order=["map","operations","adoptions"] as const;
+    const step=event.key==="ArrowLeft"?-1:1;
+    const next=event.key==="Home"?"map":event.key==="End"?"adoptions":order[(order.indexOf(tab)+step+order.length)%order.length];
     setTab(next);document.getElementById(`pipeline-tab-${next}`)?.focus();
   };
   const mapOnLoad=(event:SyntheticEvent<HTMLIFrameElement>)=>{
@@ -155,11 +159,14 @@ export function PipelineStudio() {
   const workerNote=workerState==="online"?`마지막 기록: 온라인 · ${Number.isFinite(heartbeat)?formatDate(overview?.worker.heartbeat || undefined,true):"기록 시각 확인 불가"}`:"저장된 상태 기록";
   const runningCommit=overview?.git.commit?.slice(0,7);
   const livePlaceholder=liveError?"확인 불가":"확인 전";
+  const testsFailed=Boolean(overview?.build?.tests && ["backend","frontend"].some(key=>{const counts=(overview.build!.tests as Record<string,{failed?:number;errors?:number}|undefined>)[key];return Boolean(counts && ((counts.failed??0)+(counts.errors??0)));}));
+  const noeri=overview?noeriStatus({windowOpen:windowLabel==="열림",worker:workerState,failedTests:testsFailed}):null;
 
   return <section className="pipeline-studio" data-testid="pipeline-studio" aria-labelledby="pipeline-studio-title">
     <header className="pipeline-studio-header">
       <div><p className="pipeline-studio-eyebrow">기획부터 출고까지</p><h1 id="pipeline-studio-title">콘텐츠 파이프라인</h1><p className="pipeline-studio-intro">기획과 현재 구현을 나란히 보고, 다음 개선을 직접 정리하세요.</p></div>
       <span className="pipeline-studio-readonly"><i aria-hidden="true"/>운영 상태 조회</span>
+      {noeri && <div className="pipeline-studio-noeri" role="status" data-testid="pipeline-noeri"><Noeri mood={noeri.mood} size={64} label={`뇌리: ${noeri.label}`} className={noeri.mood==="thinking"?"noeri-busy":undefined}/><div><strong>뇌리 · {noeri.label}</strong><p>{noeri.detail}</p></div></div>}
     </header>
     <div className="pipeline-studio-live-heading"><span>서버에서 확인한 상태</span><button type="button" data-testid="pipeline-live-refresh" onClick={()=>void load()} disabled={liveLoading}>{liveLoading?"확인 중…":"상태 새로고침"}</button></div>
     {liveError && <div className="pipeline-studio-alert" role="alert" data-testid="pipeline-live-error">{overview?"갱신에 실패해 마지막 조회 내용을 표시합니다. ":""}{liveError}</div>}
@@ -172,6 +179,7 @@ export function PipelineStudio() {
     <div className="pipeline-studio-tabs" role="tablist" aria-label="파이프라인 보기" onKeyDown={navigateTabs}>
       <button type="button" role="tab" id="pipeline-tab-map" data-testid="pipeline-tab-map" aria-controls="pipeline-panel-map" aria-selected={tab==="map"} tabIndex={tab==="map"?0:-1} onClick={()=>setTab("map")}>기획·구현 지도</button>
       <button type="button" role="tab" id="pipeline-tab-operations" data-testid="pipeline-tab-operations" aria-controls="pipeline-panel-operations" aria-selected={tab==="operations"} tabIndex={tab==="operations"?0:-1} onClick={()=>setTab("operations")}>운영 상세</button>
+      <button type="button" role="tab" id="pipeline-tab-adoptions" data-testid="pipeline-tab-adoptions" aria-controls="pipeline-panel-adoptions" aria-selected={tab==="adoptions"} tabIndex={tab==="adoptions"?0:-1} onClick={()=>setTab("adoptions")}>가져온 방법·판단</button>
     </div>
     <div id="pipeline-panel-map" role="tabpanel" aria-labelledby="pipeline-tab-map" hidden={tab!=="map"}>
       <div className={`pipeline-studio-canvas${expanded?" is-expanded":""}`} ref={canvas} role={expanded?"dialog":undefined} aria-modal={expanded?true:undefined} aria-labelledby={expanded?"pipeline-map-title":undefined} data-testid="pipeline-map-canvas">
@@ -186,5 +194,6 @@ export function PipelineStudio() {
       </div>
     </div>
     <div id="pipeline-panel-operations" role="tabpanel" aria-labelledby="pipeline-tab-operations" hidden={tab!=="operations"}>{tab==="operations" && <LegacyArchitectureView/>}</div>
+    <div id="pipeline-panel-adoptions" role="tabpanel" aria-labelledby="pipeline-tab-adoptions" hidden={tab!=="adoptions"}>{tab==="adoptions" && (overview?.doc.adoptions?.length?<AdoptionSection doc={overview.doc}/>:<p className="muted" role="status">{liveError?"판단 기록을 불러오지 못했습니다.":"판단 기록을 불러오는 중입니다."}</p>)}</div>
   </section>;
 }

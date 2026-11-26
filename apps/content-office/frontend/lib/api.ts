@@ -36,6 +36,7 @@ import type {
   Channel,
   ChannelPatch,
   Quiz,
+  MemoryStory,
   Cards,
   TaskAccepted,
   Calendar,
@@ -143,6 +144,8 @@ export const api = {
   thumbnailStudio:(id:string)=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio`),
   generateThumbnails:(id:string,body:{source_hash:string;revision:string;confirm_paid:boolean;edit_id?:string;instruction?:string})=>request(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/generate`,"POST",body),
   chooseStudioThumbnail:(id:string,candidate_id:string,revision:string,finalize:boolean,format:"landscape"|"shorts"="landscape")=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/choose`,"POST",{candidate_id,revision,finalize,format}),
+  // 내 영상의 한 장면을 썸네일 후보로(0원): 요청 시각 앞뒤에서 가장 선명한 장면, 얼굴을 오른쪽에
+  thumbnailFrame:(id:string,body:{source_hash:string;revision:string;video_id:string;at:number;x?:number})=>request<ThumbnailState>(`/jobs/${encodeURIComponent(id)}/thumbnail-studio/frame`,"POST",body),
   setVideoPlatforms: (id: string, platforms: ("youtube_shorts" | "instagram_reels")[], version: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/video-platforms`, "PUT", {platforms, version}),
   prepareExternalMedia: (jobId: string, body: {version:string;draft_id:string}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/prepare`, "POST", body),
   adoptExternalMedia: (jobId: string, body: {version:string;reviewed:boolean}) => request<Job>(`/jobs/${encodeURIComponent(jobId)}/external-media/adopt`, "POST", body),
@@ -355,6 +358,11 @@ export const api = {
     request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/quiz`, "POST", {}),
   quiz: (id: string) =>
     request<{ quiz: Quiz | null }>(`/jobs/${encodeURIComponent(id)}/quiz`),
+  // 그림 기억 이야기: 글은 모델, 그림은 코드(0원). 운영자가 누를 때만 줄 세운다.
+  requestStory: (id: string) =>
+    request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/story`, "POST", {}),
+  story: (id: string) =>
+    request<{ story: MemoryStory | null }>(`/jobs/${encodeURIComponent(id)}/story`),
   requestCards: (id: string, images?: boolean) =>
     request<TaskAccepted>(`/jobs/${encodeURIComponent(id)}/cards`, "POST", images === undefined ? {} : { images }),
   cards: (id: string) =>

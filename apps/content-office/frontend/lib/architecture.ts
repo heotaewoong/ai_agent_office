@@ -3,6 +3,9 @@ export type FlowStep =
   | { kind: "gate"; mark: string; label: string; checks?: string }
   | { kind: "step" };
 export type UnitCost = { task: string; role: string; unit: string; where: string };
+export type AdoptionState = "built" | "adapted" | "exists" | "next" | "skip";
+export type Adoption = { id: string; state: AdoptionState; repo: string; source: string; took: string; here: string; why: string };
+export type AdoptionRepo = { repo: string; commit: string; license: string; what: string };
 export type UsageRow = { role: string; model: string; calls: number; krw: number; per_call: number };
 export type TestCounts = { passed: number; failed: number; skipped?: number; errors?: number };
 export type ArchitectureOverview = {
@@ -15,6 +18,9 @@ export type ArchitectureOverview = {
     unit_costs: UnitCost[];
     rails: { title: string; text: string }[];
     status: { state: "ok" | "warn" | "off"; label: string; text: string; note: string }[];
+    adoptions_note?: string;
+    adoption_repos?: AdoptionRepo[];
+    adoptions?: Adoption[];
   };
   git: { commit: string | null; committed_at: string | null; subject: string | null; recent: { commit: string; at: string; author: string; subject: string }[] };
   build: { commit: string | null; deployed_at: string; tests?: { backend?: TestCounts; frontend?: TestCounts; ci?: { source?: string; check?: string; completed_at?: string; url?: string } } } | null;
@@ -60,6 +66,21 @@ export function testSummary(build: ArchitectureOverview["build"]): { text: strin
     ? `${name} 건수 미기록`
     : `${name} ${t.passed} 통과${t.failed ? ` · ${t.failed} 실패` : ""}${t.errors ? ` · ${t.errors} 오류` : ""}`;
   return { text: `${part("백엔드", b)} · ${part("화면", f)}`, failed };
+}
+
+export const ADOPTION_STATES: readonly AdoptionState[] = ["built", "adapted", "exists", "next", "skip"];
+export const ADOPTION_LABELS: Record<AdoptionState, string> = { built: "새로 만듦", adapted: "바꿔서 만듦", exists: "이미 있음", next: "다음 차례", skip: "안 가져옴" };
+
+/** 상태별 개수(0개인 상태도 칩에 보이도록 모두 채운다). */
+export function adoptionCounts(rows: Adoption[]): Record<AdoptionState, number> {
+  const counts = Object.fromEntries(ADOPTION_STATES.map((state) => [state, 0])) as Record<AdoptionState, number>;
+  for (const row of rows) if (row.state in counts) counts[row.state] += 1;
+  return counts;
+}
+
+/** 화면 필터: 상태와 저장소로 좁힌다. 원래 순서(판단 기록 순서)는 지킨다. */
+export function filterAdoptions(rows: Adoption[], state: AdoptionState | "all", repo: string | "all") {
+  return rows.filter((row) => (state === "all" || row.state === state) && (repo === "all" || row.repo === repo));
 }
 
 export function shortCommit(commit: string | null | undefined) {
