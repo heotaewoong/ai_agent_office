@@ -237,4 +237,4 @@ def test_scattered_hedges_go_to_refine_but_one_limit_paragraph_does_not():
 
 def test_base_prompt_gathers_limits_in_one_place():
     from office.editorial import BASE
-    assert "한 곳(한 소제목이나 한 문단)에 1~3문장으로 모은다" in BASE and "일반 주의 문구" in BASE and "한계를 숨기지 않는다." not in BASE
+    assert "가장 중요한 하나를" in BASE and "꼭 필요하지 않으면 쓰지 않는다" in BASE and "한계를 숨기지 않는다." not in BASE
