@@ -125,3 +125,21 @@ def triage_claim(claim: str, numbers, paragraph: int, supplied: dict, *, context
     if absent_numbers:
         return {"action": "retry_numbers", "missing": missing, "absent_numbers": absent_numbers}
     return {"action": "flag_names", "missing": missing}
+
+
+# 한계 문장 흩어짐(2026-11-27): 문단마다 '다만 ~라 일반화하면 안 돼요'가 붙으면 AI가 쓴 글처럼 읽혀요.
+HEDGE = re.compile(r"(일반화|일반 성과|따로 (확인|검증)|별도 (확인|검증)|단정(하면|하기) (안|어렵)|그대로 (믿|읽|받아들)|바탕으로 정리|독립(적인)? (성능 )?검증|보정(되지 않|하지는 않|이 아니)|데모 (결과|성격)|실제 (로봇|환경|성능|실물)[^.]{0,14}(아니|않|필요))")
+
+
+def hedge_spread(body: str) -> dict:
+    """한계, 단서 문장 수와 그 문장이 들어간 소제목 구역 수."""
+    sections, current, hits = {}, 0, 0
+    for line in str(body or "").splitlines():
+        if re.match(r"^\s*#", line):
+            current += 1
+            continue
+        for sentence in re.split(r"(?<=[.!?요다])\s+", line):
+            if HEDGE.search(sentence):
+                hits += 1
+                sections[current] = sections.get(current, 0) + 1
+    return {"sentences": hits, "sections": len(sections)}
