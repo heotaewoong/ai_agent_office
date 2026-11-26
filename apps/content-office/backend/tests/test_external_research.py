@@ -94,7 +94,9 @@ def test_plan_follows_the_claims_the_topic_makes(title, area, need, fact, exampl
 
 def test_experience_first_topics_stay_inside_and_warn_about_numbers():
     plan = research_plan("석 달 만에 집중 시간이 30% 늘어난 내 방법", area="D", experience_first=True)
-    assert plan["need"] == "none" and plan["fact"]["providers"] == [] and "수치" in plan["warning"]
+    # 2026-11-26: 내 경험 글도 사례 칸만 보조 근거로 찾는다(사실 칸은 그대로 안 함).
+    assert plan["fact"]["need"] == "none" and plan["fact"]["providers"] == [] and "수치" in plan["warning"]
+    assert plan["example"]["need"] == "recommended" and plan["need"] == "recommended"
     assert research_plan("회사를 그만두고 배운 것", area="D", experience_first=True)["warning"] is None
 
 
@@ -145,7 +147,9 @@ def test_ai_topics_search_official_feeds_code_and_papers(tmp_path, monkeypatch):
 
 def test_topics_that_need_nothing_never_leave_the_server(tmp_path):
     result = run_research(tmp_path, "회사를 그만두고 배운 것", area="D", experience_first=True, fetch=offline, fact_sources=no_library)
-    assert result["candidates"] == [] and result["searched"] is False and result["plan"]["need"] == "none"
+    # 2026-11-26: 내 경험 글은 사실 칸은 안 찾고, 사례 칸(등록한 크리에이터)만 보조 근거로 찾는다. 이 폴더엔 크리에이터가 없다.
+    assert result["candidates"] == [] and result["searched"] is False
+    assert result["plan"]["fact"]["need"] == "none" and result["plan"]["example"]["need"] == "recommended"
 
 
 def test_library_candidate_count_never_skips_fact_search(tmp_path):
@@ -241,7 +245,7 @@ def test_api_plans_many_topics_without_network_and_runs_one_search(tmp_path, mon
     monkeypatch.setattr(external_research, "fetch_public", offline)
     plans = api.post("/api/source-library/research/plans", json={"topics": [
         {"id": "idea-1", "title": "간격 복습이 기억에 미치는 효과"}, {"id": "idea-2", "title": "회사를 그만두고 배운 것", "area": "D", "experience_first": True}]})
-    assert plans.status_code == 200 and [(row["id"], row["need"]) for row in plans.json()["plans"]] == [("idea-1", "required"), ("idea-2", "none")]
+    assert plans.status_code == 200 and [(row["id"], row["need"]) for row in plans.json()["plans"]] == [("idea-1", "required"), ("idea-2", "recommended")]
     seen = {}
     monkeypatch.setattr("office.api_source_library.run_research", lambda root, title, **options: seen.update(title=title, **options) or {"candidates": []})
     run = api.post("/api/source-library/research", json={"title": "간격 복습", "area": "C", "query": "spacing effect", "force": True})

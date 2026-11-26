@@ -43,7 +43,7 @@ def test_kind_is_guessed_from_the_title_and_the_experience_switch_counts_as_a_ch
     assert [guess_kind(text) for text in titles] == ["W1", "W2", "W3", "W4", "W4", "W3"]
     assert list(KINDS) == ["W1", "W2", "W3", "W4", "W5"]
     switched = research_plan("간격 복습", area="C", experience_first=True)
-    assert (switched["kind"], switched["kind_guessed"], switched["need"]) == ("W4", False, "none")
+    assert (switched["kind"], switched["kind_guessed"], switched["need"]) == ("W4", False, "recommended")
 
 
 @pytest.mark.parametrize("title, kind, area", [
@@ -87,7 +87,8 @@ def test_out_of_scope_topics_are_blocked_even_when_forced(tmp_path):
 
 def test_experience_reviews_skip_outside_search_and_ask_for_my_own_source():
     plan = research_plan("석 달 만에 집중 시간이 30% 늘어난 방법", area="D", kind="W4")
-    assert plan["need"] == "none" and plan["needs_experience_source"] is True and plan["experience_first"] is True
+    assert plan["fact"]["need"] == "none" and plan["need"] == "recommended"
+    assert plan["needs_experience_source"] is True and plan["experience_first"] is True
     assert "수치" in plan["warning"]
     guessed = research_plan("석 달 만에 집중 시간이 30% 늘어난 내 방법", area="D")
     assert guessed["kind"] == "W4" and guessed["needs_experience_source"] is False and guessed["need"] == "required"
@@ -140,7 +141,7 @@ def test_api_saves_a_choice_and_the_idea_list_plans_with_it_without_touching_the
     assert saved.status_code == 200 and saved.json()["choice"]["kind"] == "W4"
     after = listed()
     assert after["research"]["kind_guessed"] is False and after["research"]["area_guessed"] is False
-    assert after["research"]["need"] == "none" and after["research"]["needs_experience_source"] is True
+    assert after["research"]["need"] == "recommended" and after["research"]["needs_experience_source"] is True
     assert {key: value for key, value in after.items() if key != "research"} == {key: value for key, value in before.items() if key != "research"}
     assert api.put(f"/api/source-library/research/choices/{idea['id']}", json={"kind": "W9", "area": "D"}).status_code == 422
     assert api.put(f"/api/source-library/research/choices/{idea['id']}", json={"kind": "W1", "area": "Z"}).status_code == 409

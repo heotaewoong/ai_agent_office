@@ -61,6 +61,7 @@ _LIBRARY_PASSAGE_PREFIX = 'passage: '
 _LIBRARY_TITLE_IN_PASSAGE = True
 _LIBRARY_MAX_TOKENS = 512
 _LIBRARY_MIN_SIMILARITY = 0.38
+_LIBRARY_AREA_BOOST = 0.03  # 분야 필터 대신 같은 분야 자료에 주는 순서 가산점(F10: 분야 경계 주제의 정답을 숨기지 않게)
 _MIN_LIBRARY_WORKER_AVAILABLE_KIB = 600 * 1024
 LIBRARY_MODEL = _LIBRARY_MODEL
 _MAX_LIBRARY_VECTORS = 30_000
@@ -235,15 +236,15 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
     try:
         with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
             rows = db.execute(
-                "SELECT v.item_id, v.seq, v.part, v.start_char, v.end_char, v.vector, i.url, i.title, i.content_hash, p.text, p.locator, p.heading "
+                "SELECT v.item_id, v.seq, v.part, v.start_char, v.end_char, v.vector, i.url, i.title, i.content_hash, p.text, p.locator, p.heading, i.area "
                 "FROM passage_vectors v JOIN passages p ON p.item_id=v.item_id AND p.seq=v.seq JOIN items i ON i.id=v.item_id "
                 "WHERE v.model=? AND i.status='done' AND i.use_as_evidence=1 AND i.kind='link' "
-                "AND (? IS NULL OR i.area=?) ORDER BY v.item_id, v.seq, v.part LIMIT ?",
-                (_LIBRARY_MODEL, area, area, _MAX_LIBRARY_VECTORS)).fetchall()
+                "ORDER BY v.item_id, v.seq, v.part LIMIT ?",
+                (_LIBRARY_MODEL, _MAX_LIBRARY_VECTORS)).fetchall()
     except sqlite3.Error:
         return []
     ranked = []
-    for item_id, seq, part, start, end, blob, url, title, source_hash, text, locator, heading in rows:
+    for item_id, seq, part, start, end, blob, url, title, source_hash, text, locator, heading, item_area in rows:
         if (not isinstance(blob, bytes) or len(blob) != _VECTOR.size or not isinstance(url, str) or url in excluded
                 or type(seq) is not int or seq < 1 or not _hex_hash(source_hash) or not isinstance(title, str)
                 or not title.strip() or not isinstance(text, str) or type(start) is not int or type(end) is not int):
@@ -253,8 +254,10 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
             continue
         score = sum(a * b for a, b in zip(vector, _VECTOR.unpack(blob), strict=True))
         if math.isfinite(score) and score >= _LIBRARY_MIN_SIMILARITY:
-            ranked.append((-score, (1, item_id, seq, part), url, title.strip()[:500], seq, quote, source_hash,
-                           {'locator': _place_text(locator, 40), 'heading': _place_text(heading, 200)}))
+            # 분야는 빼지 않고 같은 분야에 순서 가산점만 준다. 맨 끝 값은 가산점 없는 원래 유사도(창고 딱지에 쓴다).
+            boost = _LIBRARY_AREA_BOOST if area is not None and item_area == area else 0.0
+            ranked.append((-(score + boost), (1, item_id, seq, part), url, title.strip()[:500], seq, quote, source_hash,
+                           {'locator': _place_text(locator, 40), 'heading': _place_text(heading, 200)}, score))
     return ranked
 
 
@@ -282,7 +285,7 @@ def find_library_evidence_scored(query: str, *, root, exclude_urls: tuple[str, .
     if not matches:
         return [], 0.0
     first = matches[0]
-    top = max((-row[0] for row in ranked if row[2] == first['url'] and row[4] == first['paragraph']), default=0.0)
+    top = max((row[-1] for row in ranked if row[2] == first['url'] and row[4] == first['paragraph']), default=0.0)
     return matches, round(top, 4)
 
 
