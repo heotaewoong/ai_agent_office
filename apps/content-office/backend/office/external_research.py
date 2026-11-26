@@ -491,7 +491,8 @@ def library_judgement(root, title: str, *, area=None) -> dict:
     names = [name for name in build_queries(title)["names"].split() if len(name) >= 4]
     seen = " ".join(f"{row.get('title', '')} {row.get('quote', '')}" for row in rows).casefold()
     missing = bool(names and rows and not any(name.casefold() in seen for name in names))
-    return {"fact_sources": len({row["url"] for row in rows}), "top_score": top, "names_missing": missing}
+    top_rows = [{"url": row["url"], "paragraph": row.get("paragraph"), "title": str(row.get("title", ""))[:160]} for row in rows[:6]]
+    return {"fact_sources": len({row["url"] for row in rows}), "top_score": top, "names_missing": missing, "top": top_rows}
 
 
 def library_verdict(hits: int | None, top_score: float | None, names_missing: bool = False) -> dict | None:
@@ -510,7 +511,22 @@ def library_verdict(hits: int | None, top_score: float | None, names_missing: bo
     return {"verdict": key, "label": VERDICTS[key], "top_score": top_score, "reason": reason}
 
 
-def run_research(root, title: str, *, summary: str = "", area: str | None = None, kind: str | None = None, experience_first: bool = False,
+def run_research(root, title: str, **options) -> dict:
+    """조사 한 번을 끝까지 기록한다. 바깥 호출이 0회여도 종료 기록을 남겨서 '안 찾음'과 '기록 누락'을 구별한다."""
+    from .research_trace import record_research
+    started, result, error = monotonic(), None, None
+    try:
+        result = _run_research(root, title, **options)
+        return result
+    except Exception as exc:
+        error = type(exc).__name__
+        raise
+    finally:
+        trace = result.pop("_trace", None) if isinstance(result, dict) else None
+        record_research(root, title, options, result, trace, error, int((monotonic() - started) * 1000))
+
+
+def _run_research(root, title: str, *, summary: str = "", area: str | None = None, kind: str | None = None, experience_first: bool = False,
                  query: str | None = None, force: bool = False, fetch=None, fact_sources=library_fact_sources, translate=None,
                  auto: bool = False) -> dict:
     """외부 조사 필요 여부는 기획의 주장으로 결정한다. auto면 자료 창고 판정(맞음, 애매, 틀림)이 먼저다."""
@@ -523,21 +539,25 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
         return {"plan": plan, "queries": queries, "library": {"fact_sources": None, "sufficient": False}, "candidates": [],
                 "notes": ["범위 밖 주제로 골라서 밖으로 찾지 않았어요. 글 유형을 바꾸면 다시 찾을 수 있어요."], "searched": False, "verdict": None}
     library_query = f"{title} {query.strip()}" if query and query.strip() else title
+    trace_library = None
     if fact_sources is library_fact_sources:
         judged = library_judgement(root, library_query, area=plan["area"])
+        trace_library = {key: judged.get(key) for key in ("fact_sources", "top_score", "names_missing", "top")}
         hits = judged["fact_sources"]
         # 내 경험 중심 글은 외부 조사를 하지 않으므로 창고 판정도 붙이지 않는다.
         verdict = None if plan["experience_first"] else library_verdict(hits, judged["top_score"], judged.get("names_missing", False))
     else:
         hits, verdict = fact_sources(root, library_query), None
     library = {"fact_sources": hits, "sufficient": False}
-    result = {"plan": plan, "queries": queries, "library": library, "candidates": [], "notes": [], "searched": False, "verdict": verdict}
+    result = {"plan": plan, "queries": queries, "library": library, "candidates": [], "notes": [], "searched": False, "verdict": verdict,
+              "_trace": {"library": trace_library, "skipped_by_verdict": False, "jobs": []}}
     if re.search(r"쿠폰|할인\s*코드|\bpromo\s*code\b", f"{title} {summary}", re.I):
         result["notes"].append("쿠폰 발급·상품 적용·만료는 스토어 확인 항목이에요. 공개 자료로 확인 완료 처리하지 않아요.")
     if auto and verdict:
         # 자동 조사: 창고 판정이 '맞음'이면 밖으로 찾지 않는다. 발표·공고 글(W2)은 창고에 있어도 최신 원문을 확인한다.
         if verdict["verdict"] == "correct" and not (plan["kind"] == "W2" and not plan["kind_guessed"]):
             result["notes"].append("자료 창고에 맞는 근거가 있어서 밖으로 찾지 않았어요. 부족하면 '다시 찾기'를 눌러 주세요.")
+            result["_trace"]["skipped_by_verdict"] = True
             return result
         force = force or verdict["verdict"] != "correct"
     if not force and plan["need"] == "none":
@@ -612,6 +632,7 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
     stored = stored_urls(root) if found else set()
     result["candidates"] = [{**row, "in_library": normalize_url(row["url"]) in stored} for row in found]
     result["searched"] = bool(jobs)
+    result["_trace"]["jobs"] = sorted(jobs)
     return result
 
 
