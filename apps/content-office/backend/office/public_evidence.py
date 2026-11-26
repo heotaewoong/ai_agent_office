@@ -200,6 +200,13 @@ def _select(ranked: list[tuple], exclude_urls, limit: int, *, query: str = "") -
         }
         # 쪽(PDF)과 소제목 경로는 화면과 원고에 보여 줄 위치 정보다. 근거 ID는 예전처럼 문단 내용으로만 만든다.
         match.update({key: value for key, value in (place[0] if place else {}).items() if value})
+        from .evidence_guard import instruction_flags, key_sentence
+        flags = instruction_flags(quote)
+        if flags:
+            match['flags'] = flags  # 지시처럼 보이는 문장. 막지 않고 승인⓪ 화면에 보여 준다(2026-11-26).
+        sentence = key_sentence(query, quote) if query else None
+        if sentence:
+            match['highlight'] = sentence  # 기획과 가장 가까운 문장 표시(0원). 근거 ID와 문단은 그대로다.
         matches.append(match)
         excluded.add(url)
         if len(matches) == limit:
@@ -235,15 +242,16 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
     try:
         with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
             rows = db.execute(
-                "SELECT v.item_id, v.seq, v.part, v.start_char, v.end_char, v.vector, i.url, i.title, i.content_hash, p.text, p.locator, p.heading "
+                "SELECT v.item_id, v.seq, v.part, v.start_char, v.end_char, v.vector, i.url, i.title, i.content_hash, p.text, p.locator, p.heading, i.published_at "
                 "FROM passage_vectors v JOIN passages p ON p.item_id=v.item_id AND p.seq=v.seq JOIN items i ON i.id=v.item_id "
                 "WHERE v.model=? AND i.status='done' AND i.use_as_evidence=1 AND i.kind='link' "
                 "AND (? IS NULL OR i.area=?) ORDER BY v.item_id, v.seq, v.part LIMIT ?",
                 (_LIBRARY_MODEL, area, area, _MAX_LIBRARY_VECTORS)).fetchall()
     except sqlite3.Error:
         return []
+    from .evidence_guard import published_date
     ranked = []
-    for item_id, seq, part, start, end, blob, url, title, source_hash, text, locator, heading in rows:
+    for item_id, seq, part, start, end, blob, url, title, source_hash, text, locator, heading, published in rows:
         if (not isinstance(blob, bytes) or len(blob) != _VECTOR.size or not isinstance(url, str) or url in excluded
                 or type(seq) is not int or seq < 1 or not _hex_hash(source_hash) or not isinstance(title, str)
                 or not title.strip() or not isinstance(text, str) or type(start) is not int or type(end) is not int):
@@ -254,7 +262,7 @@ def _rank_library(path: Path, vector: list[float], exclude_urls, *, area=None) -
         score = sum(a * b for a, b in zip(vector, _VECTOR.unpack(blob), strict=True))
         if math.isfinite(score) and score >= _LIBRARY_MIN_SIMILARITY:
             ranked.append((-score, (1, item_id, seq, part), url, title.strip()[:500], seq, quote, source_hash,
-                           {'locator': _place_text(locator, 40), 'heading': _place_text(heading, 200)}))
+                           {'locator': _place_text(locator, 40), 'heading': _place_text(heading, 200), 'published': published_date(published)}))
     return ranked
 
 

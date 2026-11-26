@@ -438,6 +438,12 @@ export type IdeaPublicEvidence = {
   /** 자료 창고 문단의 PDF 쪽(p.12)과 소제목 경로. 근거 ID와는 무관한 위치 정보다. */
   locator?: string;
   heading?: string;
+  /** 자료 창고에 저장된 발행일(YYYY-MM-DD). 1년이 넘으면 화면에 표시한다. */
+  published?: string;
+  /** 문단 안에서 기획과 가장 가까운 문장(0원 표시). */
+  highlight?: string;
+  /** 지시처럼 보이는 문장 조각. 막지 않고 보여 준다. */
+  flags?: string[];
 };
 
 /** 개인 DB(책, 강의 자료) 근거 후보. 원본 위치는 오지 않고 출처 ID(book_id)만 온다. */

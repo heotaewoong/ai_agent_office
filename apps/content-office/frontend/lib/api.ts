@@ -273,6 +273,8 @@ export const api = {
     autoProduce = false,
     confirmPaid = false,
     draftTargets?: string[],
+    reasons?: string[],
+    note?: string,
   ) =>
     request<Job>(`/jobs/${encodeURIComponent(id)}/reviews/source`, "POST", {
       version,
@@ -281,6 +283,8 @@ export const api = {
       ...(autoProduce ? {auto_produce:true} : {}),
       ...(autoProduce && confirmPaid ? {confirm_paid_clips:true,confirm_paid_thumbnails:true} : {}),
       ...(draftTargets !== undefined ? {draft_targets:draftTargets} : {}),
+      ...(reasons && reasons.length ? {reasons} : {}),
+      ...(note ? {note} : {}),
     }),
   requestReleasedDraft: (id:string, version:string, channelKey:string, target:Pick<Channel,"key"|"platform"|"locale"|"public_url"|"external_account_id"|"publication_enabled">) => request<{items:{id:string;channel_key:string;state:string;reason?:string}[]}>(`/jobs/${encodeURIComponent(id)}/owner-drafts/request`, "POST", {version,channel_key:channelKey,target}),
   ownerDrafts: (id:string) => request<{items:{id:string;channel_key:string;state:string;reason?:string}[];host?:{online:boolean;last_seen:string|null}}>(`/jobs/${encodeURIComponent(id)}/owner-drafts`),

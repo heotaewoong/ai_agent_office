@@ -41,7 +41,8 @@ class ArticleTextParser(HTMLParser):
 
 def extract_article_text(markup: str) -> str:
     parser = ArticleTextParser()
-    parser.feed(markup[:2_000_000])
+    from .evidence_guard import strip_hidden_markup
+    parser.feed(strip_hidden_markup(markup[:2_000_000]))
     blocks = "".join(parser.primary_text or parser.all_text).splitlines()
     return "\n\n".join(re.sub(r"\s+", " ", block).strip() for block in blocks if block.strip())[:60000]
 

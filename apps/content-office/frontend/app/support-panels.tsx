@@ -1,5 +1,6 @@
 "use client";
 
+import { freshness, highlightParts } from "../lib/evidence-marks";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
@@ -968,10 +969,11 @@ export function IdeaBank({ active = true, onSelected, refreshKey = 0, drafts = {
                             const ids = event.target.checked ? [...selectedIds, item.id] : selectedIds.filter((id) => id !== item.id);
                             setEvidenceSelections((previous) => ({ ...previous, [idea.id]: { hash: idea.edit_hash!, ids } }));
                           }} />
-                          <span>{item.title} · 문단 {item.paragraph}{evidencePlace(item) ? ` · ${evidencePlace(item)}` : ""}</span>
+                          <span>{item.title} · 문단 {item.paragraph}{evidencePlace(item) ? ` · ${evidencePlace(item)}` : ""}{freshness(item.published) ? ` · ${freshness(item.published)!.label}` : ""}</span>
                         </label>
                         {href && <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`${item.title} 원문 열기`}>원문 열기 ↗</a>}
-                        <blockquote>{item.quote}</blockquote>
+                        {item.flags?.length ? <p className="muted" role="note">지시처럼 보이는 문장이 있어요: {item.flags[0]}</p> : null}
+                        <blockquote>{highlightParts(item.quote, item.highlight).map((part, index) => part.mark ? <mark key={index}>{part.text}</mark> : <span key={index}>{part.text}</span>)}</blockquote>
                       </div>;
                       })}
                     </div>)}
