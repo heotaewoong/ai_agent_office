@@ -194,3 +194,39 @@ def test_engine_comparison_needs_paid_acknowledgement_and_counts_calls(tmp_path)
                                        acknowledge_paid=True, root=tmp_path)
     assert report["legacy"]["roles"] == ["critique", "eval", "korean"] and report["v2_harness"]["roles"] == ["judge"]
     assert report["calls_saved"] == 2 and (tmp_path / "evals" / "reports").is_dir()
+
+
+def test_judge_uses_its_own_prompt_and_writes_the_reason_before_the_verdict():
+    from office.editorial import BASE
+    from office.harness import JUDGE_SYSTEM
+    seen = []
+
+    class Capture(Stub):
+        def generate(self, role, messages, schema, options=None):
+            if role == "judge":
+                seen.append((messages[0]["content"], schema))
+            return super().generate(role, messages, schema, options)
+    run(Capture(judges=[verdict()]), packet())
+    system, schema = seen[0]
+    assert system.startswith(JUDGE_SYSTEM) and "심사자" in system and BASE[:40] not in system
+    assert "[기준표]" in system and "[글쓰기 기준: 판정에만 참고한다" in system
+    axis = schema["properties"]["axes"]["properties"]["accuracy"]
+    assert list(axis["properties"]) == ["reason", "passed"] and axis["required"] == ["reason", "passed"]
+
+
+def test_last_refine_is_kept_for_the_judge_so_its_feedback_can_be_fixed():
+    captured = []
+
+    class Capture(Stub):
+        def generate(self, role, messages, schema, options=None):
+            if role == "refine":
+                captured.append(json.loads(messages[1]["content"])["external_feedback"])
+            return super().generate(role, messages, schema, options)
+    stub = Capture(judges=[verdict(completeness="비교축이 빠짐"), verdict()], refines=["## 하나\n아직 짧은 본문이에요 [E1].", good_body()])
+    result = run(stub, packet("## 하나\n너무 짧은 본문이에요 [E1]."), w_type="W3")
+    assert stub.calls == ["refine", "judge", "refine", "judge"]
+    assert captured[0]["failed_axes"] == {} and captured[0]["rule_issues"]
+    assert captured[1]["failed_axes"] == {"완결성": "비교축이 빠짐"} and captured[1]["rule_issues"]
+    harness = result["quality"]["harness"]
+    assert harness["judge_calls"] == 2 and harness["judge_skipped_rounds"] == 1 and harness["refine_calls"] == 2
+    assert result["quality"]["advisories"]["model_reviews_passed"] is True and harness["rolled_back"] is False
