@@ -73,10 +73,11 @@ def test_overclaims_already_checked_by_style_rules_are_not_repeated():
 
 def test_enforce_rolls_back_a_fix_that_drops_a_supported_number():
     first = good_body()
-    stub = Stub(judges=[verdict(completeness="비교축이 빠짐")], refines=[DROPPED])
+    stub = Stub(judges=[verdict(completeness="비교축이 빠짐"), verdict()], refines=[DROPPED])
     result = run(stub, packet(first), writer_checks="enforce")
     harness = result["quality"]["harness"]
-    assert stub.calls == ["judge", "refine"] and result["body"] == first
+    # 마지막 고치기 앞의 판정은 0원 규칙에 걸려도 부른다(지적을 받아 고치려고). 둘째 판정이 통과여도 사실을 잃은 판은 되돌린다.
+    assert stub.calls == ["judge", "refine", "judge"] and result["body"] == first
     assert harness["rolled_back"] is True and "fact_keep" in harness["deterioration"]["regressed_rules"]
     assert harness["writer_checks"]["mode"] == "enforce"
 
