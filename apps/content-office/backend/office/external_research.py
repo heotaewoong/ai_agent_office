@@ -39,18 +39,20 @@ _feed_cache: dict[str, tuple[float, list[dict]]] = {}
 _ERRORS = (ValueError, OSError, requests.RequestException, KeyError, TypeError, AttributeError)
 
 _CLAIMS = (
-    ("research", "연구·효과", re.compile(r"뇌|기억|집중|인지|수면|도파민|연구|논문|실험|효과|과학적|심리학|neuro|brain|memory|cognit", re.I)),
+    ("research", "연구·효과", re.compile(r"뇌|기억|집중|인지|수면|도파민|연구|논문|실험|효과|과학적|심리학|사실일까|맞을까|근거 ?있|neuro|brain|memory|cognit", re.I)),
     ("fresh", "최신 정보", re.compile(r"버전|가격|요금|출시|업데이트|신기능|새 기능|비교|차이|\bvs\b|무료|유료|플랜|지원 종료|\bv?\d+\.\d+\b", re.I)),
-    ("schedule", "일정·기준", re.compile(r"일정|접수|원서|합격 ?(?:기준|률|선)|응시료|시험일|개정|커트라인|응시 ?자격")),
+    ("schedule", "일정·기준", re.compile(r"일정|접수|원서|합격 ?(?:기준|률|선)|응시료|시험일|개정|커트라인|응시 ?자격|정책|약관|규정|저작권|상업 ?(?:적|이용)|수익 ?창출|시행")),
     ("number", "수치", re.compile(r"\d+(?:\.\d+)?\s?(?:%|퍼센트|배|만 ?원|명|점)")),
     ("howto", "방법·사례", re.compile(r"방법|루틴|후기|꿀팁|노하우|하는 법|따라 ?하기|사용법|활용법|세팅|설정|가이드|팁")),
 )
 _AREA_HINTS = (
     ("A", re.compile(r"시험|자격증|산업기사|기사 ?(?:필기|실기)|토익|오픽|수능|편입|필기|실기|공무원|합격|(?i:\bopic\b|toeic|toefl|ielts)")),
-    ("B", re.compile(r"\bAI\b|GPT|Claude|Gemini|LLM|에이전트|자동화|\bMCP\b|\bRAG\b|Hermes|OpenClaw|프롬프트|n8n|코딩|\bAPI\b|챗봇|인공지능"
-                     r"|OpenAI|\bTTS\b|옵시디언|Obsidian|노션|Notion", re.I)),
-    ("C", re.compile(r"뇌|기억|집중|학습|공부법|암기|복습|인지|수면|도파민|카페인|커피|졸음|낮잠|잠들기|자기 ?전(?:에|까지)")),
-    ("E", re.compile(r"꿀팁|생활|정리|청소|절약|요리|살림")),
+    ("B", re.compile(r"(?<![A-Za-z0-9])(?:AI|MCP|RAG|API|TTS)(?![A-Za-z0-9])|GPT|Claude|Gemini|LLM|에이전트|자동화|Hermes|OpenClaw|프롬프트|n8n|코딩|챗봇|인공지능"
+                     r"|OpenAI|옵시디언|Obsidian|노션|Notion|NotebookLM|Cursor|Perplexity|Zapier|Copilot|Codex|Lovable|Veo|Sora|Kling|Momentic"
+                     r"|CodeRabbit|AGENTS\.md|ChatGPT|챗GPT|클로드|제미나이|퍼플렉시티|바이브 ?코딩|딥러닝|머신러닝|MoneyPrinter"
+                     r"|(?<![A-Za-z0-9])(?-i:Make)(?![A-Za-z0-9])", re.I)),
+    ("C", re.compile(r"뇌|기억|집중|학습|공부법|암기|복습|인지|수면|도파민|카페인|커피|졸음|낮잠|잠들기|자기 ?전(?:에|까지)|공부|포모도로|뽀모도로|백색 ?소음|멀티태스킹")),
+    ("E", re.compile(r"꿀팁|생활|정리 ?정돈|집 ?정리|청소|절약|요리|살림|수리|고장")),
 )
 _AREA_FACT = {"A": ("official",), "B": ("official", "github", "arxiv"), "C": ("pubmed", "openalex"),
               "D": ("pubmed", "openalex"), "E": ("official",)}
@@ -66,6 +68,9 @@ PROVIDERS = {"pubmed": "PubMed 논문", "openalex": "OpenAlex 공개 논문", "a
              "official": "공식 출처 새 글", "creator": "등록한 크리에이터", "tavily": "Tavily 검색"}
 # 한글 주제를 영어 논문·저장소 검색어로 옮길 때 쓰는 작은 낱말표. 여기에 없는 말은 운영자가 검색어를 직접 고친다.
 _GLOSSARY = {
+    "동기화": "sync", "뽀모도로": "pomodoro", "백색소음": "white noise", "백색 소음": "white noise", "회고": "retrospective",
+    "스마트폰": "smartphone", "블루라이트": "blue light", "미루는": "procrastination", "수익 창출": "monetization", "저작권": "copyright",
+    "상업적 이용": "commercial use", "요금": "pricing", "보안": "security", "권한": "permission",
     "간격 복습": "spaced repetition", "분산 학습": "distributed practice", "인출": "retrieval practice", "복습": "review learning",
     "암기": "memorization", "기억력": "memory", "기억": "memory", "작업 기억": "working memory", "집중력": "attention", "집중": "attention",
     "수면": "sleep", "낮잠": "nap", "도파민": "dopamine", "습관": "habit formation", "미루기": "procrastination", "동기": "motivation",
@@ -153,7 +158,8 @@ def research_plan(title: str, summary: str = "", *, area: str | None = None, kin
         if found & {"number", "research"}:
             plan["warning"] = "내 경험 중심 글이지만 수치나 연구 주장이 보여요. 그 부분은 근거를 붙이거나 내 경험으로 표현을 바꿔 주세요."
         plan["fact"] = {"need": "none", "reason": "내 경험 중심 글이라 외부 조사를 하지 않아요.", "providers": []}
-        plan["example"] = {"need": "none", "reason": "내 경험 중심 글이라 다른 사람 사례를 찾지 않아요."}
+        # 내 경험 글도 보조 근거는 찾는다. 원문은 그대로 두고, 사례 칸 자료만 참고 목록으로 붙인다(2026-11-26 사용자 승인).
+        plan["example"] = {"need": "recommended", "reason": "내 경험 글이라 원문은 그대로 두고, 다른 사람 사례만 참고 목록으로 붙여요."}
     else:
         providers = list(dict.fromkeys([name for key in ("research", "fresh", "schedule") if key in found for name in _CLAIM_FACT[key]]
                                        + list(_AREA_FACT[area])))
@@ -467,10 +473,14 @@ def library_judgement(root, title: str, *, area=None) -> dict:
         rows, top = find_library_evidence_scored(title, root=root, exclude_urls=tuple(example_urls(root)), limit=6, area=area)
     except PublicEvidenceUnavailable:
         return unknown
-    return {"fact_sources": len({row["url"] for row in rows}), "top_score": top}
+    # 제목에 적힌 도구, 제품 이름(4자 이상)이 후보 어디에도 없으면 유사도가 높아도 딱지를 한 단계 낮춘다.
+    names = [name for name in build_queries(title)["names"].split() if len(name) >= 4]
+    seen = " ".join(f"{row.get('title', '')} {row.get('quote', '')}" for row in rows).casefold()
+    missing = bool(names and rows and not any(name.casefold() in seen for name in names))
+    return {"fact_sources": len({row["url"] for row in rows}), "top_score": top, "names_missing": missing}
 
 
-def library_verdict(hits: int | None, top_score: float | None) -> dict | None:
+def library_verdict(hits: int | None, top_score: float | None, names_missing: bool = False) -> dict | None:
     """창고 검색 결과만 보고 붙이는 딱지다. 모델을 부르지 않는다. 창고를 못 봤으면 None이고 예전 기준(주장 종류)을 따른다."""
     if hits is None:
         return None
@@ -480,6 +490,9 @@ def library_verdict(hits: int | None, top_score: float | None) -> dict | None:
         key, reason = "correct", "자료 창고에 이 주제와 아주 가까운 근거가 있어요."
     else:
         key, reason = "ambiguous", "자료 창고에 비슷한 근거는 있지만 충분한지 애매해요."
+    if names_missing and key != "incorrect":
+        key = "ambiguous" if key == "correct" else "incorrect"
+        reason = "제목의 도구나 제품 이름이 창고 근거에 없어요. 비슷한 글일 수 있어요."
     return {"verdict": key, "label": VERDICTS[key], "top_score": top_score, "reason": reason}
 
 
@@ -500,7 +513,7 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
         judged = library_judgement(root, library_query, area=plan["area"])
         hits = judged["fact_sources"]
         # 내 경험 중심 글은 외부 조사를 하지 않으므로 창고 판정도 붙이지 않는다.
-        verdict = None if plan["experience_first"] else library_verdict(hits, judged["top_score"])
+        verdict = None if plan["experience_first"] else library_verdict(hits, judged["top_score"], judged.get("names_missing", False))
     else:
         hits, verdict = fact_sources(root, library_query), None
     library = {"fact_sources": hits, "sufficient": False}
