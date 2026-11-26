@@ -154,7 +154,7 @@ def _judge_review(judge: dict) -> dict:
 
 def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, system=None, packaging=None, brief=None, offer=None,
                           original_markdown=None, refine_limit=2, topic_prompt="", w_type=None, gen_model=None, judge_model=None,
-                          trace=None, public_sample=None):
+                          trace=None, public_sample=None, writer_checks="off"):
     from .briefs import DEFAULT_PRESET, build_brief
     from .channel_adaptation import adaptation_prompt, copy_schema, title_overrides
     from .editorial import (BASE, DRAFT_SCHEMA, FORMAT_CONTRACT, ORIGINAL_MODE_PROMPT, SUMMARY_BODY_PROMPT, content_context, format_contract,
@@ -167,6 +167,9 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
     from .writing_style import KOREAN_WRITING_PROMPT, POLICY_ID
 
     assert_no_remote_tracing(public_sample=public_sample)
+    from .writer_checks import MODES as WRITER_MODES
+    if writer_checks not in WRITER_MODES:
+        raise WorkflowError(f"글쓰기 0원 검사 모드는 {', '.join(WRITER_MODES)} 중 하나여야 합니다")
     if original_markdown is not None and (not isinstance(original_markdown, str) or not original_markdown.strip()):
         raise WorkflowError("원문 보존 모드에는 직접 제공한 Markdown 본문이 필요합니다")
     gen_model = gen_model or getattr(provider, "model", None)
@@ -204,13 +207,17 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
             trace.record(**kwargs)
 
     history, best, outcome = [], None, {"rolled_back": False, "deterioration": None}
+    allowed_sentences = []  # 직전 판정에서 근거 없다고 짚은 문장. 고치며 빠져도 사실을 잃은 것으로 세지 않는다
     judge_calls = skipped = refines = 0
     for round_no in range(refine_limit + 1):
         packet = prepare(packet)
         started = time.monotonic()
         base = checks_fn(packet) if checks_fn else {"passed": True, "issues": output_issues(packet), "warnings": output_issues(packet), "blocking": []}
         korean_rules = check_texts(packet_texts(packet))
-        validation = validate_packet(packet, base_checks=base, w_type=w_type, style=style_issues(packet), korean=korean_rules)
+        writer = None if writer_checks == "off" else {"mode": writer_checks, "allowed_sentences": allowed_sentences,
+                                                      "previous_body": best["packet"].get("body") if best else None}
+        validation = validate_packet(packet, base_checks=base, w_type=w_type, style=style_issues(packet), korean=korean_rules,
+                                     writer=writer)
         record(step=f"validate:{round_no}", layer="validate", input_obj=content_context(packet), output_obj=validation["rule_scores"],
                elapsed_ms=(time.monotonic() - started) * 1000, status="ok" if validation["passed"] else "failed",
                summary={"issues": len(validation["issues"]), "blocking": len(validation["blocking"])})
@@ -254,6 +261,7 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
                     "failed_axes": {AXIS_LABELS[axis]: judge["reasons"][axis] for axis in BINARY_AXES if judge and not judge["axes"][axis]},
                     "ungrounded_sentences": judge["ungrounded_sentences"] if judge else [],
                     "korean_corrections": judge["korean_corrections"] if judge else []}
+        allowed_sentences = list(feedback["ungrounded_sentences"])
         refine_packet = campaign_packet(packet, None) if offer else packet
         context = {"packet": content_context(refine_packet), "external_feedback": feedback, "audience": brief, "w_type": w_type}
         if original_markdown is None:
@@ -296,7 +304,9 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
         "harness": {"engine": "v2_harness", "version": HARNESS_VERSION, "w_type": w_type, "gen_model": gen_model, "judge_model": judge_model,
                     "same_family_judge": _family(gen_model) == _family(judge_model), "axes": judge["axes"] if judge else None,
                     "rule_scores": validation["rule_scores"], "judge_calls": judge_calls, "judge_skipped_rounds": skipped,
-                    "refine_calls": refines, **outcome},
+                    "refine_calls": refines, **outcome,
+                    **({"writer_checks": {"mode": writer_checks, **(validation.get("writer_checks") or {})}}
+                       if writer_checks != "off" else {})},
         "note": "모델 판정 결과이며 사람 승인이나 독립 사실성 증명이 아닙니다",
     }
     return packet

@@ -81,7 +81,7 @@ def extra_rule_issues(packet: dict, *, w_type: str | None = None) -> dict[str, l
     return found
 
 
-def validate_packet(packet: dict, *, base_checks: dict, w_type: str | None = None, style=(), korean=()) -> dict:
+def validate_packet(packet: dict, *, base_checks: dict, w_type: str | None = None, style=(), korean=(), writer=None) -> dict:
     """기존 검사 결과(base_checks)와 추가 규칙을 합쳐 규칙별 통과/실패를 만든다. 모델 호출은 없다."""
     issues = [str(issue) for issue in base_checks.get("issues", [])]
     blocking = [str(issue) for issue in base_checks.get("blocking", [])]
@@ -99,5 +99,11 @@ def validate_packet(packet: dict, *, base_checks: dict, w_type: str | None = Non
     all_issues = list(dict.fromkeys([*issues, *extra_issues]))
     # 고치기로 보내지 않는 확인 의견(안 쓴 근거, warn 모드 숫자 경고)은 사람에게만 보여 줘요.
     notes = [str(note) for note in base_checks.get("notes", []) if str(note) not in all_issues]
-    return {"passed": not all_issues, "blocking": list(dict.fromkeys(blocking)), "issues": all_issues,
-            "warnings": [issue for issue in all_issues if issue not in blocking] + notes, "notes": notes, "rule_scores": scores}
+    result = {"passed": not all_issues, "blocking": list(dict.fromkeys(blocking)), "issues": all_issues,
+              "warnings": [issue for issue in all_issues if issue not in blocking] + notes, "notes": notes, "rule_scores": scores}
+    if writer and writer.get("mode") in ("warn", "enforce"):
+        # 글쓰기 0원 검사(인용, 방향, AI 상투 표현, 고친 뒤 사실 유지). off이거나 없으면 결과가 예전과 같다.
+        from .writer_checks import apply_writer_checks
+        result = apply_writer_checks(result, packet, mode=writer["mode"], previous_body=writer.get("previous_body"),
+                                     allowed_sentences=writer.get("allowed_sentences") or ())
+    return result

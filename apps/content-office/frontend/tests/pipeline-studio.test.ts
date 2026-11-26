@@ -15,7 +15,9 @@ function renderStudio(snapshot?:Record<string,unknown>) {
  const localRequire=(id:string)=>{
   if(id==="react" && snapshot) {const react=require(id);return {...react,useState:(initial:unknown)=>react.useState(initial===null?snapshot:initial)};}
   if(id==="../lib/api")return {api:{architecture(){calls.push("architecture");throw Error("SSR must not fetch");}}};
-  if(id==="./architecture-view")return {ArchitectureView:()=>createElement("div",null,"legacy")};
+  if(id==="./architecture-view")return {ArchitectureView:()=>createElement("div",null,"legacy"),AdoptionSection:()=>createElement("div",null,"adoptions")};
+  if(id==="./noeri")return {Noeri:()=>createElement("span",null,"noeri")};
+  if(id==="../lib/noeri")return {noeriStatus:({windowOpen}:{windowOpen:boolean})=>({mood:windowOpen?"thinking":"calm",label:windowOpen?"일하는 중":"쉬는 중",detail:"뇌리 설명"})};
   if(id==="../lib/workflow")return {formatDate:()=>"date"};
   if(id.endsWith(".css"))return {};
   return require(id);

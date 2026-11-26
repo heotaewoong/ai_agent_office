@@ -8,7 +8,7 @@
       "num": "1 · 수집",
       "title": "오늘의 뉴스 · 기획 은행",
       "items": [
-        "RSS/Atom 피드에서 기사 수집·중복 정리 · 운영자가 켜면 매일 아침 자동 수집",
+        "RSS/Atom 피드에서 기사 수집·중복 정리 · 운영자가 켜면 매일 아침(지금 07:10) 자동 수집, 평일만도 고를 수 있음",
         "독자 질문(댓글·DM) 묶음과 직접 기획 등록",
         "수요·근거·독자 적합도로 선정 이유 확인",
         "시험 일정은 검증 여부를 구분하고, 미확인 날짜를 확정 근거로 쓰지 않음"
@@ -55,7 +55,8 @@
         "비평·평가는 같은 근거를 보되 서로의 답을 받지 않음",
         "수정 후 다시 검수하고 국어 표현·번역투·조사 확인",
         "근거 번호·금지 주장·줄표·훈계·문체를 코드로 검사",
-        "중대 지적이 남으면 승인 차단, 원고 수정 시 이전 승인 무효화"
+        "중대 지적이 남으면 승인 차단, 원고 수정 시 이전 승인 무효화",
+        "글쓰기 0원 검사: 인용이 원문 그대로인지, 숫자 방향, AI 말버릇, 고친 뒤 사실 유지, 근거 원문 베끼기(낱말 5개 연속). 설정으로 끄기, 기록만, 막기"
       ],
       "who": "제작 설정에서 선택한 글 모델 · 비용은 실제 기록에서 확인",
       "id": "draft",
@@ -78,7 +79,9 @@
         "세로 영상: 선택 음성·장면 배경·자막을 FFmpeg로 조립",
         "썸네일 후보·참고 PDF를 독립된 파일로 제작",
         "퀴즈 5문항 JSON과 카드뉴스 6~8장·주제 이미지",
-        "영상 OFF이면 음성·영상 호출 안 함; 실패해도 성공 파일은 보존"
+        "영상 OFF이면 음성·영상 호출 안 함; 실패해도 성공 파일은 보존",
+        "그림 기억 이야기: 뇌리가 주인공인 4~6장과 떠올려 보기, 글은 모델이 쓰고 그림은 코드가 그림(이미지 0원)",
+        "썸네일: 내 영상에서 가장 선명한 장면을 골라 얼굴이 잘리지 않게 자른 후보(0원)"
       ],
       "who": "선택한 글·이미지·음성 프로필 + 로컬 렌더러",
       "id": "produce",
@@ -193,6 +196,12 @@
       "role": "image",
       "unit": "장면 1개",
       "where": "제작 설정 → 배경 이미지"
+    },
+    {
+      "task": "그림 기억 이야기 글",
+      "role": "story",
+      "unit": "1회(고쳐 쓰면 2회)",
+      "where": "작업실 · 그림 기억 이야기 버튼"
     }
   ],
   "rails": [
@@ -255,10 +264,10 @@
       "note": "2026-10-30 구현. Google OAuth 클라이언트(YOUTUBE_CLIENT_ID·SECRET)와 리디렉션 주소 등록 후 사용 가능"
     },
     {
-      "state": "warn",
-      "label": "설치 대기",
+      "state": "ok",
+      "label": "검증 기록",
       "text": "매일 아침 뉴스 자동 수집(설정한 시각에 15분 이내 작업 시간 · 수집과 한국어 카드 요약만)",
-      "note": "2026-10-30 구현·단위 검사. 원고·승인·제작은 하지 않음. EC2 cron 등록과 첫 실제 실행은 아직 확인 전"
+      "note": "10/30부터 운영 중. 11/20~11/26 매일 완료(11/26 기사 611건, 0원). 11/27 시각을 07:10으로 바꿈"
     },
     {
       "state": "warn",
@@ -279,7 +288,7 @@
       "note": "명시적 비서 요청과 검증된 완료 보고의 원고 인계는 구현되어 있습니다. 모든 콘텐츠 작업의 자동 팀 경유와는 구분합니다"
     }
   ],
-  "definition_version": "2026-11-17 · 공정 정의 3판 · 구현 설명 기준",
+  "definition_version": "2026-11-27 · 공정 정의 4판 · CONNECT AI LAB 저장소에서 가져온 방법 반영",
   "lanes": [
     {
       "id": "outputs",
@@ -291,7 +300,7 @@
         "블로그: HTML·Markdown",
         "영상: MP4·음성·SRT/VTT 자막",
         "이미지: 썸네일·카드 PNG·주제 배경",
-        "학습 자료: 퀴즈 JSON·참고 PDF"
+        "학습 자료: 퀴즈 JSON·참고 PDF·그림 기억 이야기 PNG"
       ],
       "boundary": "한 출력의 실패가 다른 완료 파일을 지우지 않습니다. 블로그를 공개해야 영상이 만들어지는 구조가 아닙니다."
     },
@@ -322,6 +331,209 @@
         "수동 발송 후 성과·교훈을 기록"
       ],
       "boundary": "목적별 자동 동의 필터·오너 메일러의 실제 발송은 미연결입니다. 회차 승인만으로 메일이나 홍보가 발송되지 않습니다."
+    }
+  ],
+  "adoptions_note": "CONNECT AI LAB(github.com/wonseokjung) 저장소 6개를 직접 읽고 HeoBrain에 맞는지 판단한 기록. 코드는 옮기지 않고 방법만 배워 다시 썼다. 공개 코드라 REA 같은 역설계 도구보다 원본을 읽는 쪽이 정확하다.",
+  "adoption_repos": [
+    {
+      "repo": "connect-ai-writer",
+      "commit": "9057798",
+      "license": "MIT + Commons Clause",
+      "what": "영상 하나로 플랫폼별 글, 트렌드, 리서치, 그림책 동화"
+    },
+    {
+      "repo": "connect-ai-marketer",
+      "commit": "b2c162c",
+      "license": "MIT + Commons Clause",
+      "what": "내 브라우저에서 도는 마케팅팀 8명(댓글, 리스닝, 업로드 마무리 등)"
+    },
+    {
+      "repo": "reversebusiness",
+      "commit": "d4b4712",
+      "license": "MIT",
+      "what": "사업 웹사이트 해부 6칸과 베끼기 검사"
+    },
+    {
+      "repo": "connect-ai-video-motion",
+      "commit": "beafb45",
+      "license": "MIT(Remotion은 별도 라이선스)",
+      "what": "내 영상 위 빈자리에 모션그래픽"
+    },
+    {
+      "repo": "connect-ai-motion",
+      "commit": "4132e92",
+      "license": "MIT(Remotion은 별도 라이선스)",
+      "what": "글 몇 줄로 모션그래픽 영상"
+    },
+    {
+      "repo": "connect-ai-autonomous-company",
+      "commit": "65b1018",
+      "license": "소규모 팀 라이선스 초안(5명 미만 무료)",
+      "what": "AI 직원 본사: 안전 정지, 결재 기억, 실행 허용 목록"
+    }
+  ],
+  "adoptions": [
+    {
+      "id": "writer-checks",
+      "state": "built",
+      "repo": "connect-ai-writer",
+      "source": "lib/check.mjs, lib/humanize.mjs",
+      "took": "인용이 원문 그대로인지, 숫자의 늘었다 줄었다가 근거와 같은지, AI 말버릇, 고친 뒤 사실을 잃지 않았는지 보는 0원 검사",
+      "here": "원고 단계 office/writer_checks.py. 설정 writer_checks로 끄기, 기록만, 막기를 고름",
+      "why": "판정 모델을 부르기 전에 규칙으로 걸러서 비용이 없다. 승인 원고 14편으로 만든 고장 초안 30개를 다 잡았고 정상 10개는 오탐이 없었다"
+    },
+    {
+      "id": "copy-overlap",
+      "state": "built",
+      "repo": "reversebusiness",
+      "source": "skill/reversebusiness/tools/check-clone.mjs",
+      "took": "원본과 낱말 5개 이상이 연달아 같으면 베낀 것으로 보는 검사",
+      "here": "writer_checks의 copy_overlap 규칙. 따옴표 밖 본문을 근거 원문 문단과만 비교",
+      "why": "출처를 붙여도 문장을 통째로 옮기면 저작권과 검색 품질 둘 다 위험하다. 따옴표 인용은 인용 대조가 따로 본다"
+    },
+    {
+      "id": "memory-story",
+      "state": "adapted",
+      "repo": "connect-ai-writer",
+      "source": "lib/story.mjs, lib/scenes.mjs",
+      "took": "한 문장으로 그림책을 만들고, 글이 말한 물건은 그림에 있어야 하며, 교훈으로 끝내지 않는 방식",
+      "here": "그림 기억 이야기(office/memory_story.py): 원고에서 기억할 것 4~6개를 장면에 묶고 마지막은 떠올려 보기와 정답",
+      "why": "동화는 HeoBrain 독자와 안 맞지만 '글+그림'과 '떠올려 보기'는 뇌과학 학습 브랜드에 딱 맞는다. 그림은 코드로 그려 0원이고 가짜 사람이 없다"
+    },
+    {
+      "id": "noeri",
+      "state": "adapted",
+      "repo": "connect-ai-writer",
+      "source": "skill/assets/scholar(집현전 학사)",
+      "took": "단계마다 표정이 바뀌는 캐릭터로 진행 상황을 보여 주는 생각",
+      "here": "HeoBrain 캐릭터 뇌리(office/mascot.py, app/noeri.tsx). 파이프라인 화면과 그림 기억 이야기 주인공",
+      "why": "집현전 학사는 남의 브랜드라 쓰지 않고, '뇌리에 남다'에서 이름을 따 HeoBrain 색으로 새로 그렸다. 표정은 서버 기록으로만 바뀐다"
+    },
+    {
+      "id": "frame-focus",
+      "state": "adapted",
+      "repo": "connect-ai-writer",
+      "source": "lib/face.swift, lib/focus.mjs, lib/frames.mjs",
+      "took": "내 영상에서 가장 선명한 장면을 고르고 얼굴이 잘리지 않게 카드 크기로 자르기",
+      "here": "office/frame_focus.py와 썸네일 화면의 '내 영상 장면으로 후보 만들기'(0원)",
+      "why": "face.swift는 맥 전용이라 EC2에서 못 돈다. 사람이 위치를 고르거나, OpenCV가 있으면 얼굴을 찾고, 없으면 가운데를 지키는 순서로 바꿨다"
+    },
+    {
+      "id": "morning-routine",
+      "state": "built",
+      "repo": "connect-ai-writer",
+      "source": "README 아침 트렌드 루틴",
+      "took": "정해진 아침 시각에 트렌드를 모아 두는 습관",
+      "here": "기존 매일 아침 수집을 07:10으로 옮기고 '평일만' 선택을 더함",
+      "why": "새로 만들 필요 없이 이미 도는 수집(10/30부터)에 시각과 요일만 맞췄다. 책 OCR(02~07시)이 끝난 뒤라 겹치지 않는다"
+    },
+    {
+      "id": "trends",
+      "state": "exists",
+      "repo": "connect-ai-writer",
+      "source": "lib/trends.mjs",
+      "took": "구글 트렌드 급상승, 검색어 자동완성, 위키백과 조회수",
+      "here": "구글 트렌드 급상승 RSS는 이미 수집 중(feeds.json, 발견 화면의 search_trend)",
+      "why": "네이버 자동완성은 서버 자동 수집을 하지 않는다는 운영 규칙 때문에, 구글 자동완성은 공식 주소가 아니라서 넣지 않는다. 위키백과 조회수(공식 공개 API)는 다음 후보"
+    },
+    {
+      "id": "writer-plan-voice",
+      "state": "exists",
+      "repo": "connect-ai-writer",
+      "source": "lib/plan.mjs, lib/voice.mjs, platforms.json",
+      "took": "쓰기 전 기획서, 본인 자막으로 만드는 말투표, 플랫폼별 글자 수",
+      "here": "기획서 5칸과 말투표 도구는 연구 폴더(research/content-writing), 플랫폼 글자 수와 봉인은 기존 기능",
+      "why": "말투표는 본인이 쓰거나 말한 글만 쓴다. 편입 영상 대사는 AI가 쓴 원고라 표본에서 뺐다"
+    },
+    {
+      "id": "marketer-fork",
+      "state": "exists",
+      "repo": "connect-ai-marketer",
+      "source": "team.json, roles/*, lib/ego.mjs",
+      "took": "역할별 AI 팀원, 결재함, 마지막 게시 버튼은 사람",
+      "here": "heobrain-marketer 포크(11/24): BrowserOS 원격 조종(CDP)과 EC2 대기함, 읽기 일감 3개만 허용",
+      "why": "게시와 답글은 사람 승인 뒤에만 한다. 서버는 PC 브라우저를 SSH 터널로 빌려 쓰므로 PC가 꺼져 있으면 일감이 기다린다"
+    },
+    {
+      "id": "browser-choice",
+      "state": "exists",
+      "repo": "connect-ai-marketer",
+      "source": "lib/ego.mjs (CAM_BROWSER)",
+      "took": "Ego Lite 위에서 도는 브라우저 자동화",
+      "here": "포크는 BrowserOS가 기본이고 CAM_BROWSER=ego로 Ego Lite도 쓴다",
+      "why": "Ego Lite는 원격 조종 포트를 열지 않아 서버에서 직접 못 부르고 PC 쪽 다리 작업이 있어야 한다. 그래서 통째로 갈아타지 않고, BrowserOS가 꺼져 있을 때 PC 다리 모드로 Ego Lite를 쓰는 예비 경로로 둔다"
+    },
+    {
+      "id": "studio-readback",
+      "state": "next",
+      "repo": "connect-ai-marketer",
+      "source": "roles/studio-finisher",
+      "took": "저장한 뒤 새로 고쳐 읽어서 실제로 저장된 것과 시트를 비교",
+      "here": "YouTube 비공개 업로드 뒤 공식 API로 제목, 설명, 태그를 다시 읽어 비교하는 단계",
+      "why": "'보냈다'와 '실제로 그렇게 저장됐다'는 다르다. 업로드 대사 기능 옆에 붙이면 된다"
+    },
+    {
+      "id": "comments",
+      "state": "next",
+      "repo": "connect-ai-marketer",
+      "source": "roles/comment-replier",
+      "took": "새 댓글을 모으고 답글 초안을 결재함에 넣기. 공개한 적 없는 사실을 묻는 댓글은 답하지 않고 목록으로",
+      "here": "YouTube 공식 댓글 API로 읽기와 초안만. 게시는 사람 승인 뒤",
+      "why": "로그인 화면을 긁는 방식 대신 공식 API를 쓴다. 답글은 공개된 내 글에 있는 사실만 쓰게 한다"
+    },
+    {
+      "id": "listener",
+      "state": "skip",
+      "repo": "connect-ai-marketer",
+      "source": "roles/listener",
+      "took": "X와 스레드에서 키워드 글을 모아 반응 순으로 정리",
+      "here": "넣지 않음",
+      "why": "로그인한 화면을 자동으로 긁는 것은 두 서비스 약관과 부딪칠 수 있다. 공식 API 권한이 생기면 다시 본다"
+    },
+    {
+      "id": "business-anatomy",
+      "state": "next",
+      "repo": "reversebusiness",
+      "source": "SKILL.md, report.schema.json",
+      "took": "사업 사이트를 돈, 흐름, 화면 지도, 기술, 근거와 모르는 것, 내 버전 6칸으로 해부. 관찰과 추정과 모름을 구분",
+      "here": "편입·자격증 강의 상품을 보고 HeoBrain 상품 구성을 정할 때 쓰는 경쟁 상품 해부",
+      "why": "robots.txt와 약관을 지키고 공개 페이지 5장만 읽는 규칙까지 같이 가져와야 한다. 베끼기 검사는 먼저 원고 검사에 넣었다"
+    },
+    {
+      "id": "motion",
+      "state": "next",
+      "repo": "connect-ai-video-motion",
+      "source": "src/core/face.mjs, lib/check.mjs, catalog/*/meta.json",
+      "took": "자막의 한 말에 맞춰 그래픽을 띄우고 얼굴과 몸을 피해 빈자리에 놓기, 4낱말 넘는 그래픽과 대비 부족 검사",
+      "here": "먼저 자막과 원고 숫자로 그래픽 계획표(plan.json)만 만들고, 렌더는 PC에서",
+      "why": "EC2에는 GPU와 크롬이 없어 Remotion 렌더가 느리다. Remotion은 1인 회사 무료라 라이선스는 문제없다"
+    },
+    {
+      "id": "text-motion",
+      "state": "next",
+      "repo": "connect-ai-motion",
+      "source": "README, catalog/kit/*/meta.json",
+      "took": "찍은 영상 없이 글 몇 줄로 모션그래픽 영상을 만들고, 글의 숫자를 화면에 그대로 옮기기(84.6%는 84.6%)",
+      "here": "그림 기억 이야기 장면을 짧은 세로 영상으로 잇는 다음 단계 후보",
+      "why": "숫자를 그대로 옮기는 규칙은 우리 사실 유지 검사와 같아서 바로 쓸 수 있다. 렌더는 Remotion이라 PC나 따로 띄운 렌더 서버에서 돌린다"
+    },
+    {
+      "id": "decision-memory",
+      "state": "next",
+      "repo": "connect-ai-autonomous-company",
+      "source": "lib/rl.mjs",
+      "took": "승인, 고친 뒤 승인, 반려를 기록해 다음 비슷한 일의 지시에 넣기. 결제와 삭제는 몇 번 승인해도 자동으로 올리지 않기",
+      "here": "기존 교훈 검토(improvements)에 승인① 때 고친 내용과 반려 이유를 붙이는 방향",
+      "why": "새 저장소를 만들기보다 이미 사람이 검토하는 교훈 흐름을 넓히는 게 안전하다. 승인을 대신 만들지 않는다"
+    },
+    {
+      "id": "job-allowlist",
+      "state": "exists",
+      "repo": "connect-ai-autonomous-company",
+      "source": "lib/jobspec.mjs, lib/gates.mjs",
+      "took": "다른 컴퓨터에서 돌릴 일은 허용 목록에 있는 것만, 일감 제목은 명령에 넣지 않기. 결제, 업로드, 게시, 삭제, 발송은 사람이 누를 때까지 정지",
+      "here": "마케터 다리의 허용 일감 3개, 콘텐츠 오피스의 승인 ⓪①②③",
+      "why": "이미 같은 원칙으로 돌고 있어서 새로 만들 것이 없다"
     }
   ]
 }

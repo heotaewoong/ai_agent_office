@@ -19,6 +19,7 @@ class DailyCollectPatch(BaseModel):
     time_kst: Any = None
     minutes: Any = None
     max_krw: Any = None
+    days: Any = None
 
 
 def register(app, store):

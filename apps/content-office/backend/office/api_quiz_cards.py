@@ -18,6 +18,7 @@ from PIL import Image, UnidentifiedImageError
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, Response
 
+from .memory_story import story_artifacts, story_payload
 from .quiz import enqueue_output
 from .runtime import window_open
 from .store import WorkflowError
@@ -50,6 +51,8 @@ def artifact_records(job, *, include_stale_cards=False):
         for slide in record.get("slides", []) or []:
             if slide.get("artifact"):
                 yield slide["artifact"]
+    # 그림 기억 이야기: 화면 미리보기에서는 이전 판 그림도 읽는다(카드와 같은 규칙)
+    yield from story_artifacts(job, include_stale=include_stale_cards)
 
 
 def _verified_path(store, file):
@@ -66,7 +69,7 @@ def _verified_path(store, file):
 def output_warnings(job):
     """출고② 전에 사람이 볼 비차단 경고. 퀴즈·카드 검사 문제점을 게이트 항목 형식으로 돌려준다."""
     items = []
-    for output, label in (("quiz", "퀴즈"), ("cards", "카드뉴스")):
+    for output, label in (("quiz", "퀴즈"), ("cards", "카드뉴스"), ("story", "그림 기억 이야기")):
         record = job.get(output) or {}
         if record.get("source_hash") != job.get("source_hash"):
             continue
@@ -115,6 +118,15 @@ def register(app, store):
     @app.get("/api/jobs/{job_id}/cards")
     def get_cards(job_id: str):
         return {"cards": cards_payload(store.job(job_id))}
+
+    @app.post("/api/jobs/{job_id}/story", status_code=202)
+    def request_story(job_id: str):
+        # 그림 기억 이야기: 글 모델 호출 1~2번(퀴즈와 같은 규모), 그림은 코드로 그려 이미지 비용이 없다.
+        return enqueue(job_id, "story")
+
+    @app.get("/api/jobs/{job_id}/story")
+    def get_story(job_id: str):
+        return {"story": story_payload(store.job(job_id))}
 
     @app.get("/api/jobs/{job_id}/cards/archive")
     def cards_archive(job_id: str, version: int, source_hash: str):

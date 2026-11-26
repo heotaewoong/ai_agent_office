@@ -2,7 +2,8 @@
 
 운영자가 '제작 설정'에서 켠 일정(`daily_collect`)에 따라, cron이 15분마다 이 모듈을 부른다. 설정한 시각부터
 15분 안의 첫 실행만 일한다: 짧은 작업 시간을 'scheduled_daily_collect'로 열고, RSS 수집과 한국어 카드 요약
-(bootstrap.refresh)만 한 뒤, 연 시간을 스스로 닫는다.
+(bootstrap.refresh)만 한 뒤, 연 시간을 스스로 닫는다. days가 weekdays면 토·일(한국 시간)에는 열지 않는다
+(2026-11-27 오너 결정: 평일 07:10 루틴. 방식 출처는 connect-ai-writer의 아침 트렌드 루틴).
 
 하지 않는 것: 작업자(worker) 시작, 원고·제작·업로드, 기획 선택⓪·승인①②③, 운영자가 연 작업 시간의 연장·재사용.
 비용은 이번 실행의 사용분(정산+예약)이 운영자가 정한 상한(max_krw)을 넘기 전에 요약을 멈춘다.
@@ -22,7 +23,8 @@ from .store import CostScopeExceeded, WorkflowError, now
 SETTING = "daily_collect"
 RUNS = "daily_collect_runs"
 SOURCE = "scheduled_daily_collect"
-DEFAULTS = {"enabled": False, "time_kst": "07:00", "minutes": 15, "max_krw": 100}
+DEFAULTS = {"enabled": False, "time_kst": "07:00", "minutes": 15, "max_krw": 100, "days": "everyday"}
+DAYS = ("everyday", "weekdays")
 SLOT_MINUTES = 15  # cron 주기와 같다. 이 구간 안의 실행만 일한다.
 MINUTES_RANGE = (5, 30)
 MAX_KRW_RANGE = (10, 1000)
@@ -45,6 +47,8 @@ def _validate(values):
     low, high = MAX_KRW_RANGE
     if type(values["max_krw"]) is not int or not low <= values["max_krw"] <= high:
         raise WorkflowError(f"1회 비용 상한은 {low}~{high}원의 정수로 입력하세요")
+    if values["days"] not in DAYS:
+        raise WorkflowError("수집 요일은 매일(everyday) 또는 평일만(weekdays)으로 고르세요")
 
 
 def update_daily_collect_settings(store, patch, *, actor):
@@ -137,6 +141,8 @@ def run_daily_collect(store, now=None, *, refresh=None, provider_factory=None, d
     day = _slot_day(settings, local)
     if day is None:
         return {"status": "skipped", "reason": "outside_time"}
+    if settings["days"] == "weekdays" and datetime.fromisoformat(day).weekday() >= 5:
+        return {"status": "skipped", "reason": "weekend", "date": day}  # 주말은 기록 없이 넘긴다(작업 시간도 열지 않음)
     try:
         lock = ProcessLock(store.root / "runtime" / "daily-collect.lock")
         lock.__enter__()
