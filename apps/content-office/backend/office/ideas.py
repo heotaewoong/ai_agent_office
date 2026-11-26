@@ -133,6 +133,21 @@ def _checked_public_references(references):
         quote_hash = hashlib.sha256(quote.encode()).hexdigest()
         if quote_hash != item["quote_sha256"] or item["id"] != public_evidence_id(url, item["source_sha256"], paragraph, quote_hash):
             raise WorkflowError("공개 근거의 원문 판본이 일치하지 않습니다")
+        if "published" in entry:
+            if not isinstance(entry["published"], str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", entry["published"]):
+                raise WorkflowError("공개 근거의 발행일 형식이 올바르지 않습니다")
+            item["published"] = entry["published"]
+        if "highlight" in entry:
+            value = entry["highlight"]
+            if not isinstance(value, str) or not value.strip() or len(value) > 400 or value not in quote:
+                raise WorkflowError("공개 근거의 표시 문장이 원문 문단과 맞지 않습니다")
+            item["highlight"] = value
+        if "flags" in entry:
+            value = entry["flags"]
+            if (not isinstance(value, list) or len(value) > 3
+                    or any(not isinstance(flag, str) or not flag.strip() or len(flag) > 120 for flag in value)):
+                raise WorkflowError("공개 근거의 주의 표시 형식이 올바르지 않습니다")
+            item["flags"] = list(value)
         checked.append(item)
         seen.add(url)
     return checked

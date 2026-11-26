@@ -142,6 +142,8 @@ class Review(BaseModel):
     private_delivery_channel: Literal['youtube_main_ko','youtube_english'] | None = None
     draft_targets: list[Literal['youtube_main_ko','youtube_english','instagram_main','instagram_english','threads_main','linkedin_personal','tistory_main','naver_blog_main']] | None = Field(default=None, max_length=8)
     outputs: list[Literal['blog', 'video', 'cards', 'pdf']] | None = None
+    reasons: list[Literal['fact', 'explanation', 'style', 'design', 'rights', 'format']] = Field(default_factory=list, max_length=6)
+    note: str = Field(default='', max_length=300)
 
 
 class VideoPlatformsInput(BaseModel):
@@ -702,6 +704,8 @@ def create_app(store: Store | None = None):
 
     @app.post("/api/jobs/{job_id}/reviews/source")
     def review_source(job_id: str, review: Review):
+        if review.decision == 'rejected' and not review.reasons:
+            raise WorkflowError('반려 이유를 하나 이상 골라 주세요. 다음 시험지(출력 골든셋)의 재료가 돼요')
         contract = None
         production_options = {}
         if review.auto_produce:
@@ -729,7 +733,22 @@ def create_app(store: Store | None = None):
                     raise WorkflowError(estimate['label'] + '. 유료 영상 클립 비용을 화면에서 확인하세요')
                 production_options.update(paid_clips_confirmed=True, paid_clip_estimate={k: estimate[k] for k in ('clips','credits','reservation_krw','model')})
             contract=production_contract(renderer_for_job(store,job), selections, image_renderer=background_renderer_for_job(store,job), clip_renderer=clip_renderer_for_job(store,job), channel_registry=registry(store) if selections.get('blog') else None, thumbnail_artwork=thumbnails)['hash']
-        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, production_contract=contract, production_options=production_options, draft_targets=review.draft_targets)
+        return store.review_source(job_id, review.version, review.decision, "local-operator", review.selections, reasons=review.reasons, note=review.note, production_contract=contract, production_options=production_options, draft_targets=review.draft_targets)
+
+    @app.get('/api/quality/source-rejections')
+    def source_rejections():
+        """승인① 반려 이유 모음(새 순서 2번 실패 분류의 재료). 이유 칸이 생기기 전 기록은 none으로 센다."""
+        with store.connection() as db:
+            rows = db.execute("SELECT job_id, data, created_at FROM approvals WHERE kind='source' AND decision='rejected' "
+                              "ORDER BY created_at DESC LIMIT 500").fetchall()
+        counts, recent = {}, []
+        for job_id, data, created_at in rows:
+            record = json.loads(data)
+            for reason in record.get('reasons') or ['none']:
+                counts[reason] = counts.get(reason, 0) + 1
+            if len(recent) < 20:
+                recent.append({'job_id': job_id, 'reasons': record.get('reasons') or [], 'note': record.get('note') or '', 'created_at': created_at})
+        return {'total': len(rows), 'counts': counts, 'recent': recent}
 
     @app.post('/api/jobs/{job_id}/owner-drafts/request')
     def released_draft_request(job_id: str, body: ReleasedDraftRequest):

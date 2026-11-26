@@ -12,6 +12,10 @@ from .brand import banned_claim_hits
 NUMBER = re.compile(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)?")
 REALISTIC_KINDS = {"realistic_person", "realistic_event", "realistic_place", "voice_clone_other"}
 YMYL_TOPICS = {"finance", "law", "health"}
+_MD_IMAGE = re.compile(r"!\[[^\]\n]*\]\(")
+_LINK = re.compile(r"https?://[^\s<>()\[\]\"']+")
+_OWN_HOSTS = {"heobrain.kr", "www.heobrain.kr", "heobrain.store", "www.heobrain.store"}
+_TEXT_KEYS = ("title", "body", "video", "channel_posts", "titles", "hashtags", "evidence")
 
 
 def _numbers(text):
@@ -86,8 +90,68 @@ def korean_grammar(packet):
     return items
 
 
+
+def _strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _strings(item)
+
+
+def evidence_guard_items(packet, today=None):
+    """근거 지키기(2026-11-26). 오래된 근거, 지시처럼 보이는 근거 문장, 근거에 없는 주소는 경고로 사람에게 보이고,
+    원고 안의 이미지 문법은 막는다. 저자 원문 보존 글은 저자가 쓴 주소와 사진 표기라 주소와 이미지는 보지 않는다."""
+    from urllib.parse import urlsplit
+    from .evidence_guard import days_old
+    items = []
+    evidence = [item for item in packet.get("evidence") or [] if isinstance(item, dict)]
+    for item in evidence:
+        age = days_old(item.get("published_at"), today)
+        if age is not None and age > 365:
+            items.append({"level": "warn", "rule": "stale_evidence",
+                          "message": f"근거 {item.get('id')}의 발행일이 1년 넘었어요({str(item['published_at'])[:10]}). 지금 사실처럼 쓰지 않았는지 확인하세요"})
+        flags = item.get("instruction_flags") or []
+        if flags:
+            items.append({"level": "warn", "rule": "evidence_instruction",
+                          "message": f"근거 {item.get('id')} 문단에 지시처럼 보이는 문장이 있어요: '{str(flags[0])[:80]}'. 원고가 따르지 않았는지 확인하세요"})
+    if packet.get("preserve_original") is True:
+        return items
+    video = packet.get("video") or {}
+    texts = [packet.get("title"), packet.get("body"), video.get("title"), video.get("description")]
+    texts += [scene.get(key) for scene in (video.get("scenes") or []) if isinstance(scene, dict) for key in ("narration", "caption")]
+    posts = packet.get("channel_posts")
+    if isinstance(posts, dict):
+        texts += list(posts.values())
+    texts = [text for text in texts if isinstance(text, str)]
+    if any(_MD_IMAGE.search(text) for text in texts):
+        items.append({"level": "block", "rule": "markdown_image",
+                      "message": "원고에 이미지 문법(![...](...))이 있어요. 이미지는 제작 단계에서 붙이니 원고에서 지워 주세요"})
+    allowed = set(_OWN_HOSTS)
+    for item in evidence:
+        allowed.add((urlsplit(str(item.get("url") or "")).hostname or "").lower())
+    for key, value in packet.items():  # 상품, 쿠폰처럼 구조 칸에 들어 있는 주소는 사람이 넣은 주소다.
+        if key not in _TEXT_KEYS:
+            for text in _strings(value):
+                for url in _LINK.findall(text):
+                    allowed.add((urlsplit(url).hostname or "").lower())
+    unknown = []
+    for text in texts:
+        for url in _LINK.findall(text):
+            host = (urlsplit(url.rstrip(".,)")).hostname or "").lower()
+            if host and host not in allowed and host not in unknown:
+                unknown.append(host)
+    for host in unknown[:3]:
+        items.append({"level": "warn", "rule": "unknown_link",
+                      "message": f"근거에 없는 주소가 원고에 있어요: {host}. 근거나 상품 주소가 아니면 지워 주세요"})
+    return items
+
+
 def run_gates(packet, previous_packets=(), assets=(), brand=None):
-    items = metadata_fact_check(packet) + inauthentic_risk(packet, previous_packets) + ymyl_persona(packet, assets) + korean_grammar(packet)
+    items = metadata_fact_check(packet) + inauthentic_risk(packet, previous_packets) + ymyl_persona(packet, assets) + korean_grammar(packet) + evidence_guard_items(packet)
     if brand:
         video = packet.get("video") or {}
         thumbs = [t for t in (video.get("thumbnails") or []) if isinstance(t, dict)]

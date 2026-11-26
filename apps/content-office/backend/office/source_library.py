@@ -31,6 +31,7 @@ from xml.etree import ElementTree
 
 import requests
 
+from .evidence_guard import strip_hidden_markup, strip_invisible
 from .briefs import AXES
 from .feeds import fetch_public, normalize_url
 from .store import WorkflowError
@@ -171,7 +172,7 @@ def _migrate(db: sqlite3.Connection) -> None:
 
 
 def _clean(text: str) -> str:
-    return re.sub(r"[ \t ]+", " ", unicodedata.normalize("NFKC", text)).strip()
+    return re.sub(r"[ \t ]+", " ", unicodedata.normalize("NFKC", strip_invisible(text))).strip()
 
 
 def split_passages(paragraphs, limit: int = PASSAGE_CHARS) -> list[str]:
@@ -535,7 +536,9 @@ def _gate(source: dict, blocks: list[_Block] | None, legacy_chars: int, legacy_n
 
 
 def _html_doc(markup: str, url: str) -> _Doc:
-    original, markup = markup, (_main_region(markup, url) or markup)
+    original = markup
+    markup = strip_hidden_markup(markup)  # 숨긴 글(0 글씨, 투명, 배경 없는 흰 글씨, 화면 밖)은 추출 전에 지운다(2026-11-26)
+    markup = _main_region(markup, url) or markup
     page = _PageText()
     page.feed(markup)
     page.close_block()

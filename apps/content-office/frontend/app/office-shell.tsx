@@ -3,6 +3,7 @@ import { ActionFeedback } from "./action-feedback";
 import { JobTrash,jobTrashWorking,type JobTrashRequest } from './job-trash';
 import {DeliveryConsole} from "./delivery-console";
 import ArtifactLibrary from './artifact-library';
+import { RejectSourceButton } from "./reject-source";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -1735,30 +1736,16 @@ function Studio({
                 </ProduceButton>
               ) : (
                 <>
-                  <button
-                    className="button text"
-                    disabled={
-                      locked ||
-                      !job.source_hash ||
-                      dirty ||
-                      job.state !== "source_review"
-                    }
-                    onClick={() =>
+                  <RejectSourceButton
+                    disabled={locked || !job.source_hash || dirty || job.state !== "source_review"}
+                    onReject={(reasons, note) =>
                       void action(
                         "원고 거절",
-                        () =>
-                          api.reviewSource(
-                            job.id,
-                            job.source_hash!,
-                            "rejected",
-                            selections,
-                          ),
-                        "원고를 거절했습니다. 수정 후 다시 검수할 수 있습니다.",
+                        () => api.reviewSource(job.id, job.source_hash!, "rejected", selections, false, false, undefined, reasons, note),
+                        "원고를 거절했습니다. 고른 이유는 다음 시험지(출력 골든셋)의 재료가 돼요.",
                       )
                     }
-                  >
-                    거절
-                  </button>
+                  />
                   <button
                     className="button primary"
                     disabled={locked || !passed || selectionCount === 0 || Boolean(requestBlockedReason)}
