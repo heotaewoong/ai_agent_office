@@ -45,7 +45,11 @@ with ProcessLock(runtime / "services-management.lock"):
             if sock.connect_ex(("127.0.0.1", port)) == 0:
                 raise SystemExit(f"Port {port} is already in use. No duplicate services were started.")
     commands = {
-        "api": ([sys.executable, "-m", "uvicorn", "office.api:app", "--host", "127.0.0.1", "--port", "8510"], app / "backend"),
+        # keep-alive를 화면 프록시(next)보다 길게 둔다. 기본 5초면 프록시가 재사용하려던 연결을 API가 먼저 닫아
+        # 'socket hang up'과 ECONNRESET으로 화면이 가끔 500을 받는다(2026-11-27 frontend.log 약 100건).
+        # 로그 줄마다 시각을 찍어 오류가 언제 났는지 짚을 수 있게 한다.
+        "api": ([sys.executable, "-m", "uvicorn", "office.api:app", "--host", "127.0.0.1", "--port", "8510",
+                 "--timeout-keep-alive", "75", "--log-config", str(app / "scripts/uvicorn-log.json")], app / "backend"),
         "frontend": ([str(app / "frontend/node_modules/.bin/next"), "start" if (app / "frontend/.next/BUILD_ID").is_file() else "dev", "--hostname", "127.0.0.1", "--port", "3110"], app / "frontend"),
     }
     active = window_open(store)
