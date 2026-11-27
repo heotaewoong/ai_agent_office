@@ -122,3 +122,28 @@ def test_refine_keeps_brand_bundle_and_packaging(tmp_path):
     index = provider.roles.index("refine")
     assert "[브랜드 목소리" in provider.systems[index]
     assert "AI 팀이 블로그를 쓰는 법" in provider.users[index]
+
+
+def test_legacy_review_records_writer_checks_without_changing_status(tmp_path):
+    store = Store(tmp_path)
+    job = evidence_job(store)
+    prepare_source(store, job["id"], provider=FullProvider("AI 도구 비교"))
+    before = store.job(job["id"])["source_packet"]["quality"]
+    assert "writer_checks" not in before
+
+    store2 = Store(tmp_path / "warn")
+    store2.set_setting("writer_checks", "warn")
+    job2 = evidence_job(store2)
+    prepare_source(store2, job2["id"], provider=FullProvider("AI 도구 비교"))
+    quality = store2.job(job2["id"])["source_packet"]["quality"]
+    recorded = quality["writer_checks"]
+    assert recorded["mode"] == "warn" and recorded["engine"] == "legacy" and "issues" in recorded
+    assert quality["status"] == before["status"] and quality["deterministic_checks"] == before["deterministic_checks"]
+
+    store3 = Store(tmp_path / "enforce")
+    store3.set_setting("writer_checks", "enforce")
+    job3 = evidence_job(store3)
+    prepare_source(store3, job3["id"], provider=FullProvider("AI 도구 비교"))
+    quality3 = store3.job(job3["id"])["source_packet"]["quality"]
+    assert quality3["writer_checks"]["mode"] == "warn" and quality3["writer_checks"]["requested_mode"] == "enforce"
+    assert quality3["status"] == before["status"]
