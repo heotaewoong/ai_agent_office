@@ -263,3 +263,32 @@ def test_unavailable_bridge_is_a_plain_message(scope, monkeypatch, tmp_path):
     response = client.post(f"/api/ideas/{idea['id']}/book-evidence", headers=headers, json={"expected_hash": digest(idea)})
     assert response.status_code == 409 and "설치" in response.json()["detail"]
     assert not store.jobs()
+
+
+def test_unrelated_book_passages_are_dropped_by_cosine_floor(bridge):
+    """2026-11-27 운영 실측: 관련 없는 제목에도 섞은 점수는 0.75~0.95가 나와 책 4권이 붙었다. 벡터 유사도 하한으로 거른다."""
+    replies, _ = bridge
+    replies.append({"status": "ok", "mode": "hybrid", "results": [
+        bridge_row(score=0.88, cosine=0.50),
+        bridge_row(chunk_sha256="d" * 64, score=0.61, cosine=0.62),
+        bridge_row(chunk_sha256="e" * 64, score=0.55),  # 예전 다리(cosine 없음)는 그대로 둔다
+    ]})
+    rows, mode = find_book_evidence("뽀모도로 25분이 정말 맞을까")
+    assert mode == "hybrid" and [row["chunk_sha256"] for row in rows] == ["d" * 64, "e" * 64]
+
+
+def test_missing_title_names_need_a_higher_cosine(bridge):
+    replies, _ = bridge
+    replies.append({"status": "ok", "mode": "hybrid", "low_coverage": True, "missing_anchors": ["im2"],
+                    "results": [bridge_row(cosine=0.58), bridge_row(chunk_sha256="d" * 64, cosine=0.62)]})
+    rows, _ = find_book_evidence("오픽 IM2에서 막힌 분을 위한 첫 7일")
+    assert [row["chunk_sha256"] for row in rows] == ["d" * 64]
+
+
+def test_bridge_passes_cosine_and_low_coverage(tmp_path):
+    bridge = load_bridge()
+    found = {"effective_mode": "hybrid", "anchor_coverage": {"anchor_cov": 0.0, "missing_anchors": ["im2"], "low_coverage_warning": True},
+             "results": [{"kind": "book_text", "source": "https://drive.google.com/file/d/book/view", "source_title": "RAG의 모든 것",
+                          "text": QUOTE, "content_hash": "b" * 64, "score": 0.9, "cosine": 0.47}]}
+    reply = bridge.handle(json.dumps({"query": "오픽 IM2", "limit": 4}).encode(), search=lambda query: found, catalog_root=tmp_path)
+    assert reply["low_coverage"] is True and reply["missing_anchors"] == ["im2"] and reply["results"][0]["cosine"] == 0.47

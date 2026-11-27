@@ -19,6 +19,11 @@ import unicodedata
 from .store import WorkflowError
 
 BOOK_EVIDENCE_LIMIT = 4
+# 관련 없는 질문에도 책 4권을 쥐여 주지 않도록 벡터 유사도(KURE cosine) 하한을 둔다(2026-11-27).
+# P5 책 검색 골든셋 Dev 41문항으로 맞췄다: 답이 없는 질문 4개는 모두 0개가 되고, 답이 있는 질문 37개 중 31개는 후보가 남는다.
+# 제목의 고유 이름(제품, 시험 등급 등)이 개인 DB에 없으면(low_coverage) 하한을 0.60으로 올린다. 이때 아예 0개로 막으면 답 있는 질문이 4개 더 빠졌다.
+BOOK_MIN_COSINE = 0.54
+BOOK_MIN_COSINE_MISSING_NAMES = 0.60
 BOOK_SOURCE_KIND = "approved_book_evidence"
 _SOCKET = "/run/heobrain-book-search/search.sock"
 _TIMEOUT = 45.0  # 임베딩 서버가 꺼져 있으면 켜는 데 몇 초 걸린다(실측 cold start 3.1초).
@@ -116,15 +121,19 @@ def find_book_evidence(query: str, *, limit: int = BOOK_EVIDENCE_LIMIT) -> tuple
     if not query:
         return [], "none"
     reply = _ask(query, max(1, min(int(limit), 6)))
+    mode = reply.get("mode") if reply.get("mode") in ("hybrid", "text", "vector") else "unknown"
+    floor = BOOK_MIN_COSINE_MISSING_NAMES if reply.get("low_coverage") is True else BOOK_MIN_COSINE
     rows, seen = [], set()
     for row in reply["results"]:
+        cosine = row.get("cosine") if isinstance(row, dict) else None
+        if isinstance(cosine, (int, float)) and cosine < floor:
+            continue
         item = _from_bridge(row)
         if item and item["id"] not in seen:
             seen.add(item["id"])
             rows.append(item)
         if len(rows) == limit:
             break
-    mode = reply.get("mode") if reply.get("mode") in ("hybrid", "text", "vector") else "unknown"
     return checked_book_references(rows), mode
 
 
