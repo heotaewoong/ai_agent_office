@@ -552,7 +552,8 @@ def test_blog_preview_blocks_missing_or_modified_manifest_photos(context, change
     else:
         picture.write_bytes(b"changed synthetic bytes")
     response = client.get(f"/api/jobs/{job['id']}/blog-preview")
-    assert response.status_code == 409 and "사진" in response.json()["detail"]
+    # iframe 안에서 읽히도록 막힌 이유를 HTML 문장으로 돌려준다(상태 코드는 409 그대로)
+    assert response.status_code == 409 and response.headers["content-type"].startswith("text/html") and "사진" in response.text
 
 
 @pytest.mark.parametrize("location", ["other-job", "outside"])

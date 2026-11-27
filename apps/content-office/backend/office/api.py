@@ -1027,6 +1027,16 @@ def create_app(store: Store | None = None):
 
     @app.get('/api/jobs/{job_id}/blog-preview')
     def blog_preview(job_id: str, format: Literal['html', 'markdown', 'naver', 'linkedin', 'threads', 'instagram'] = 'html'):
+        # 미리보기는 화면의 iframe 안에 뜬다. 막힌 이유를 JSON 대신 읽을 수 있는 문장으로 보여 준다(상태 코드는 409 그대로).
+        try:
+            return _blog_preview(job_id, format)
+        except WorkflowError as error:
+            from html import escape
+            return HTMLResponse('<!doctype html><meta charset="utf-8"><p style="font:16px/1.6 sans-serif;margin:16px">'
+                                + escape(str(error)) + '</p>', status_code=409,
+                                headers={'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'"})
+
+    def _blog_preview(job_id, format):
         from .exports import blog_reader_html
         job = store.require_source_approval(job_id)
         manifest = job.get('manifest') or {}
