@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { officeHref } from "../lib/navigation";
 import { researchKinds, type ResearchKind } from "../lib/source-library";
-import type { Idea, IdeaBookEvidence, IdeaPublicEvidence, Job } from "../lib/types";
+import type { Article, Idea, IdeaBookEvidence, IdeaPublicEvidence, Job } from "../lib/types";
 import { statusInfo, workWindowBlockedReason } from "../lib/workflow";
 import { Icon } from "./icons";
 import styles from "./create-wizard.module.css";
@@ -35,7 +35,10 @@ const WINDOW_MINUTES = 120;
 const TITLE_MAX = 45;
 
 function message(cause: unknown, fallback: string) {
-  return cause instanceof Error && cause.message ? cause.message : fallback;
+  const text = cause instanceof Error && cause.message ? cause.message : fallback;
+  // 돈 드는 호출이 막힌 이유는 고칠 곳까지 알려 줘요.
+  if (text.includes("예산 한도")) return `${text} 제작 설정의 전체 예산 상한을 올리면 이어서 할 수 있어요.`;
+  return text;
 }
 
 function host(url: string) {
@@ -65,6 +68,8 @@ async function ensureWindow() {
 export function CreateWizard() {
   const [step, setStep] = useState<Step>("topic");
   const [ideas, setIdeas] = useState<Idea[] | null>(null);
+  const [news, setNews] = useState<Article[] | null>(null);
+  const [notice, setNotice] = useState("");
   const [idea, setIdea] = useState<Idea | null>(null);
   const [kind, setKind] = useState<ResearchKind | "">("");
   const [picks, setPicks] = useState<string[]>([]);
@@ -93,6 +98,11 @@ export function CreateWizard() {
     let alive = true;
     const jobId = new URLSearchParams(window.location.search).get("job");
     loadIdeas().catch((cause) => { if (alive) setError(message(cause, "기획 목록을 불러오지 못했어요.")); });
+    api.dashboard().then((dashboard) => {
+      if (!alive) return;
+      // 오늘의 뉴스는 원문이 곧 근거라 고르면 바로 원고를 써요(제목 단계 없음).
+      setNews([...dashboard.articles].filter((a) => a.source_readable !== false && !a.selected).sort((a, b) => b.score - a.score).slice(0, 4));
+    }).catch(() => { if (alive) setNews([]); });
     if (jobId) {
       api.job(jobId).then((current) => {
         if (!alive) return;
@@ -124,6 +134,21 @@ export function CreateWizard() {
     setBookPicks([]);
     setError("");
     setStep("kind");
+  }
+
+  async function startNews(article: Article) {
+    await run("뉴스로 원고 만들기", async () => {
+      await ensureWindow();
+      const result = await api.createJobs([article.id], true);
+      const opened = result.jobs[0];
+      if (!opened) throw new Error("작업을 만들지 못했어요.");
+      const reason = (result.draft_requests ?? []).find((item) => item.reason)?.reason;
+      if (reason) setNotice(reason);
+      setJob(opened);
+      remember(opened.id);
+      setStarted(Date.now());
+      setStep("write");
+    }, "뉴스로 원고를 시작하지 못했어요.");
   }
 
   async function addOwnTopic() {
@@ -261,15 +286,15 @@ export function CreateWizard() {
       </ol>
 
       {error && <p className={styles.error} role="alert"><Icon name="alert" size={18} />{error}</p>}
+      {notice && <p className={styles.note} role="status">{notice}</p>}
       {busy && <p className={styles.busy} role="status"><Icon name="refresh" size={16} className="spin" />{busy} 중이에요</p>}
 
       {step === "topic" && (
         <div className={styles.panel}>
           <h3 className={styles.question}>무엇을 쓸까요?</h3>
-          <p className={styles.help}>추천 기획을 누르거나, 아래에 제목과 원문 링크를 넣으세요.</p>
-          {list === null ? <p className={styles.help}>기획을 불러오는 중이에요.</p> : list.length === 0 ? (
-            <p className={styles.help}>바로 쓸 수 있는 추천 기획이 없어요. 아래에 직접 넣어 주세요.</p>
-          ) : (
+          <p className={styles.help}>카드 하나를 누르거나, 아래에 제목과 원문 링크를 넣으세요.</p>
+          {list && list.length > 0 && <h4 className={styles.sub}>추천 기획</h4>}
+          {list === null ? <p className={styles.help}>기획을 불러오는 중이에요.</p> : list.length === 0 ? null : (
             <ul className={styles.cards}>
               {list.map((item) => (
                 <li key={item.id}>
@@ -285,6 +310,22 @@ export function CreateWizard() {
               ))}
             </ul>
           )}
+          {news && news.length > 0 && (
+            <>
+              <h4 className={styles.sub}>오늘의 뉴스로 바로 쓰기</h4>
+              <ul className={styles.cards}>
+                {news.map((item) => (
+                  <li key={item.id}>
+                    <button type="button" className={styles.card} onClick={() => void startNews(item)} disabled={!!busy}>
+                      <span className={styles.cardTitle}>{item.card_ko?.headline || item.editorial_title || item.title}</span>
+                      <span className={styles.cardMeta}><span>{item.feed_name}</span><span>원문이 근거, 바로 원고</span></span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          <h4 className={styles.sub}>직접 정하기</h4>
           <form className={styles.own} onSubmit={(event) => { event.preventDefault(); void addOwnTopic(); }}>
             <label>제목<input value={form.title} maxLength={200} placeholder="예: Claude로 블로그 초안 10분 만에 쓰는 법" onChange={(e) => setForm({ ...form, title: e.target.value })} /></label>
             <label>원문 링크<input value={form.url} inputMode="url" placeholder="https://" onChange={(e) => setForm({ ...form, url: e.target.value })} /></label>

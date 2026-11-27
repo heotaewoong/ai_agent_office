@@ -10,6 +10,7 @@
 .panel { border: 1px solid var(--line); border-radius: 16px; padding: clamp(18px, 3vw, 28px); background: var(--surface); display: grid; gap: 14px; }
 .topic { margin: 0; font-size: 14px; color: var(--muted); }
 .question { margin: 0; font-family: var(--font-display); font-size: clamp(26px, 3.4vw, 34px); line-height: 1.2; color: var(--ink); }
+.sub { margin: 6px 0 0; font-size: 15px; font-weight: 700; color: var(--ink); }
 .help { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .note { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); color: var(--accent-ink); font-size: 15px; line-height: 1.6; }
 .error { margin: 0; display: flex; gap: 8px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
