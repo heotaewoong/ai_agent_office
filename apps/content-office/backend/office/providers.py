@@ -229,7 +229,10 @@ class Provider:
         except (ValueError, KeyError, TypeError, IndexError):
             raise WorkflowError("모델 결과 형식이 올바르지 않습니다. 성공으로 처리하지 않습니다") from None
         self.store.cache_put(key, result)
-        self.store.event("model_completed", {"role": role, "model": self.model, "provider": provider, "key": key, "input_tokens": input_tokens, "output_tokens": output_tokens, "estimated_krw": round(actual, 3)}, self.job_id)
+        # 요청한 모델 이름과 별개로 제공자가 실제로 답한 모델판을 남겨요(같은 이름이라도 판이 바뀌면 결과가 달라질 수 있어요).
+        served = data.get("model") if provider == "openai" else data.get("modelVersion")
+        served = served if isinstance(served, str) and len(served) <= 120 else None
+        self.store.event("model_completed", {"role": role, "model": self.model, "model_version": served, "provider": provider, "key": key, "input_tokens": input_tokens, "output_tokens": output_tokens, "estimated_krw": round(actual, 3)}, self.job_id)
         return result
 
     # --- Gemini -------------------------------------------------------------------------------

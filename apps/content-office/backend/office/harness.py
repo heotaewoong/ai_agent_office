@@ -12,6 +12,12 @@ legacy 검수(같은 모델 3명이 최대 3라운드, 80점 기준)를 바꾸�
    판정자는 작성자 프롬프트(BASE)를 쓰지 않고 전용 프롬프트(JUDGE_SYSTEM)를 쓰며, 축마다 이유를 먼저 쓴 뒤 판정한다.
 4. Refine: 밖에서 온 신호(규칙 위반, 실패한 축의 이유, 근거 없는 문장, 국어 교정)만 넘긴다. 자기 비평은 하지 않는다.
 5. 단조 보호: 고친 판에서 통과하던 규칙이나 축이 하나라도 실패로 바뀌면 직전 판으로 되돌리고 멈춘다.
+6. 정체 멈춤(2026-11-27): 고친 판에서 실패하던 규칙이나 축이 하나도 통과로 바뀌지 않았고, 새로 받은 신호(처음 부른
+   판정)도 없으면 같은 지적으로 또 고치지 않고 멈춘다(STALLED). 같은 지적을 반복해 고치는 루프는 비용만 쓰고 나아지지
+   않는다(그래프 엔지니어링 p.222~224, First Principles p.225~229). 처음 부른 판정이 있으면 새 지적이 생긴 것이라 한 번 더
+   고친다(운영 기록 2026-11-27 23:10: 규칙만 보고 고친 1회는 실패, 판정 지적까지 받은 2회째에 해결).
+7. 끝난 이유(stop_reason)를 quality.harness와 기록 파일에 남긴다: PASS, REPAIRED, STALLED, ROLLED_BACK, HOLD, CAP_REACHED,
+   POLICY_BLOCKED. 예외로 끝나면 BUDGET_EXHAUSTED 또는 FAILED를 기록하고 예외는 그대로 올린다(자동 우회 없음).
 
 사람 승인 ⓪①②③은 만들거나 대신하지 않는다. 모든 모델 호출은 기존 Provider(비용 장부, 작업 시간, 단가 검사)와
 LangGraph 체크포인트(editorial_call_intents: 결과가 불명확한 호출은 다시 부르지 않음)를 그대로 지난다.
@@ -24,7 +30,7 @@ import os
 import time
 from pathlib import Path
 
-from .store import WorkflowError, canonical, digest
+from .store import CostScopeExceeded, WorkflowError, canonical, digest
 
 HARNESS_VERSION = "v2-harness-2026-11-26"
 ENGINES = ("legacy", "v2_harness")
@@ -126,20 +132,62 @@ def run_binary_judge(packet, provider, *, w_type, gen_model, judge_model, brief,
 
 
 def compare_quality_snapshots(previous: dict, current: dict) -> dict:
-    """통과하던 규칙이나 축이 실패로 바뀌었는지 본다. 하나라도 있으면 직전 판으로 되돌린다."""
-    def regressions(key):
-        before, after = previous.get(key) or {}, current.get(key) or {}
-        return sorted(name for name, ok in before.items() if ok is True and after.get(name) is False)
+    """고치기 전후를 4칸으로 나눈다: 개선(X→O), 수리 실패(X→X), 보존(O→O), 회귀(O→X).
 
-    def improvements(key):
+    회귀가 하나라도 있으면 직전 판으로 되돌린다. newly_checked는 이번에 처음 판정한 축(직전에는 판정을 건너뜀)이다.
+    """
+    def cells(key):
         before, after = previous.get(key) or {}, current.get(key) or {}
-        return sorted(name for name, ok in after.items() if ok is True and before.get(name) is False)
+        shared = sorted(set(before) & set(after))
+        return {"improved": [n for n in shared if before[n] is False and after[n] is True],
+                "repair_failed": [n for n in shared if before[n] is False and after[n] is False],
+                "preserved": [n for n in shared if before[n] is True and after[n] is True],
+                "regressed": [n for n in shared if before[n] is True and after[n] is False]}
 
-    rules, axes = regressions("rule_scores"), regressions("axes")
-    deteriorated = bool(rules or axes)
-    return {"deteriorated": deteriorated, "regressed_rules": rules, "regressed_axes": axes,
-            "improved": improvements("rule_scores") + improvements("axes"),
+    rules, axes = cells("rule_scores"), cells("axes")
+    deteriorated = bool(rules["regressed"] or axes["regressed"])
+    newly_checked = sorted(set(current.get("axes") or {}) - set(previous.get("axes") or {}))
+    return {"deteriorated": deteriorated, "regressed_rules": rules["regressed"], "regressed_axes": axes["regressed"],
+            "improved": rules["improved"] + axes["improved"],
+            "repair_failed": rules["repair_failed"] + axes["repair_failed"],
+            "preserved": len(rules["preserved"]) + len(axes["preserved"]), "newly_checked": newly_checked,
             "action": "rollback_to_previous" if deteriorated else "keep"}
+
+
+STOP_NOTES = {
+    "PASS": "첫 판정에서 통과했어요",
+    "REPAIRED": "밖의 지적으로 고친 뒤 통과했어요",
+    "STALLED": "고쳐도 나아진 항목이 없어 같은 지적으로 더 고치지 않고 멈췄어요. 남은 지적은 사람이 고쳐야 해요",
+    "ROLLED_BACK": "고친 판에서 통과하던 항목이 실패로 바뀌어 이전 판으로 되돌리고 멈췄어요",
+    "HOLD": "근거가 제목의 질문에 답하지 못해 고쳐 쓰기로 풀리지 않아요. 보류할지 사람이 정해요",
+    "CAP_REACHED": "고치기 상한을 다 써도 판정을 못 넘었어요. 남은 지적은 사람이 고쳐야 해요",
+    "POLICY_BLOCKED": "모델이 고칠 수 없는 무결성 문제가 있어 판정과 고치기를 부르지 않고 멈췄어요",
+}
+_STOP_LAYER = {"PASS": "eval_judge", "REPAIRED": "eval_judge", "HOLD": "eval_judge", "POLICY_BLOCKED": "validate",
+               "STALLED": "refine", "ROLLED_BACK": "refine", "CAP_REACHED": "refine",
+               "BUDGET_EXHAUSTED": "guardrail", "FAILED": "generation"}
+
+
+def _cells(compared: dict | None) -> dict | None:
+    if not compared:
+        return None
+    return {key: compared[key] for key in ("improved", "repair_failed", "preserved", "newly_checked")} | {
+        "regressed": compared["regressed_rules"] + compared["regressed_axes"]}
+
+
+def _evidence_use(packet: dict) -> dict:
+    """원고가 붙인 근거 ID와 받은 근거 ID(문장 없이 ID만). 인용 세탁이나 안 쓴 근거를 기록에서 세게 한다."""
+    from .editorial import cited_evidence_ids
+    supplied = sorted({str(item["id"]) for item in packet.get("evidence") or [] if isinstance(item, dict) and item.get("id")})
+    cited = sorted(cited_evidence_ids(packet["body"])) if isinstance(packet.get("body"), str) else []
+    kinds = sorted({str(item.get("source_kind") or "article") for item in packet.get("evidence") or [] if isinstance(item, dict)})
+    return {"evidence_ids": supplied, "cited_evidence_ids": cited, "uncited_evidence_ids": sorted(set(supplied) - set(cited)),
+            "unknown_cited_ids": sorted(set(cited) - set(supplied)), "evidence_kinds": kinds}
+
+
+def _failing(snapshot: dict) -> dict:
+    return {"rules": sorted(n for n, ok in (snapshot.get("rule_scores") or {}).items() if ok is False),
+            "axes": sorted(n for n, ok in (snapshot.get("axes") or {}).items() if ok is False)}
 
 
 def _judge_review(judge: dict) -> dict:
@@ -207,81 +255,122 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
             trace.record(**kwargs)
 
     history, best, outcome = [], None, {"rolled_back": False, "deterioration": None}
-    allowed_sentences = []  # 직전 판정에서 근거 없다고 짚은 문장. 고치며 빠져도 사실을 잃은 것으로 세지 않는다
+    stop_reason = None
     judge_calls = skipped = refines = 0
-    for round_no in range(refine_limit + 1):
-        packet = prepare(packet)
-        started = time.monotonic()
-        base = checks_fn(packet) if checks_fn else {"passed": True, "issues": output_issues(packet), "warnings": output_issues(packet), "blocking": []}
-        korean_rules = check_texts(packet_texts(packet))
-        writer = None if writer_checks == "off" else {"mode": writer_checks, "allowed_sentences": allowed_sentences,
-                                                      "previous_body": best["packet"].get("body") if best else None}
-        validation = validate_packet(packet, base_checks=base, w_type=w_type, style=style_issues(packet), korean=korean_rules,
-                                     writer=writer)
-        record(step=f"validate:{round_no}", layer="validate", input_obj=content_context(packet), output_obj=validation["rule_scores"],
-               elapsed_ms=(time.monotonic() - started) * 1000, status="ok" if validation["passed"] else "failed",
-               summary={"issues": len(validation["issues"]), "blocking": len(validation["blocking"])})
-        last = round_no == refine_limit
-        judge = None
-        if validation["blocking"]:
-            pass  # 무결성 문제는 모델이 고칠 수 없다. 판정과 수정을 부르지 않고 멈춘다.
-        elif validation["issues"] and round_no < refine_limit - 1:
-            skipped += 1  # 0원 규칙에서 걸렸으니 유료 판정 없이 바로 고친다. 마지막 고치기 한 번은 판정 지적용으로 남긴다.
-        else:
-            if event:
-                event("editorial_role", {"role": "judge", "round": round_no, "packet_hash": digest(content_context(packet))})
+    record(step="run:start", layer="input_contract", input_obj=content_context(packet), status="ok",
+           meta={"harness_version": HARNESS_VERSION, "rubric_sha": rubric_sha[:12], "judge_prompt_sha": digest(JUDGE_SYSTEM)[:12],
+                 "writer_prompt_sha": digest(system or BASE)[:12], "writing_policy": POLICY_ID if writing_prompt else None,
+                 "gen_model": gen_model, "judge_model": judge_model, "w_type": w_type, "refine_limit": refine_limit,
+                 "writer_checks": writer_checks, "original_preserved": original_markdown is not None, **_evidence_use(packet)})
+    try:
+        allowed_sentences = []  # 직전 판정에서 근거 없다고 짚은 문장. 고치며 빠져도 사실을 잃은 것으로 세지 않는다
+        for round_no in range(refine_limit + 1):
+            packet = prepare(packet)
             started = time.monotonic()
-            judge = run_binary_judge(packet, provider, w_type=w_type, gen_model=gen_model, judge_model=judge_model, brief=brief,
-                                     style_reference=writing_prompt, extra_prompt=preserve_prompt)
-            judge_calls += 1
-            record(step=f"judge:{round_no}", layer="eval_judge", input_obj=content_context(packet), output_obj=judge["axes"],
-                   elapsed_ms=(time.monotonic() - started) * 1000, calls=1, status="ok" if judge["passed"] else "failed",
-                   summary={"failed_axes": [axis for axis in BINARY_AXES if not judge["axes"][axis]]})
-        snapshot = {"rule_scores": validation["rule_scores"], "axes": judge["axes"] if judge else None}
-        if best is not None:
-            compared = compare_quality_snapshots(best["snapshot"], snapshot)
-            if compared["deteriorated"]:
-                record(step=f"rollback:{round_no}", layer="refine", input_obj=snapshot, output_obj=best["snapshot"], status="rolled_back",
-                       failure_reason=", ".join(compared["regressed_rules"] + compared["regressed_axes"]))
-                history.append({"round": round_no, "source_content_hash": digest(content_context(packet)), "rule_scores": snapshot["rule_scores"],
-                                "axes": snapshot["axes"], "comparison": compared, "kept": False})
-                outcome = {"rolled_back": True, "deterioration": compared}
-                packet, validation, judge, korean_rules = best["packet"], best["validation"], best["judge"], best["korean"]
+            base = checks_fn(packet) if checks_fn else {"passed": True, "issues": output_issues(packet), "warnings": output_issues(packet), "blocking": []}
+            korean_rules = check_texts(packet_texts(packet))
+            writer = None if writer_checks == "off" else {"mode": writer_checks, "allowed_sentences": allowed_sentences,
+                                                          "previous_body": best["packet"].get("body") if best else None}
+            validation = validate_packet(packet, base_checks=base, w_type=w_type, style=style_issues(packet), korean=korean_rules,
+                                         writer=writer)
+            record(step=f"validate:{round_no}", layer="validate", input_obj=content_context(packet), output_obj=validation["rule_scores"],
+                   elapsed_ms=(time.monotonic() - started) * 1000, status="ok" if validation["passed"] else "failed",
+                   summary={"issues": len(validation["issues"]), "blocking": len(validation["blocking"])},
+                   meta={"round": round_no, "failed_rules": sorted(n for n, ok in validation["rule_scores"].items() if ok is False),
+                         "issues": len(validation["issues"]), "blocking": len(validation["blocking"]),
+                         **_evidence_use(packet)})
+            last = round_no == refine_limit
+            judge = None
+            if validation["blocking"]:
+                pass  # 무결성 문제는 모델이 고칠 수 없다. 판정과 수정을 부르지 않고 멈춘다.
+            elif validation["issues"] and round_no < refine_limit - 1:
+                skipped += 1  # 0원 규칙에서 걸렸으니 유료 판정 없이 바로 고친다. 마지막 고치기 한 번은 판정 지적용으로 남긴다.
+            else:
+                if event:
+                    event("editorial_role", {"role": "judge", "round": round_no, "packet_hash": digest(content_context(packet))})
+                started = time.monotonic()
+                judge = run_binary_judge(packet, provider, w_type=w_type, gen_model=gen_model, judge_model=judge_model, brief=brief,
+                                         style_reference=writing_prompt, extra_prompt=preserve_prompt)
+                judge_calls += 1
+                record(step=f"judge:{round_no}", layer="eval_judge", input_obj=content_context(packet), output_obj=judge["axes"],
+                       elapsed_ms=(time.monotonic() - started) * 1000, calls=1, status="ok" if judge["passed"] else "failed",
+                       summary={"failed_axes": [axis for axis in BINARY_AXES if not judge["axes"][axis]]},
+                       meta={"round": round_no, "model": judge_model, "axes": judge["axes"],
+                             "ungrounded_sentences": len(judge["ungrounded_sentences"]), "korean_corrections": len(judge["korean_corrections"])})
+            snapshot = {"rule_scores": validation["rule_scores"], "axes": judge["axes"] if judge else None}
+            compared = None
+            if best is not None:
+                compared = compare_quality_snapshots(best["snapshot"], snapshot)
+                if compared["deteriorated"]:
+                    record(step=f"rollback:{round_no}", layer="refine", input_obj=snapshot, output_obj=best["snapshot"], status="rolled_back",
+                           failure_reason=", ".join(compared["regressed_rules"] + compared["regressed_axes"]),
+                           meta={"round": round_no, "transitions": _cells(compared)})
+                    history.append({"round": round_no, "source_content_hash": digest(content_context(packet)), "rule_scores": snapshot["rule_scores"],
+                                    "axes": snapshot["axes"], "comparison": compared, "transitions": _cells(compared), "kept": False})
+                    outcome = {"rolled_back": True, "deterioration": compared}
+                    packet, validation, judge, korean_rules = best["packet"], best["validation"], best["judge"], best["korean"]
+                    stop_reason = "ROLLED_BACK"
+                    break
+            best = {"packet": copy.deepcopy(packet), "snapshot": snapshot, "validation": validation, "judge": judge, "korean": korean_rules}
+            history.append({"round": round_no, "source_content_hash": digest(content_context(packet)), "rule_scores": snapshot["rule_scores"],
+                            "axes": snapshot["axes"], "judge_skipped": judge is None and not validation["blocking"], "kept": True,
+                            **({"transitions": _cells(compared)} if compared else {})})
+            if validation["blocking"]:
+                stop_reason = "POLICY_BLOCKED"
                 break
-        best = {"packet": copy.deepcopy(packet), "snapshot": snapshot, "validation": validation, "judge": judge, "korean": korean_rules}
-        history.append({"round": round_no, "source_content_hash": digest(content_context(packet)), "rule_scores": snapshot["rule_scores"],
-                        "axes": snapshot["axes"], "judge_skipped": judge is None and not validation["blocking"], "kept": True})
-        if validation["blocking"] or last or (validation["passed"] and judge is not None and judge["passed"]):
-            break
-        if judge is not None and judge["axes"].get("hold_decision") is False:
-            break  # 근거가 제목의 질문에 답하지 못하는 원고는 고쳐 쓰기로 해결되지 않아요. 사람이 보류를 정해요.
-        if event:
-            event("editorial_role", {"role": "refine", "round": round_no + 1})
-        feedback = {"rule_issues": validation["issues"],
-                    "failed_axes": {AXIS_LABELS[axis]: judge["reasons"][axis] for axis in BINARY_AXES if judge and not judge["axes"][axis]},
-                    "ungrounded_sentences": judge["ungrounded_sentences"] if judge else [],
-                    "korean_corrections": judge["korean_corrections"] if judge else []}
-        allowed_sentences = list(feedback["ungrounded_sentences"])
-        refine_packet = campaign_packet(packet, None) if offer else packet
-        context = {"packet": content_context(refine_packet), "external_feedback": feedback, "audience": brief, "w_type": w_type}
-        if original_markdown is None:
-            context["format_targets"] = format_targets(packet)
-        if packaging is not None:
-            context["packaging"] = packaging
-        body_instruction = ("파생 제목, 영상, 설명만 수정하고 body는 빈 문자열로 반환하라. 서버가 저자 원문을 그대로 보존한다." + preserve_prompt
-                            if original_markdown is not None else
-                            "external_feedback에 적힌 문제만 고친다. 이미 통과한 소제목, 근거 연결, 사실, 숫자는 그대로 둔다. "
-                            "korean_corrections는 뜻과 근거 ID를 유지하며 반영한다. 지적을 고칠 때는 해당 문장 자체를 고쳐 쓰고, 단서나 면책 문장을 새로 덧붙이지 않는다. body는 format_targets의 목표 길이에 맞춘 전체 원고이며 titles 3안과 hashtags 5개를 함께 고친다. "
-                            "format_targets의 현재 수치를 목표 범위로 맞춘다. " + format_contract(w_type or packet.get("w_type")) + SUMMARY_BODY_PROMPT)
-        started = time.monotonic()
-        refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "밖에서 받은 지적만 해결하고 근거와 숫자를 임의로 바꾸지 말라." + writing_prompt + body_instruction},
-                                               {"role": "user", "content": canonical(context)}], draft_schema, {"max_tokens": 8192, "temperature": 0.4})
-        refines += 1
-        record(step=f"refine:{round_no + 1}", layer="refine", input_obj=context, output_obj=refined, elapsed_ms=(time.monotonic() - started) * 1000, calls=1)
-        for key in ("title", "body", "video", "titles", "hashtags", "channel_posts"):
-            if key in refined:
-                packet[key] = original_markdown if key == "body" and original_markdown is not None else refined[key]
+            if validation["passed"] and judge is not None and judge["passed"]:
+                stop_reason = "REPAIRED" if refines else "PASS"
+                break
+            if last:
+                stop_reason = "CAP_REACHED"
+                break
+            if judge is not None and judge["axes"].get("hold_decision") is False:
+                stop_reason = "HOLD"
+                break  # 근거가 제목의 질문에 답하지 못하는 원고는 고쳐 쓰기로 해결되지 않아요. 사람이 보류를 정해요.
+            if compared is not None and not compared["improved"] and not compared["newly_checked"]:
+                # 정체: 직전 고치기가 실패 항목을 하나도 못 고쳤고 새 판정도 없어요. 같은 지적으로 또 고치면 비용만 들어요.
+                stop_reason = "STALLED"
+                break
+            if event:
+                event("editorial_role", {"role": "refine", "round": round_no + 1})
+            feedback = {"rule_issues": validation["issues"],
+                        "failed_axes": {AXIS_LABELS[axis]: judge["reasons"][axis] for axis in BINARY_AXES if judge and not judge["axes"][axis]},
+                        "ungrounded_sentences": judge["ungrounded_sentences"] if judge else [],
+                        "korean_corrections": judge["korean_corrections"] if judge else []}
+            allowed_sentences = list(feedback["ungrounded_sentences"])
+            refine_packet = campaign_packet(packet, None) if offer else packet
+            context = {"packet": content_context(refine_packet), "external_feedback": feedback, "audience": brief, "w_type": w_type}
+            if original_markdown is None:
+                context["format_targets"] = format_targets(packet)
+            if packaging is not None:
+                context["packaging"] = packaging
+            body_instruction = ("파생 제목, 영상, 설명만 수정하고 body는 빈 문자열로 반환하라. 서버가 저자 원문을 그대로 보존한다." + preserve_prompt
+                                if original_markdown is not None else
+                                "external_feedback에 적힌 문제만 고친다. 이미 통과한 소제목, 근거 연결, 사실, 숫자는 그대로 둔다. "
+                                "korean_corrections는 뜻과 근거 ID를 유지하며 반영한다. 지적을 고칠 때는 해당 문장 자체를 고쳐 쓰고, 단서나 면책 문장을 새로 덧붙이지 않는다. body는 format_targets의 목표 길이에 맞춘 전체 원고이며 titles 3안과 hashtags 5개를 함께 고친다. "
+                                "format_targets의 현재 수치를 목표 범위로 맞춘다. " + format_contract(w_type or packet.get("w_type")) + SUMMARY_BODY_PROMPT)
+            started = time.monotonic()
+            refined = provider.generate("refine", [{"role": "system", "content": (system or BASE) + "밖에서 받은 지적만 해결하고 근거와 숫자를 임의로 바꾸지 말라." + writing_prompt + body_instruction},
+                                                   {"role": "user", "content": canonical(context)}], draft_schema, {"max_tokens": 8192, "temperature": 0.4})
+            refines += 1
+            record(step=f"refine:{round_no + 1}", layer="refine", input_obj=context, output_obj=refined, elapsed_ms=(time.monotonic() - started) * 1000, calls=1,
+                   meta={"round": round_no + 1, "feedback": {key: len(value) for key, value in feedback.items()}})
+            for key in ("title", "body", "video", "titles", "hashtags", "channel_posts"):
+                if key in refined:
+                    packet[key] = original_markdown if key == "body" and original_markdown is not None else refined[key]
 
+    except Exception as error:
+        reason = "BUDGET_EXHAUSTED" if (isinstance(error, CostScopeExceeded) or "예산" in str(error)) else "FAILED"
+        record(step="run:end", layer=_STOP_LAYER[reason], status=reason, failure_reason=type(error).__name__,
+               meta={"stop_reason": reason, "refine_calls": refines, "judge_calls": judge_calls, "judge_skipped_rounds": skipped,
+                     "rounds": len(history)})
+        raise
+    stop_reason = stop_reason or "CAP_REACHED"
+    remaining = _failing(best["snapshot"]) if best else {"rules": [], "axes": []}
+    record(step="run:end", layer=_STOP_LAYER[stop_reason], status=stop_reason,
+           meta={"stop_reason": stop_reason, "refine_calls": refines, "judge_calls": judge_calls, "judge_skipped_rounds": skipped,
+                 "rounds": len(history), "remaining": remaining,
+                 "transitions": [entry.get("transitions") for entry in history if entry.get("transitions")]})
     blocking = list(validation["blocking"])
     reviews = [_judge_review(judge)] if judge else []
     korean_ok = not korean_rules and (judge is None or judge["axes"]["reader_value_korean"])
@@ -304,7 +393,8 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
         "harness": {"engine": "v2_harness", "version": HARNESS_VERSION, "w_type": w_type, "gen_model": gen_model, "judge_model": judge_model,
                     "same_family_judge": _family(gen_model) == _family(judge_model), "axes": judge["axes"] if judge else None,
                     "rule_scores": validation["rule_scores"], "judge_calls": judge_calls, "judge_skipped_rounds": skipped,
-                    "refine_calls": refines, **outcome,
+                    "refine_calls": refines, "stop_reason": stop_reason, "stop_note": STOP_NOTES.get(stop_reason), "remaining": remaining,
+                    **outcome,
                     **({"writer_checks": {"mode": writer_checks, **(validation.get("writer_checks") or {})}}
                        if writer_checks != "off" else {})},
         "note": "모델 판정 결과이며 사람 승인이나 독립 사실성 증명이 아닙니다",

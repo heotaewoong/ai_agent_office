@@ -244,7 +244,7 @@ class OpenAIResponse:
         self.usage = usage or {"prompt_tokens": 100, "completion_tokens": 50, "completion_tokens_details": {"reasoning_tokens": 20}}
 
     def json(self):
-        return {"id": "chatcmpl-test", "choices": [{"message": {"content": self.text}, "finish_reason": "stop"}], "usage": self.usage}
+        return {"id": "chatcmpl-test", "model": "gpt-5.4-mini-2026-03-17", "choices": [{"message": {"content": self.text}, "finish_reason": "stop"}], "usage": self.usage}
 
 
 def test_openai_model_uses_chat_completions_with_schema_and_settles_real_usage(tmp_path, monkeypatch):
@@ -270,6 +270,7 @@ def test_openai_model_uses_chat_completions_with_schema_and_settles_real_usage(t
     assert store.budget()["spent_krw"] > 0 and store.budget()["reserved_krw"] == 0
     done = next(e for e in store.events(limit=5) if e["kind"] == "model_completed")
     assert done["data"]["model"] == "gpt-5.4-mini" and done["data"]["provider"] == "openai" and done["data"]["output_tokens"] == 50
+    assert done["data"]["model_version"] == "gpt-5.4-mini-2026-03-17"
     assert abs(done["data"]["estimated_krw"] - expected) < 0.01
     provider.generate("gen", [{"role": "system", "content": "SYS"}, {"role": "user", "content": "hi"}], SCHEMA)
     assert len(calls) == 1

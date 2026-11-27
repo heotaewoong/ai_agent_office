@@ -83,6 +83,41 @@ def test_remote_tracing_is_blocked_and_private_runs_keep_no_payload(monkeypatch,
         recorder.record(step="x", layer="unknown")
 
 
+def test_snapshot_comparison_reports_four_cells():
+    before = {"rule_scores": {"length": False, "style": False, "korean": True}, "axes": None}
+    after = {"rule_scores": {"length": True, "style": False, "korean": True}, "axes": {"accuracy": True}}
+    result = compare_quality_snapshots(before, after)
+    assert result["improved"] == ["length"] and result["repair_failed"] == ["style"] and result["preserved"] == 1
+    assert result["newly_checked"] == ["accuracy"] and result["deteriorated"] is False
+
+
+def test_private_trace_keeps_only_identifier_meta_and_labels(tmp_path):
+    stub = Stub(judges=[verdict(accuracy="숫자가 원문과 다름"), verdict()], refines=[good_body()])
+    trace = TraceRecorder(tmp_path, "run-p", w_type="W3", contains_private=True,
+                          labels={"card_id": "OG-D001", "card_sha": "abc123", "trial": 2, "extra": "버림"})
+    result = run(stub, packet(), w_type="W3", trace=trace)
+    rows = read_traces(tmp_path)
+    text = json.dumps(rows, ensure_ascii=False)
+    assert "도구 3가지를 실제 화면으로" not in text and "숫자가 원문과 다름" not in text
+    assert all(row["payload"] is None and row["labels"] == {"card_id": "OG-D001", "card_sha": "abc123", "trial": 2} for row in rows)
+    assert rows[-1]["meta"]["stop_reason"] == result["quality"]["harness"]["stop_reason"] == "REPAIRED"
+    from office.harness_trace import _safe_meta
+    assert _safe_meta({"ok": "E1", "long": "가" * 200, "deep": {"a": {"b": {"c": {"d": 1}}}}}) == {"ok": "E1", "long": None, "deep": {"a": {"b": None}}}
+
+
+def test_budget_stop_is_recorded_and_the_error_is_not_swallowed(tmp_path):
+    from office.store import CostScopeExceeded
+
+    class Broke(Stub):
+        def generate(self, role, messages, schema, options=None):
+            raise CostScopeExceeded("이번 실행의 비용 상한(100원)을 넘는 최대 예약이 필요하여 호출을 보류합니다")
+    trace = TraceRecorder(tmp_path, "run-b", w_type="W3")
+    with pytest.raises(CostScopeExceeded):
+        run(Broke(), packet(), w_type="W3", trace=trace)
+    end = read_traces(tmp_path)[-1]
+    assert end["step"] == "run:end" and end["status"] == "BUDGET_EXHAUSTED" and end["layer"] == "guardrail"
+
+
 def test_snapshot_comparison_rolls_back_on_any_regression():
     before = {"rule_scores": {"length": True, "style": False}, "axes": {"accuracy": True, "groundedness": False}}
     after = {"rule_scores": {"length": True, "style": True}, "axes": {"accuracy": False, "groundedness": True}}
@@ -113,7 +148,13 @@ def test_rule_failure_skips_the_paid_judge_and_refines_first(tmp_path):
     harness = result["quality"]["harness"]
     assert harness["judge_calls"] == 1 and harness["judge_skipped_rounds"] == 1 and harness["rolled_back"] is False
     assert result["quality"]["status"] == "passed" and result["quality"]["reviews"][0]["role"] == "judge"
-    assert [row["layer"] for row in read_traces(tmp_path)] == ["validate", "refine", "validate", "eval_judge"]
+    rows = read_traces(tmp_path)
+    assert [row["layer"] for row in rows] == ["input_contract", "validate", "refine", "validate", "eval_judge", "eval_judge"]
+    assert [row["step"] for row in rows][0] == "run:start" and rows[-1]["step"] == "run:end" and rows[-1]["status"] == "REPAIRED"
+    assert [row["span_id"] for row in rows] == [f"run-2.{n}" for n in range(1, 7)] and {row["trace_id"] for row in rows} == {"run-2"}
+    assert rows[0]["meta"]["harness_version"] and rows[0]["meta"]["judge_model"] == "gpt-5.4-mini" and rows[0]["meta"]["refine_limit"] == 2
+    assert rows[1]["meta"]["failed_rules"] and rows[1]["meta"]["cited_evidence_ids"] == ["E1"] and rows[2]["meta"]["feedback"]["rule_issues"] >= 1
+    assert all(row["retry_count"] == 0 for row in rows) and harness["stop_reason"] == "REPAIRED"
 
 
 def test_refine_that_breaks_a_passing_axis_is_rolled_back(tmp_path):
@@ -230,15 +271,34 @@ def test_last_refine_is_kept_for_the_judge_so_its_feedback_can_be_fixed():
     harness = result["quality"]["harness"]
     assert harness["judge_calls"] == 2 and harness["judge_skipped_rounds"] == 1 and harness["refine_calls"] == 2
     assert result["quality"]["advisories"]["model_reviews_passed"] is True and harness["rolled_back"] is False
+    # 규칙만 보고 고친 1회가 실패해도(X→X), 처음 받은 판정 지적은 새 신호라 정체로 멈추지 않는다(운영 2026-11-27 23:10과 같은 경로).
+    transitions = result["quality"]["history"][1]["transitions"]
+    assert transitions["repair_failed"] and set(transitions["newly_checked"]) == set(BINARY_AXES)
+    assert harness["stop_reason"] == "REPAIRED"
+
+
+def test_same_failure_after_a_refine_stops_as_stalled():
+    # 고친 판에서 실패 축이 하나도 안 줄었고 새 판정 신호도 없으면, 같은 지적으로 또 고치지 않고 멈춘다(2026-11-27).
+    stub = Stub(judges=[verdict(accuracy="숫자가 원문과 다름") for _ in range(3)], refines=[good_body(), good_body()])
+    result = run(stub, packet(), w_type="W3")
+    assert stub.calls == ["judge", "refine", "judge"]
+    quality = result["quality"]
+    assert quality["refine_count"] == 1 and quality["harness"]["rolled_back"] is False
+    assert quality["harness"]["stop_reason"] == "STALLED" and "더 고치지 않고" in quality["harness"]["stop_note"]
+    assert quality["harness"]["remaining"] == {"rules": [], "axes": ["accuracy"]}
+    assert quality["history"][1]["transitions"]["repair_failed"] == ["accuracy"] and quality["history"][1]["transitions"]["improved"] == []
+    assert quality["status"] == "needs_review" and quality["review_pending"] == ["정확성: 숫자가 원문과 다름"]
 
 
 def test_exhausted_refines_below_accuracy_stay_in_review_pending():
-    # 고치기를 다 써도 정확성이 기준에 못 미치면, 가장 나은 판은 남기되 통과로 올리지 않고 검토 대기로 둔다.
-    stub = Stub(judges=[verdict(accuracy="숫자가 원문과 다름") for _ in range(3)], refines=[good_body(), good_body()])
+    # 고칠 때마다 나아지지만 상한까지 써도 정확성이 기준에 못 미치면, 가장 나은 판은 남기되 통과로 올리지 않고 검토 대기로 둔다.
+    stub = Stub(judges=[verdict(accuracy="숫자가 원문과 다름", completeness="비교축이 빠짐"), verdict(accuracy="숫자가 원문과 다름"),
+                        verdict(accuracy="숫자가 원문과 다름")], refines=[good_body(), good_body()])
     result = run(stub, packet(), w_type="W3")
     assert stub.calls == ["judge", "refine", "judge", "refine", "judge"]
     quality = result["quality"]
     assert quality["refine_count"] == 2 and quality["harness"]["rolled_back"] is False
+    assert quality["harness"]["stop_reason"] == "CAP_REACHED" and quality["history"][1]["transitions"]["improved"] == ["completeness"]
     assert quality["status"] == "needs_review" and quality["critical"] is False
     assert quality["advisories"]["model_reviews_passed"] is False
     assert quality["review_pending"] == ["정확성: 숫자가 원문과 다름"]
