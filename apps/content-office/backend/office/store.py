@@ -303,6 +303,12 @@ class Store:
                 record["external_media_reviewed"] = external_media_reviewed is True
                 record["review_method"] = "operator_external_media"
             db.execute("INSERT INTO approvals VALUES(?,?,?,?,?,?,?,?)", (record["id"], job_id, "source", version, decision, actor, canonical(record), now()))
+            if decision == "rejected" and (record.get("note") or record.get("reasons")):
+                # 결재 기억: 반려 이유를 교훈 후보로만 남긴다. 사람이 교훈 검토에서 승인해야 다음 원고 요청에 들어간다.
+                from .improvements import rejection_lesson
+                lesson = rejection_lesson(job, record)
+                db.execute("INSERT INTO lessons VALUES(?,?,?,?,?)", (lesson["id"], "proposed", canonical(lesson), now(), now()))
+                self._event(db, "lesson_proposed", {"lesson_id": lesson["id"], "kind": lesson["kind"]})
             job.update(source_approval=record, state="source_approved" if decision == "approved" else "source_rejected")
             if production_contract is not None:
                 if decision != 'approved' or not isinstance(production_contract, str) or len(production_contract) != 64 or any(c not in '0123456789abcdef' for c in production_contract):

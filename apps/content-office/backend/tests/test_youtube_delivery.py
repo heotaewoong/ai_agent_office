@@ -834,3 +834,18 @@ def test_stock_footage_description_credits_pexels_instead_of_calling_it_generate
     described.write_text('설명\n\n영상 소스: Pexels (Kim) · https://www.pexels.com\n', encoding='utf-8')
     once = video_metadata(job, {'media': {}, 'clips': {'provider': 'pexels', 'attributions': attributions}}, {'description.txt': described})
     assert once['snippet']['description'].count('Pexels') == 1
+
+
+def test_readback_compares_saved_title_description_and_tags_without_changing_state(tmp_path, monkeypatch):
+    from office.youtube_delivery import deliver_youtube, reconcile_youtube
+    env(monkeypatch)
+    store, job_id = enabled_fixture(tmp_path)
+    session = FakeYouTube()
+    record = deliver_youtube(store, job_id, actor='op', session=session)
+    assert record['state'] == 'private' and record['readback']['differences'] == []
+    assert set(record['readback']['unchecked']) == {'title', 'description', 'tags'}  # 응답에 없으면 확인 못 함으로 남긴다
+    sent = session.posts[1]['json']['snippet']
+    session.video['snippet'] = {**session.video['snippet'], 'title': sent['title'] + ' (수정됨)', 'description': sent['description'], 'tags': ['AI']}
+    again = reconcile_youtube(store, job_id, record['id'], session=session)
+    assert again['state'] == 'private' and again['readback']['differences'] == ['title', 'tags'] and again['readback']['unchecked'] == []
+    assert 'delivery_readback_mismatch' in [e['kind'] for e in store.events(job_id)]

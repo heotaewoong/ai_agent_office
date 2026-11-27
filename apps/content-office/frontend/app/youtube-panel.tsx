@@ -157,6 +157,13 @@ export function YoutubePanel({
                     {record.privacy_status ? ` · 공개 범위 ${record.privacy_status}` : ""}
                     {record.reason ? ` · ${record.reason}` : ""}
                   </small>
+                  {record.readback?.differences?.length ? (
+                    <small className="critical-issue" role="status">
+                      저장된 값이 보낸 값과 달라요: {record.readback.differences.map((field) => ({ title: "제목", description: "설명", tags: "태그" })[field] ?? field).join(", ")}. Studio에서 확인하세요
+                    </small>
+                  ) : record.readback ? (
+                    <small>다시 읽기 확인{record.readback.unchecked?.length ? ` · 응답에 없어 확인 못 함: ${record.readback.unchecked.length}칸` : " · 보낸 그대로 저장됨"}</small>
+                  ) : null}
                 </div>
                 <div className="delivery-actions">
                   {link && (

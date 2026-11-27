@@ -93,6 +93,9 @@ export function NewsletterPanel({ job, busy, action }: { job: Job; busy: boolean
         <label>
           제목
           <input id={`${uid}-subject`} value={subject} maxLength={150} disabled={busy} onChange={(e) => setSubject(e.target.value)} />
+          <small className={subject.trim().length > 40 ? "hint warn" : "muted"}>
+            {subject.trim().length}자{subject.trim().length > 40 ? ". 메일 목록에는 앞 40자쯤만 보여요. 중요한 말을 앞에 두세요" : ""}
+          </small>
         </label>
         <label>회차 목적<select value={kind} disabled={busy} onChange={event => setKind(event.target.value as NewsletterEditorial["kind"])}><option value="briefing">AI 빠른 소식</option><option value="analysis">AI 심층 큐레이션</option><option value="updates">HeoBrain 상품·서비스 소식</option></select></label>
         <button className="button primary" type="button" disabled={busy || !releaseApproved || !job.release_approval?.outputs?.includes("blog") || !keyValid || !subject.trim() || !targets.length || related.length > 7 || !inputs} onClick={build}>

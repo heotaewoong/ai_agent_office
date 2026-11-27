@@ -13,6 +13,8 @@ const CHANNELS: { value: SnapshotChannel; label: string }[] = [
 ];
 const PERIODS: SnapshotPeriod[] = ["24h", "7d", "28d"];
 const STATE_LABEL: Record<Lesson["state"], string> = { proposed: "검토 대기", approved: "승인됨", rejected: "반려됨" };
+// 승인한 원고 반려 교훈만 다음 원고 요청에 문체·구성 참고로 들어간다.
+const KIND_LABEL: Record<string, string> = { packaging: "제목과 썸네일", promise_mismatch: "제목 약속", hook: "첫 3초", draft_rejection: "원고 반려" };
 
 function message(error: unknown) {
   return error instanceof Error ? error.message : "요청을 처리하지 못했습니다";
@@ -122,7 +124,7 @@ export function PerformancePanel() {
         <span className="section-meta">{lessons.length}건</span>
       </div>
       {lessons.length === 0 ? (
-        <p className="muted">아직 교훈 후보가 없습니다. 성과 CSV를 올리면 기준선과 비교해 후보가 만들어집니다.</p>
+        <p className="muted">아직 교훈 후보가 없습니다. 성과 CSV를 올리거나 승인①에서 이유를 적어 반려하면 후보가 만들어집니다. 원고 반려 교훈은 승인한 것만 다음 원고에 참고로 들어갑니다.</p>
       ) : (
         <div className="table-scroll">
           <table>
@@ -132,7 +134,7 @@ export function PerformancePanel() {
             <tbody>
               {lessons.map((lesson) => (
                 <tr key={lesson.id}>
-                  <td>{lesson.kind}</td>
+                  <td>{KIND_LABEL[lesson.kind] ?? lesson.kind}</td>
                   <td>{lesson.hypothesis}</td>
                   <td>
                     {lesson.weight_change

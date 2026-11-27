@@ -331,6 +331,8 @@ export type Delivery = {
   created_at?: string;
   updated_at?: string;
   reconciled_at?: string;
+  /** 저장 뒤 다시 읽기: 보낸 제목, 설명, 태그와 실제로 저장된 값의 차이 */
+  readback?: { checked_at?: string; differences?: string[]; unchecked?: string[] };
 };
 export type ChannelStagingRow = {
   channel_key: string;

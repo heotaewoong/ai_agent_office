@@ -189,6 +189,33 @@ def _access_token(session, credentials):
     return token
 
 
+def _readback(store, record, snippet):
+    """저장 뒤 다시 읽기(connect-ai-marketer 업로드 마무리 방식): 보낸 제목, 설명, 태그가 실제로 그렇게 저장됐는지 비교한다.
+    공개 범위와 상태는 바꾸지 않고, 다른 점과 응답에 없어 확인 못 한 칸만 남긴다."""
+    sent = record.get("sent")
+    if not isinstance(sent, dict) or not isinstance(snippet, dict):
+        return
+    differences, unchecked = [], []
+    if isinstance(snippet.get("title"), str):
+        if snippet["title"] != sent.get("title"):
+            differences.append("title")
+    else:
+        unchecked.append("title")
+    if isinstance(snippet.get("description"), str):
+        if hashlib.sha256(snippet["description"].encode("utf-8")).hexdigest() != sent.get("description_sha256"):
+            differences.append("description")
+    else:
+        unchecked.append("description")
+    if isinstance(snippet.get("tags"), list):
+        if sorted(snippet["tags"]) != sorted(sent.get("tags") or []):
+            differences.append("tags")
+    elif sent.get("tags"):
+        unchecked.append("tags")
+    record["readback"] = {"checked_at": now(), "differences": differences, "unchecked": unchecked}
+    if differences:
+        store.event("delivery_readback_mismatch", {"delivery_id": record["id"], "external_id": record.get("external_id"), "fields": differences}, record["job_id"])
+
+
 def _finalize(store, record, body):
     try:
         external_id = body["id"]
@@ -226,6 +253,7 @@ def _finalize(store, record, body):
         store.event("delivery_visibility_mismatch", {"delivery_id": record["id"], "external_id": external_id, "privacy_status": status.get("privacyStatus")}, record["job_id"])
         raise WorkflowError("업로드 결과의 공개 범위가 private가 아닙니다. YouTube Studio에서 즉시 확인하세요")
     record.update(state="private", visibility="private", reason=None)
+    _readback(store, record, snippet)
     _save(store, record)
     store.event("delivery_private", {"delivery_id": record["id"], "external_id": external_id, "channel": "youtube", "quota_units_estimate": QUOTA_UNITS_INSERT}, record["job_id"])
     return record
@@ -250,6 +278,8 @@ def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_C
     record = {"id": "delivery_" + key[:16], "key": key, "channel": "youtube", "channel_key": channel_key, "locale": locale, "job_id": job_id, "asset_sha256": asset_sha,
               "manifest_hash": manifest["hash"], "release_version": release["version"], "idempotency_key": key,
               "title": metadata["snippet"]["title"], "visibility": "private", "state": "created", "actor": str(actor)[:120],
+              "sent": {"title": metadata["snippet"]["title"], "tags": list(metadata["snippet"]["tags"]),
+                       "description_sha256": hashlib.sha256(metadata["snippet"]["description"].encode("utf-8")).hexdigest()},
               "quota_units_estimate": QUOTA_UNITS_INSERT, "quota_note": QUOTA_NOTE, "created_at": now(), "updated_at": now()}
     with _delivery_lock(store, key):
         return _upload_youtube(store, record, data, metadata, credentials, session)
@@ -402,6 +432,7 @@ def _reconcile_youtube(store, job_id, record, session):
         elif privacy == "private" and record.get("reason") in ("visibility_unconfirmed", "channel_unconfirmed"):
             record.update(state="private", visibility="private", reason=None)
             store.event("delivery_private", {"delivery_id": record["id"], "external_id": record["external_id"], "channel": "youtube", "reconciled": True}, job_id)
+        _readback(store, record, snippet)
         _save(store, record)
         return record
     raise WorkflowError("대사할 세션이나 외부 ID가 없는 기록입니다")

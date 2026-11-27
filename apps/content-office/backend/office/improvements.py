@@ -136,3 +136,23 @@ def storyboard(job):
 def workspace(store, job_id):
     job = store.job(job_id)
     return {'job_id': job_id, 'source_hash': job.get('source_hash'), 'rubric': RUBRIC, 'candidates': candidates(job, store.drafts(job_id)), 'reviews': records(store, 'review', job_id), 'storyboard': storyboard(job), 'learning': learning_contract(job), 'learning_observations': records(store, 'learning', job_id), 'experiences': [{**r, 'record_hash': digest(r)} for r in records(store, 'experience')], 'outcomes': records(store, 'outcome', job_id), 'casebook': [{'id': f'{axis}{n:02}', 'axis': axis, 'topic': topic, 'status': 'scenario_template_not_evaluated', 'split': 'holdout' if n > 7 else 'development'} for axis, topics in CASE_TOPICS.items() for n, topic in enumerate(topics, 1)], 'note': '평가·학습·성과 기록은 사람 승인①②③이나 실제 외부 게시를 대신하지 않습니다.'}
+
+
+REASON_LABELS = {"fact": "사실", "explanation": "설명", "style": "문체", "design": "디자인", "rights": "권리", "format": "형식"}
+
+
+def rejection_lesson(job, approval):
+    """승인① 반려를 교훈 후보로 바꾼다(connect-ai-autonomous-company 결재 기억 방식). 승인은 사람이 교훈 검토에서 한다."""
+    from .store import identifier
+    labels = ", ".join(REASON_LABELS.get(reason, reason) for reason in approval.get("reasons") or []) or "이유 미선택"
+    note = str(approval.get("note") or "").strip()
+    return {"id": identifier("lesson"), "state": "proposed", "kind": "draft_rejection",
+            "hypothesis": f"{labels} 문제로 반려" + (f": {note}" if note else ""), "weight_change": None,
+            "evidence": {"job_id": job.get("id"), "approval_id": approval["id"], "reasons": list(approval.get("reasons") or []),
+                         "w_type": (job.get("source_packet") or {}).get("w_type")}}
+
+
+def rejection_lessons(store, limit=3):
+    """사람이 승인한 반려 교훈 중 최근 것. 원고 요청의 문체와 구성 참고 자료로만 쓴다."""
+    approved = [lesson for lesson in store.lessons("approved") if lesson.get("kind") == "draft_rejection"]
+    return [lesson["hypothesis"] for lesson in approved[-limit:]]
