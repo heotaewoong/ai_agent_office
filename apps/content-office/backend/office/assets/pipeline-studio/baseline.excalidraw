@@ -15107,11 +15107,12 @@
           "number": 1,
           "status": "설명주석",
           "current_label": "콘텐츠 오피스 전체",
-          "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이며 LangGraph는 원고 생성·검수·수정 구간에만 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
+          "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이다. LangGraph는 원고 생성·검수·수정 구간(editorial_graph)과 승인① 뒤 제작 단계(production_graph: 글·카드 먼저, 영상 관문) 두 곳에 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
           "source_refs": [
             "backend/office/worker.py:39",
-            "backend/office/editorial.py:340",
-            "backend/office/editorial_graph.py:28"
+            "backend/office/editorial.py:410",
+            "backend/office/editorial_graph.py:28",
+            "backend/office/production_graph.py:60"
           ]
         }
       }
@@ -15160,11 +15161,12 @@
           "number": 1,
           "status": "설명주석",
           "current_label": "콘텐츠 오피스 전체",
-          "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이며 LangGraph는 원고 생성·검수·수정 구간에만 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
+          "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이다. LangGraph는 원고 생성·검수·수정 구간(editorial_graph)과 승인① 뒤 제작 단계(production_graph: 글·카드 먼저, 영상 관문) 두 곳에 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
           "source_refs": [
             "backend/office/worker.py:39",
-            "backend/office/editorial.py:340",
-            "backend/office/editorial_graph.py:28"
+            "backend/office/editorial.py:410",
+            "backend/office/editorial_graph.py:28",
+            "backend/office/production_graph.py:60"
           ]
         }
       }
@@ -15891,9 +15893,9 @@
           "current_label": "모델 원고 평가 + 규칙 검사",
           "detail": "본문·인용·문체·형식·채널 검수는 존재한다. 검색엔진 노출이나 AI 검색 인용을 실제 측정하는 독립 SEO/AEO 시스템은 아니다.",
           "source_refs": [
-            "backend/office/editorial.py:96",
+            "backend/office/editorial.py:117",
             "backend/office/editorial.py:273",
-            "backend/office/output_specs.py:2"
+            "backend/office/output_specs.py:11"
           ]
         }
       }
@@ -15944,9 +15946,9 @@
           "current_label": "모델 원고 평가 + 규칙 검사",
           "detail": "본문·인용·문체·형식·채널 검수는 존재한다. 검색엔진 노출이나 AI 검색 인용을 실제 측정하는 독립 SEO/AEO 시스템은 아니다.",
           "source_refs": [
-            "backend/office/editorial.py:96",
+            "backend/office/editorial.py:117",
             "backend/office/editorial.py:273",
-            "backend/office/output_specs.py:2"
+            "backend/office/output_specs.py:11"
           ]
         }
       }
@@ -16009,7 +16011,7 @@
           "current_label": "소재 점수 + 수동 성과·교훈",
           "detail": "기획 시 적합성·수요·이상치·시의성을 점수화하고 결과 입력에서 교훈 후보를 만든다. 모든 플랫폼 실시간 화제성 자동 수집·승자 판정은 없다.",
           "source_refs": [
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/analytics.py:75"
           ]
         }
@@ -16061,7 +16063,7 @@
           "current_label": "소재 점수 + 수동 성과·교훈",
           "detail": "기획 시 적합성·수요·이상치·시의성을 점수화하고 결과 입력에서 교훈 후보를 만든다. 모든 플랫폼 실시간 화제성 자동 수집·승자 판정은 없다.",
           "source_refs": [
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/analytics.py:75"
           ]
         }
@@ -16485,7 +16487,7 @@
           "current_label": "승인 원고 기반 채널 콘텐츠 생성",
           "detail": "원본 배치에서는 SEO/화제성 뒤 작성처럼 보이지만 현재는 원고 생성·검수 후 승인①을 받고 출력별 제작한다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
+            "backend/office/editorial.py:148",
             "backend/office/store.py:257",
             "backend/office/media.py:899"
           ]
@@ -16538,7 +16540,7 @@
           "current_label": "승인 원고 기반 채널 콘텐츠 생성",
           "detail": "원본 배치에서는 SEO/화제성 뒤 작성처럼 보이지만 현재는 원고 생성·검수 후 승인①을 받고 출력별 제작한다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
+            "backend/office/editorial.py:148",
             "backend/office/store.py:257",
             "backend/office/media.py:899"
           ]
@@ -16585,10 +16587,12 @@
           "number": 11,
           "status": "부분",
           "current_label": "원고 Eval 및 필수규칙 판정",
-          "detail": "원본 왼쪽 점수 상자. 현재 독립 SEO 점수기가 아니라 모델 평가와 결정규칙 검사에 대응한다. 80점은 수정 목표이며 통과를 보증하지 않는다.",
+          "detail": "원본 왼쪽 점수 상자. 현재 독립 SEO 점수기가 아니라 모델 평가와 결정규칙 검사에 대응한다. 80점은 수정 목표이며 통과를 보증하지 않는다. v2 판정 기준에 근거 없는 약속·학습 효과 보장 금지와 네 번 읽기를 더했고, 승인① 검수 칸에 문단 숫자마다 근거에 같은 숫자가 있는지 보여 주는 숫자 출처 표가 있다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:273"
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:273",
+            "backend/office/harness_rubric.md",
+            "backend/office/writer_checks.py:378"
           ]
         }
       }
@@ -16637,10 +16641,12 @@
           "number": 11,
           "status": "부분",
           "current_label": "원고 Eval 및 필수규칙 판정",
-          "detail": "원본 왼쪽 점수 상자. 현재 독립 SEO 점수기가 아니라 모델 평가와 결정규칙 검사에 대응한다. 80점은 수정 목표이며 통과를 보증하지 않는다.",
+          "detail": "원본 왼쪽 점수 상자. 현재 독립 SEO 점수기가 아니라 모델 평가와 결정규칙 검사에 대응한다. 80점은 수정 목표이며 통과를 보증하지 않는다. v2 판정 기준에 근거 없는 약속·학습 효과 보장 금지와 네 번 읽기를 더했고, 승인① 검수 칸에 문단 숫자마다 근거에 같은 숫자가 있는지 보여 주는 숫자 출처 표가 있다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:273"
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:273",
+            "backend/office/harness_rubric.md",
+            "backend/office/writer_checks.py:378"
           ]
         }
       }
@@ -16687,7 +16693,7 @@
           "current_label": "소재 점수와 성과 교훈",
           "detail": "원본 오른쪽 점수 상자. 기획 점수·수동 성과 기록은 있지만 독립 화제성 API 점수기는 미연결이다.",
           "source_refs": [
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/analytics.py:75"
           ]
         }
@@ -16739,7 +16745,7 @@
           "current_label": "소재 점수와 성과 교훈",
           "detail": "원본 오른쪽 점수 상자. 기획 점수·수동 성과 기록은 있지만 독립 화제성 API 점수기는 미연결이다.",
           "source_refs": [
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/analytics.py:75"
           ]
         }
@@ -16950,11 +16956,12 @@
           "number": 14,
           "status": "부분",
           "current_label": "Discovery·정시 수집·요청형 조사",
-          "detail": "공개 RSS와 등록 소스를 수집하며 요청형 경쟁조사가 있다. 독립 Google 검색 에이전트/모든 소스 자동 수집과는 다르다.",
+          "detail": "공개 RSS와 등록 소스를 수집하며 요청형 경쟁조사가 있다. 아침 자동 수집은 제작 설정에서 켜고 시각(지금 07:10)과 요일(매일, 평일만)을 고른다. 독립 Google 검색 에이전트/모든 소스 자동 수집과는 다르다.",
           "source_refs": [
             "backend/office/discovery.py:156",
-            "backend/office/daily_collect.py:130",
-            "backend/office/benchmark_research.py:146"
+            "backend/office/daily_collect.py:134",
+            "backend/office/benchmark_research.py:146",
+            "backend/office/daily_collect.py:54"
           ]
         }
       }
@@ -17003,11 +17010,12 @@
           "number": 14,
           "status": "부분",
           "current_label": "Discovery·정시 수집·요청형 조사",
-          "detail": "공개 RSS와 등록 소스를 수집하며 요청형 경쟁조사가 있다. 독립 Google 검색 에이전트/모든 소스 자동 수집과는 다르다.",
+          "detail": "공개 RSS와 등록 소스를 수집하며 요청형 경쟁조사가 있다. 아침 자동 수집은 제작 설정에서 켜고 시각(지금 07:10)과 요일(매일, 평일만)을 고른다. 독립 Google 검색 에이전트/모든 소스 자동 수집과는 다르다.",
           "source_refs": [
             "backend/office/discovery.py:156",
-            "backend/office/daily_collect.py:130",
-            "backend/office/benchmark_research.py:146"
+            "backend/office/daily_collect.py:134",
+            "backend/office/benchmark_research.py:146",
+            "backend/office/daily_collect.py:54"
           ]
         }
       }
@@ -17116,7 +17124,7 @@
           "current_label": "등록 RSS·YouTube 피드·공개 소스",
           "detail": "지원 소스에서 후보를 모은다. 구글 조사·HN을 포함한 모든 기획 소스가 같은 자동 연결이라는 뜻은 아니다.",
           "source_refs": [
-            "backend/office/feeds.py:183",
+            "backend/office/feeds.py:194",
             "backend/office/discovery.py:50",
             "backend/office/source_registry.py"
           ]
@@ -17169,7 +17177,7 @@
           "current_label": "등록 RSS·YouTube 피드·공개 소스",
           "detail": "지원 소스에서 후보를 모은다. 구글 조사·HN을 포함한 모든 기획 소스가 같은 자동 연결이라는 뜻은 아니다.",
           "source_refs": [
-            "backend/office/feeds.py:183",
+            "backend/office/feeds.py:194",
             "backend/office/discovery.py:50",
             "backend/office/source_registry.py"
           ]
@@ -17467,8 +17475,8 @@
           "current_label": "기사/기획 후보 정렬 후 사람 선택",
           "detail": "기사 순위·이벤트 중복 제거와 기획 점수를 보조로 쓰고 선택⓪은 사람이 한다.",
           "source_refs": [
-            "backend/office/feeds.py:124",
-            "backend/office/feeds.py:162",
+            "backend/office/feeds.py:135",
+            "backend/office/feeds.py:173",
             "backend/office/ideas.py:129"
           ]
         }
@@ -17520,8 +17528,8 @@
           "current_label": "기사/기획 후보 정렬 후 사람 선택",
           "detail": "기사 순위·이벤트 중복 제거와 기획 점수를 보조로 쓰고 선택⓪은 사람이 한다.",
           "source_refs": [
-            "backend/office/feeds.py:124",
-            "backend/office/feeds.py:162",
+            "backend/office/feeds.py:135",
+            "backend/office/feeds.py:173",
             "backend/office/ideas.py:129"
           ]
         }
@@ -17573,8 +17581,8 @@
           "current_label": "공통 원고 생성·검수",
           "detail": "기사의 근거를 읽고 공통 편집 파이프라인에서 원고를 만든다. 뉴스용 독립 에이전트 조직은 없다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
-            "backend/office/editorial.py:125"
+            "backend/office/editorial.py:410",
+            "backend/office/editorial.py:148"
           ]
         }
       }
@@ -17625,8 +17633,8 @@
           "current_label": "공통 원고 생성·검수",
           "detail": "기사의 근거를 읽고 공통 편집 파이프라인에서 원고를 만든다. 뉴스용 독립 에이전트 조직은 없다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
-            "backend/office/editorial.py:125"
+            "backend/office/editorial.py:410",
+            "backend/office/editorial.py:148"
           ]
         }
       }
@@ -18021,7 +18029,7 @@
           "current_label": "상세 편집 원고",
           "detail": "공통 원고 본문을 상세 요약/설명으로 사용한다. 전용 '상세 요약' 단계가 따로 직렬 실행되는 것은 아니다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/newsletter_formats.py:41"
           ]
         }
@@ -18073,7 +18081,7 @@
           "current_label": "상세 편집 원고",
           "detail": "공통 원고 본문을 상세 요약/설명으로 사용한다. 전용 '상세 요약' 단계가 따로 직렬 실행되는 것은 아니다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/newsletter_formats.py:41"
           ]
         }
@@ -18119,10 +18127,11 @@
           "number": 22,
           "status": "구현",
           "current_label": "회차 본문·출처 패키징",
-          "detail": "승인 기사 판본을 보존하고 회차 보고서를 생성한다.",
+          "detail": "승인 기사 판본을 보존하고 회차 보고서를 생성한다. 회차 제목 칸은 글자 수를 보여 주고 40자가 넘으면 알린다.",
           "source_refs": [
             "backend/office/newsletter_formats.py:41",
-            "backend/office/newsletter.py:127"
+            "backend/office/newsletter.py:127",
+            "frontend/app/newsletter-panel.tsx"
           ]
         }
       }
@@ -18171,10 +18180,11 @@
           "number": 22,
           "status": "구현",
           "current_label": "회차 본문·출처 패키징",
-          "detail": "승인 기사 판본을 보존하고 회차 보고서를 생성한다.",
+          "detail": "승인 기사 판본을 보존하고 회차 보고서를 생성한다. 회차 제목 칸은 글자 수를 보여 주고 40자가 넘으면 알린다.",
           "source_refs": [
             "backend/office/newsletter_formats.py:41",
-            "backend/office/newsletter.py:127"
+            "backend/office/newsletter.py:127",
+            "frontend/app/newsletter-panel.tsx"
           ]
         }
       }
@@ -18532,8 +18542,8 @@
           "current_label": "선택한 제공자 원고·사실검수",
           "detail": "Claude 고정이 아니라 프로필에서 선택한 제공자를 사용한다. 생성→비평→평가→한국어검수→필요시 수정 최대2회이며 LangGraph가 이 구간을 저장·재개한다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/providers.py:114"
           ]
@@ -18586,8 +18596,8 @@
           "current_label": "선택한 제공자 원고·사실검수",
           "detail": "Claude 고정이 아니라 프로필에서 선택한 제공자를 사용한다. 생성→비평→평가→한국어검수→필요시 수정 최대2회이며 LangGraph가 이 구간을 저장·재개한다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/providers.py:114"
           ]
@@ -18692,11 +18702,13 @@
         "comparison": {
           "number": 24,
           "status": "구현",
-          "current_label": "선택 출력의 제작 조정",
-          "detail": "승인① 뒤 영상·카드·블로그/SNS·PDF를 선택에 따라 순차 제작하고 출력별 실패를 분리한다. '에이전트'는 기능 역할명이다.",
+          "current_label": "제작 단계: 글·카드 먼저, 영상은 따로",
+          "detail": "승인① 뒤 LangGraph 제작 단계(plan, 글·카드·PDF, 영상 관문, 영상)로 만든다. 영상과 다른 출력을 같이 고르면 영상은 대기(deferred)로 두고, 제작·출고함에서 예상 비용을 보고 누른 요청을 Store에서 다시 확인한 뒤 만든다. 영상만 고른 작업은 바로 만든다. 출력별 실패를 분리하고 같은 판본의 출력은 다시 만들지 않는다. '에이전트'는 기능 역할명이다.",
           "source_refs": [
+            "backend/office/production_graph.py:60",
+            "backend/office/worker.py:57",
             "backend/office/media.py:899",
-            "backend/office/worker.py:66"
+            "backend/office/api.py:804"
           ]
         }
       }
@@ -18704,9 +18716,9 @@
     {
       "id": "ec2_5y2tjc7wlk6eZI74CTGQM",
       "type": "text",
-      "x": 9415.60632691661,
+      "x": 9410.60632691661,
       "y": 1320.6258390726248,
-      "width": 154.0,
+      "width": 164.0,
       "height": 50.0,
       "angle": 0,
       "strokeColor": "#111827",
@@ -18721,7 +18733,7 @@
       "index": "b6b",
       "roundness": null,
       "seed": 550855820,
-      "version": 183,
+      "version": 184,
       "versionNonce": 902922636,
       "isDeleted": false,
       "boundElements": [],
@@ -18729,14 +18741,14 @@
       "created": 1793159831133,
       "link": null,
       "locked": false,
-      "text": "선택 출력의 제작\n조정",
+      "text": "제작 단계: 글·카드\n먼저, 영상은 따로",
       "fontSize": 20,
       "baseFontSize": null,
       "fontFamily": 2,
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "ec2_JUqf3gFNyNcFvjiaPnm-_",
-      "originalText": "선택 출력의 제작 조정",
+      "originalText": "제작 단계: 글·카드 먼저, 영상은 따로",
       "autoResize": false,
       "lineHeight": 1.25,
       "labelPosition": null,
@@ -18744,11 +18756,13 @@
         "comparison": {
           "number": 24,
           "status": "구현",
-          "current_label": "선택 출력의 제작 조정",
-          "detail": "승인① 뒤 영상·카드·블로그/SNS·PDF를 선택에 따라 순차 제작하고 출력별 실패를 분리한다. '에이전트'는 기능 역할명이다.",
+          "current_label": "제작 단계: 글·카드 먼저, 영상은 따로",
+          "detail": "승인① 뒤 LangGraph 제작 단계(plan, 글·카드·PDF, 영상 관문, 영상)로 만든다. 영상과 다른 출력을 같이 고르면 영상은 대기(deferred)로 두고, 제작·출고함에서 예상 비용을 보고 누른 요청을 Store에서 다시 확인한 뒤 만든다. 영상만 고른 작업은 바로 만든다. 출력별 실패를 분리하고 같은 판본의 출력은 다시 만들지 않는다. '에이전트'는 기능 역할명이다.",
           "source_refs": [
+            "backend/office/production_graph.py:60",
+            "backend/office/worker.py:57",
             "backend/office/media.py:899",
-            "backend/office/worker.py:66"
+            "backend/office/api.py:804"
           ]
         }
       }
@@ -20506,7 +20520,7 @@
           "number": 34,
           "status": "부분",
           "current_label": "FFmpeg 운영 제작 / 외부 제작물 반입",
-          "detail": "FFmpeg 호출은 연결되어 있다. 이 원본에 병기된 Remotion·HYPERFRAMES가 일반 media.produce에서 모두 호출되는 것은 아니다. HYPERFRAMES 연결은 office 코드 검색에서 발견되지 않았다.",
+          "detail": "FFmpeg 호출은 연결되어 있다. 이 원본에 병기된 Remotion·HYPERFRAMES가 일반 media.produce에서 모두 호출되는 것은 아니다. HYPERFRAMES 연결은 office 코드 검색에서 발견되지 않았다. 글로 만드는 모션그래픽(connect-ai-motion, Remotion)을 런웨이 클립 대신 쓰는 시험은 PC 렌더로 다음 차례다.",
           "source_refs": [
             "backend/office/media.py:674",
             "backend/office/media.py:702",
@@ -20559,7 +20573,7 @@
           "number": 34,
           "status": "부분",
           "current_label": "FFmpeg 운영 제작 / 외부 제작물 반입",
-          "detail": "FFmpeg 호출은 연결되어 있다. 이 원본에 병기된 Remotion·HYPERFRAMES가 일반 media.produce에서 모두 호출되는 것은 아니다. HYPERFRAMES 연결은 office 코드 검색에서 발견되지 않았다.",
+          "detail": "FFmpeg 호출은 연결되어 있다. 이 원본에 병기된 Remotion·HYPERFRAMES가 일반 media.produce에서 모두 호출되는 것은 아니다. HYPERFRAMES 연결은 office 코드 검색에서 발견되지 않았다. 글로 만드는 모션그래픽(connect-ai-motion, Remotion)을 런웨이 클립 대신 쓰는 시험은 PC 렌더로 다음 차례다.",
           "source_refs": [
             "backend/office/media.py:674",
             "backend/office/media.py:702",
@@ -20762,11 +20776,12 @@
           "number": 36,
           "status": "구현",
           "current_label": "제작 결과·실패 상태와 검토 인계",
-          "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 생성완료가 외부 전달완료는 아니다.",
+          "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 제작 단계가 멈추면 한 것·멈춘 곳·이유 3칸(production_handoff)을 남기고 유료 호출을 자동으로 다시 하지 않는다. 생성완료가 외부 전달완료는 아니다.",
           "source_refs": [
-            "backend/office/worker.py:66",
+            "backend/office/worker.py:71",
             "backend/office/media.py:899",
-            "backend/office/delivery_queue.py"
+            "backend/office/delivery_queue.py",
+            "backend/office/production_graph.py:103"
           ]
         }
       }
@@ -20815,11 +20830,12 @@
           "number": 36,
           "status": "구현",
           "current_label": "제작 결과·실패 상태와 검토 인계",
-          "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 생성완료가 외부 전달완료는 아니다.",
+          "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 제작 단계가 멈추면 한 것·멈춘 곳·이유 3칸(production_handoff)을 남기고 유료 호출을 자동으로 다시 하지 않는다. 생성완료가 외부 전달완료는 아니다.",
           "source_refs": [
-            "backend/office/worker.py:66",
+            "backend/office/worker.py:71",
             "backend/office/media.py:899",
-            "backend/office/delivery_queue.py"
+            "backend/office/delivery_queue.py",
+            "backend/office/production_graph.py:103"
           ]
         }
       }
@@ -21326,7 +21342,7 @@
           "current_label": "영상 청크 요약 기획",
           "detail": "Whisper 전사 청크를 각각 요약하는 독립 운영 단계는 미연결이다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/knowledge.py:78",
             "backend/office/external_media.py"
           ]
@@ -21379,7 +21395,7 @@
           "current_label": "영상 청크 요약 기획",
           "detail": "Whisper 전사 청크를 각각 요약하는 독립 운영 단계는 미연결이다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/knowledge.py:78",
             "backend/office/external_media.py"
           ]
@@ -21480,7 +21496,7 @@
           "current_label": "본인영상 최종 요약 기획",
           "detail": "기존 원고 편집 기능은 있으나 영상 전사 연쇄의 최종요약 노드는 연결되지 않았다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/external_media.py"
           ]
         }
@@ -21532,7 +21548,7 @@
           "current_label": "본인영상 최종 요약 기획",
           "detail": "기존 원고 편집 기능은 있으나 영상 전사 연쇄의 최종요약 노드는 연결되지 않았다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/external_media.py"
           ]
         }
@@ -22578,11 +22594,12 @@
           "number": 47,
           "status": "구현",
           "current_label": "LangGraph 원고 생성·비평·평가·한국어검수·수정",
-          "detail": "선택 제공자로 순차 검수하며 최대2회 수정한다. 완료 호출 SQLite 재사용/실패구간 재개가 적용된다. 근거수집·제작·사람승인·전달은 그래프 밖이다.",
+          "detail": "선택 제공자로 순차 검수하며 최대2회 수정한다. 완료 호출 SQLite 재사용/실패구간 재개가 적용된다. v2 하네스에서는 0원 글 검사(인용 그대로, 숫자 방향, 고친 뒤 사실 유지, AI 말버릇, 베끼기)를 판정 전에 돌린다. 근거수집·사람승인·전달은 그래프 밖이고 제작은 별도 제작 단계 그래프(024)다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:340",
-            "backend/office/editorial_graph.py:28"
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:410",
+            "backend/office/editorial_graph.py:28",
+            "backend/office/writer_checks.py"
           ]
         }
       }
@@ -22631,11 +22648,12 @@
           "number": 47,
           "status": "구현",
           "current_label": "LangGraph 원고 생성·비평·평가·한국어검수·수정",
-          "detail": "선택 제공자로 순차 검수하며 최대2회 수정한다. 완료 호출 SQLite 재사용/실패구간 재개가 적용된다. 근거수집·제작·사람승인·전달은 그래프 밖이다.",
+          "detail": "선택 제공자로 순차 검수하며 최대2회 수정한다. 완료 호출 SQLite 재사용/실패구간 재개가 적용된다. v2 하네스에서는 0원 글 검사(인용 그대로, 숫자 방향, 고친 뒤 사실 유지, AI 말버릇, 베끼기)를 판정 전에 돌린다. 근거수집·사람승인·전달은 그래프 밖이고 제작은 별도 제작 단계 그래프(024)다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:340",
-            "backend/office/editorial_graph.py:28"
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:410",
+            "backend/office/editorial_graph.py:28",
+            "backend/office/writer_checks.py"
           ]
         }
       }
@@ -22679,13 +22697,14 @@
         "comparison": {
           "number": 48,
           "status": "조건부·수동",
-          "current_label": "출력 종류와 상품 조건 선택",
-          "detail": "영상·카드·블로그·PDF 등 출력 선택을 저장한다. PDF 제작과 PDF 판매/결제는 별도다.",
+          "current_label": "출력 종류 선택, 영상은 따로 클릭",
+          "detail": "영상·카드·블로그·PDF 등 출력 선택을 저장한다. 새 작업은 블로그·카드뉴스·영상이 기본 선택이고, 영상과 다른 출력을 같이 고르면 영상은 승인① 뒤 제작·출고함에서 따로 누를 때 만든다. PDF 제작과 PDF 판매/결제는 별도다.",
           "source_refs": [
             "backend/office/store.py:257",
             "backend/office/formats.py",
             "backend/office/offers.py",
-            "backend/office/media.py:899"
+            "backend/office/media.py:899",
+            "backend/office/production_graph.py:60"
           ]
         }
       }
@@ -22710,7 +22729,7 @@
       "index": "b7o",
       "roundness": null,
       "seed": 1578777894,
-      "version": 1024,
+      "version": 1025,
       "versionNonce": 432487334,
       "isDeleted": false,
       "boundElements": [],
@@ -22718,14 +22737,14 @@
       "created": 1793180698487,
       "link": null,
       "locked": false,
-      "text": "출력 종류와 상품\n조건 선택",
+      "text": "출력 종류 선택,\n영상은 따로 클릭",
       "fontSize": 20,
       "baseFontSize": null,
       "fontFamily": 2,
       "textAlign": "center",
       "verticalAlign": "middle",
       "containerId": "ec2_G1pFCq2SmN9cD8PO78R1D",
-      "originalText": "출력 종류와 상품 조건 선택",
+      "originalText": "출력 종류 선택, 영상은 따로 클릭",
       "autoResize": false,
       "lineHeight": 1.25,
       "labelPosition": null,
@@ -22733,13 +22752,14 @@
         "comparison": {
           "number": 48,
           "status": "조건부·수동",
-          "current_label": "출력 종류와 상품 조건 선택",
-          "detail": "영상·카드·블로그·PDF 등 출력 선택을 저장한다. PDF 제작과 PDF 판매/결제는 별도다.",
+          "current_label": "출력 종류 선택, 영상은 따로 클릭",
+          "detail": "영상·카드·블로그·PDF 등 출력 선택을 저장한다. 새 작업은 블로그·카드뉴스·영상이 기본 선택이고, 영상과 다른 출력을 같이 고르면 영상은 승인① 뒤 제작·출고함에서 따로 누를 때 만든다. PDF 제작과 PDF 판매/결제는 별도다.",
           "source_refs": [
             "backend/office/store.py:257",
             "backend/office/formats.py",
             "backend/office/offers.py",
-            "backend/office/media.py:899"
+            "backend/office/media.py:899",
+            "backend/office/production_graph.py:60"
           ]
         }
       }
@@ -22819,11 +22839,12 @@
           "number": 49,
           "status": "부분",
           "current_label": "RSS·경쟁자 관측·요청형 조사",
-          "detail": "ViewStats·vling·블랙키위·Google Trends API를 모두 묶은 자동 수집 연결은 없다. 기존 공개 피드/등록 경쟁자 자료와 사람입력 수요를 사용한다.",
+          "detail": "구글 트렌드 급상승은 RSS로 이미 수집한다(feeds.json, 발견 화면). ViewStats·vling·블랙키위를 묶은 자동 수집은 없다. 구글·유튜브·네이버 자동완성, 위키백과 조회수, 네이버 데이터랩(키 필요)은 11/27 사용자 결정으로 다음 차례다.",
           "source_refs": [
             "backend/office/discovery.py:156",
             "backend/office/benchmark_research.py:146",
-            "backend/office/ideas.py:61"
+            "backend/office/ideas.py:63",
+            "backend/office/discovery.py:50"
           ]
         }
       }
@@ -22925,8 +22946,8 @@
           "current_label": "이벤트 중복제거·기획 다축 점수",
           "detail": "기사 이벤트/기획 중복을 제거한다. 이상치·수요·근거·적합·새로움에 시의성 가산점 최대10점이 연결된다. 검색상승속도 전용 API는 없다.",
           "source_refs": [
-            "backend/office/feeds.py:162",
-            "backend/office/ideas.py:61",
+            "backend/office/feeds.py:173",
+            "backend/office/ideas.py:63",
             "backend/office/store.py"
           ]
         }
@@ -22978,8 +22999,8 @@
           "current_label": "이벤트 중복제거·기획 다축 점수",
           "detail": "기사 이벤트/기획 중복을 제거한다. 이상치·수요·근거·적합·새로움에 시의성 가산점 최대10점이 연결된다. 검색상승속도 전용 API는 없다.",
           "source_refs": [
-            "backend/office/feeds.py:162",
-            "backend/office/ideas.py:61",
+            "backend/office/feeds.py:173",
+            "backend/office/ideas.py:63",
             "backend/office/store.py"
           ]
         }
@@ -23288,7 +23309,7 @@
           "current_label": "선택 제공자 원고·사실검수",
           "detail": "중앙 대본 상자. Claude 고정이 아니라 선택 제공자이다. 근거 확보 뒤 LangGraph 편집 구간으로 들어간다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/providers.py:114"
           ]
@@ -23341,7 +23362,7 @@
           "current_label": "선택 제공자 원고·사실검수",
           "detail": "중앙 대본 상자. Claude 고정이 아니라 선택 제공자이다. 근거 확보 뒤 LangGraph 편집 구간으로 들어간다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/providers.py:114"
           ]
@@ -23494,11 +23515,13 @@
           "number": 53,
           "status": "조건부·수동",
           "current_label": "사람 원고 승인①",
-          "detail": "현재 원고 해시/판본에 결합된 승인이다. 출력·채널별 비공개 초안 사전선택도 여기서 결합된다. 에이전트는 승인을 만들지 않는다.",
+          "detail": "현재 원고 해시/판본에 결합된 승인이다. 출력·채널별 비공개 초안 사전선택도 여기서 결합된다. 에이전트는 승인을 만들지 않는다. 이유나 메모를 적어 반려하면 원고 반려 교훈 후보가 생기고, 사람이 승인한 교훈만 최근 3개까지 다음 원고 요청에 문체·구성 참고로 들어간다.",
           "source_refs": [
             "backend/office/store.py:257",
             "backend/office/owner_drafts.py:26",
-            "backend/office/owner_drafts.py:51"
+            "backend/office/owner_drafts.py:51",
+            "backend/office/improvements.py:144",
+            "backend/office/store.py:309"
           ]
         }
       }
@@ -23547,11 +23570,13 @@
           "number": 53,
           "status": "조건부·수동",
           "current_label": "사람 원고 승인①",
-          "detail": "현재 원고 해시/판본에 결합된 승인이다. 출력·채널별 비공개 초안 사전선택도 여기서 결합된다. 에이전트는 승인을 만들지 않는다.",
+          "detail": "현재 원고 해시/판본에 결합된 승인이다. 출력·채널별 비공개 초안 사전선택도 여기서 결합된다. 에이전트는 승인을 만들지 않는다. 이유나 메모를 적어 반려하면 원고 반려 교훈 후보가 생기고, 사람이 승인한 교훈만 최근 3개까지 다음 원고 요청에 문체·구성 참고로 들어간다.",
           "source_refs": [
             "backend/office/store.py:257",
             "backend/office/owner_drafts.py:26",
-            "backend/office/owner_drafts.py:51"
+            "backend/office/owner_drafts.py:51",
+            "backend/office/improvements.py:144",
+            "backend/office/store.py:309"
           ]
         }
       }
@@ -23976,9 +24001,9 @@
           "number": 56,
           "status": "조건부·수동",
           "current_label": "사람 출고 승인②",
-          "detail": "제작 manifest·파일 판본에 결합된 출고 승인. 이후 명시적 웹초안/EC2 YouTube 비공개 전달과 수동 공개게시가 나뉜다. 사전선택 PC 초안의 일괄 필수관문으로 해석하지 않는다.",
+          "detail": "제작 manifest·파일 판본에 결합된 출고 승인. 이후 명시적 웹초안/EC2 YouTube 비공개 전달과 수동 공개게시가 나뉜다. 사전선택 PC 초안의 일괄 필수관문으로 해석하지 않는다. 영상을 나중에 만들면 완성본이 바뀌어 승인②를 다시 받는다.",
           "source_refs": [
-            "backend/office/store.py:431",
+            "backend/office/store.py:446",
             "backend/office/owner_drafts.py:318",
             "backend/office/youtube_delivery.py:108"
           ]
@@ -24029,9 +24054,9 @@
           "number": 56,
           "status": "조건부·수동",
           "current_label": "사람 출고 승인②",
-          "detail": "제작 manifest·파일 판본에 결합된 출고 승인. 이후 명시적 웹초안/EC2 YouTube 비공개 전달과 수동 공개게시가 나뉜다. 사전선택 PC 초안의 일괄 필수관문으로 해석하지 않는다.",
+          "detail": "제작 manifest·파일 판본에 결합된 출고 승인. 이후 명시적 웹초안/EC2 YouTube 비공개 전달과 수동 공개게시가 나뉜다. 사전선택 PC 초안의 일괄 필수관문으로 해석하지 않는다. 영상을 나중에 만들면 완성본이 바뀌어 승인②를 다시 받는다.",
           "source_refs": [
-            "backend/office/store.py:431",
+            "backend/office/store.py:446",
             "backend/office/owner_drafts.py:318",
             "backend/office/youtube_delivery.py:108"
           ]
@@ -24178,11 +24203,12 @@
           "number": 57,
           "status": "구현",
           "current_label": "썸네일 후보 구상·생성",
-          "detail": "승인원고의 제목/관점으로 후보를 생성·합성하며 별도 수정/선택 이력을 가진다.",
+          "detail": "승인원고의 제목/관점으로 후보를 생성·합성하며 별도 수정/선택 이력을 가진다. 출고함에서 시각을 적으면 내 영상의 가장 선명한 장면을 얼굴이 잘리지 않게 잘라 후보로 넣는다(0원).",
           "source_refs": [
             "backend/office/media.py:506",
             "backend/office/thumbnail_studio.py:220",
-            "backend/office/thumbnail_studio.py:289"
+            "backend/office/thumbnail_studio.py:289",
+            "backend/office/frame_focus.py:115"
           ]
         }
       }
@@ -24231,11 +24257,12 @@
           "number": 57,
           "status": "구현",
           "current_label": "썸네일 후보 구상·생성",
-          "detail": "승인원고의 제목/관점으로 후보를 생성·합성하며 별도 수정/선택 이력을 가진다.",
+          "detail": "승인원고의 제목/관점으로 후보를 생성·합성하며 별도 수정/선택 이력을 가진다. 출고함에서 시각을 적으면 내 영상의 가장 선명한 장면을 얼굴이 잘리지 않게 잘라 후보로 넣는다(0원).",
           "source_refs": [
             "backend/office/media.py:506",
             "backend/office/thumbnail_studio.py:220",
-            "backend/office/thumbnail_studio.py:289"
+            "backend/office/thumbnail_studio.py:289",
+            "backend/office/frame_focus.py:115"
           ]
         }
       }
@@ -25864,8 +25891,8 @@
           "current_label": "등록 소스 수집 설명",
           "detail": "공개 피드 수집은 존재하지만 소스별 병렬 에이전트 토폴로지가 원본대로 구현된 것은 아니다.",
           "source_refs": [
-            "backend/office/feeds.py:183",
-            "backend/office/daily_collect.py:163"
+            "backend/office/feeds.py:194",
+            "backend/office/daily_collect.py:169"
           ]
         }
       }
@@ -25916,8 +25943,8 @@
           "current_label": "등록 소스 수집 설명",
           "detail": "공개 피드 수집은 존재하지만 소스별 병렬 에이전트 토폴로지가 원본대로 구현된 것은 아니다.",
           "source_refs": [
-            "backend/office/feeds.py:183",
-            "backend/office/daily_collect.py:163"
+            "backend/office/feeds.py:194",
+            "backend/office/daily_collect.py:169"
           ]
         }
       }
@@ -25964,8 +25991,8 @@
           "current_label": "기사 순위·중복제거 / 테마 자동화 차이",
           "detail": "기사 순위와 중복 이벤트 통합은 있지만 전용 테마 클러스터·실시간 트렌드 감지 엔진은 별도 미연결이다.",
           "source_refs": [
-            "backend/office/feeds.py:124",
-            "backend/office/feeds.py:162",
+            "backend/office/feeds.py:135",
+            "backend/office/feeds.py:173",
             "backend/office/newsletter_formats.py:41"
           ]
         }
@@ -26017,8 +26044,8 @@
           "current_label": "기사 순위·중복제거 / 테마 자동화 차이",
           "detail": "기사 순위와 중복 이벤트 통합은 있지만 전용 테마 클러스터·실시간 트렌드 감지 엔진은 별도 미연결이다.",
           "source_refs": [
-            "backend/office/feeds.py:124",
-            "backend/office/feeds.py:162",
+            "backend/office/feeds.py:135",
+            "backend/office/feeds.py:173",
             "backend/office/newsletter_formats.py:41"
           ]
         }
@@ -26175,7 +26202,7 @@
           "detail": "원고 승인① 필요. 5문항·정답·해설·근거를 생성하고 검사 실패 시 수정한다. 풀기/채점 UI는 만들지 않는다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -26227,7 +26254,7 @@
           "detail": "원고 승인① 필요. 5문항·정답·해설·근거를 생성하고 검사 실패 시 수정한다. 풀기/채점 UI는 만들지 않는다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -26340,7 +26367,7 @@
           "detail": "정답·해설·근거 ID와 문항을 저장하고 현재 원고 판본과 결합한다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -26392,7 +26419,7 @@
           "detail": "정답·해설·근거 ID와 문항을 저장하고 현재 원고 판본과 결합한다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -26452,7 +26479,7 @@
           "detail": "모델 검토/수정과 문항구조·근거·정답 검사가 있다. 모든 링크의 실제 사실을 자동 보증하는 독립 AI-Judge 서비스는 아니다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -26504,7 +26531,7 @@
           "detail": "모델 검토/수정과 문항구조·근거·정답 검사가 있다. 모든 링크의 실제 사실을 자동 보증하는 독립 AI-Judge 서비스는 아니다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -27038,7 +27065,7 @@
           "detail": "수동 기록과 검토는 가능하지만 오답집계→다음주 키워드 자동 삽입 경로는 미연결이다.",
           "source_refs": [
             "backend/office/improvements.py:111",
-            "backend/office/ideas.py:61"
+            "backend/office/ideas.py:63"
           ]
         }
       }
@@ -27090,7 +27117,7 @@
           "detail": "수동 기록과 검토는 가능하지만 오답집계→다음주 키워드 자동 삽입 경로는 미연결이다.",
           "source_refs": [
             "backend/office/improvements.py:111",
-            "backend/office/ideas.py:61"
+            "backend/office/ideas.py:63"
           ]
         }
       }
@@ -27143,11 +27170,12 @@
           "number": 75,
           "status": "구현",
           "current_label": "학습 카드뉴스 제작 출력",
-          "detail": "승인원고를 카드 계획/PNG로 만들며 퀴즈와 함께 보조 큐로 처리할 수 있다.",
+          "detail": "승인원고를 카드 계획/PNG로 만들며 퀴즈와 함께 보조 큐로 처리할 수 있다. 새 작업의 기본 선택이고 승인① 뒤 글과 함께 먼저 만든다. 같은 자리에서 그림 기억 이야기(뇌리 주인공 4~6장, 떠올려 보기와 정답, 그림은 코드로 0원)도 만든다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/quiz.py:136",
-            "backend/office/worker.py:66"
+            "backend/office/quiz.py:137",
+            "backend/office/worker.py:71",
+            "backend/office/memory_story.py:266"
           ]
         }
       }
@@ -27196,11 +27224,12 @@
           "number": 75,
           "status": "구현",
           "current_label": "학습 카드뉴스 제작 출력",
-          "detail": "승인원고를 카드 계획/PNG로 만들며 퀴즈와 함께 보조 큐로 처리할 수 있다.",
+          "detail": "승인원고를 카드 계획/PNG로 만들며 퀴즈와 함께 보조 큐로 처리할 수 있다. 새 작업의 기본 선택이고 승인① 뒤 글과 함께 먼저 만든다. 같은 자리에서 그림 기억 이야기(뇌리 주인공 4~6장, 떠올려 보기와 정답, 그림은 코드로 0원)도 만든다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/quiz.py:136",
-            "backend/office/worker.py:66"
+            "backend/office/quiz.py:137",
+            "backend/office/worker.py:71",
+            "backend/office/memory_story.py:266"
           ]
         }
       }
@@ -28386,7 +28415,7 @@
           "detail": "학습/뉴스 별도 라우터 조직이 아니라 승인 원고의 공통 카드 엔진을 사용한다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/worker.py:66"
+            "backend/office/worker.py:71"
           ]
         }
       }
@@ -28438,7 +28467,7 @@
           "detail": "학습/뉴스 별도 라우터 조직이 아니라 승인 원고의 공통 카드 엔진을 사용한다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/worker.py:66"
+            "backend/office/worker.py:71"
           ]
         }
       }
@@ -29443,7 +29472,7 @@
           "detail": "성과 기록/CSV에서 교훈 후보를 만들고 사람 승인 후 기획점수에 반영한다. 모든 채널 화제성 자동합산은 없다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -29495,7 +29524,7 @@
           "detail": "성과 기록/CSV에서 교훈 후보를 만들고 사람 승인 후 기획점수에 반영한다. 모든 채널 화제성 자동합산은 없다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -29548,7 +29577,7 @@
           "source_refs": [
             "backend/office/calendar.py:111",
             "backend/office/calendar.py:133",
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/api_calendar_questions.py:28"
           ]
         }
@@ -29602,7 +29631,7 @@
           "source_refs": [
             "backend/office/calendar.py:111",
             "backend/office/calendar.py:133",
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/api_calendar_questions.py:28"
           ]
         }
@@ -29892,7 +29921,7 @@
           "source_refs": [
             "backend/office/improvements.py:97",
             "backend/office/editorial.py:361",
-            "backend/office/editorial.py:431"
+            "backend/office/editorial.py:576"
           ]
         }
       }
@@ -29945,7 +29974,7 @@
           "source_refs": [
             "backend/office/improvements.py:97",
             "backend/office/editorial.py:361",
-            "backend/office/editorial.py:431"
+            "backend/office/editorial.py:576"
           ]
         }
       }
@@ -30061,7 +30090,7 @@
           "current_label": "기존 스토어로 수동 문제 인계",
           "detail": "스토어 연결 검토 계약은 있지만 실제 퀴즈 업로드·결과 동기화는 미연결. 결과 열람에 뉴스레터 구독을 강제하지 않는다.",
           "source_refs": [
-            "backend/office/quiz.py:171",
+            "backend/office/quiz.py:172",
             "backend/office/improvements.py:111",
             "backend/office/leads.py:63"
           ]
@@ -30114,7 +30143,7 @@
           "current_label": "기존 스토어로 수동 문제 인계",
           "detail": "스토어 연결 검토 계약은 있지만 실제 퀴즈 업로드·결과 동기화는 미연결. 결과 열람에 뉴스레터 구독을 강제하지 않는다.",
           "source_refs": [
-            "backend/office/quiz.py:171",
+            "backend/office/quiz.py:172",
             "backend/office/improvements.py:111",
             "backend/office/leads.py:63"
           ]
@@ -30745,11 +30774,12 @@
           "number": 98,
           "status": "조건부·수동",
           "current_label": "썸네일 후보 내보내기 + YouTube 수동 실험",
-          "detail": "앱은 후보 생성·선택·내보내기를 돕는다. 실제 Test & Compare 실행/시청시간 승자 판정은 YouTube에서 사람이 수행하며 자동 동기화하지 않는다.",
+          "detail": "앱은 후보 생성·선택·내보내기를 돕는다. 실제 Test & Compare 실행/시청시간 승자 판정은 YouTube에서 사람이 수행하며 자동 동기화하지 않는다. 패키징 화면 제목 3안마다 0원 점수(근거에 없는 숫자, 과장, AI 티, 길이)와 이유를 보여 준다.",
           "source_refs": [
             "backend/office/thumbnail_studio.py:137",
             "backend/office/thumbnail_studio.py:254",
-            "backend/office/analytics.py:60"
+            "backend/office/analytics.py:60",
+            "frontend/lib/packaging.ts:38"
           ]
         }
       }
@@ -30798,11 +30828,12 @@
           "number": 98,
           "status": "조건부·수동",
           "current_label": "썸네일 후보 내보내기 + YouTube 수동 실험",
-          "detail": "앱은 후보 생성·선택·내보내기를 돕는다. 실제 Test & Compare 실행/시청시간 승자 판정은 YouTube에서 사람이 수행하며 자동 동기화하지 않는다.",
+          "detail": "앱은 후보 생성·선택·내보내기를 돕는다. 실제 Test & Compare 실행/시청시간 승자 판정은 YouTube에서 사람이 수행하며 자동 동기화하지 않는다. 패키징 화면 제목 3안마다 0원 점수(근거에 없는 숫자, 과장, AI 티, 길이)와 이유를 보여 준다.",
           "source_refs": [
             "backend/office/thumbnail_studio.py:137",
             "backend/office/thumbnail_studio.py:254",
-            "backend/office/analytics.py:60"
+            "backend/office/analytics.py:60",
+            "frontend/lib/packaging.ts:38"
           ]
         }
       }
@@ -30919,7 +30950,7 @@
           "detail": "성과 기록과 교훈은 있으나 분기마다 글을 골라 재작성·배포하는 자동 운영 루프는 없다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -30971,7 +31002,7 @@
           "detail": "성과 기록과 교훈은 있으나 분기마다 글을 골라 재작성·배포하는 자동 운영 루프는 없다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -31257,7 +31288,7 @@
           "detail": "원본 외부 엔진 참고 메모. 현재 일반 제작 코드가 해당 엔진을 import/호출하는 근거는 없다. 채택 제안과 구현을 구분한다.",
           "source_refs": [
             "backend/office/media.py:702",
-            "backend/office/worker.py:66"
+            "backend/office/worker.py:71"
           ]
         }
       }
@@ -31309,7 +31340,7 @@
           "detail": "원본 외부 엔진 참고 메모. 현재 일반 제작 코드가 해당 엔진을 import/호출하는 근거는 없다. 채택 제안과 구현을 구분한다.",
           "source_refs": [
             "backend/office/media.py:702",
-            "backend/office/worker.py:66"
+            "backend/office/worker.py:71"
           ]
         }
       }
@@ -31462,7 +31493,7 @@
           "detail": "원본 주석은 현재 코드와 다르다. calendar→ideas.score_idea 연결과 최대10점 가산은 구현됐고 D-60/30/7 정시 자동 주제제안은 아직 없다. 원본은 수정하지 않았다.",
           "source_refs": [
             "backend/office/calendar.py:111",
-            "backend/office/ideas.py:61"
+            "backend/office/ideas.py:63"
           ]
         }
       }
@@ -31728,7 +31759,7 @@
           "current_label": "퀴즈 JSON 구현 / 오답 PDF 자동화 미연결",
           "detail": "승인 원고의 4지선다 JSON 생성·검수는 구현됐다. 오답집계→무료/유료 PDF 자동화는 별도 미연결이며 원본 메모의 무료 방침을 운영상품 확정으로 해석하지 않는다.",
           "source_refs": [
-            "backend/office/quiz.py:152",
+            "backend/office/quiz.py:153",
             "backend/office/improvements.py:111",
             "backend/office/media.py:899"
           ]
@@ -31818,7 +31849,7 @@
           "detail": "검수/SEO와 분기 리프레시를 묶자는 기획 메모다. 정기 리프레시 구현 근거는 아니다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -31993,7 +32024,7 @@
           "current_label": "퀴즈 결과와 마케팅 동의 분리",
           "detail": "현재 퀴즈 기록은 구독 강제와 묶지 않으며 무료자료 신청과 광고수신 동의를 별도 취급한다. 실제 스토어 결과공개 UI는 이 앱의 구현범위가 아니다.",
           "source_refs": [
-            "backend/office/quiz.py:171",
+            "backend/office/quiz.py:172",
             "backend/office/improvements.py:120",
             "backend/office/leads.py:63"
           ]
@@ -32347,8 +32378,8 @@
           "current_label": "독자·문제·현재 해결법 브리프",
           "detail": "현재 brief에 reader/problem/current_solution 등이 있어 기획 전에 입력·덮어쓰기할 수 있다.",
           "source_refs": [
-            "backend/office/briefs.py:10",
-            "backend/office/api.py:219"
+            "backend/office/briefs.py:11",
+            "backend/office/api.py:234"
           ]
         }
       }
@@ -32490,7 +32521,7 @@
           "detail": "현재 AI입문자 하나로 한정되지 않는다. 취준·시험 등 여러 프리셋과 필드별 수정이 가능하다.",
           "source_refs": [
             "backend/office/briefs.py",
-            "backend/office/api.py:219"
+            "backend/office/api.py:234"
           ]
         }
       }
@@ -32534,8 +32565,8 @@
       "type": "text",
       "x": 10313.141122053026,
       "y": 594.8990145290438,
-      "width": 282.0,
-      "height": 25.0,
+      "width": 192.0,
+      "height": 50.0,
       "angle": 0,
       "strokeColor": "#111827",
       "backgroundColor": "transparent",
@@ -32550,7 +32581,7 @@
       "frameId": null,
       "roundness": null,
       "seed": 1768518195,
-      "version": 2,
+      "version": 3,
       "versionNonce": 880615796,
       "isDeleted": false,
       "boundElements": [],
@@ -32559,11 +32590,11 @@
       "locked": false,
       "fontSize": 20,
       "fontFamily": 2,
-      "text": "문체 규칙·한국어 검수·출력규격",
+      "text": "문체 규칙·말투 리듬\n한국어 검수·출력규격",
       "textAlign": "left",
       "verticalAlign": "top",
       "containerId": null,
-      "originalText": "문체 규칙·한국어 검수·출력규격",
+      "originalText": "문체 규칙·말투 리듬 한국어 검수·출력규격",
       "autoResize": false,
       "lineHeight": 1.25,
       "created": 1793180698487,
@@ -32574,13 +32605,15 @@
         "comparison": {
           "number": 115,
           "status": "구현",
-          "current_label": "문체 규칙·한국어 검수·출력규격",
-          "detail": "브랜드 문체/금지표현과 한국어 검수, 제목3개·해시태그5개·본문1500자±10% 규격이 있다. 원문보존 경로는 분량규칙 예외를 둔다.",
+          "current_label": "문체 규칙·말투 리듬 한국어 검수·출력규격",
+          "detail": "브랜드 문체/금지표현과 한국어 검수, 제목3개·해시태그5개·본문1500자±10% 규격이 있다. 0원 글 검사가 같은 문장 끝 4번, 혼자 묻고 답하기, 해요체 사이 습니다체, 서양식 비유, 근거 없는 강한 표현을 알리고 AI 티 점수(1,000자당)를 기록한다. 고친 판의 점수가 오르면 직전 판으로 되돌린다(enforce). 원문보존 경로는 분량규칙 예외를 둔다.",
           "source_refs": [
             "backend/office/brand.py:63",
-            "backend/office/editorial.py:237",
-            "backend/office/output_specs.py:2",
-            "backend/office/editorial.py:125"
+            "backend/office/editorial.py:260",
+            "backend/office/output_specs.py:11",
+            "backend/office/editorial.py:148",
+            "backend/office/writer_checks.py:341",
+            "backend/office/writer_checks.py:370"
           ]
         }
       }
@@ -32843,7 +32876,7 @@
           "current_label": "문제 생성과 스토어 풀기/채점 분리",
           "detail": "현재 퀴즈 생성 기록도 같은 경계를 명시한다. 스토어에 자동 동기화하거나 결과를 가져오는 기능은 미연결이다.",
           "source_refs": [
-            "backend/office/quiz.py:171",
+            "backend/office/quiz.py:172",
             "backend/office/improvements.py:111"
           ]
         }
@@ -33139,9 +33172,9 @@
           "number": 122,
           "status": "부분",
           "current_label": "브리프 톤·브랜드 문체·음성 지시",
-          "detail": "톤/언어와 브랜드 예시·TTS 프로필을 적용한다. 특정 유튜버를 흉내내는 독립 말투 에이전트나 별도 에이전트 런타임은 없다.",
+          "detail": "톤/언어와 브랜드 예시·TTS 프로필을 적용한다. 특정 유튜버를 흉내내는 독립 말투 에이전트나 별도 에이전트 런타임은 없다. 본인 글과 자막으로 센 말투표(voice-stats)는 재료를 받아 같이 만드는 다음 차례다.",
           "source_refs": [
-            "backend/office/briefs.py:10",
+            "backend/office/briefs.py:11",
             "backend/office/brand.py:63",
             "backend/office/voice_selection.py",
             "backend/office/speech_provider.py"
@@ -33193,9 +33226,9 @@
           "number": 122,
           "status": "부분",
           "current_label": "브리프 톤·브랜드 문체·음성 지시",
-          "detail": "톤/언어와 브랜드 예시·TTS 프로필을 적용한다. 특정 유튜버를 흉내내는 독립 말투 에이전트나 별도 에이전트 런타임은 없다.",
+          "detail": "톤/언어와 브랜드 예시·TTS 프로필을 적용한다. 특정 유튜버를 흉내내는 독립 말투 에이전트나 별도 에이전트 런타임은 없다. 본인 글과 자막으로 센 말투표(voice-stats)는 재료를 받아 같이 만드는 다음 차례다.",
           "source_refs": [
-            "backend/office/briefs.py:10",
+            "backend/office/briefs.py:11",
             "backend/office/brand.py:63",
             "backend/office/voice_selection.py",
             "backend/office/speech_provider.py"
@@ -33449,13 +33482,14 @@
           "number": 124,
           "status": "부분",
           "current_label": "YouTube 비공개 전달 / Instagram 보류 / TikTok 인계",
-          "detail": "승인① 사전선택 PC YouTube 비공개 업로드와 승인② 뒤 EC2 YouTube 전달이 구별된다. Instagram은 실제 자동어댑터 미구현이며 TikTok 포함 공개발행은 수동 인계다.",
+          "detail": "승인① 사전선택 PC YouTube 비공개 업로드와 승인② 뒤 EC2 YouTube 전달이 구별된다. Instagram은 실제 자동어댑터 미구현이며 TikTok 포함 공개발행은 수동 인계다. EC2 YouTube 전달 직후와 대사 때 저장된 제목·설명·태그를 다시 읽어 보낸 값과 비교하고 다른 칸을 유튜브 칸에 보여 준다(상태 불변).",
           "source_refs": [
             "backend/office/owner_drafts.py:51",
             "backend/office/owner_drafts.py:318",
             "backend/office/youtube_delivery.py:108",
             "backend/office/video_platforms.py",
-            "scripts/owner-draft-extension/background.mjs:18"
+            "scripts/owner-draft-extension/background.mjs:18",
+            "backend/office/youtube_delivery.py:192"
           ]
         }
       }
@@ -33504,13 +33538,14 @@
           "number": 124,
           "status": "부분",
           "current_label": "YouTube 비공개 전달 / Instagram 보류 / TikTok 인계",
-          "detail": "승인① 사전선택 PC YouTube 비공개 업로드와 승인② 뒤 EC2 YouTube 전달이 구별된다. Instagram은 실제 자동어댑터 미구현이며 TikTok 포함 공개발행은 수동 인계다.",
+          "detail": "승인① 사전선택 PC YouTube 비공개 업로드와 승인② 뒤 EC2 YouTube 전달이 구별된다. Instagram은 실제 자동어댑터 미구현이며 TikTok 포함 공개발행은 수동 인계다. EC2 YouTube 전달 직후와 대사 때 저장된 제목·설명·태그를 다시 읽어 보낸 값과 비교하고 다른 칸을 유튜브 칸에 보여 준다(상태 불변).",
           "source_refs": [
             "backend/office/owner_drafts.py:51",
             "backend/office/owner_drafts.py:318",
             "backend/office/youtube_delivery.py:108",
             "backend/office/video_platforms.py",
-            "scripts/owner-draft-extension/background.mjs:18"
+            "scripts/owner-draft-extension/background.mjs:18",
+            "backend/office/youtube_delivery.py:192"
           ]
         }
       }
@@ -33556,11 +33591,12 @@
           "number": 1,
           "status": "설명주석",
           "current_label": "콘텐츠 오피스 전체",
-          "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이며 LangGraph는 원고 생성·검수·수정 구간에만 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
+          "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이다. LangGraph는 원고 생성·검수·수정 구간(editorial_graph)과 승인① 뒤 제작 단계(production_graph: 글·카드 먼저, 영상 관문) 두 곳에 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
           "source_refs": [
             "backend/office/worker.py:39",
-            "backend/office/editorial.py:340",
-            "backend/office/editorial_graph.py:28"
+            "backend/office/editorial.py:410",
+            "backend/office/editorial_graph.py:28",
+            "backend/office/production_graph.py:60"
           ]
         }
       }
@@ -33910,9 +33946,9 @@
           "current_label": "모델 원고 평가 + 규칙 검사",
           "detail": "본문·인용·문체·형식·채널 검수는 존재한다. 검색엔진 노출이나 AI 검색 인용을 실제 측정하는 독립 SEO/AEO 시스템은 아니다.",
           "source_refs": [
-            "backend/office/editorial.py:96",
+            "backend/office/editorial.py:117",
             "backend/office/editorial.py:273",
-            "backend/office/output_specs.py:2"
+            "backend/office/output_specs.py:11"
           ]
         }
       }
@@ -33960,7 +33996,7 @@
           "current_label": "소재 점수 + 수동 성과·교훈",
           "detail": "기획 시 적합성·수요·이상치·시의성을 점수화하고 결과 입력에서 교훈 후보를 만든다. 모든 플랫폼 실시간 화제성 자동 수집·승자 판정은 없다.",
           "source_refs": [
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/analytics.py:75"
           ]
         }
@@ -34009,7 +34045,7 @@
           "current_label": "승인 원고 기반 채널 콘텐츠 생성",
           "detail": "원본 배치에서는 SEO/화제성 뒤 작성처럼 보이지만 현재는 원고 생성·검수 후 승인①을 받고 출력별 제작한다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
+            "backend/office/editorial.py:148",
             "backend/office/store.py:257",
             "backend/office/media.py:899"
           ]
@@ -34057,10 +34093,12 @@
           "number": 11,
           "status": "부분",
           "current_label": "원고 Eval 및 필수규칙 판정",
-          "detail": "원본 왼쪽 점수 상자. 현재 독립 SEO 점수기가 아니라 모델 평가와 결정규칙 검사에 대응한다. 80점은 수정 목표이며 통과를 보증하지 않는다.",
+          "detail": "원본 왼쪽 점수 상자. 현재 독립 SEO 점수기가 아니라 모델 평가와 결정규칙 검사에 대응한다. 80점은 수정 목표이며 통과를 보증하지 않는다. v2 판정 기준에 근거 없는 약속·학습 효과 보장 금지와 네 번 읽기를 더했고, 승인① 검수 칸에 문단 숫자마다 근거에 같은 숫자가 있는지 보여 주는 숫자 출처 표가 있다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:273"
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:273",
+            "backend/office/harness_rubric.md",
+            "backend/office/writer_checks.py:378"
           ]
         }
       }
@@ -34108,7 +34146,7 @@
           "current_label": "소재 점수와 성과 교훈",
           "detail": "원본 오른쪽 점수 상자. 기획 점수·수동 성과 기록은 있지만 독립 화제성 API 점수기는 미연결이다.",
           "source_refs": [
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/analytics.py:75"
           ]
         }
@@ -34205,11 +34243,12 @@
           "number": 14,
           "status": "부분",
           "current_label": "Discovery·정시 수집·요청형 조사",
-          "detail": "공개 RSS와 등록 소스를 수집하며 요청형 경쟁조사가 있다. 독립 Google 검색 에이전트/모든 소스 자동 수집과는 다르다.",
+          "detail": "공개 RSS와 등록 소스를 수집하며 요청형 경쟁조사가 있다. 아침 자동 수집은 제작 설정에서 켜고 시각(지금 07:10)과 요일(매일, 평일만)을 고른다. 독립 Google 검색 에이전트/모든 소스 자동 수집과는 다르다.",
           "source_refs": [
             "backend/office/discovery.py:156",
-            "backend/office/daily_collect.py:130",
-            "backend/office/benchmark_research.py:146"
+            "backend/office/daily_collect.py:134",
+            "backend/office/benchmark_research.py:146",
+            "backend/office/daily_collect.py:54"
           ]
         }
       }
@@ -34257,7 +34296,7 @@
           "current_label": "등록 RSS·YouTube 피드·공개 소스",
           "detail": "지원 소스에서 후보를 모은다. 구글 조사·HN을 포함한 모든 기획 소스가 같은 자동 연결이라는 뜻은 아니다.",
           "source_refs": [
-            "backend/office/feeds.py:183",
+            "backend/office/feeds.py:194",
             "backend/office/discovery.py:50",
             "backend/office/source_registry.py"
           ]
@@ -34357,8 +34396,8 @@
           "current_label": "기사/기획 후보 정렬 후 사람 선택",
           "detail": "기사 순위·이벤트 중복 제거와 기획 점수를 보조로 쓰고 선택⓪은 사람이 한다.",
           "source_refs": [
-            "backend/office/feeds.py:124",
-            "backend/office/feeds.py:162",
+            "backend/office/feeds.py:135",
+            "backend/office/feeds.py:173",
             "backend/office/ideas.py:129"
           ]
         }
@@ -34407,8 +34446,8 @@
           "current_label": "공통 원고 생성·검수",
           "detail": "기사의 근거를 읽고 공통 편집 파이프라인에서 원고를 만든다. 뉴스용 독립 에이전트 조직은 없다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
-            "backend/office/editorial.py:125"
+            "backend/office/editorial.py:410",
+            "backend/office/editorial.py:148"
           ]
         }
       }
@@ -34555,7 +34594,7 @@
           "current_label": "상세 편집 원고",
           "detail": "공통 원고 본문을 상세 요약/설명으로 사용한다. 전용 '상세 요약' 단계가 따로 직렬 실행되는 것은 아니다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/newsletter_formats.py:41"
           ]
         }
@@ -34602,10 +34641,11 @@
           "number": 22,
           "status": "구현",
           "current_label": "회차 본문·출처 패키징",
-          "detail": "승인 기사 판본을 보존하고 회차 보고서를 생성한다.",
+          "detail": "승인 기사 판본을 보존하고 회차 보고서를 생성한다. 회차 제목 칸은 글자 수를 보여 주고 40자가 넘으면 알린다.",
           "source_refs": [
             "backend/office/newsletter_formats.py:41",
-            "backend/office/newsletter.py:127"
+            "backend/office/newsletter.py:127",
+            "frontend/app/newsletter-panel.tsx"
           ]
         }
       }
@@ -34653,8 +34693,8 @@
           "current_label": "선택한 제공자 원고·사실검수",
           "detail": "Claude 고정이 아니라 프로필에서 선택한 제공자를 사용한다. 생성→비평→평가→한국어검수→필요시 수정 최대2회이며 LangGraph가 이 구간을 저장·재개한다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/providers.py:114"
           ]
@@ -34701,11 +34741,13 @@
         "comparison": {
           "number": 24,
           "status": "구현",
-          "current_label": "선택 출력의 제작 조정",
-          "detail": "승인① 뒤 영상·카드·블로그/SNS·PDF를 선택에 따라 순차 제작하고 출력별 실패를 분리한다. '에이전트'는 기능 역할명이다.",
+          "current_label": "제작 단계: 글·카드 먼저, 영상은 따로",
+          "detail": "승인① 뒤 LangGraph 제작 단계(plan, 글·카드·PDF, 영상 관문, 영상)로 만든다. 영상과 다른 출력을 같이 고르면 영상은 대기(deferred)로 두고, 제작·출고함에서 예상 비용을 보고 누른 요청을 Store에서 다시 확인한 뒤 만든다. 영상만 고른 작업은 바로 만든다. 출력별 실패를 분리하고 같은 판본의 출력은 다시 만들지 않는다. '에이전트'는 기능 역할명이다.",
           "source_refs": [
+            "backend/office/production_graph.py:60",
+            "backend/office/worker.py:57",
             "backend/office/media.py:899",
-            "backend/office/worker.py:66"
+            "backend/office/api.py:804"
           ]
         }
       }
@@ -35200,7 +35242,7 @@
           "number": 34,
           "status": "부분",
           "current_label": "FFmpeg 운영 제작 / 외부 제작물 반입",
-          "detail": "FFmpeg 호출은 연결되어 있다. 이 원본에 병기된 Remotion·HYPERFRAMES가 일반 media.produce에서 모두 호출되는 것은 아니다. HYPERFRAMES 연결은 office 코드 검색에서 발견되지 않았다.",
+          "detail": "FFmpeg 호출은 연결되어 있다. 이 원본에 병기된 Remotion·HYPERFRAMES가 일반 media.produce에서 모두 호출되는 것은 아니다. HYPERFRAMES 연결은 office 코드 검색에서 발견되지 않았다. 글로 만드는 모션그래픽(connect-ai-motion, Remotion)을 런웨이 클립 대신 쓰는 시험은 PC 렌더로 다음 차례다.",
           "source_refs": [
             "backend/office/media.py:674",
             "backend/office/media.py:702",
@@ -35300,11 +35342,12 @@
           "number": 36,
           "status": "구현",
           "current_label": "제작 결과·실패 상태와 검토 인계",
-          "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 생성완료가 외부 전달완료는 아니다.",
+          "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 제작 단계가 멈추면 한 것·멈춘 곳·이유 3칸(production_handoff)을 남기고 유료 호출을 자동으로 다시 하지 않는다. 생성완료가 외부 전달완료는 아니다.",
           "source_refs": [
-            "backend/office/worker.py:66",
+            "backend/office/worker.py:71",
             "backend/office/media.py:899",
-            "backend/office/delivery_queue.py"
+            "backend/office/delivery_queue.py",
+            "backend/office/production_graph.py:103"
           ]
         }
       }
@@ -35501,7 +35544,7 @@
           "current_label": "영상 청크 요약 기획",
           "detail": "Whisper 전사 청크를 각각 요약하는 독립 운영 단계는 미연결이다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/knowledge.py:78",
             "backend/office/external_media.py"
           ]
@@ -35551,7 +35594,7 @@
           "current_label": "본인영상 최종 요약 기획",
           "detail": "기존 원고 편집 기능은 있으나 영상 전사 연쇄의 최종요약 노드는 연결되지 않았다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/external_media.py"
           ]
         }
@@ -35848,11 +35891,12 @@
           "number": 47,
           "status": "구현",
           "current_label": "LangGraph 원고 생성·비평·평가·한국어검수·수정",
-          "detail": "선택 제공자로 순차 검수하며 최대2회 수정한다. 완료 호출 SQLite 재사용/실패구간 재개가 적용된다. 근거수집·제작·사람승인·전달은 그래프 밖이다.",
+          "detail": "선택 제공자로 순차 검수하며 최대2회 수정한다. 완료 호출 SQLite 재사용/실패구간 재개가 적용된다. v2 하네스에서는 0원 글 검사(인용 그대로, 숫자 방향, 고친 뒤 사실 유지, AI 말버릇, 베끼기)를 판정 전에 돌린다. 근거수집·사람승인·전달은 그래프 밖이고 제작은 별도 제작 단계 그래프(024)다.",
           "source_refs": [
-            "backend/office/editorial.py:125",
-            "backend/office/editorial.py:340",
-            "backend/office/editorial_graph.py:28"
+            "backend/office/editorial.py:148",
+            "backend/office/editorial.py:410",
+            "backend/office/editorial_graph.py:28",
+            "backend/office/writer_checks.py"
           ]
         }
       }
@@ -35897,13 +35941,14 @@
         "comparison": {
           "number": 48,
           "status": "조건부·수동",
-          "current_label": "출력 종류와 상품 조건 선택",
-          "detail": "영상·카드·블로그·PDF 등 출력 선택을 저장한다. PDF 제작과 PDF 판매/결제는 별도다.",
+          "current_label": "출력 종류 선택, 영상은 따로 클릭",
+          "detail": "영상·카드·블로그·PDF 등 출력 선택을 저장한다. 새 작업은 블로그·카드뉴스·영상이 기본 선택이고, 영상과 다른 출력을 같이 고르면 영상은 승인① 뒤 제작·출고함에서 따로 누를 때 만든다. PDF 제작과 PDF 판매/결제는 별도다.",
           "source_refs": [
             "backend/office/store.py:257",
             "backend/office/formats.py",
             "backend/office/offers.py",
-            "backend/office/media.py:899"
+            "backend/office/media.py:899",
+            "backend/office/production_graph.py:60"
           ]
         }
       }
@@ -35949,11 +35994,12 @@
           "number": 49,
           "status": "부분",
           "current_label": "RSS·경쟁자 관측·요청형 조사",
-          "detail": "ViewStats·vling·블랙키위·Google Trends API를 모두 묶은 자동 수집 연결은 없다. 기존 공개 피드/등록 경쟁자 자료와 사람입력 수요를 사용한다.",
+          "detail": "구글 트렌드 급상승은 RSS로 이미 수집한다(feeds.json, 발견 화면). ViewStats·vling·블랙키위를 묶은 자동 수집은 없다. 구글·유튜브·네이버 자동완성, 위키백과 조회수, 네이버 데이터랩(키 필요)은 11/27 사용자 결정으로 다음 차례다.",
           "source_refs": [
             "backend/office/discovery.py:156",
             "backend/office/benchmark_research.py:146",
-            "backend/office/ideas.py:61"
+            "backend/office/ideas.py:63",
+            "backend/office/discovery.py:50"
           ]
         }
       }
@@ -36001,8 +36047,8 @@
           "current_label": "이벤트 중복제거·기획 다축 점수",
           "detail": "기사 이벤트/기획 중복을 제거한다. 이상치·수요·근거·적합·새로움에 시의성 가산점 최대10점이 연결된다. 검색상승속도 전용 API는 없다.",
           "source_refs": [
-            "backend/office/feeds.py:162",
-            "backend/office/ideas.py:61",
+            "backend/office/feeds.py:173",
+            "backend/office/ideas.py:63",
             "backend/office/store.py"
           ]
         }
@@ -36100,7 +36146,7 @@
           "current_label": "선택 제공자 원고·사실검수",
           "detail": "중앙 대본 상자. Claude 고정이 아니라 선택 제공자이다. 근거 확보 뒤 LangGraph 편집 구간으로 들어간다.",
           "source_refs": [
-            "backend/office/editorial.py:340",
+            "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/providers.py:114"
           ]
@@ -36148,11 +36194,13 @@
           "number": 53,
           "status": "조건부·수동",
           "current_label": "사람 원고 승인①",
-          "detail": "현재 원고 해시/판본에 결합된 승인이다. 출력·채널별 비공개 초안 사전선택도 여기서 결합된다. 에이전트는 승인을 만들지 않는다.",
+          "detail": "현재 원고 해시/판본에 결합된 승인이다. 출력·채널별 비공개 초안 사전선택도 여기서 결합된다. 에이전트는 승인을 만들지 않는다. 이유나 메모를 적어 반려하면 원고 반려 교훈 후보가 생기고, 사람이 승인한 교훈만 최근 3개까지 다음 원고 요청에 문체·구성 참고로 들어간다.",
           "source_refs": [
             "backend/office/store.py:257",
             "backend/office/owner_drafts.py:26",
-            "backend/office/owner_drafts.py:51"
+            "backend/office/owner_drafts.py:51",
+            "backend/office/improvements.py:144",
+            "backend/office/store.py:309"
           ]
         }
       }
@@ -36298,9 +36346,9 @@
           "number": 56,
           "status": "조건부·수동",
           "current_label": "사람 출고 승인②",
-          "detail": "제작 manifest·파일 판본에 결합된 출고 승인. 이후 명시적 웹초안/EC2 YouTube 비공개 전달과 수동 공개게시가 나뉜다. 사전선택 PC 초안의 일괄 필수관문으로 해석하지 않는다.",
+          "detail": "제작 manifest·파일 판본에 결합된 출고 승인. 이후 명시적 웹초안/EC2 YouTube 비공개 전달과 수동 공개게시가 나뉜다. 사전선택 PC 초안의 일괄 필수관문으로 해석하지 않는다. 영상을 나중에 만들면 완성본이 바뀌어 승인②를 다시 받는다.",
           "source_refs": [
-            "backend/office/store.py:431",
+            "backend/office/store.py:446",
             "backend/office/owner_drafts.py:318",
             "backend/office/youtube_delivery.py:108"
           ]
@@ -36348,11 +36396,12 @@
           "number": 57,
           "status": "구현",
           "current_label": "썸네일 후보 구상·생성",
-          "detail": "승인원고의 제목/관점으로 후보를 생성·합성하며 별도 수정/선택 이력을 가진다.",
+          "detail": "승인원고의 제목/관점으로 후보를 생성·합성하며 별도 수정/선택 이력을 가진다. 출고함에서 시각을 적으면 내 영상의 가장 선명한 장면을 얼굴이 잘리지 않게 잘라 후보로 넣는다(0원).",
           "source_refs": [
             "backend/office/media.py:506",
             "backend/office/thumbnail_studio.py:220",
-            "backend/office/thumbnail_studio.py:289"
+            "backend/office/thumbnail_studio.py:289",
+            "backend/office/frame_focus.py:115"
           ]
         }
       }
@@ -36792,8 +36841,8 @@
           "current_label": "등록 소스 수집 설명",
           "detail": "공개 피드 수집은 존재하지만 소스별 병렬 에이전트 토폴로지가 원본대로 구현된 것은 아니다.",
           "source_refs": [
-            "backend/office/feeds.py:183",
-            "backend/office/daily_collect.py:163"
+            "backend/office/feeds.py:194",
+            "backend/office/daily_collect.py:169"
           ]
         }
       }
@@ -36841,8 +36890,8 @@
           "current_label": "기사 순위·중복제거 / 테마 자동화 차이",
           "detail": "기사 순위와 중복 이벤트 통합은 있지만 전용 테마 클러스터·실시간 트렌드 감지 엔진은 별도 미연결이다.",
           "source_refs": [
-            "backend/office/feeds.py:124",
-            "backend/office/feeds.py:162",
+            "backend/office/feeds.py:135",
+            "backend/office/feeds.py:173",
             "backend/office/newsletter_formats.py:41"
           ]
         }
@@ -36941,7 +36990,7 @@
           "detail": "원고 승인① 필요. 5문항·정답·해설·근거를 생성하고 검사 실패 시 수정한다. 풀기/채점 UI는 만들지 않는다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -36990,7 +37039,7 @@
           "detail": "정답·해설·근거 ID와 문항을 저장하고 현재 원고 판본과 결합한다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -37039,7 +37088,7 @@
           "detail": "모델 검토/수정과 문항구조·근거·정답 검사가 있다. 모든 링크의 실제 사실을 자동 보증하는 독립 AI-Judge 서비스는 아니다.",
           "source_refs": [
             "backend/office/quiz.py:58",
-            "backend/office/quiz.py:152"
+            "backend/office/quiz.py:153"
           ]
         }
       }
@@ -37187,7 +37236,7 @@
           "detail": "수동 기록과 검토는 가능하지만 오답집계→다음주 키워드 자동 삽입 경로는 미연결이다.",
           "source_refs": [
             "backend/office/improvements.py:111",
-            "backend/office/ideas.py:61"
+            "backend/office/ideas.py:63"
           ]
         }
       }
@@ -37233,11 +37282,12 @@
           "number": 75,
           "status": "구현",
           "current_label": "학습 카드뉴스 제작 출력",
-          "detail": "승인원고를 카드 계획/PNG로 만들며 퀴즈와 함께 보조 큐로 처리할 수 있다.",
+          "detail": "승인원고를 카드 계획/PNG로 만들며 퀴즈와 함께 보조 큐로 처리할 수 있다. 새 작업의 기본 선택이고 승인① 뒤 글과 함께 먼저 만든다. 같은 자리에서 그림 기억 이야기(뇌리 주인공 4~6장, 떠올려 보기와 정답, 그림은 코드로 0원)도 만든다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/quiz.py:136",
-            "backend/office/worker.py:66"
+            "backend/office/quiz.py:137",
+            "backend/office/worker.py:71",
+            "backend/office/memory_story.py:266"
           ]
         }
       }
@@ -37633,7 +37683,7 @@
           "detail": "학습/뉴스 별도 라우터 조직이 아니라 승인 원고의 공통 카드 엔진을 사용한다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/worker.py:66"
+            "backend/office/worker.py:71"
           ]
         }
       }
@@ -37978,7 +38028,7 @@
           "detail": "성과 기록/CSV에서 교훈 후보를 만들고 사람 승인 후 기획점수에 반영한다. 모든 채널 화제성 자동합산은 없다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -38028,7 +38078,7 @@
           "source_refs": [
             "backend/office/calendar.py:111",
             "backend/office/calendar.py:133",
-            "backend/office/ideas.py:61",
+            "backend/office/ideas.py:63",
             "backend/office/api_calendar_questions.py:28"
           ]
         }
@@ -38129,7 +38179,7 @@
           "source_refs": [
             "backend/office/improvements.py:97",
             "backend/office/editorial.py:361",
-            "backend/office/editorial.py:431"
+            "backend/office/editorial.py:576"
           ]
         }
       }
@@ -38177,7 +38227,7 @@
           "current_label": "기존 스토어로 수동 문제 인계",
           "detail": "스토어 연결 검토 계약은 있지만 실제 퀴즈 업로드·결과 동기화는 미연결. 결과 열람에 뉴스레터 구독을 강제하지 않는다.",
           "source_refs": [
-            "backend/office/quiz.py:171",
+            "backend/office/quiz.py:172",
             "backend/office/improvements.py:111",
             "backend/office/leads.py:63"
           ]
@@ -38374,11 +38424,12 @@
           "number": 98,
           "status": "조건부·수동",
           "current_label": "썸네일 후보 내보내기 + YouTube 수동 실험",
-          "detail": "앱은 후보 생성·선택·내보내기를 돕는다. 실제 Test & Compare 실행/시청시간 승자 판정은 YouTube에서 사람이 수행하며 자동 동기화하지 않는다.",
+          "detail": "앱은 후보 생성·선택·내보내기를 돕는다. 실제 Test & Compare 실행/시청시간 승자 판정은 YouTube에서 사람이 수행하며 자동 동기화하지 않는다. 패키징 화면 제목 3안마다 0원 점수(근거에 없는 숫자, 과장, AI 티, 길이)와 이유를 보여 준다.",
           "source_refs": [
             "backend/office/thumbnail_studio.py:137",
             "backend/office/thumbnail_studio.py:254",
-            "backend/office/analytics.py:60"
+            "backend/office/analytics.py:60",
+            "frontend/lib/packaging.ts:38"
           ]
         }
       }
@@ -38427,7 +38478,7 @@
           "detail": "성과 기록과 교훈은 있으나 분기마다 글을 골라 재작성·배포하는 자동 운영 루프는 없다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -38525,7 +38576,7 @@
           "detail": "원본 외부 엔진 참고 메모. 현재 일반 제작 코드가 해당 엔진을 import/호출하는 근거는 없다. 채택 제안과 구현을 구분한다.",
           "source_refs": [
             "backend/office/media.py:702",
-            "backend/office/worker.py:66"
+            "backend/office/worker.py:71"
           ]
         }
       }
@@ -38574,7 +38625,7 @@
           "detail": "원본 주석은 현재 코드와 다르다. calendar→ideas.score_idea 연결과 최대10점 가산은 구현됐고 D-60/30/7 정시 자동 주제제안은 아직 없다. 원본은 수정하지 않았다.",
           "source_refs": [
             "backend/office/calendar.py:111",
-            "backend/office/ideas.py:61"
+            "backend/office/ideas.py:63"
           ]
         }
       }
@@ -38723,7 +38774,7 @@
           "current_label": "퀴즈 JSON 구현 / 오답 PDF 자동화 미연결",
           "detail": "승인 원고의 4지선다 JSON 생성·검수는 구현됐다. 오답집계→무료/유료 PDF 자동화는 별도 미연결이며 원본 메모의 무료 방침을 운영상품 확정으로 해석하지 않는다.",
           "source_refs": [
-            "backend/office/quiz.py:152",
+            "backend/office/quiz.py:153",
             "backend/office/improvements.py:111",
             "backend/office/media.py:899"
           ]
@@ -38774,7 +38825,7 @@
           "detail": "검수/SEO와 분기 리프레시를 묶자는 기획 메모다. 정기 리프레시 구현 근거는 아니다.",
           "source_refs": [
             "backend/office/analytics.py:75",
-            "backend/office/ideas.py:52"
+            "backend/office/ideas.py:54"
           ]
         }
       }
@@ -38871,7 +38922,7 @@
           "current_label": "퀴즈 결과와 마케팅 동의 분리",
           "detail": "현재 퀴즈 기록은 구독 강제와 묶지 않으며 무료자료 신청과 광고수신 동의를 별도 취급한다. 실제 스토어 결과공개 UI는 이 앱의 구현범위가 아니다.",
           "source_refs": [
-            "backend/office/quiz.py:171",
+            "backend/office/quiz.py:172",
             "backend/office/improvements.py:120",
             "backend/office/leads.py:63"
           ]
@@ -39069,8 +39120,8 @@
           "current_label": "독자·문제·현재 해결법 브리프",
           "detail": "현재 brief에 reader/problem/current_solution 등이 있어 기획 전에 입력·덮어쓰기할 수 있다.",
           "source_refs": [
-            "backend/office/briefs.py:10",
-            "backend/office/api.py:219"
+            "backend/office/briefs.py:11",
+            "backend/office/api.py:234"
           ]
         }
       }
@@ -39168,7 +39219,7 @@
           "detail": "현재 AI입문자 하나로 한정되지 않는다. 취준·시험 등 여러 프리셋과 필드별 수정이 가능하다.",
           "source_refs": [
             "backend/office/briefs.py",
-            "backend/office/api.py:219"
+            "backend/office/api.py:234"
           ]
         }
       }
@@ -39213,13 +39264,15 @@
         "comparison": {
           "number": 115,
           "status": "구현",
-          "current_label": "문체 규칙·한국어 검수·출력규격",
-          "detail": "브랜드 문체/금지표현과 한국어 검수, 제목3개·해시태그5개·본문1500자±10% 규격이 있다. 원문보존 경로는 분량규칙 예외를 둔다.",
+          "current_label": "문체 규칙·말투 리듬 한국어 검수·출력규격",
+          "detail": "브랜드 문체/금지표현과 한국어 검수, 제목3개·해시태그5개·본문1500자±10% 규격이 있다. 0원 글 검사가 같은 문장 끝 4번, 혼자 묻고 답하기, 해요체 사이 습니다체, 서양식 비유, 근거 없는 강한 표현을 알리고 AI 티 점수(1,000자당)를 기록한다. 고친 판의 점수가 오르면 직전 판으로 되돌린다(enforce). 원문보존 경로는 분량규칙 예외를 둔다.",
           "source_refs": [
             "backend/office/brand.py:63",
-            "backend/office/editorial.py:237",
-            "backend/office/output_specs.py:2",
-            "backend/office/editorial.py:125"
+            "backend/office/editorial.py:260",
+            "backend/office/output_specs.py:11",
+            "backend/office/editorial.py:148",
+            "backend/office/writer_checks.py:341",
+            "backend/office/writer_checks.py:370"
           ]
         }
       }
@@ -39365,7 +39418,7 @@
           "current_label": "문제 생성과 스토어 풀기/채점 분리",
           "detail": "현재 퀴즈 생성 기록도 같은 경계를 명시한다. 스토어에 자동 동기화하거나 결과를 가져오는 기능은 미연결이다.",
           "source_refs": [
-            "backend/office/quiz.py:171",
+            "backend/office/quiz.py:172",
             "backend/office/improvements.py:111"
           ]
         }
@@ -39558,9 +39611,9 @@
           "number": 122,
           "status": "부분",
           "current_label": "브리프 톤·브랜드 문체·음성 지시",
-          "detail": "톤/언어와 브랜드 예시·TTS 프로필을 적용한다. 특정 유튜버를 흉내내는 독립 말투 에이전트나 별도 에이전트 런타임은 없다.",
+          "detail": "톤/언어와 브랜드 예시·TTS 프로필을 적용한다. 특정 유튜버를 흉내내는 독립 말투 에이전트나 별도 에이전트 런타임은 없다. 본인 글과 자막으로 센 말투표(voice-stats)는 재료를 받아 같이 만드는 다음 차례다.",
           "source_refs": [
-            "backend/office/briefs.py:10",
+            "backend/office/briefs.py:11",
             "backend/office/brand.py:63",
             "backend/office/voice_selection.py",
             "backend/office/speech_provider.py"
@@ -39660,13 +39713,14 @@
           "number": 124,
           "status": "부분",
           "current_label": "YouTube 비공개 전달 / Instagram 보류 / TikTok 인계",
-          "detail": "승인① 사전선택 PC YouTube 비공개 업로드와 승인② 뒤 EC2 YouTube 전달이 구별된다. Instagram은 실제 자동어댑터 미구현이며 TikTok 포함 공개발행은 수동 인계다.",
+          "detail": "승인① 사전선택 PC YouTube 비공개 업로드와 승인② 뒤 EC2 YouTube 전달이 구별된다. Instagram은 실제 자동어댑터 미구현이며 TikTok 포함 공개발행은 수동 인계다. EC2 YouTube 전달 직후와 대사 때 저장된 제목·설명·태그를 다시 읽어 보낸 값과 비교하고 다른 칸을 유튜브 칸에 보여 준다(상태 불변).",
           "source_refs": [
             "backend/office/owner_drafts.py:51",
             "backend/office/owner_drafts.py:318",
             "backend/office/youtube_delivery.py:108",
             "backend/office/video_platforms.py",
-            "scripts/owner-draft-extension/background.mjs:18"
+            "scripts/owner-draft-extension/background.mjs:18",
+            "backend/office/youtube_delivery.py:192"
           ]
         }
       }

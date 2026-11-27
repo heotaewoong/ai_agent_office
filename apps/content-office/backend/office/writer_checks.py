@@ -47,6 +47,8 @@ WATCH = ("다양한", "효과적인", "효과적으로", "에 있어서", "이�
 WESTERN = ("산장", "벽난로", "오두막", "캠프파이어", "추수감사절", "와인 셀러")
 STRONG = ("최고", "최초", "1위", "보장", "평생", "100%")
 FORMAL = re.compile(r"(습니다|입니다|됩니다)[.!?…]*$")
+# 혼자 묻고 답하기(connect-ai-writer humanize 연출 패턴): 물음표 문장 바로 뒤에 스스로 답을 내놓는 문장.
+SELF_ANSWER = re.compile(r"^(바로|정답은|답은|이유는|그 이유는|그건|결론은)")
 HAEYO = re.compile(r"(요|죠)[.!?…]*$")
 ENDING = re.compile(r"([가-힣]{1,3})[.!?…]*$")
 UP_KO = ("증가", "늘었", "늘어", "늘고", "늘린", "늘리", "늘면", "올랐", "올라", "오른", "오르", "상승", "많아", "커졌", "커지",
@@ -337,7 +339,7 @@ def _sentences(text):
 
 
 def rhythm_notes(text, evidence_text=""):
-    """말투 리듬(connect-ai-writer humanize의 리듬 검사 방식): 같은 끝이 4번, 해요체 사이 습니다체, 비슷한 문장 길이.
+    """말투 리듬(connect-ai-writer humanize의 리듬 검사 방식): 같은 끝이 4번, 혼자 묻고 답하기 2번, 해요체 사이 습니다체, 비슷한 문장 길이.
     모두 알림이고 막지 않는다."""
     notes, sentences = [], _sentences(text)
     endings = [match.group(1) for sentence in sentences if (match := ENDING.search(re.sub(r"[\"'”’)\]]+$", "", sentence)))]
@@ -347,6 +349,9 @@ def rhythm_notes(text, evidence_text=""):
         if run == 4:
             notes.append(f"같은 문장 끝 '{after}': 4번 이어져요. 끝맺음을 바꿔 보세요")
             break
+    asked = sum(1 for before, after in zip(sentences, sentences[1:]) if before.endswith("?") and SELF_ANSWER.match(after))
+    if asked >= 2:
+        notes.append(f"혼자 묻고 답하는 문장이 {asked}번 나와요. 질문 하나로 충분해요")
     formal = sum(1 for sentence in sentences if FORMAL.search(sentence))
     haeyo = sum(1 for sentence in sentences if HAEYO.search(sentence))
     if formal >= 2 and haeyo >= formal:

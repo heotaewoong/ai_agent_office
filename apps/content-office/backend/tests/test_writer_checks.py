@@ -183,6 +183,9 @@ def test_rhythm_notes_warn_without_blocking():
     assert any("강한 표현 '최고'" in note for note in rhythm_notes("최고의 방법이에요.", "근거 문장"))
     assert not any("강한 표현" in note for note in rhythm_notes("1위를 했어요.", "업계 1위 기록"))
     assert rhythm_notes("짧아요. 이건 조금 더 길게 쓴 문장이에요. 그리고 마지막으로 아주 길게 이어서 쓴 문장도 하나 있어요.") == []
+    twice = "왜 잊을까요? 바로 복습 간격 때문이에요. 그럼 언제 볼까요? 정답은 다음 날 아침이에요."
+    assert any("혼자 묻고 답하는 문장이 2번" in note for note in rhythm_notes(twice))
+    assert not any("혼자 묻고" in note for note in rhythm_notes("왜 잊을까요? 바로 복습 간격 때문이에요."))
 
 
 def test_number_trace_marks_numbers_the_cited_evidence_does_not_have():
