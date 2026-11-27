@@ -395,6 +395,8 @@ def create_app(store: Store | None = None):
     store = store or default_store()
     app = FastAPI(title="HeoBrain 콘텐츠 오피스", version="0.1.0")
     app.state.store = store
+    from .memory_watch import install as install_memory_watch
+    install_memory_watch(app)  # 메모리가 크게 뛴 요청만 api.log에 남긴다(2026-11-27 1.3GB 급증 원인 찾기)
     secret_path = store.root / ".session-secret"
     if not secret_path.is_file():
         secret_path.write_bytes(secrets.token_bytes(32))

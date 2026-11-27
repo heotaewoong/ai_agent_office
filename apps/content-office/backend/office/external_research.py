@@ -209,6 +209,16 @@ def build_queries(title: str, query: str | None = None) -> dict:
             "custom": bool(custom)}
 
 
+# 이 낱말만으로 된 영어 검색어는 주제를 좁히지 못한다. 제품, 도구 이름이나 구체적인 개념이 하나라도 있으면 쓴다.
+_GENERIC_ENGLISH = {"ai", "app", "apps", "tool", "tools", "agent", "agents", "learning", "study", "tips", "guide", "review",
+                    "review learning", "coding", "automation", "productivity", "work", "data", "model", "models"}
+
+
+def _too_generic(english: str) -> bool:
+    words = [word for word in re.findall(r"[a-z0-9.+#-]+", (english or "").casefold()) if word]
+    return bool(words) and all(word in _GENERIC_ENGLISH for word in words)
+
+
 def _candidate(lane, provider, title, url, snippet="", year=None, source=None) -> dict | None:
     title, url = _clean(str(title or ""))[:240], str(url or "").strip()
     parts = urlsplit(url)
@@ -325,6 +335,10 @@ def _pick_feed_entries(entries, terms, lane, provider):
     scored = []
     for entry, text in zip(entries, texts):
         matched = [term for term in terms if term in text]
+        # 제목 낱말이 셋 이상이면 두 낱말 이상 맞아야 한다. "ChatGPT" 한 낱말만 맞은 다른 주제 새 글을 거른다(2026-11-27 운영 실측).
+        # "ai", "agent" 같은 넓은 낱말은 두 낱말 조건에 세지 않는다.
+        if len(terms) >= 3 and len([term for term in matched if term not in _GENERIC_ENGLISH]) < 2:
+            continue
         if any(frequency[term] <= rare for term in matched):
             scored.append((sum(math.log(1 + len(texts) / frequency[term]) for term in matched), entry))
     scored.sort(key=lambda row: row[1]["published_at"], reverse=True)
@@ -549,9 +563,19 @@ def run_research(root, title: str, *, summary: str = "", area: str | None = None
             result["queries"] = queries
         elif made.get("note"):
             result["notes"].append(made["note"])
+    generic = _too_generic(queries["english"]) and not queries["custom"]
+    if generic and any(name in api for name in fact):
+        # 낱말표로 만든 검색어가 "AI", "learning"처럼 너무 넓으면 논문, 저장소 검색이 주제와 상관없는 결과만 준다(2026-11-27 운영 실측).
+        result["notes"].append(f"영어 검색어가 너무 넓어서({queries['english'] or '없음'}) 논문과 저장소는 찾지 않았어요. 검색어 칸에 구체적인 영어 낱말을 적고 다시 찾아 주세요.")
     for name in fact:
         if name in api:
             wanted = (queries["names"] or queries["english"]) if name == "github" else queries["english"]
+            if name == "github" and queries["names"] and not _too_generic(queries["names"]):
+                generic_name = False
+            else:
+                generic_name = generic
+            if wanted and generic_name:
+                continue
             if wanted:
                 jobs[name] = (api[name], (fetch, wanted, tuple(queries.get("alternatives") or ())) if name == "pubmed" else (fetch, wanted))
             else:

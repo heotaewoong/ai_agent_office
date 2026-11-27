@@ -71,6 +71,8 @@ def shape(item: dict, catalog: dict) -> dict | None:
         "locator": " ".join(str(item.get("locator") or "").split())[:120], "text": text[:2400], "chunk_sha256": chunk,
         "quote_policy": policy, "ocr_quality": item.get("ocr_quality") if isinstance(item.get("ocr_quality"), str) else None,
         "score": item.get("score") if isinstance(item.get("score"), (int, float)) else None,
+        # 섞은 점수(score)는 질문마다 0~1로 다시 맞춘 상대값이라 관련 없는 질문에도 높게 나온다. 관련성 판단은 벡터 유사도(cosine)로 한다.
+        "cosine": item.get("cosine") if isinstance(item.get("cosine"), (int, float)) else None,
     }
 
 
@@ -111,7 +113,10 @@ def handle(raw: bytes, search=run_search, catalog_root: Path = ROOT) -> dict:
             rows.append(row)
         if len(rows) == limit:
             break
-    return {"status": "ok", "mode": found.get("effective_mode"), "hint": found.get("hint"), "results": rows}
+    anchors = found.get("anchor_coverage") if isinstance(found.get("anchor_coverage"), dict) else {}
+    missing = [str(name)[:40] for name in anchors.get("missing_anchors") or [] if isinstance(name, str)][:5]
+    return {"status": "ok", "mode": found.get("effective_mode"), "hint": found.get("hint"), "results": rows,
+            "low_coverage": bool(anchors.get("low_coverage_warning")), "missing_anchors": missing}
 
 
 def _allowed_uids() -> set[int]:
