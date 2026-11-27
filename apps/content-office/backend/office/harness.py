@@ -176,13 +176,16 @@ def _cells(compared: dict | None) -> dict | None:
 
 
 def _evidence_use(packet: dict) -> dict:
-    """원고가 붙인 근거 ID와 받은 근거 ID(문장 없이 ID만). 인용 세탁이나 안 쓴 근거를 기록에서 세게 한다."""
+    """원고가 붙인 근거 ID와 받은 근거 ID(문장 없이 ID만). 인용 세탁이나 안 쓴 근거, 지시문이 섞인 근거를 기록에서 세게 한다."""
     from .editorial import cited_evidence_ids
     supplied = sorted({str(item["id"]) for item in packet.get("evidence") or [] if isinstance(item, dict) and item.get("id")})
     cited = sorted(cited_evidence_ids(packet["body"])) if isinstance(packet.get("body"), str) else []
     kinds = sorted({str(item.get("source_kind") or "article") for item in packet.get("evidence") or [] if isinstance(item, dict)})
+    flagged = sorted({str(item["id"]) for item in packet.get("evidence") or []
+                      if isinstance(item, dict) and item.get("id") and item.get("instruction_flags")})
     return {"evidence_ids": supplied, "cited_evidence_ids": cited, "uncited_evidence_ids": sorted(set(supplied) - set(cited)),
-            "unknown_cited_ids": sorted(set(cited) - set(supplied)), "evidence_kinds": kinds}
+            "unknown_cited_ids": sorted(set(cited) - set(supplied)), "evidence_kinds": kinds,
+            "instruction_flagged_ids": flagged}
 
 
 def _failing(snapshot: dict) -> dict:
