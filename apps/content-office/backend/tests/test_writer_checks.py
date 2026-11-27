@@ -169,3 +169,34 @@ def test_prepare_source_threads_the_setting(tmp_path, monkeypatch):
     harness = result["source_packet"]["quality"]["harness"]
     assert harness["engine"] == "v2_harness" and harness["writer_checks"]["mode"] == "warn"
     assert not result["source_approval"]
+
+
+def test_rhythm_notes_warn_without_blocking():
+    from office.writer_checks import rhythm_notes
+    same = "하나 있어요. 둘도 있어요. 셋도 있어요. 넷도 있어요."
+    assert any("같은 문장 끝" in note for note in rhythm_notes(same))
+    mixed = "좋아요. 괜찮아요. 맞아요. 그렇습니다. 또 그렇습니다."
+    assert any("습니다체 문장 2개" in note for note in rhythm_notes(mixed))
+    flat = " ".join(["이 문장은 열 글자예요."] * 8)
+    assert any("문장 길이" in note for note in rhythm_notes(flat))
+    assert any("서양식 비유" in note for note in rhythm_notes("산장에서 끓인 수프처럼 따뜻해요."))
+    assert any("강한 표현 '최고'" in note for note in rhythm_notes("최고의 방법이에요.", "근거 문장"))
+    assert not any("강한 표현" in note for note in rhythm_notes("1위를 했어요.", "업계 1위 기록"))
+    assert rhythm_notes("짧아요. 이건 조금 더 길게 쓴 문장이에요. 그리고 마지막으로 아주 길게 이어서 쓴 문장도 하나 있어요.") == []
+
+
+def test_number_trace_marks_numbers_the_cited_evidence_does_not_have():
+    from office.writer_checks import evidence_sources, number_trace
+    packet = {"body": "응시자가 12% 줄었어요 [E1].\n\n참가자는 34명이에요 [E2].",
+              "evidence": [{"id": "E1", "url": "https://a", "claim": "응시자가 12% 줄었다"}, {"id": "E2", "url": "https://b", "claim": "참가자 35명"}]}
+    rows = number_trace(packet["body"], evidence_sources(packet))
+    assert [(row["number"], row["found_in"]) for row in rows] == [("12", "E1"), ("34", None)]
+    assert rows[0]["sentence"] == "응시자가 12% 줄었어요." and rows[1]["cited"] == ["E2"]
+    assert writer_findings(packet)["number_trace"] == rows
+
+
+def test_refine_that_raises_the_ai_tell_score_is_a_rule_failure():
+    worse = "결론적으로 다양한 방법을 정리하자면 이렇습니다. 다양한 방법이 있어요."
+    found = writer_findings({"body": worse, "evidence": []}, previous_body="이렇게 하면 돼요. 방법은 하나예요.")
+    assert found["issues"]["tell_score"] and found["tell_score"] > 0
+    assert not writer_findings({"body": "이렇게 하면 돼요.", "evidence": []}, previous_body=worse)["issues"]["tell_score"]

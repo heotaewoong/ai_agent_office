@@ -3247,6 +3247,22 @@ td a {
   margin: 8px 0 0;
   padding-left: 19px;
 }
+.number-trace {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  margin-top: 8px;
+}
+.number-trace th,
+.number-trace td {
+  border-bottom: 1px solid var(--line, #e5e5e5);
+  padding: 5px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.number-trace tr.critical-issue td {
+  color: var(--danger);
+}
 .thumbnail-section {
   border: 1px solid var(--primary-line);
   border-radius: 7px;

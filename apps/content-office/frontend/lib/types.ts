@@ -74,6 +74,8 @@ export type SourcePacket = {
     refine_count?: number;
     note?: string;
     gates?: GateReport;
+    writer_checks?: WriterChecks;
+    harness?: { writer_checks?: WriterChecks };
     deterministic_checks?: {
       passed?: boolean;
       issues?: string[];
@@ -723,3 +725,12 @@ export type CouponSnapshot = { code: string | null; discount_percent: number | n
 export type FreePdf = { title: string; url: string; verified: boolean };
 export type OfferInput = { product: string; price_krw: number; url: string; note: string; coupon?: CouponSnapshot | null; free_pdf?: FreePdf | null; expected_offer_hash: string | null };
 export type Offer = Omit<OfferInput, "expected_offer_hash"> & { captured_at: string; actor: string };
+
+/** 글쓰기 0원 검사 기록(office/writer_checks.py). 승인① 화면에서 걸린 말과 숫자 출처를 보여 줘요. */
+export type WriterChecks = {
+  mode?: string;
+  issues?: Record<string, string[]>;
+  notes?: string[];
+  tell_score?: number;
+  number_trace?: { number: string; sentence: string; cited: string[]; found_in: string | null }[];
+};

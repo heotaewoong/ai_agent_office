@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { api } from "../lib/api";
-import { validatePackagingBrief, TITLE_MAX, THUMB_TEXT_MAX, HOOK_MAX } from "../lib/packaging";
+import { validatePackagingBrief, scoreTitle, TITLE_MAX, THUMB_TEXT_MAX, HOOK_MAX } from "../lib/packaging";
 import type { Action, Job, PackagingBrief } from "../lib/types";
 import styles from "./packaging-panel.module.css";
 
@@ -17,6 +17,8 @@ export function PackagingPanel({
 }) {
   const p = job.packaging;
   const id = useId();
+  // 숫자 대조용 근거 글: 기사 요약과 근거 주장(모델 호출 없음)
+  const sourceText = [job.article?.summary, ...(job.article?.evidence ?? []).map((item) => item.claim)].filter(Boolean).join(" ");
   const [dirty, setDirty] = useState(false);
   const [titles, setTitles] = useState<string[]>(() => [0, 1, 2].map((i) => p?.titles?.[i] ?? ""));
   const [thumbs, setThumbs] = useState(() =>
@@ -80,6 +82,7 @@ export function PackagingPanel({
             <p className={styles.candidateTitle}>{t||"어떤 제목이 눈길을 끌까요?"}</p>
             <div className={styles.field}><div className={styles.labelRow}><label htmlFor={`${id}-title-${i}`}>제목 {i+1}안</label><span className={t.length>TITLE_MAX?styles.over:undefined}>{t.length}/{TITLE_MAX}</span></div>
               <input id={`${id}-title-${i}`} value={t} disabled={busy} aria-invalid={t.length>TITLE_MAX} onChange={e=>{setTitles(titles.map((x,j)=>j===i?e.target.value:x));markDirty();}} placeholder="전할 가치를 한 문장으로"/>
+              {t.trim() && (() => { const rated = scoreTitle(t, sourceText); return <small aria-live="polite">제목 점수 {rated.score}{rated.reasons.length ? ` · ${rated.reasons.join(" · ")}` : " · 걸린 점 없음"}</small>; })()}
             </div>
             <div className={styles.field}><div className={styles.labelRow}><label htmlFor={`${id}-thumb-${i}`}>썸네일 {i+1}안 글자</label><span className={thumbs[i].text.length>THUMB_TEXT_MAX?styles.over:undefined}>{thumbs[i].text.length}/{THUMB_TEXT_MAX}</span></div>
               <input id={`${id}-thumb-${i}`} value={thumbs[i].text} disabled={busy} aria-invalid={thumbs[i].text.length>THUMB_TEXT_MAX} onChange={e=>{setThumbs(thumbs.map((x,j)=>j===i?{...x,text:e.target.value}:x));markDirty();}} placeholder="12자 이내의 핵심 문구"/>

@@ -29,7 +29,7 @@ import re
 from .store import WorkflowError
 
 MODES = ("off", "warn", "enforce")
-RULES = ("quote_exact", "direction_cited", "ai_tells", "fact_keep", "copy_overlap")
+RULES = ("quote_exact", "direction_cited", "ai_tells", "fact_keep", "copy_overlap", "tell_score")
 _ORIGINAL_KEYS = ("source_quote", "quote", "excerpt", "text", "passage")
 CITE_GROUP = re.compile(r"\[([A-Z]{1,3}\d{1,3}(?:\s*,\s*[A-Z]{1,3}\d{1,3})*)\]")
 NUM = re.compile(r"(?<![\w.])(\d+(?:,\d{3})*(?:\.\d+)?)(?!\.?\d)")
@@ -43,6 +43,12 @@ AI_TELLS = ("알아보겠습니다", "알아보도록 하겠습니다", "살펴�
             "정리하자면", "되어집니다", "되어진", "하는 것이 가능합니다", "혁신적인", "획기적인", "게임 체인저", "게임체인저",
             "패러다임", "시너지", "극대화", "새로운 지평", "본 글에서는", "본 포스팅에서는", "도움이 되셨길")
 WATCH = ("다양한", "효과적인", "효과적으로", "에 있어서", "이를 통해", "함으로써", "단순히")
+# 사용자 요청(11/27 계획표): 서양식 비유는 한국 일상 소재로, 강한 표현은 근거에 있을 때만. 둘 다 알림만 한다.
+WESTERN = ("산장", "벽난로", "오두막", "캠프파이어", "추수감사절", "와인 셀러")
+STRONG = ("최고", "최초", "1위", "보장", "평생", "100%")
+FORMAL = re.compile(r"(습니다|입니다|됩니다)[.!?…]*$")
+HAEYO = re.compile(r"(요|죠)[.!?…]*$")
+ENDING = re.compile(r"([가-힣]{1,3})[.!?…]*$")
 UP_KO = ("증가", "늘었", "늘어", "늘고", "늘린", "늘리", "늘면", "올랐", "올라", "오른", "오르", "상승", "많아", "커졌", "커지",
          "높아", "확대", "급증", "성장", "뛰었", "향상")
 DOWN_KO = ("감소", "줄었", "줄어", "줄고", "줄인", "줄이", "줄면", "내렸", "내려", "떨어", "하락", "적어", "작아", "낮아", "축소",
@@ -325,6 +331,59 @@ def tell_problems(texts):
     return problems, notes
 
 
+def _sentences(text):
+    rows = [part.strip() for part in SENT.split(CITE_GROUP.sub(" ", text or ""))]
+    return [row for row in rows if len(row) >= 4 and not row.startswith(("#", "|", "-", "*", ">"))]
+
+
+def rhythm_notes(text, evidence_text=""):
+    """말투 리듬(connect-ai-writer humanize의 리듬 검사 방식): 같은 끝이 4번, 해요체 사이 습니다체, 비슷한 문장 길이.
+    모두 알림이고 막지 않는다."""
+    notes, sentences = [], _sentences(text)
+    endings = [match.group(1) for sentence in sentences if (match := ENDING.search(re.sub(r"[\"'”’)\]]+$", "", sentence)))]
+    run = 1
+    for before, after in zip(endings, endings[1:]):
+        run = run + 1 if after == before else 1
+        if run == 4:
+            notes.append(f"같은 문장 끝 '{after}': 4번 이어져요. 끝맺음을 바꿔 보세요")
+            break
+    formal = sum(1 for sentence in sentences if FORMAL.search(sentence))
+    haeyo = sum(1 for sentence in sentences if HAEYO.search(sentence))
+    if formal >= 2 and haeyo >= formal:
+        notes.append(f"해요체 사이에 습니다체 문장 {formal}개가 섞였어요")
+    lengths = [len(sentence) for sentence in sentences]
+    if len(lengths) >= 8:
+        mean = sum(lengths) / len(lengths)
+        spread = (sum((length - mean) ** 2 for length in lengths) / len(lengths)) ** 0.5
+        if mean and spread / mean < 0.2:
+            notes.append("문장 길이가 거의 같아요. 짧은 문장과 긴 문장을 섞으세요")
+    notes += [f"서양식 비유 '{word}': 한국 일상 소재로 바꿔 보세요" for word in WESTERN if word in text]
+    notes += [f"강한 표현 '{word}': 근거에서 찾지 못했어요" for word in STRONG if word in text and word not in (evidence_text or "")]
+    return notes
+
+
+def tell_score(text):
+    """AI 티 점수(1,000자당): 상투 표현 3점, 자주 보이는 표현 1점. 막지 않고 고친 뒤 올랐는지만 본다."""
+    if not text:
+        return 0.0
+    points = sum(3 * text.count(phrase) for phrase in AI_TELLS) + sum(text.count(phrase) for phrase in WATCH)
+    return round(points * 1000 / len(text), 2)
+
+
+def number_trace(body, sources, limit=40):
+    """승인① 화면의 숫자 출처 표: 문단의 숫자마다 그 문단이 단 근거에 같은 숫자가 있는지. 막지 않는다."""
+    rows = []
+    for paragraph in _paragraphs(body):
+        ids = [item for item in cited_ids(paragraph) if item in sources]
+        for sentence in SENT.split(paragraph):
+            for number in sorted(numbers_in(sentence)):
+                found = next((item for item in ids if number in numbers_in(sources[item][0])), None)
+                rows.append({"number": number, "sentence": re.sub(r"\s+([.!?])", r"\1", CITE_GROUP.sub("", sentence)).strip()[:90], "cited": ids, "found_in": found})
+                if len(rows) >= limit:
+                    return rows
+    return rows
+
+
 def _texts(packet, preserve):
     try:
         from .editorial import packet_texts
@@ -349,8 +408,15 @@ def writer_findings(packet, *, previous_body=None, allowed_sentences=()):
             lost = fact_keep(previous_body, body, sources, allowed_sentences)
             if lost:
                 issues["fact_keep"].append("고친 판이 직전 판에 있던 사실을 잃었어요: " + ", ".join(f"{kind} {value}" for kind, value in lost[:8]))
-    issues["ai_tells"], notes = tell_problems(_texts(packet, preserve))
-    return {"issues": issues, "notes": notes, "quotes_checked": checked, "quotes_translated": translated}
+            before, after = tell_score(previous_body), tell_score(body)
+            if after > before + 0.5:
+                issues["tell_score"].append(f"고친 판이 AI 티 점수가 올랐어요(1,000자당 {before} → {after}). 직전 판 말투로 돌아가세요")
+    texts = _texts(packet, preserve)
+    issues["ai_tells"], notes = tell_problems(texts)
+    notes += rhythm_notes("\n".join(texts), " ".join(text for text, _ in sources.values()))
+    trace = [] if preserve else number_trace(body, sources)
+    return {"issues": issues, "notes": notes, "quotes_checked": checked, "quotes_translated": translated,
+            "tell_score": tell_score(body), "number_trace": trace}
 
 
 def apply_writer_checks(result, packet, *, mode, previous_body=None, allowed_sentences=()):

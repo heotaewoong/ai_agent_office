@@ -26,6 +26,7 @@ import type {
   Task,
   OutputKind,
   VoiceProfile,
+  WriterChecks,
 } from "../lib/types";
 import {
   createJobRefreshGuard,
@@ -1993,6 +1994,31 @@ function WorkflowSteps({ state }: { state: string }) {
   );
 }
 
+/** 0원 글 검사: 걸린 말, 알림, 숫자 출처 표. 승인을 막지 않고 사람이 원문을 다시 찾는 시간을 줄여요. */
+function WriterChecksSummary({ checks }: { checks?: WriterChecks }) {
+  if (!checks) return null;
+  const issues = Object.values(checks.issues ?? {}).flat();
+  const trace = checks.number_trace ?? [];
+  const missing = trace.filter((row) => !row.found_in).length;
+  if (!issues.length && !(checks.notes ?? []).length && !trace.length) return null;
+  return (
+    <details className="quality-advisories" open={missing > 0 || issues.length > 0}>
+      <summary>0원 글 검사 · 걸린 말 {issues.length}개 · 숫자 {trace.length}개 중 근거 못 찾음 {missing}개</summary>
+      {issues.length > 0 && <ul>{issues.map((issue, index) => <li key={`i${index}`}>{issue}</li>)}</ul>}
+      {(checks.notes ?? []).length > 0 && <p className="muted">알림: {(checks.notes ?? []).join(" · ")}</p>}
+      {trace.length > 0 && (
+        <table className="number-trace">
+          <thead><tr><th>숫자</th><th>문장</th><th>단 근거</th><th>근거에 있나</th></tr></thead>
+          <tbody>{trace.map((row, index) => (
+            <tr key={`n${index}`} className={row.found_in ? undefined : "critical-issue"}>
+              <td>{row.number}</td><td>{row.sentence}</td><td>{row.cited.join(", ") || "없음"}</td><td>{row.found_in ?? "못 찾음"}</td>
+            </tr>))}</tbody>
+        </table>
+      )}
+    </details>
+  );
+}
+
 function QualityPanel({ job }: { job: Job }) {
   const quality = job.source_packet?.quality;
   const gateItems = quality?.gates?.items ?? [];
@@ -2056,6 +2082,7 @@ function QualityPanel({ job }: { job: Job }) {
           </ul>
         </div>
       )}
+      <WriterChecksSummary checks={quality?.writer_checks ?? quality?.harness?.writer_checks} />
       {advisoryIssues.length > 0 && (
         <details className="quality-advisories">
           <summary>확인 의견 {advisoryIssues.length}개 · 승인을 막지 않아요</summary>
