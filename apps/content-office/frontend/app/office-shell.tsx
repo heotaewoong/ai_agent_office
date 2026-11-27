@@ -11,6 +11,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { officeHref, officeRoute, type View } from "../lib/navigation";
 import { draftableNews, filterNews, newsSegment, newsSegments, newsEmptyState, newsSort, newsSorts, sortNews, newsHref, newsTab } from "../lib/news";
 import { DecisionHome } from "./decision-home";
+import { CreateWizard } from "./create-wizard";
 import { BenchmarkWorkspace } from './benchmark-workspace';
 import { api, OfficeApiError } from "../lib/api";
 import { createDashboardRefreshGuard } from "../lib/dashboard-refresh";
@@ -100,6 +101,7 @@ import {
 type LocalDraft = { title: string; body: string; baseHash?: string };
 const views: { id: View; title: string; icon: string; en: string; group: string; hint: string }[] = [
   { id: "home", title: "내 결정 대기", icon: "inbox", en: "DECISIONS", group: "오늘", hint: "승인과 검토가 필요한 일" },
+  { id: "create", title: "새 글 만들기", icon: "pen", en: "CREATE", group: "만들기", hint: "주제부터 원고까지 다섯 단계" },
   { id: "plans", title: "기획·독자 질문", icon: "idea", en: "PLANNING", group: "만들기", hint: "기획 은행과 독자 질문" },
   { id: "news", title: "오늘의 뉴스", icon: "news", en: "DAILY BRIEFING", group: "만들기", hint: "공식 뉴스와 플랫폼 소식" },
   { id: "studio", title: "콘텐츠 작업실", icon: "studio", en: "CONTENT STUDIO", group: "만들기", hint: "원고 편집과 검수" },
@@ -501,7 +503,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             <Link
               href={officeHref(item.id, item.id === 'delivery' ? '' : activeId)}
               prefetch={false}
-              className={`nav-item ${view === item.id ? "active" : ""}`}
+              className={`nav-item ${item.id === "create" ? "nav-create" : ""} ${view === item.id ? "active" : ""}`}
               aria-current={view === item.id ? "page" : undefined}
             >
               <Icon name={item.icon} />
@@ -583,7 +585,9 @@ export default function Office({ children }: { children: React.ReactNode }) {
                 {libraryActive ? '산출물 보관함' : currentView.title}
               </h1>
               <p className="page-description">
-                {view === "home"
+                {view === "create"
+                  ? "주제 하나만 고르면 근거, 제목, 원고까지 차례로 이어져요."
+                  : view === "home"
                   ? "내 검토가 필요한 작업과 다음 행동을 확인하세요."
                   : view === "plans"
                     ? "근거가 갖춰진 기획을 골라 작업으로 넘기고, 독자 질문과 내 글도 여기서 기획으로 만들어요."
@@ -603,6 +607,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
               </p>
             </div>
             <div className="heading-actions">
+              {view === "home" && <Link className="button primary" href="/create" prefetch={false}><Icon name="pen" size={17} />새 글 만들기</Link>}
               <KnowledgeDrawer />
               {(view === "studio" || view === "delivery") && <a className="button secondary" href="/detail-lab/" target="_blank" rel="noopener noreferrer">상세페이지 만들기 ↗</a>}
               {view === "news" && (
@@ -628,7 +633,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
             </div>
           </div>}
 
-          {view !== "world" && view !== "architecture" && !libraryActive && !(view === 'news' && !officialNews) && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
+          {view !== "world" && view !== "architecture" && view !== "create" && !libraryActive && !(view === 'news' && !officialNews) && <PageOutline scope={`${view}-${activeId}`} curated={view === "studio" || view === "delivery"} />}
 
           <ActionFeedback busy={busy} error={visibleError} notice={notice} onDismiss={() => { setError(""); setDashboardError(""); setNotice(""); }} />
           {visibleError && (
@@ -689,6 +694,7 @@ export default function Office({ children }: { children: React.ReactNode }) {
           ) : (
             <>
               {view === "home" && <DecisionHome dashboard={dashboard} />}
+              {view === "create" && <CreateWizard />}
               <div hidden={view!=="plans"}>
               {(view === "plans" || plansVisited) && <>
                   <IdeaBank

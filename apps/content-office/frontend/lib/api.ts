@@ -351,6 +351,8 @@ export const api = {
       { expected_hash: expectedHash, ...(publicEvidenceIds.length ? { public_evidence_ids: publicEvidenceIds } : {}),
         ...(bookEvidenceIds.length ? { book_evidence_ids: bookEvidenceIds } : {}) },
     ),
+  // 제목 3안과 훅 제안(모델 1회). 저장하지 않고, 고른 것만 setPackaging으로 저장해요.
+  suggestPackaging: (jobId: string) => request<{ suggestion: { titles: string[]; hooks: string[]; hook: string; thumbnails: { text: string; visual: string }[]; logline: string; reasons: string[] }; issues: string[][]; version: string }>(`/jobs/${encodeURIComponent(jobId)}/packaging/suggest`, "POST", {}),
   setPackaging: (jobId: string, brief: PackagingBrief) =>
     request(`/jobs/${encodeURIComponent(jobId)}/packaging`, "POST", brief),
   gates: (jobId: string) =>

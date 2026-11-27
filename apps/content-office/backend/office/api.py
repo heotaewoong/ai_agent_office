@@ -1234,6 +1234,12 @@ def create_app(store: Store | None = None):
                                     public_evidence_ids=body.public_evidence_ids,
                                     book_evidence_ids=body.book_evidence_ids)
 
+    @app.post("/api/jobs/{job_id}/packaging/suggest")
+    def suggest_job_packaging(job_id: str):
+        # 제목 3안과 훅을 모델이 한 번 제안한다. 저장하지 않고, 사람이 고른 것만 아래 packaging으로 저장된다.
+        from .packaging_suggest import suggest_packaging
+        return suggest_packaging(store, job_id)
+
     @app.post("/api/jobs/{job_id}/packaging")
     def set_packaging(job_id: str, brief: PackagingInput):
         return attach_packaging(store, job_id, brief.model_dump(exclude_none=True), "local-operator")

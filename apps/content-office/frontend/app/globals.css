@@ -4673,3 +4673,7 @@ button.sidebar-window{width:100%;background:none;border:0;font:inherit;color:inh
 .window-row select{min-width:130px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit;background:var(--surface);color:var(--ink)}
 .newsletter-build small{display:block;margin-top:4px;font-size:13px;line-height:1.5}
 .newsletter-build small.hint.warn{color:var(--accent-ink)}
+
+/* 새 글 만들기: 메뉴에서 가장 먼저 눈에 띄게(2026-11-27) */
+.nav-item.nav-create { color: var(--primary-ink); font-weight: 700; background: var(--primary-soft); border: 1px solid var(--primary-line); }
+.nav-item.nav-create.active { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
