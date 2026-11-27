@@ -115,6 +115,23 @@ def _from_bridge(row) -> dict | None:
     return {key: item[key] for key in _FIELDS}
 
 
+_TOC_LINE = re.compile(r"(?:\.{2,}|·{2,}|…)\s*\d{1,4}\s*$|\s\d{1,4}\s*$")
+_MIN_BOOK_LETTERS = 60
+
+
+def low_information_chunk(text: str) -> bool:
+    """목차(줄 끝이 쪽 번호), 장 제목만 있는 조각, 글자가 너무 적은 조각. 2026-11-28 점검에서 상위 후보 절반이 이런 조각이었다."""
+    letters = len(re.findall(r"[가-힣A-Za-z]", text or ""))
+    sentence = re.search(r"(다|요|죠|까|니다)[.!?]?(\s|$)|[.!?](\s|$)", text or "")
+    if letters < 20 or (letters < _MIN_BOOK_LETTERS and not sentence):  # 장 제목만 있는 조각은 문장이 끝나지 않아요
+        return True
+    lines = [line.strip() for line in (text or "").splitlines() if line.strip()]
+    if len(lines) < 3:
+        return False
+    toc = sum(1 for line in lines if len(line) <= 80 and _TOC_LINE.search(line))
+    return toc / len(lines) >= 0.4
+
+
 def find_book_evidence(query: str, *, limit: int = BOOK_EVIDENCE_LIMIT) -> tuple[list[dict], str]:
     """기획 제목으로 개인 DB를 찾는다. (근거 후보, 검색 방식)을 돌려준다. 검색 방식은 hybrid 또는 text(임베딩을 못 쓸 때)."""
     query = " ".join(str(query or "").split())[:800]
@@ -129,6 +146,8 @@ def find_book_evidence(query: str, *, limit: int = BOOK_EVIDENCE_LIMIT) -> tuple
         if isinstance(cosine, (int, float)) and cosine < floor:
             continue
         item = _from_bridge(row)
+        if item and item["kind"] == "book" and low_information_chunk(item["quote"]):  # 강의 자료는 슬라이드라 원래 짧아요
+            continue
         if item and item["id"] not in seen:
             seen.add(item["id"])
             rows.append(item)

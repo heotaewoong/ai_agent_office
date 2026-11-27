@@ -102,6 +102,38 @@ class RoutingProvider:
         return getattr(self.writer, name)
 
 
+BOOK_MASK = "(개인 책 문단: 무료 등급 외부 판정에는 원문을 보내지 않아요. 서지 정보만 보내요)"
+BOOK_MASK_PROMPT = ("\n근거 중 개인 책 문단(source_kind=approved_book_evidence)은 원문을 보내지 않았다. 그 근거에 기대는 문장은 "
+                    "근거 연결과 정확성에서 실패로 보지 않고 ungrounded_sentences에 넣지 않는다. 책 인용 길이와 출처는 0원 규칙이 따로 검사한다.")
+
+
+def judge_sends_private_books(judge_model) -> bool:
+    """판정 모델에 개인 책 문단 원문을 보내도 되나. Gemini 무료 등급은 입력을 제품 개선에 쓰고 사람이 읽을 수 있어
+    (Gemini API 추가 약관, 2025-10-07 판) 결제를 켰다고 운영자가 HEOBRAIN_GEMINI_PAID=1로 밝힌 때만 보낸다. OpenAI API는 기본 학습 제외라 보낸다."""
+    from .providers import provider_for
+    if provider_for(judge_model) == "gemini":
+        return os.environ.get("HEOBRAIN_GEMINI_PAID") == "1"
+    return True
+
+
+def judge_view(packet, judge_model) -> tuple[dict, int]:
+    """판정 모델에 보낼 원고 묶음. 보내면 안 되는 개인 책 문단은 원문만 가리고 몇 개 가렸는지 돌려준다."""
+    from .editorial import content_context
+    from .private_books import BOOK_SOURCE_KIND
+    context = content_context(packet)
+    if judge_sends_private_books(judge_model):
+        return context, 0
+    masked, evidence = 0, []
+    for item in context.get("evidence") or []:
+        if isinstance(item, dict) and item.get("source_kind") == BOOK_SOURCE_KIND and item.get("source_quote"):
+            item = {**item, "source_quote": BOOK_MASK}
+            masked += 1
+        evidence.append(item)
+    if masked:
+        context = {**context, "evidence": evidence}
+    return context, masked
+
+
 def run_binary_judge(packet, provider, *, w_type, gen_model, judge_model, brief, extra_prompt="", style_reference="") -> dict:
     """교차 모델 7축 판정 1회. 판정 모델이 생성 모델과 같으면 부르지 않는다."""
     from .editorial import content_context
@@ -112,7 +144,10 @@ def run_binary_judge(packet, provider, *, w_type, gen_model, judge_model, brief,
     system = (JUDGE_SYSTEM + "\n[기준표]\n" + rubric +
               "\ncontent_checks에는 source_sufficient(실제 본문 근거 확보), topic_matches(제목, 본문, 결론, SNS, 영상이 원문 주제를 설명), "
               "reason, channel_topics(channel_posts의 각 키를 한 번씩)를 반환한다." + style + extra_prompt)
-    payload = canonical({"packet": content_context(packet), "audience": brief, "w_type": w_type})
+    view, masked = judge_view(packet, judge_model)
+    if masked:
+        system += BOOK_MASK_PROMPT
+    payload = canonical({"packet": view, "audience": brief, "w_type": w_type})
     result = provider.generate("judge", [{"role": "system", "content": system}, {"role": "user", "content": payload}],
                                JUDGE_SCHEMA, {"max_tokens": 4096, "temperature": 0.1})
     axes = result.get("axes") if isinstance(result, dict) else None
@@ -122,7 +157,7 @@ def run_binary_judge(packet, provider, *, w_type, gen_model, judge_model, brief,
     return {"axes": passed, "reasons": {axis: str(axes[axis].get("reason", ""))[:400] for axis in BINARY_AXES},
             "ungrounded_sentences": [str(item)[:400] for item in result.get("ungrounded_sentences") or []][:20],
             "korean_corrections": list(result.get("korean_corrections") or [])[:30],
-            "content_checks": result.get("content_checks") or {}, "passed": all(passed.values())}
+            "content_checks": result.get("content_checks") or {}, "passed": all(passed.values()), "masked_book_quotes": masked}
 
 
 def compare_quality_snapshots(previous: dict, current: dict) -> dict:
