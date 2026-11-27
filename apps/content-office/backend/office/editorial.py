@@ -640,6 +640,16 @@ def prepare_source(store: Store, job_id, provider=None, evaluate_only=False, *, 
     packet["quality"]["deterministic_checks"] = checks
     if not checks["passed"]:
         packet["quality"].update(status="blocked", critical=True)
+    if review_engine == "legacy":
+        legacy_writer = resolve_writer_checks(store)
+        if legacy_writer != "off":
+            # 예전 검수에는 되돌리기가 없어서 어떤 모드든 기록만 해요. 상태, 승인, 고치기는 바꾸지 않고, 검사가 실패해도 원고는 그대로 저장해요.
+            try:
+                from .writer_checks import writer_findings
+                packet["quality"]["writer_checks"] = {"mode": "warn", "requested_mode": legacy_writer, "engine": "legacy",
+                                                      **writer_findings(packet)}
+            except Exception as error:  # noqa: BLE001
+                packet["quality"]["writer_checks"] = {"mode": "warn", "engine": "legacy", "error": type(error).__name__}
     previous = [j["source_packet"] for j in store.jobs() if j["id"] != job_id and j.get("source_packet")]
     packet["quality"]["gates"] = run_gates(packet, previous, packet.get("assets", []), brand)
     if packet["quality"]["gates"]["status"] == "block":
