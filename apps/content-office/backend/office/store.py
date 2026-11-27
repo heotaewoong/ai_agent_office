@@ -167,7 +167,7 @@ class Store:
                 if existing.get('deleted_at'):
                     raise WorkflowError('같은 기사의 작업이 휴지통에 있습니다. 기존 작업을 복원하세요')
                 return existing
-        job = {"id": identifier("job"), "article": article, "title": article.get("editorial_title", article["title"]), "state": "research_ready", "error": None, "source_hash": None, "source_packet": None, "source_approval": None, "release_approval": None, "manifest": None, "selections": {"blog": True, "video": True, "pdf": False, "cards": False}, "brief": brief, "created_at": now(), "updated_at": now()}
+        job = {"id": identifier("job"), "article": article, "title": article.get("editorial_title", article["title"]), "state": "research_ready", "error": None, "source_hash": None, "source_packet": None, "source_approval": None, "release_approval": None, "manifest": None, "selections": {"blog": True, "video": True, "pdf": False, "cards": True}, "brief": brief, "created_at": now(), "updated_at": now()}
         db.execute("INSERT INTO jobs VALUES(?,?,?)", (job["id"], canonical(job), now()))
         self._event(db, "job_created", {"article_id": article["id"], "role": "총괄", "brief_preset": brief["preset"]}, job["id"])
         return job
@@ -411,7 +411,8 @@ class Store:
                 raise WorkflowError("제작물의 부모 원고 버전이 다릅니다")
             from .blog_assets import verify_manifest
             verify_manifest(self, job, manifest)
-            partial = any(status.get('state') != 'completed' for status in manifest.get('output_status', {}).values())
+            # 'deferred'(영상 단계 대기)는 실패가 아니라 사람이 누를 차례예요.
+            partial = any(status.get('state') not in ('completed', 'deferred') for status in manifest.get('output_status', {}).values())
             job.update(manifest=manifest, state="partial_release_review" if partial else "release_review", release_approval=None, error=None)
             self._event(db, "production_partial" if partial else "production_completed", {"source_hash": source_hash, "role": "영상·제작", 'completed_outputs': manifest.get('completed_outputs')}, job_id)
             return self._write_job(db, job)

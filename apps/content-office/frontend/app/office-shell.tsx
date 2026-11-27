@@ -44,6 +44,8 @@ import {
   draftStatus,
   workWindowBlockedReason,
   mainVideoFile,
+  videoAwaitingClick,
+  videoLater,
 } from "../lib/workflow";
 import { Icon } from "./icons";
 import { PageOutline } from "./page-outline";
@@ -111,7 +113,7 @@ const defaultSelections: Selections = {
   blog: true,
   video: true,
   pdf: false,
-  cards: false,
+  cards: true,
 };
 
 function Badge({ state }: { state: string }) {
@@ -1686,6 +1688,7 @@ function Studio({
                   <Icon name={channel.icon} size={21} />
                   <strong>{channel.title}</strong>
                   <span>{channel.description}</span>
+                  {channel.id === "video" && videoLater(selections) && <span>블로그와 카드 다음에 비용을 보고 따로 만들어요</span>}
                   <span className="channel-check">
                     <Icon name="check" size={12} />
                   </span>
@@ -1782,7 +1785,7 @@ function Studio({
                       })[key],
                   )
                   .join(", ")}
-                . 외부 게시와 출고는 별도 검토 단계입니다.
+                . {videoLater(selections) && "영상은 블로그와 카드를 만든 뒤 제작·출고함에서 예상 비용을 보고 따로 눌러야 만들어요. "}외부 게시와 출고는 별도 검토 단계입니다.
               </p>
               {!approvalIsCurrent(approvalVersion, job.source_hash) && (
                 <p className="critical-issue">
@@ -1799,7 +1802,7 @@ function Studio({
                 </button>
                 <ProduceButton
                   jobId={job.id}
-                  video={selections.video}
+                  video={selections.video && !videoLater(selections)}
                   className="button primary small"
                   disabled={
                     locked ||
@@ -2450,6 +2453,26 @@ function Delivery({
               onClick={() => setPreview(videoFile?.id ?? (firstThumbnail ? thumbnailArtifact(firstThumbnail).id : undefined))}>
               영상·썸네일 확인
             </a>
+          </div>}
+          {videoAwaitingClick(job) && <div className={deliveryStyles.attention} role="status">
+            <strong>영상은 아직 만들지 않았어요</strong>
+            <p>블로그와 카드는 준비됐어요. 영상은 예상 비용을 확인하고 눌러야 만들어요. 영상을 만들면 출고 승인②를 한 번 더 받아요.</p>
+            <ProduceButton
+              key={`video-stage-${job.source_hash}-${job.clip_profile_override?.selected_at??'global'}`}
+              jobId={job.id}
+              stage="video"
+              className="button primary small"
+              disabled={busy || Boolean(requestBlockedReason) || !["release_review", "partial_release_review", "release_approved"].includes(job.state)}
+              onProduce={(confirmPaidClips) =>
+                void action(
+                  "영상 만들기",
+                  () => api.produce(job.id, confirmPaidClips, "video"),
+                  "영상 제작을 요청했어요. 끝나면 출고 승인②에서 같이 확인해요.",
+                )
+              }
+            >
+              영상 만들기
+            </ProduceButton>
           </div>}
           <OutputChoices
             job={job}

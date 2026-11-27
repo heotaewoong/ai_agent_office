@@ -170,6 +170,8 @@ class ProduceRequest(BaseModel):
     # Paid generated clips start only after the operator saw the estimate and confirmed it on the page.
     confirm_paid_clips: bool = False
     confirm_paid_thumbnails: bool = Field(default=False, strict=True)
+    # 나눠 만들기의 두 번째 단계: 글과 카드를 만든 뒤 사람이 누르는 영상 제작
+    stage: Literal['video'] | None = None
 
 
 class ClipLimitsRequest(BaseModel):
@@ -729,13 +731,15 @@ def create_app(store: Store | None = None):
             selections={key:bool((review.selections if review.selections is not None else job['selections']).get(key,False)) for key in ('blog','video','pdf','cards')}
             job = {**job, 'selections': selections}
             from .thumbnail_studio import enabled
+            from .production_graph import staged
             thumbnails = enabled(store, job)
-            if thumbnails:
+            video_later = staged(selections)  # 영상은 글과 카드 다음에 따로 누르므로 지금 확인할 영상 비용이 없다
+            if thumbnails and not video_later:
                 if not review.confirm_paid_thumbnails:
                     raise WorkflowError('원고 기반 썸네일 3장 포함 제작 비용을 화면에서 확인하세요. 기존 후보는 재사용합니다')
                 production_options['thumbnail_artwork_confirmed'] = True
             from .video_selection import paid_clip_estimate
-            estimate = paid_clip_estimate(store, job)
+            estimate = paid_clip_estimate(store, {**job, 'selections': {**selections, 'video': False}} if video_later else job)
             if estimate['paid']:
                 if not review.confirm_paid_clips:
                     raise WorkflowError(estimate['label'] + '. 유료 영상 클립 비용을 화면에서 확인하세요')
@@ -784,10 +788,13 @@ def create_app(store: Store | None = None):
         return adopt_reviewed(store, job_id, body.version, body.reviewed)
 
     @app.get("/api/jobs/{job_id}/production-estimate")
-    def production_estimate(job_id: str, video: bool | None = None):
+    def production_estimate(job_id: str, video: bool | None = None, stage: Literal['video'] | None = None):
         # Read-only: what the next production may pay for generated clips. Never calls a provider.
         from .video_selection import paid_clip_estimate
+        from .production_graph import staged
         job = store.job(job_id)
+        if video is None and stage != 'video' and staged(job['selections']):
+            video = False  # 나눠 만들기: 다음 제작은 글과 카드뿐이고 영상은 따로 누른다
         if video is not None:
             job = {**job, 'selections': {**job['selections'], 'video': video}}
         from .thumbnail_studio import enabled
@@ -798,11 +805,18 @@ def create_app(store: Store | None = None):
         require_open_window()
         job = store.require_source_approval(job_id)
         from .thumbnail_studio import enabled
-        thumbnails = enabled(store, job)
-        if thumbnails and not (body and body.confirm_paid_thumbnails):
+        from .production_graph import staged
+        video_stage = bool(body and body.stage == 'video')
+        if video_stage:
+            manifest = job.get('manifest') or {}
+            if not job['selections'].get('video') or manifest.get('source_hash') != job['source_hash']:
+                raise WorkflowError('영상은 승인①에서 영상을 고르고 글과 카드를 먼저 만든 뒤에 따로 만들어요')
+        video_later = staged(job['selections']) and not video_stage
+        thumbnails = enabled(store, job)  # 제작 판본(contract)은 두 단계가 같아야 해서 실제 선택으로 계산한다
+        if thumbnails and not video_later and not (body and body.confirm_paid_thumbnails):
             raise WorkflowError('원고 기반 썸네일 3장 포함 제작 비용을 화면에서 확인하세요. 기존 후보는 재사용합니다')
         from .video_selection import paid_clip_estimate
-        estimate = paid_clip_estimate(store, job)
+        estimate = paid_clip_estimate(store, {**job, 'selections': {**job['selections'], 'video': False}} if video_later else job)
         if estimate["paid"] and not (body and body.confirm_paid_clips):
             raise WorkflowError(estimate["label"] + ". 유료 영상 클립이 포함되어 화면에서 확인한 뒤에만 제작을 시작합니다")
         from .media import production_contract
@@ -812,12 +826,16 @@ def create_app(store: Store | None = None):
         from .channels import registry
         contract = production_contract(renderer_for_job(store, job), job['selections'], image_renderer=background_renderer_for_job(store, job), clip_renderer=clip_renderer_for_job(store, job), channel_registry=registry(store) if job['selections'].get('blog') else None, thumbnail_artwork=thumbnails)
         payload = {"job_id": job_id, "source_hash": job["source_hash"], "production_contract": contract['hash']}
-        if thumbnails:
+        if thumbnails and not video_later:
             payload['thumbnail_artwork_confirmed'] = True
         if estimate["paid"]:
             payload.update(paid_clips_confirmed=True, paid_clip_estimate={k: estimate[k] for k in ("clips", "credits", "reservation_krw", "model")})
             store.event("paid_clips_confirmed", {**payload["paid_clip_estimate"], "actor": "local-operator-ui"}, job_id)
-        task = store.enqueue("produce", payload, key=f"produce:{job_id}:{job['source_hash']}:{contract['hash']}")
+        if video_stage:
+            payload['stage'] = 'video'
+            store.event('video_stage_requested', {'source_hash': job['source_hash'], 'manifest_hash': job['manifest'].get('hash'),
+                                                  'paid_clips': bool(estimate['paid']), 'actor': 'local-operator-ui'}, job_id)
+        task = store.enqueue("produce", payload, key=f"produce:{job_id}:{job['source_hash']}:{contract['hash']}" + (':video' if video_stage else ''))
         if task["state"] == "queued":
             store.update_job(job_id, state="production_queued")
         return task

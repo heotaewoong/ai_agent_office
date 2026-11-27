@@ -1,5 +1,20 @@
 # HeoBrain 콘텐츠 오피스
 
+## 나눠 만들기: 글과 카드 먼저, 영상은 따로 — 2026-11-27
+
+- **바뀐 점:** 승인①에서 영상과 다른 제작물(블로그, 카드, PDF)을 같이 고르면, 첫 제작은 블로그, 글 채널 문구, 카드뉴스, PDF만 만들어요. 영상은 `output_status.video.state = "deferred"`로 남고, 제작·출고함의 **영상 만들기**를 눌러야 시작해요. 누르기 전에 예상 비용(유료 클립, 썸네일 그림)을 보여 주고 확인을 받아요. 영상만 고른 작업은 예전처럼 바로 만들어요. 새 작업의 기본 선택에 카드뉴스를 더했어요.
+- **이유:** 실제 비용 기록(11/27)에서 영상 1편이 클립 포함 약 2,700원(클립 없이 약 340원), 카드뉴스는 약 55원(배경 그림 포함 약 235원)이었어요. 23개 작업 모두 영상을 같이 골라서, 영상 비용이 승인 순간 자동으로 나갔어요.
+- **그래프:** `office/production_graph.py`의 LangGraph `StateGraph`예요. `plan → text_outputs → video_gate → video_output` 순서가 고정이고 에이전트가 고르지 않아요.
+  - 사람 결정의 기준은 Store예요. 영상 클릭은 `POST /api/jobs/{id}/produce {"stage": "video"}`로 쌓인 작업이고, `video_gate`는 그 작업을 Store에서 다시 확인해요. `interrupt`는 멈추는 자리일 뿐이고 재개 값은 작업 id예요. 잘못된 재개 값이 체크포인트에 남지 않게 그래프에 넣기 전에 먼저 확인해요.
+  - `video_gate`는 `interrupt` 앞에서 돈 드는 일을 하지 않아요. 재개하면 노드가 처음부터 다시 돌기 때문이에요.
+  - 같은 판본의 글과 카드는 다시 만들지 않아요(출력별 재사용). 영상 단계에서 지금 완성본이 같은 판본이면 글과 카드를 다시 저장하지도 않아요. 다시 저장하면 출고 승인②가 지워지기 때문이에요.
+  - 제작 노드가 멈추면 `error_handler`가 인수인계 3칸(한 것, 멈춘 곳, 이유)을 `production_handoff` 기록으로 남기고 같은 오류로 멈춰요. 유료 호출을 자동으로 다시 하지 않아요.
+  - 시간 제한(`TimeoutPolicy`)은 걸지 않아요. 동기 렌더는 스레드를 멈출 수 없어서 제한이 지나도 뒤에서 계속 돌 수 있어요. ffmpeg 명령마다 있는 시간 제한과 제작 잠금이 그 자리를 맡아요.
+  - 병렬(`Send`)도 쓰지 않아요. 같은 제작 폴더와 SQLite에 쓰는 일이고 서버는 2코어라 나눠 돌려도 빨라지지 않아요.
+  - 체크포인트는 `OFFICE_STATE_DIR/production-checkpoints/`(0600)이고 상태에는 id와 해시만 둬요. 외부 추적이 켜져 있으면 시작하지 않아요.
+- **영상을 만들면** 완성본이 바뀌어 출고 승인②를 한 번 더 받아요. 본인 PC 임시저장(`owner_drafts`)은 파일과 글 내용이 같으면 다시 보내지 않아요(`_delivery_key`). 아직 실행 안 된 전달 대기는 승인②가 바뀌면 멈춰요.
+- **시험:** `tests/test_production_stages.py`(관문에서 멈춤, Store 확인 없는 재개 거부, 영상만 고른 작업은 바로, 실패 인수인계, 실제 ffmpeg로 글과 카드 먼저 그다음 영상, 유료 확인은 영상 클릭에서만), 화면 `tests/workflow.test.ts`.
+
 ## 원고 생성·검수·수정의 중단·재개 — 2026-11-17
 
 현재 코드의 `prepare_source()`는 LangGraph Functional API를 기본 실행기로 사용합니다. 기존 생성 → 비평·평가·한국어 검수 → 필요하면 수정(최대 2회) 흐름을 그대로 실행하고, 끝난 모델 호출을 작업별 SQLite 체크포인트에 저장합니다. 서버에서 이 기능을 쓰려면 이 판본과 검증된 의존성을 함께 배포해야 합니다. 이 문단 자체는 운영 배포 완료 기록이 아닙니다.
@@ -20,7 +35,7 @@
 - **검토 대기:** v2 검수(`v2_harness`)에서 고치기 상한(2회)을 다 써도 판정을 못 넘은 원고는 `quality.status = "needs_review"`예요. 되돌리기와 상한은 "가장 나은 판을 남기는" 규칙일 뿐 합격이 아니라서, 남긴 판에 통과를 붙이지 않아요. 못 넘은 축은 `quality.review_pending`에 남고, 화면 뱃지는 "검토 대기"예요. 승인⓪①은 기존 규칙(`status != "passed"`면 거부)대로 막혀요. 지적을 고쳐 다시 검수해야 승인할 수 있어요. 시험: `tests/test_harness.py`의 `test_exhausted_refines_below_accuracy_stay_in_review_pending`, `test_review_pending_draft_cannot_be_approved`. 기본 실행기는 여전히 `legacy`예요.
 - **LangSmith 연결 실험:** 운영 원고와 개인 자료는 지금처럼 로컬(`events`, `traces/*.jsonl`)에만 남겨요. 원격 추적 환경 변수가 켜지면 검수는 시작하지 않아요. 예외는 저장소에 커밋한 공개 샘플(`backend/office/public_samples/*.json`)과 글자까지 같은 입력뿐이에요(`office/public_sample.py`의 `require_public_sample`: 파일과 해시 일치, `https://` 근거만, 책이나 개인 자료 표시 없음, 원문 보존 모드 아님). 모델은 0원 가짜 모델이에요.
   - 확인 실행(아무것도 안 보냄): `backend/.venv/bin/python scripts/langsmith_public_probe.py`
-  - 실제 전송: `LANGSMITH_API_KEY`를 넣은 셸에서 `... scripts/langsmith_public_probe.py --send` (프로젝트 `heobrain-public-probe`). 키는 운영 `office.env`에 넣지 않아요.
+  - 실제 전송: `... scripts/langsmith_public_probe.py --send` (프로젝트 `heobrain-public-probe`). 셸에 `LANGSMITH_API_KEY`가 없으면 본인만 읽을 수 있는 키 파일 `~/.config/heobrain-content-office/langsmith.key`(권한 600, 바꾸려면 `HEOBRAIN_LANGSMITH_KEY_FILE`)를 읽어요. 다른 계정이 읽을 수 있는 파일이면 멈춰요. 키 값은 출력하지 않고 결과에는 `key_source`(env 또는 file)만 남겨요. 키는 운영 `office.env`에 넣지 않아요. 시험: `scripts/tests/test_langsmith_public_probe.py`
   - 시험: `test_remote_tracing_only_for_checked_in_public_samples`
 
 ## 오늘의 뉴스에 모은 소식·경쟁사·아이디어 · 2026-11-07

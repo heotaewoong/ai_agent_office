@@ -896,7 +896,8 @@ def production_lock(folder):
     finally:
         os.close(fd)
 
-def produce(store, job_id, *, voice_renderer=None, background_renderer=None, clip_renderer=None):
+def produce(store, job_id, *, voice_renderer=None, background_renderer=None, clip_renderer=None, defer_video=False):
+    # defer_video: 나눠 만들기(production_graph)의 첫 단계. 이미 만든 영상은 재사용하고, 새 영상은 사람이 따로 누를 때까지 미룬다.
     from .artifact_library import require_available
     # This guard must run before directory creation or any external voice or image callback.
     job = store.require_source_approval(job_id)
@@ -976,6 +977,10 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
                                 clips = [{**previous['clips'], 'scene': scene} for scene in previous['clips'].get('scenes', [])]
                             store.event('output_reused', {'output': kind, 'source_hash': source_hash, 'files': len(old_records)}, job_id)
                             return
+                    if kind == 'video' and defer_video:
+                        output_status[kind] = {'state': 'deferred'}
+                        store.event('output_deferred', {'output': kind, 'source_hash': source_hash, 'reason': '영상은 예상 비용을 보고 사람이 따로 눌러야 만들어요'}, job_id)
+                        return
                     output_files[kind] = action()
                     output_status[kind] = {'state': 'completed', 'files': len(output_files[kind])}
                     store.event('output_completed', {'output': kind, 'files': len(output_files[kind]), 'source_hash': source_hash}, job_id)
@@ -1060,6 +1065,8 @@ def produce(store, job_id, *, voice_renderer=None, background_renderer=None, cli
             records = [{**artifact_record(root, path), 'outputs': ['shared'] if path == shared or path in campaign_files else [kind for kind, paths in output_files.items() if path in paths]} for path in sorted(set(files))]
             from .offers import offer_snapshot
             manifest = {'source_hash': source_hash, 'offer_snapshot': offer_snapshot(job.get('offer')), 'production_contract': contract, 'output_status': output_status, 'completed_outputs': completed, 'files': records, 'media': media, 'thumbnail_candidates': [r for r in records if r['name'] in {p.name for p in thumbs}], 'warnings': ['게시·업로드는 실행되지 않았습니다', '완료된 제작물을 선택해 출고 승인②을 받습니다. 영상은 음성 청취와 화면 검토가 필요합니다']}
+            if output_status.get('video', {}).get('state') == 'deferred':
+                manifest['warnings'].append('영상은 아직 만들지 않았어요. 제작·출고함에서 예상 비용을 보고 영상 만들기를 누르면 만들어요. 영상을 만들면 출고 승인②를 한 번 더 받아요')
             if backgrounds and any(kind in completed for kind in ('video', 'cards')):
                 manifest['background'] = background_summary(backgrounds)
                 manifest['warnings'].append('배경은 생성 이미지이며 한국어 글자는 로컬 레이어입니다. 출고 전 화면 검토가 필요합니다')

@@ -53,12 +53,17 @@ def process_task(store, task):
         renderer = renderer_for_job(store, current)
         background = background_renderer_for_job(store, current)
         clips = clip_renderer_for_job(store, current)
-        if getattr(clips, 'paid', False) and payload.get('paid_clips_confirmed') is not True:
+        from .production_graph import run_production, staged
+        stage = 'video' if payload.get('stage') == 'video' else 'text'
+        # 나눠 만들기: 글과 카드를 먼저 만들고, 영상(유료 클립, 썸네일 그림 포함)은 사람이 따로 누른 요청에서만 만든다.
+        video_now = stage == 'video' or not staged(current['selections'])
+        if video_now and getattr(clips, 'paid', False) and payload.get('paid_clips_confirmed') is not True:
             # Paid clips need the operator's on-page confirmation; no automatic path may start them.
             raise WorkflowError('유료 영상 클립은 운영자가 화면에서 확인한 제작에서만 만듭니다. 제작을 다시 요청하세요')
-        if payload.get('production_contract') and payload['production_contract'] != production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips, channel_registry=registry(store) if current['selections'].get('blog') else None, thumbnail_artwork=enabled(store, current))['hash']:
+        contract = production_contract(renderer, current['selections'], image_renderer=background, clip_renderer=clips, channel_registry=registry(store) if current['selections'].get('blog') else None, thumbnail_artwork=enabled(store, current))['hash']
+        if payload.get('production_contract') and payload['production_contract'] != contract:
             raise WorkflowError('대기 중 제작 설정이 변경되었습니다. 현재 설정으로 제작을 다시 요청하세요')
-        if enabled(store, current):
+        if video_now and enabled(store, current):
             if payload.get('thumbnail_artwork_confirmed') is not True:
                 raise WorkflowError('자동 썸네일 이미지 비용을 확인하고 제작을 다시 요청하세요')
             generate(store, job_id, current['source_hash'])
@@ -66,14 +71,17 @@ def process_task(store, task):
         # 제작과 함께 같은 원고의 퀴즈·카드뉴스를 자동으로 줄 세운다. 이미 현재 버전 결과가 있으면 건너뛴다.
         from .quiz import enqueue_missing_outputs
         queued_outputs = enqueue_missing_outputs(store, current)
-        manifest = produce(store, job_id, voice_renderer=renderer, background_renderer=background, clip_renderer=clips)
+        run = run_production(store, job_id, task_id=task.get('id'), stage=stage, contract=contract,
+                             produce=lambda defer_video: produce(store, job_id, voice_renderer=renderer, background_renderer=background, clip_renderer=clips, defer_video=defer_video))
+        manifest = run['manifest']
         if current.get('owner_draft_policy'):
             from .owner_drafts import prepare
             try:
                 prepare(store, job_id)
             except WorkflowError as error:
                 store.event('owner_drafts_blocked', {'reason': str(error), 'public_sent': False}, job_id)
-        return {"job_id": job_id, "manifest_hash": manifest["hash"], 'partial': any(status.get('state') != 'completed' for status in manifest.get('output_status', {}).values()), 'completed_outputs': manifest.get('completed_outputs'), 'queued_outputs': queued_outputs}
+        return {"job_id": job_id, "manifest_hash": manifest["hash"], 'partial': any(status.get('state') not in ('completed', 'deferred') for status in manifest.get('output_status', {}).values()), 'completed_outputs': manifest.get('completed_outputs'), 'queued_outputs': queued_outputs,
+                'awaiting_video': run['awaiting_video'], 'path': run['path']}
     if task["kind"] in ("quiz", "cards"):
         from .quiz import generate_quiz
         from .cards import plan_cards

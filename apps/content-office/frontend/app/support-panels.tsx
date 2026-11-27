@@ -610,7 +610,7 @@ export function OutputChoices({
       <div className="output-grid">
         {outputs.map(key => {
           const status=job.manifest?.output_status?.[key], ready=complete.includes(key);
-          return <div className="output-choice" key={key}><div><strong>{outputNames[key]}</strong><span className={`badge ${ready?'green':status?.state==='failed'?'red':'neutral'}`}>{ready?'완료':status?.state==='failed'?'제작 실패':status?.state==='running'?'제작 중':'미완료'}</span></div>
+          return <div className="output-choice" key={key}><div><strong>{outputNames[key]}</strong><span className={`badge ${ready?'green':status?.state==='failed'?'red':'neutral'}`}>{ready?'완료':status?.state==='failed'?'제작 실패':status?.state==='running'?'제작 중':status?.state==='deferred'?'영상 만들기 대기':'미완료'}</span></div>
             {status?.files != null && <p>{status.files}개 파일</p>}
             {status?.error && <p className="output-error">{status.error}</p>}
             {status?.successful_assets_preserved && <p>성공한 자산은 보존되어 있습니다.</p>}

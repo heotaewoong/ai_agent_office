@@ -31,6 +31,16 @@ export function completedOutputs(
     ? selected
     : [];
 }
+/** 영상과 다른 제작물을 같이 고르면 영상은 글과 카드 다음에 따로 눌러 만들어요(서버 production_graph.staged와 같은 규칙). */
+export function videoLater(selections?: Partial<Record<OutputKind, boolean>> | null): boolean {
+  return Boolean(selections?.video && (selections.blog || selections.cards || selections.pdf));
+}
+
+/** 글과 카드는 만들었고 영상이 사람의 '영상 만들기'를 기다리는 상태인지. */
+export function videoAwaitingClick(job: Pick<Job, "selections" | "manifest" | "source_hash">): boolean {
+  return Boolean(job.selections?.video && job.manifest?.output_status?.video?.state === "deferred");
+}
+
 export function validReleaseOutputs(
   job: Pick<Job, "state" | "selections" | "manifest">,
   outputs: OutputKind[],
