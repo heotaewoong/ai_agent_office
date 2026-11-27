@@ -261,9 +261,15 @@ export type VerdictLabelState = {
   label: VerdictLabel | null; suggested: "correct" | "wrong" | null; saved_external: number;
 };
 export const verdictLabels: { id: VerdictLabel; label: string; help: string }[] = [
-  { id: "correct", label: "맞음", help: "판정대로였어요." },
-  { id: "wrong", label: "틀림", help: "판정이 빗나갔어요." },
+  { id: "correct", label: "맞았어요", help: "창고 근거가 판정대로였어요." },
+  { id: "wrong", label: "빗나갔어요", help: "실제 창고 근거와 판정이 달랐어요." },
   { id: "practice", label: "연습", help: "연습으로 눌러 보는 거라 채점에서 빼요." },
+];
+/** 자료 창고 판정 세 가지가 무엇을 뜻하고, 그래서 시스템이 무엇을 하는지(승인⓪ 화면 설명용). */
+export const verdictMeanings: { id: ResearchVerdictKey; label: string; meaning: string; action: string }[] = [
+  { id: "correct", label: "맞음", meaning: "창고에 쓸 만한 근거가 있어요.", action: "바깥 검색을 하지 않아요." },
+  { id: "ambiguous", label: "애매", meaning: "근거가 조금 있어요.", action: "바깥 검색으로 보충해요." },
+  { id: "incorrect", label: "틀림", meaning: "창고에 이 기획에 맞는 근거가 없어요.", action: "바깥 검색(Tavily 1회)을 자동으로 해요." },
 ];
 export type ResearchRequest = {
   /** 기획 카드에서 누른 조사면 기획 ID. 추천과 실제로 누른 것을 세는 데만 쓴다. */

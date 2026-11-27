@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { api } from "../lib/api";
-import { verdictLabels, type VerdictLabel, type VerdictLabelState } from "../lib/source-library";
+import { verdictLabels, verdictMeanings, type VerdictLabel, type VerdictLabelState } from "../lib/source-library";
 
 type Props = {
   ideaId: string;
@@ -44,9 +44,24 @@ export function VerdictLabelPicker({ ideaId, value, onChange }: Props) {
   const picked = value ?? first ?? undefined;
   return (
     <fieldset className="idea-public-evidence" style={{ margin: "12px 0" }}>
-      <legend>자료 창고 판정 “{state.verdict_label}”이 맞았나요?</legend>
-      <p className="muted">
-        {state.label ? "저장해 둔 답이에요." : "미리 골라 둔 값이에요."} 다르면 바꿔 주세요. 아래 버튼으로 기획을 선택할 때 함께 저장돼요.
+      <legend>자료 창고 판정이 맞았는지 알려 주세요</legend>
+      <p className="muted" style={{ margin: "4px 0 8px" }}>
+        시스템이 이 기획에 맞는 근거가 자료 창고에 있는지 먼저 보고, 셋 중 하나로 판정해요. 지금 판정은 굵게 표시돼요.
+      </p>
+      <ul style={{ listStyle: "none", padding: 0, margin: "0 0 10px", display: "grid", gap: 4 }}>
+        {verdictMeanings.map((item) => {
+          const now = item.id === state.verdict;
+          return (
+            <li key={item.id} aria-current={now ? "true" : undefined}
+                style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${now ? "var(--primary)" : "var(--line)"}`, background: now ? "var(--primary-soft)" : "transparent", fontWeight: now ? 700 : 400 }}>
+              {now ? "지금 판정: " : ""}<strong>{item.label}</strong> {item.meaning} {item.action}
+              {now && state.top_score != null ? <span className="muted"> (창고 최고 점수 {state.top_score.toFixed(2)})</span> : null}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="muted" style={{ margin: "0 0 6px" }}>
+        아래 자료 창고 근거를 보고 판정이 맞았는지 골라 주세요. {state.label ? "저장해 둔 답이에요." : "미리 골라 둔 값이에요."} 기획을 선택할 때 함께 저장되고, 쌓이면 판정 기준을 고치는 데 써요.
       </p>
       {verdictLabels.map((choice) => (
         <label key={choice.id} style={{ display: "inline-flex", gap: 6, marginRight: 16, alignItems: "center" }}>
