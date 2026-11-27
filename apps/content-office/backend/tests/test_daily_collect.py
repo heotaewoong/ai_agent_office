@@ -266,3 +266,22 @@ def test_scheduled_source_requires_the_operators_enabled_schedule(tmp_path):
         with pytest.raises(WorkflowError, match="일정"):
             start_session(store, minutes=15, current=AT_0703, source="scheduled_daily_collect", schedule=schedule)
     assert store.setting("work_window") is None
+
+
+def test_enabled_trend_signals_run_in_the_same_window_and_failures_do_not_change_the_run(tmp_path, monkeypatch):
+    from office import trend_signals
+    store = Store(tmp_path)
+    enabled(store, minutes=10, max_krw=100)
+    trend_signals.update_trend_settings(store, {"enabled": True}, actor="owner")
+    seen = []
+    monkeypatch.setattr(trend_signals, "collect_trends", lambda s: seen.append(s.setting("work_window")["status"]) or {"rows": 20, "paid_calls": 0})
+    result = run(store, refresh=FakeRefresh(calls=1))
+    assert result["status"] == "completed" and seen == ["active"]
+    assert store.setting("daily_collect_runs")[-1]["trend_signals"] == {"rows": 20, "paid_calls": 0}
+
+    store2 = Store(tmp_path / "b")
+    enabled(store2, minutes=10, max_krw=100)
+    trend_signals.update_trend_settings(store2, {"enabled": True}, actor="owner")
+    monkeypatch.setattr(trend_signals, "collect_trends", lambda s: (_ for _ in ()).throw(RuntimeError("down")))
+    assert run(store2, refresh=FakeRefresh(calls=1))["status"] == "completed"
+    assert store2.setting("daily_collect_runs")[-1]["trend_signals"] == {"error": "RuntimeError"}

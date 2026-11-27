@@ -1284,6 +1284,8 @@ def create_app(store: Store | None = None):
     register_improvements(app, store)
     from .api_discovery import register as register_discovery
     register_discovery(app, store)
+    from .api_trends import register as register_trends
+    register_trends(app, store)
     from .api_world_music import register as register_world_music
     register_world_music(app, store)
     from .api_assistant_reports import register as register_assistant_reports

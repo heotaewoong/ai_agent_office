@@ -194,6 +194,13 @@ def _collect(store, run, window, settings, refresh, provider_factory, deadline_r
         provider.cost_scope_exhausted = False
         end_at = aware_time(window["authorized_end"]) - timedelta(seconds=5)
         report = deadline_runner(lambda: refresh(store, provider=provider), end_at)
+        from .trend_signals import collect_trends, trend_settings
+        if trend_settings(store)["enabled"]:
+            # 트렌드 신호는 0원이고 실패해도 아침 수집 결과를 바꾸지 않는다(같은 작업 시간 안에서만 돈다)
+            try:
+                run["trend_signals"] = deadline_runner(lambda: collect_trends(store), end_at)
+            except Exception as error:
+                run["trend_signals"] = {"error": type(error).__name__}
     except CostScopeExceeded:
         status = "stopped_cost_cap"
     except WindowDeadline:

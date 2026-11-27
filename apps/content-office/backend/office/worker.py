@@ -17,6 +17,9 @@ def process_task(store, task):
     if task['kind'] == 'discover':
         from .discovery import run
         return run(store, payload.get('config_hash'))
+    if task['kind'] == 'trend_signals':
+        from .trend_signals import collect_trends
+        return collect_trends(store)
     if task['kind'] == 'benchmark_refresh':
         from .benchmarks import run
         return run(store, payload.get('registry_hash'))

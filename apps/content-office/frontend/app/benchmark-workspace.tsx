@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { BenchmarkPanel } from './benchmark-panel';
 import { AssistantChat } from './assistant-chat';
 import { DiscoveryPanel } from './discovery-panel';
+import { TrendSignalsPanel } from './trend-signals-panel';
 import { PlatformNewsPanel } from './platform-news-panel';
 import styles from './platform-news.module.css';
 
@@ -16,6 +17,7 @@ export function BenchmarkWorkspace({ connected, active, manageSources, officialU
   const router = useRouter();
   const [platform, setPlatform] = useState('all');
   const [discoveryOpen, setDiscoveryOpen] = useState(false);
+  const [trendsOpen, setTrendsOpen] = useState(false);
   const [preparedDraft, setPreparedDraft] = useState('');
   const [openSignal, setOpenSignal] = useState(0);
   const [closeSignal, setCloseSignal] = useState(0);
@@ -26,6 +28,10 @@ export function BenchmarkWorkspace({ connected, active, manageSources, officialU
     <details id="platform-trend-research" className={styles.discovery} onToggle={event => setDiscoveryOpen(event.currentTarget.open)}>
       <summary>소재 참고 조사 · 설정과 결과</summary>
       <DiscoveryPanel active={active && discoveryOpen} platform={platform} />
+    </details>
+    <details id="trend-signals" className={styles.discovery} onToggle={event => setTrendsOpen(event.currentTarget.open)}>
+      <summary>트렌드 신호(0원) · 자동완성과 위키백과 조회수</summary>
+      <TrendSignalsPanel active={active && trendsOpen} onIdeaSaved={onIdeaSaved} />
     </details>
     <BenchmarkPanel active={active} platform={platform} onResetPlatform={() => setPlatform('all')} manageSources={manageSources}
       officialUrls={officialUrls} onIdeaSaved={onIdeaSaved}

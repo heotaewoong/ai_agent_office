@@ -15109,7 +15109,7 @@
           "current_label": "콘텐츠 오피스 전체",
           "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이다. LangGraph는 원고 생성·검수·수정 구간(editorial_graph)과 승인① 뒤 제작 단계(production_graph: 글·카드 먼저, 영상 관문) 두 곳에 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
           "source_refs": [
-            "backend/office/worker.py:39",
+            "backend/office/worker.py:42",
             "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/production_graph.py:60"
@@ -15163,7 +15163,7 @@
           "current_label": "콘텐츠 오피스 전체",
           "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이다. LangGraph는 원고 생성·검수·수정 구간(editorial_graph)과 승인① 뒤 제작 단계(production_graph: 글·카드 먼저, 영상 관문) 두 곳에 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
           "source_refs": [
-            "backend/office/worker.py:39",
+            "backend/office/worker.py:42",
             "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/production_graph.py:60"
@@ -20778,7 +20778,7 @@
           "current_label": "제작 결과·실패 상태와 검토 인계",
           "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 제작 단계가 멈추면 한 것·멈춘 곳·이유 3칸(production_handoff)을 남기고 유료 호출을 자동으로 다시 하지 않는다. 생성완료가 외부 전달완료는 아니다.",
           "source_refs": [
-            "backend/office/worker.py:71",
+            "backend/office/worker.py:74",
             "backend/office/media.py:899",
             "backend/office/delivery_queue.py",
             "backend/office/production_graph.py:103"
@@ -20832,7 +20832,7 @@
           "current_label": "제작 결과·실패 상태와 검토 인계",
           "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 제작 단계가 멈추면 한 것·멈춘 곳·이유 3칸(production_handoff)을 남기고 유료 호출을 자동으로 다시 하지 않는다. 생성완료가 외부 전달완료는 아니다.",
           "source_refs": [
-            "backend/office/worker.py:71",
+            "backend/office/worker.py:74",
             "backend/office/media.py:899",
             "backend/office/delivery_queue.py",
             "backend/office/production_graph.py:103"
@@ -22839,12 +22839,13 @@
           "number": 49,
           "status": "부분",
           "current_label": "RSS·경쟁자 관측·요청형 조사",
-          "detail": "구글 트렌드 급상승은 RSS로 이미 수집한다(feeds.json, 발견 화면). ViewStats·vling·블랙키위를 묶은 자동 수집은 없다. 구글·유튜브·네이버 자동완성, 위키백과 조회수, 네이버 데이터랩(키 필요)은 11/27 사용자 결정으로 다음 차례다.",
+          "detail": "구글 트렌드 급상승은 RSS로 수집한다(feeds.json, 발견 화면). 11/27부터 씨앗 단어마다 구글·유튜브·네이버 자동완성과 위키백과 조회수를 0원으로 모은다(트렌드 신호: 아침 수집 때 같이 또는 지금 모으기, 막히면 비워 둠). ViewStats·vling·블랙키위 자동 수집은 없고 네이버 데이터랩은 키를 받으면 붙인다.",
           "source_refs": [
             "backend/office/discovery.py:156",
             "backend/office/benchmark_research.py:146",
             "backend/office/ideas.py:63",
-            "backend/office/discovery.py:50"
+            "backend/office/discovery.py:50",
+            "backend/office/trend_signals.py:141"
           ]
         }
       }
@@ -27174,7 +27175,7 @@
           "source_refs": [
             "backend/office/cards.py:288",
             "backend/office/quiz.py:137",
-            "backend/office/worker.py:71",
+            "backend/office/worker.py:74",
             "backend/office/memory_story.py:266"
           ]
         }
@@ -27228,7 +27229,7 @@
           "source_refs": [
             "backend/office/cards.py:288",
             "backend/office/quiz.py:137",
-            "backend/office/worker.py:71",
+            "backend/office/worker.py:74",
             "backend/office/memory_story.py:266"
           ]
         }
@@ -28415,7 +28416,7 @@
           "detail": "학습/뉴스 별도 라우터 조직이 아니라 승인 원고의 공통 카드 엔진을 사용한다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/worker.py:71"
+            "backend/office/worker.py:74"
           ]
         }
       }
@@ -28467,7 +28468,7 @@
           "detail": "학습/뉴스 별도 라우터 조직이 아니라 승인 원고의 공통 카드 엔진을 사용한다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/worker.py:71"
+            "backend/office/worker.py:74"
           ]
         }
       }
@@ -31288,7 +31289,7 @@
           "detail": "원본 외부 엔진 참고 메모. 현재 일반 제작 코드가 해당 엔진을 import/호출하는 근거는 없다. 채택 제안과 구현을 구분한다.",
           "source_refs": [
             "backend/office/media.py:702",
-            "backend/office/worker.py:71"
+            "backend/office/worker.py:74"
           ]
         }
       }
@@ -31340,7 +31341,7 @@
           "detail": "원본 외부 엔진 참고 메모. 현재 일반 제작 코드가 해당 엔진을 import/호출하는 근거는 없다. 채택 제안과 구현을 구분한다.",
           "source_refs": [
             "backend/office/media.py:702",
-            "backend/office/worker.py:71"
+            "backend/office/worker.py:74"
           ]
         }
       }
@@ -33593,7 +33594,7 @@
           "current_label": "콘텐츠 오피스 전체",
           "detail": "원본 제목. 실제 흐름은 일반 Python 워커와 개별 제작·전달 모듈이다. LangGraph는 원고 생성·검수·수정 구간(editorial_graph)과 승인① 뒤 제작 단계(production_graph: 글·카드 먼저, 영상 관문) 두 곳에 연결된다. CrewAI·Google ADK의 현재 운영 import·호출 연결은 office 코드 검색에서 발견되지 않았다.",
           "source_refs": [
-            "backend/office/worker.py:39",
+            "backend/office/worker.py:42",
             "backend/office/editorial.py:410",
             "backend/office/editorial_graph.py:28",
             "backend/office/production_graph.py:60"
@@ -35344,7 +35345,7 @@
           "current_label": "제작 결과·실패 상태와 검토 인계",
           "detail": "제작 완료·부분실패·차단 상태를 기록해 출고함/검토로 넘긴다. 제작 단계가 멈추면 한 것·멈춘 곳·이유 3칸(production_handoff)을 남기고 유료 호출을 자동으로 다시 하지 않는다. 생성완료가 외부 전달완료는 아니다.",
           "source_refs": [
-            "backend/office/worker.py:71",
+            "backend/office/worker.py:74",
             "backend/office/media.py:899",
             "backend/office/delivery_queue.py",
             "backend/office/production_graph.py:103"
@@ -35994,12 +35995,13 @@
           "number": 49,
           "status": "부분",
           "current_label": "RSS·경쟁자 관측·요청형 조사",
-          "detail": "구글 트렌드 급상승은 RSS로 이미 수집한다(feeds.json, 발견 화면). ViewStats·vling·블랙키위를 묶은 자동 수집은 없다. 구글·유튜브·네이버 자동완성, 위키백과 조회수, 네이버 데이터랩(키 필요)은 11/27 사용자 결정으로 다음 차례다.",
+          "detail": "구글 트렌드 급상승은 RSS로 수집한다(feeds.json, 발견 화면). 11/27부터 씨앗 단어마다 구글·유튜브·네이버 자동완성과 위키백과 조회수를 0원으로 모은다(트렌드 신호: 아침 수집 때 같이 또는 지금 모으기, 막히면 비워 둠). ViewStats·vling·블랙키위 자동 수집은 없고 네이버 데이터랩은 키를 받으면 붙인다.",
           "source_refs": [
             "backend/office/discovery.py:156",
             "backend/office/benchmark_research.py:146",
             "backend/office/ideas.py:63",
-            "backend/office/discovery.py:50"
+            "backend/office/discovery.py:50",
+            "backend/office/trend_signals.py:141"
           ]
         }
       }
@@ -37286,7 +37288,7 @@
           "source_refs": [
             "backend/office/cards.py:288",
             "backend/office/quiz.py:137",
-            "backend/office/worker.py:71",
+            "backend/office/worker.py:74",
             "backend/office/memory_story.py:266"
           ]
         }
@@ -37683,7 +37685,7 @@
           "detail": "학습/뉴스 별도 라우터 조직이 아니라 승인 원고의 공통 카드 엔진을 사용한다.",
           "source_refs": [
             "backend/office/cards.py:288",
-            "backend/office/worker.py:71"
+            "backend/office/worker.py:74"
           ]
         }
       }
@@ -38576,7 +38578,7 @@
           "detail": "원본 외부 엔진 참고 메모. 현재 일반 제작 코드가 해당 엔진을 import/호출하는 근거는 없다. 채택 제안과 구현을 구분한다.",
           "source_refs": [
             "backend/office/media.py:702",
-            "backend/office/worker.py:71"
+            "backend/office/worker.py:74"
           ]
         }
       }

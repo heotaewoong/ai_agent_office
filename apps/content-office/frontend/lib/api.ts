@@ -153,6 +153,9 @@ export const api = {
   savePlatformNewsIdea: (input: { platform: string; url: string; expected_hash: string }) =>
     request<{ idea: Idea }>('/platform-news/ideas', 'POST', input),
   discovery: () => request<import('./discovery').DiscoveryStatus>('/discovery'),
+  trendSignals: () => request<import('./trend-signals').TrendStatus>('/trend-signals'),
+  saveTrendSignals: (body: import('./trend-signals').TrendSettings) => request<import('./trend-signals').TrendStatus>('/trend-signals', 'PUT', body),
+  refreshTrendSignals: () => request<{ id: string; kind: string; state: string }>('/trend-signals/refresh', 'POST'),
   saveDiscovery: (body: import('./discovery').ResearchConfig & { expected_hash: string }) => request<import('./discovery').DiscoveryStatus>('/discovery', 'PUT', body),
   versionHistory: (jobId: string) => request<ContentHistory>(`/jobs/${encodeURIComponent(jobId)}/history`),
   jobClipProfile: (jobId: string) => request<{source_hash:string|null;override_hash:string;effective:{id:string;paid:boolean};global_profile_id:string}>(`/jobs/${encodeURIComponent(jobId)}/clip-profile`),
