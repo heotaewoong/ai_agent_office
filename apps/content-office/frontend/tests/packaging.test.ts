@@ -38,3 +38,12 @@ test("title score subtracts for missing numbers, overclaims and AI tells, and ne
   assert.ok(hype.score <= 55 && hype.reasons.some((reason) => reason.includes("무조건 합격")));
   assert.equal(scoreTitle("").score, 0);
 });
+
+test("scoreHook uses the title rules with a first-line length of 60", async () => {
+  const { scoreHook } = await import("../lib/packaging.ts");
+  assert.equal(scoreHook("오늘 정보처리기사 실기 접수가 시작됐어요", "실기 접수").score, 100);
+  const long = scoreHook("가".repeat(61));
+  assert.equal(long.score, 90); assert.match(long.reasons[0], /60자/);
+  assert.equal(scoreHook("합격률 70%를 넘겼어요", "합격률 50%").score, 60);
+  assert.equal(scoreHook("첫 줄\n둘째 줄은 안 봐요".replace("\\n", "\n")).reasons.length, 1);
+});

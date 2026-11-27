@@ -2,7 +2,7 @@
 
 import { useId, useState } from "react";
 import { api } from "../lib/api";
-import { validatePackagingBrief, scoreTitle, TITLE_MAX, THUMB_TEXT_MAX, HOOK_MAX } from "../lib/packaging";
+import { validatePackagingBrief, scoreTitle, scoreHook, TITLE_MAX, THUMB_TEXT_MAX, HOOK_MAX } from "../lib/packaging";
 import type { Action, Job, PackagingBrief } from "../lib/types";
 import styles from "./packaging-panel.module.css";
 
@@ -93,7 +93,7 @@ export function PackagingPanel({
         <p className={styles.swipeHint}>좌우로 넘겨 후보 3안을 비교할 수 있어요.</p>
         <div className={styles.detailsGrid}>
           <div className={styles.writing}><div className={styles.stepHeading}><span>02</span><div><h3>첫 문장과 한 줄 설명</h3><p>제목에서 약속한 내용을 첫 문장으로 이어 주세요.</p></div></div>
-            <div className={styles.field}><div className={styles.labelRow}><label htmlFor={`${id}-hook`}>훅 (첫 문장)</label><span className={hook.trim().length>HOOK_MAX?styles.over:undefined}>{hook.trim().length}/{HOOK_MAX}</span></div><textarea id={`${id}-hook`} rows={3} value={hook} disabled={busy} aria-invalid={hook.trim().length>HOOK_MAX} onChange={e=>{setHook(e.target.value);markDirty();}} placeholder="계속 읽고 싶어지는 첫 문장"/></div>
+            <div className={styles.field}><div className={styles.labelRow}><label htmlFor={`${id}-hook`}>훅 (첫 문장)</label><span className={hook.trim().length>HOOK_MAX?styles.over:undefined}>{hook.trim().length}/{HOOK_MAX}</span></div><textarea id={`${id}-hook`} rows={3} value={hook} disabled={busy} aria-invalid={hook.trim().length>HOOK_MAX} onChange={e=>{setHook(e.target.value);markDirty();}} placeholder="계속 읽고 싶어지는 첫 문장"/>{hook.trim() && (() => { const rated = scoreHook(hook, sourceText); return <small aria-live="polite">첫 줄 점수 {rated.score}{rated.reasons.length ? ` · ${rated.reasons.join(" · ")}` : " · 걸린 점 없음"}</small>; })()}</div>
             <div className={styles.field}><label htmlFor={`${id}-logline`}>한 줄 설명 (로그라인)</label><textarea id={`${id}-logline`} rows={2} value={logline} disabled={busy} onChange={e=>{setLogline(e.target.value);markDirty();}} placeholder="누구의 어떤 문제를 어떻게 해결하나요?"/></div>
           </div>
           <aside className={styles.preview} aria-label="선택한 제목 미리보기"><span className={styles.eyebrow}>선택한 제목 · {chosen+1}안</span><h3>{titles[chosen]||"제목을 입력하면 여기에 보여요"}</h3><p>{hook||"첫 문장을 적으면 제목과의 흐름을 함께 확인할 수 있어요."}</p><div><strong>한 줄 설명</strong><p>{logline||"독자가 얻게 될 결과를 짧게 정리해 보세요."}</p></div></aside>
