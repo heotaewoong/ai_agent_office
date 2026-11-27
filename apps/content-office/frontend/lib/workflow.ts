@@ -38,7 +38,8 @@ export function videoLater(selections?: Partial<Record<OutputKind, boolean>> | n
 
 /** 글과 카드는 만들었고 영상이 사람의 '영상 만들기'를 기다리는 상태인지. */
 export function videoAwaitingClick(job: Pick<Job, "selections" | "manifest" | "source_hash">): boolean {
-  return Boolean(job.selections?.video && job.manifest?.output_status?.video?.state === "deferred");
+  // 원고가 새 판으로 바뀌었으면 예전 완성본의 영상 대기는 누를 수 없다(서버도 거절한다).
+  return Boolean(job.selections?.video && job.manifest?.source_hash === job.source_hash && job.manifest?.output_status?.video?.state === "deferred");
 }
 
 export function validReleaseOutputs(

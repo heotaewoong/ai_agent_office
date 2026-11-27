@@ -56,7 +56,12 @@ export function TrendSignalsPanel({ active = true, onIdeaSaved }: { active?: boo
       </label>
       <div className="button-row" style={{ marginTop: 12 }}>
         <button type="button" className="button secondary" onClick={() => void save({ seeds: parseSeeds(seeds, data.limits.max_seeds) })}>씨앗 저장</button>
-        <button type="button" className="button primary" onClick={() => void run('모으기 요청', () => api.refreshTrendSignals(), '모으기를 줄 세웠어요. 작업 시간이 열려 있으면 작업자가 모아요.')}>지금 모으기</button>
+        <button type="button" className="button primary" onClick={() => void run('모으기 요청', async () => {
+          const task = await api.refreshTrendSignals();
+          // 같은 15분 안에는 같은 작업을 돌려줘요. 끝난 작업이면 새로 줄 서지 않았다고 정직하게 알려요.
+          if (task.state === 'completed') { await load(); throw new Error('15분 안에 이미 모았어요. 아래 표가 그 결과예요'); }
+          if (task.state === 'failed') throw new Error('이번 15분 안의 모으기가 실패했어요. 15분 뒤 다시 눌러 주세요');
+        }, '모으기를 줄 세웠어요. 작업 시간이 열려 있으면 작업자가 모아요.')}>지금 모으기</button>
         <button type="button" className="button secondary" onClick={() => void load()}>다시 읽기</button>
       </div>
     </fieldset>

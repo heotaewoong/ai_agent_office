@@ -189,6 +189,11 @@ def _access_token(session, credentials):
     return token
 
 
+def _text_hash(text):
+    """줄바꿈 모양과 앞뒤 공백 차이는 같은 것으로 본다(유튜브가 저장할 때 정리해도 '다름'으로 잡지 않게)."""
+    return hashlib.sha256(text.replace("\r\n", "\n").strip().encode("utf-8")).hexdigest()
+
+
 def _readback(store, record, snippet):
     """저장 뒤 다시 읽기(connect-ai-marketer 업로드 마무리 방식): 보낸 제목, 설명, 태그가 실제로 그렇게 저장됐는지 비교한다.
     공개 범위와 상태는 바꾸지 않고, 다른 점과 응답에 없어 확인 못 한 칸만 남긴다."""
@@ -197,12 +202,12 @@ def _readback(store, record, snippet):
         return
     differences, unchecked = [], []
     if isinstance(snippet.get("title"), str):
-        if snippet["title"] != sent.get("title"):
+        if snippet["title"].strip() != str(sent.get("title") or "").strip():
             differences.append("title")
     else:
         unchecked.append("title")
     if isinstance(snippet.get("description"), str):
-        if hashlib.sha256(snippet["description"].encode("utf-8")).hexdigest() != sent.get("description_sha256"):
+        if _text_hash(snippet["description"]) != sent.get("description_sha256"):
             differences.append("description")
     else:
         unchecked.append("description")
@@ -279,7 +284,7 @@ def deliver_youtube(store, job_id, *, actor, session=None, channel_key=DEFAULT_C
               "manifest_hash": manifest["hash"], "release_version": release["version"], "idempotency_key": key,
               "title": metadata["snippet"]["title"], "visibility": "private", "state": "created", "actor": str(actor)[:120],
               "sent": {"title": metadata["snippet"]["title"], "tags": list(metadata["snippet"]["tags"]),
-                       "description_sha256": hashlib.sha256(metadata["snippet"]["description"].encode("utf-8")).hexdigest()},
+                       "description_sha256": _text_hash(metadata["snippet"]["description"])},
               "quota_units_estimate": QUOTA_UNITS_INSERT, "quota_note": QUOTA_NOTE, "created_at": now(), "updated_at": now()}
     with _delivery_lock(store, key):
         return _upload_youtube(store, record, data, metadata, credentials, session)

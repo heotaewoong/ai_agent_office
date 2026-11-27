@@ -327,4 +327,5 @@ test("video waits for its own click only when other outputs are made first", asy
   assert.equal(videoAwaitingClick(deferred as never), true);
   assert.deepEqual(completedOutputs({ ...deferred, state: "release_review", manifest: { ...deferred.manifest, completed_outputs: ["blog"] } } as never), ["blog"]);
   assert.equal(videoAwaitingClick({ ...deferred, manifest: { ...deferred.manifest, output_status: { video: { state: "completed" } } } } as never), false);
+  assert.equal(videoAwaitingClick({ ...deferred, source_hash: "new-draft" } as never), false);  // 원고가 새 판이면 예전 대기는 못 누름
 });

@@ -849,3 +849,14 @@ def test_readback_compares_saved_title_description_and_tags_without_changing_sta
     again = reconcile_youtube(store, job_id, record['id'], session=session)
     assert again['state'] == 'private' and again['readback']['differences'] == ['title', 'tags'] and again['readback']['unchecked'] == []
     assert 'delivery_readback_mismatch' in [e['kind'] for e in store.events(job_id)]
+
+
+def test_readback_ignores_line_ending_and_edge_space_changes_youtube_may_make():
+    from office.youtube_delivery import _readback, _text_hash
+    events = []
+    store = type("S", (), {"event": lambda self, *a: events.append(a)})()
+    record = {"id": "d1", "job_id": "j1", "sent": {"title": "제목", "tags": ["a"], "description_sha256": _text_hash("첫 줄\n둘째 줄")}}
+    _readback(store, record, {"title": " 제목 ", "description": "첫 줄\r\n둘째 줄\n", "tags": ["a"]})
+    assert record["readback"]["differences"] == [] and events == []
+    _readback(store, record, {"title": "제목", "description": "다른 설명", "tags": ["a"]})
+    assert record["readback"]["differences"] == ["description"] and len(events) == 1
