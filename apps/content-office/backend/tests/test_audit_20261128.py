@@ -49,3 +49,12 @@ def test_masked_judge_call_never_sends_book_text(monkeypatch):
 ])
 def test_low_information_book_chunks(text, low):
     assert low_information_chunk(text) is low
+
+
+def test_budget_cap_change_leaves_an_event(tmp_path):
+    from office.store import Store
+    store = Store(tmp_path)
+    store.set_setting("budget_cap", 0)
+    store.set_setting("budget_cap", 0)  # 같은 값이면 기록하지 않아요
+    changed = [e for e in store.events(limit=50) if e["kind"] == "budget_cap_changed"]
+    assert len(changed) == 1 and changed[0]["data"]["to"] == 0

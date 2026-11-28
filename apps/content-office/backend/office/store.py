@@ -134,7 +134,13 @@ class Store:
 
     def set_setting(self, key, value):
         with self.connection() as db:
+            previous = None
+            if key == "budget_cap":  # 예산 상한이 바뀌면 운영 기록에 남겨요(11/17 기록 없이 0원이 된 일, 2026-11-28 점검)
+                row = db.execute("SELECT value FROM settings WHERE key='budget_cap'").fetchone()
+                previous = json.loads(row[0]) if row else None
             db.execute("INSERT OR REPLACE INTO settings VALUES(?,?)", (key, canonical(value)))
+            if key == "budget_cap" and previous != value:
+                self._event(db, "budget_cap_changed", {"from": previous, "to": value, "via": "set_setting"})
 
     def save_articles(self, articles):
         with self.connection(transaction=True) as db:
