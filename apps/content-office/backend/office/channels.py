@@ -153,3 +153,20 @@ def update_channel(store, key, patch, actor):
     store.set_setting(SETTING_KEY, overrides)
     store.event("channel_updated", {"key": key, "fields": clean, "actor": str(actor)[:120]})
     return _row(key, overrides)
+
+
+OWNER_POST_HOSTS = ("onethingflow.tistory.com", "blog.naver.com/oneflowwhy", "m.blog.naver.com/oneflowwhy", "heobrain.kr", "www.heobrain.kr")
+
+
+def owner_post_urls(urls):
+    """오너가 직접 쓴 글의 주소인지(티스토리, 네이버 블로그, 상점). 근거를 1인칭으로 쓸지 정할 때 쓴다."""
+    from urllib.parse import urlparse
+    found = []
+    for url in urls or []:
+        parsed = urlparse(str(url or ""))
+        if parsed.scheme not in ("http", "https"):
+            continue
+        place = (parsed.netloc.lower() + parsed.path.lower()).rstrip("/")
+        if any(place == host or place.startswith(host + "/") or parsed.netloc.lower() == host for host in OWNER_POST_HOSTS):
+            found.append(url)
+    return found

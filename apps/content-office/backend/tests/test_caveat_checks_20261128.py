@@ -105,3 +105,12 @@ def test_voice_from_owner_posts_and_per_scene_narration_targets():
     assert "문단마다 \"다만 ~라 일반화하면 안 돼요\"를 붙이지 않아요" in prompt
     assert "장면마다 36~56자" in adaptation_prompt({"audience": {"language": "ko"}}) and "의미와 한계로" not in adaptation_prompt({"audience": {"language": "ko"}})
     assert "장면마다 36~56자" in idea_instructions("W3")
+
+
+def test_owner_posts_are_written_in_first_person():
+    from office.channels import owner_post_urls
+    from office.editorial import OWNER_POST_PROMPT
+    assert owner_post_urls(["https://onethingflow.tistory.com/entry/x", "https://blog.naver.com/oneflowwhy/1", "https://www.heobrain.kr/"]) == [
+        "https://onethingflow.tistory.com/entry/x", "https://blog.naver.com/oneflowwhy/1", "https://www.heobrain.kr/"]
+    assert owner_post_urls(["https://blog.naver.com/someoneelse/1", "https://example.com/onethingflow.tistory.com"]) == []
+    assert "1인칭" in OWNER_POST_PROMPT and "작성자는" in OWNER_POST_PROMPT
