@@ -1242,6 +1242,14 @@ function BudgetStrip({ budget }: { budget: Dashboard["budget"] }) {
         {formatMoney(budget.remaining_krw)}
         <small>원 남음</small>
       </span>
+      {budget.remaining_krw <= 0 && (
+        <p className="notice error" role="alert" style={{ gridColumn: "1 / -1", margin: 0 }}>
+          <Icon name="alert" size={18} />
+          <span>
+            유료 호출이 멈춰 있어요. 예산 상한 {formatMoney(budget.cap_krw)}원, 남은 예산 {formatMoney(budget.remaining_krw)}원이라 원고, 이미지, 영상, 음성 호출이 모두 막혀요. 일부러 멈춘 게 아니면 제작 설정에서 상한을 올려 주세요.
+          </span>
+        </p>
+      )}
       <p className="budget-note">
         실제 청구액이 아닌 사용량 기준 원가 추정치입니다. {budget.fx_note || ""}
         {budget.pricing_as_of ? ` · 단가 기준 ${budget.pricing_as_of}` : ""}
