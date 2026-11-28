@@ -92,3 +92,16 @@ def test_writer_prompts_ask_for_one_limit_without_disclaimers():
     assert "면책 문장은 쓰지 않는다" in BASE and "글 전체에서 2개까지" in BASE and "한계만 다루는 소제목을 글 중간에" in BASE
     text = idea_instructions("W3")
     assert "한계는 글 전체에서 1~2문장만" in text and "원문이 밝힌 한계가 있으면 여기서 한 문장" not in text
+
+
+def test_voice_from_owner_posts_and_per_scene_narration_targets():
+    from office.brand import DEFAULT_DIR, brand_system_prompt, load_brand
+    from office.channel_adaptation import adaptation_prompt
+    brand = load_brand(DEFAULT_DIR)
+    titles = [example["title"] for example in brand["examples"]]
+    assert any("ASUS" in title for title in titles) and any("편입" in title for title in titles)
+    prompt = brand_system_prompt("BASE", brand)
+    assert "오너 글에서 뽑은 말투" in prompt and "문장은 가져오지 않아요" in prompt
+    assert "문단마다 \"다만 ~라 일반화하면 안 돼요\"를 붙이지 않아요" in prompt
+    assert "장면마다 36~56자" in adaptation_prompt({"audience": {"language": "ko"}}) and "의미와 한계로" not in adaptation_prompt({"audience": {"language": "ko"}})
+    assert "장면마다 36~56자" in idea_instructions("W3")
