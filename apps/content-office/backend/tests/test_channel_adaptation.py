@@ -12,7 +12,7 @@ from test_editorial import OriginalPreservingProvider, original_markdown, preser
 
 
 def copies():
-    return {'threads_main': '기기와 폴더의 일시정지 상태부터 확인해요.',
+    return {'threads_main': '동기화가 멈췄다면 어디부터 볼까요?\n기기와 폴더의 일시정지 상태부터 확인해요.',
             'linkedin_personal': '도구를 고를 때 비용뿐 아니라 기기 구성과 운영 조건을 함께 확인해요. 개인 사례를 모든 장애의 원인으로 일반화하지 않아요.',
             'instagram_main': '노트가 안 오면 기기와 폴더를 확인해요. 충돌본은 백업 후 비교해요.',
             'x_main': '동기화 완료 표시와 원격 기기 연결 상태를 따로 확인해요.'}
@@ -24,6 +24,10 @@ class AdaptedProvider(OriginalPreservingProvider):
         if role in ('gen', 'refine'):
             assert 'channel_posts' in schema['required']
             result['channel_posts'] = copies()
+            scenes = (result.get('video') or {}).get('scenes') or []
+            for scene in scenes:
+                # 내레이션 합계 180~280자 검사(2026-11-27)를 지키는 길이로 맞춰요.
+                scene['narration'] = (scene.get('narration') or '').ljust(-(-200 // len(scenes)), '요')
         else:
             assert json.loads(messages[-1]['content'])['packet']['channel_posts'] == copies()
         return result
@@ -143,3 +147,22 @@ def test_user_selected_blog_and_short_titles_survive_model_refine_and_are_review
     assert result['source_packet']['title'] == titles['blog']
     assert result['source_packet']['video']['title'] == titles['shorts']
     assert result['source_packet']['body'] == original and result['source_approval'] is None
+
+
+def test_x_uses_weighted_length_like_connect_ai_lab_and_formats_are_checked_in_code():
+    """2026-11-27 실패 분류: 형식 지적 28/59건을 검수 모델이 잡았어요. 규격을 코드로 옮겨요(CONNECT AI LAB xcount 규칙)."""
+    from office.channel_adaptation import adaptation_issues, x_length
+    assert x_length('가' * 10) == 20 and x_length('abc') == 3 and x_length('보기 https://heobrain.kr/a/b/c') == 2 * 2 + 1 + 23
+    packet = {'body': '본문', 'channel_policy_version': 'x', 'source_article_url': 'https://heobrain.kr/a',
+              'channel_posts': {'threads_main': '왜 멈출까요?\n설정부터 봐요.', 'linkedin_personal': '링크드인 요약', 'instagram_main': '인스타 요약',
+                                'x_main': '가' * 130},
+              'video': {'scenes': [{'narration': '나' * 60} for _ in range(4)]}}
+    issues = adaptation_issues(packet)
+    assert any('x_main이 X 가중 글자 수' in i for i in issues)  # 한글 130자 = 260 + 링크 23 + 줄바꿈 > 280
+    packet['channel_posts']['x_main'] = '가' * 100
+    packet['channel_posts']['threads_main'] = '설정부터 봐요. 자세한 건 https://example.com/x'
+    packet['video']['scenes'] = [{'narration': '짧아요'}]
+    issues = adaptation_issues(packet)
+    assert not any('x_main' in i for i in issues)
+    assert any('threads_main 본문에 주소' in i for i in issues) and any('질문 하나로 시작' in i for i in issues)
+    assert any('영상 내레이션 합계가' in i for i in issues)
