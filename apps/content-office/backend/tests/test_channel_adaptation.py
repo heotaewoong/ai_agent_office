@@ -164,5 +164,5 @@ def test_x_uses_weighted_length_like_connect_ai_lab_and_formats_are_checked_in_c
     packet['video']['scenes'] = [{'narration': '짧아요'}]
     issues = adaptation_issues(packet)
     assert not any('x_main' in i for i in issues)
-    assert any('threads_main 본문에 주소' in i for i in issues) and any('질문 하나로 시작' in i for i in issues)
+    assert any('threads_main 본문에 주소' in i for i in issues) and not any('질문 하나로 시작' in i for i in issues)
     assert any('영상 내레이션 합계가' in i for i in issues)

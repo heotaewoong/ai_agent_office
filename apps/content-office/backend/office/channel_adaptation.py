@@ -6,7 +6,7 @@ from .store import WorkflowError
 
 VERSION = "channel-copy-2-topic"
 CHANNEL_COPY = {
-    "threads_main": (500, "질문 하나 → 핵심 답·설정·주의점. 한 게시물로 완결"),
+    "threads_main": (500, "첫 줄에 핵심이나 확인된 숫자 하나 → 핵심 답·설정·주의점. 한 게시물로 완결"),
     "linkedin_personal": (3000, "원문 사건·핵심 답 → 구체적인 과정 → 해당 사건의 의미와 한계"),
     "instagram_main": (2200, "원문 주제의 핵심 → 알아둘 사실·과정 → 해당 주제의 확인 사항"),
     "x_main": (280, "핵심 결론 하나와 중요한 조건. 긴 설명은 원문 링크로 연결"),
@@ -124,8 +124,6 @@ def adaptation_issues(packet, footer=""):
         if isinstance(value, str) and value.strip():
             if _URL.search(value):
                 issues.append(f"{key} 본문에 주소가 있습니다. 출처 주소는 서버가 덧붙이니 본문에서 빼세요")
-            if key == "threads_main" and "?" not in value.strip().split("\n")[0]:
-                issues.append("threads_main은 첫 줄을 질문 하나로 시작해야 합니다")
     scenes = [scene for scene in ((packet.get("video") or {}).get("scenes") or []) if isinstance(scene, dict)]
     if scenes:
         spoken = len(" ".join(str(scene.get("narration") or "").strip() for scene in scenes).strip())
