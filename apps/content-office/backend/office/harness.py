@@ -305,7 +305,8 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
             context["packaging"] = packaging
         body_instruction = ("파생 제목, 영상, 설명만 수정하고 body는 빈 문자열로 반환하라. 서버가 저자 원문을 그대로 보존한다." + preserve_prompt
                             if original_markdown is not None else
-                            "external_feedback에 적힌 문제만 고친다. 이미 통과한 소제목, 근거 연결, 사실, 숫자는 그대로 둔다. "
+                            "external_feedback에 적힌 문제를 고친다. 지적받은 문장이 든 문단은 낱말만 바꾸지 말고 브랜드 목소리와 문체 예시의 말투로 문단 전체를 다시 쓴다. "
+                            "이미 통과한 소제목, 근거 연결, 사실, 숫자, 인용은 그대로 둔다. "
                             "korean_corrections는 뜻과 근거 ID를 유지하며 반영한다. 지적을 고칠 때는 해당 문장 자체를 고쳐 쓰고, 단서나 면책 문장을 새로 덧붙이지 않는다. body는 format_targets의 목표 길이에 맞춘 전체 원고이며 titles 3안과 hashtags 5개를 함께 고친다. "
                             "format_targets의 현재 수치를 목표 범위로 맞춘다. " + format_contract(w_type or packet.get("w_type")) + SUMMARY_BODY_PROMPT)
         started = time.monotonic()
