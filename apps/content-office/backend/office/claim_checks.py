@@ -133,13 +133,79 @@ HEDGE = re.compile(r"(일반화|일반 성과|따로 (확인|검증)|별도 (확
 
 def hedge_spread(body: str) -> dict:
     """한계, 단서 문장 수와 그 문장이 들어간 소제목 구역 수."""
-    sections, current, hits = {}, 0, 0
+    found = caveat_report(body)
+    return {"sentences": len(found["caveats"]), "sections": len({section for section, _ in found["caveats"]})}
+
+
+# 단서 문장 2차(2026-11-28): 11-27 단어 목록은 표현만 바뀐 단서(넓혀 읽으면, 보장하는 것은 아니에요, 범위 안에서만 읽어야,
+# 말할 수는 없어요)를 하나도 못 잡았어요. 낱말 대신 '읽는 법을 지시하는 말', '보장 부정', '역접 시작 + 한계 낱말'을 봐요.
+# 면책(BOILERPLATE): 독자가 할 일이 바뀌지 않는 문장. 읽는 법 지시와 보장 부정이에요. 있으면 지워요.
+BOILERPLATE = re.compile(
+    r"보장(하|되|해|할)?(는|진|지는|지도|지|한다는|할 수)\s*(것은|건|게)?\s*(않|아니|없|못)"
+    r"|(성과|효과|결과|성공|성능)(를|을)?\s*보장(하지|하진|하는 것은|하는 건|할 수는|할 순)"
+    r"|(넓혀|확대해|일반화해|그대로)\s*(읽|해석|받아들|보|적용)[가-힣]*\s*(안\s*돼|안\s*되|면\s*안|지\s*말|기\s*어렵|선\s*안|서는\s*안)"
+    r"|(범위|조건|환경|맥락|기준|안)(으로|에서|에서는)?만\s*(읽|해석|받아들|봐|보아|이해)"
+    r"|(말할|단정할|장담할|기대할|일반화할)\s*수(는|가)?\s*없(어요|습니다|다|죠)\s*[.!]?\s*$"
+    r"|(참고용|참고로만)\s*(으로)?\s*(읽|보|봐|삼)"
+    r"|(신중하게|조심해서|주의해서)\s*(읽|해석|받아들|봐|보)")
+# 한계 낱말: 역접으로 시작하는 문장에 이게 있으면 단서 문장으로 세요.
+_LIMIT_WORDS = re.compile(r"범위|조건|전제|한계|일반화|일반 |보장|환경|표본|실험|검증|확인되지|아직|외부|실제 ")
+CONTRAST_OPENER = re.compile(r"^\s*(다만|하지만|그러나|그렇지만|그런데|단,|단 |물론)")
+_CAVEAT_HEADING = re.compile(r"한계|읽어야|만 읽|믿고 읽|어디까지 (믿|읽)")
+# 근거가 말한 내용을 전하는 문장('근거는 ~받아들이기 어렵다고 말해요')은 면책이 아니라 내용이에요.
+_REPORTED = re.compile(r"(다고|라고|다는|라는)\s*(말|보고|밝|설명|지적|정리|결론|주장|봐|본|점|뜻)")
+_SENTENCES = re.compile(r"(?<=[.!?。])\s+|(?<=[요다])\s+(?=[가-힣A-Z\"“'‘(\[])")
+CAVEAT_LIMITS = {"total": 2, "contrast_openers": 2}
+
+
+def _body_sentences(body: str):
+    """(구역 번호, 문장) 목록과 소제목 목록. 표 줄과 근거 표기는 빼요."""
+    section, rows, headings = 0, [], []
     for line in str(body or "").splitlines():
-        if re.match(r"^\s*#", line):
-            current += 1
+        stripped = line.strip()
+        if re.match(r"^#{1,6}\s", stripped):
+            section += 1
+            headings.append((section, re.sub(r"^#{1,6}\s*", "", stripped)))
             continue
-        for sentence in re.split(r"(?<=[.!?요다])\s+", line):
-            if HEDGE.search(sentence):
-                hits += 1
-                sections[current] = sections.get(current, 0) + 1
-    return {"sentences": hits, "sections": len(sections)}
+        if not stripped or stripped.startswith("|"):
+            continue
+        text = CITE.sub("", re.sub(r"^\s*(?:[-*>]|\d+[.)])\s+", "", stripped)).strip()
+        rows.extend((section, sentence.strip()) for sentence in _SENTENCES.split(text) if len(sentence.strip()) > 3)
+    return rows, headings, section
+
+
+def caveat_report(body: str) -> dict:
+    """본문의 단서 문장, 면책 문장, 역접 시작 문장, 한계 소제목. 모델을 부르지 않아요."""
+    rows, headings, last_section = _body_sentences(body)
+    caveats, boilerplate, openers = [], [], []
+    for section, sentence in rows:
+        opener = CONTRAST_OPENER.match(sentence)
+        if opener:
+            openers.append((section, sentence))
+        if BOILERPLATE.search(sentence) and not _REPORTED.search(sentence[BOILERPLATE.search(sentence).end():]):
+            boilerplate.append((section, sentence))
+            caveats.append((section, sentence))
+        elif HEDGE.search(sentence) or (opener and _LIMIT_WORDS.search(sentence)):
+            caveats.append((section, sentence))
+    # 한계만 다루는 소제목은 글 끝 한 곳(마지막 소제목)이면 괜찮아요. 중간에 끼면 글이 경고문처럼 읽혀요.
+    caveat_headings = [(section, text) for section, text in headings if _CAVEAT_HEADING.search(text) and section != last_section]
+    return {"caveats": caveats, "boilerplate": boilerplate, "contrast_openers": openers, "caveat_headings": caveat_headings}
+
+
+def caveat_issues(body: str) -> list[str]:
+    """고치기로 보낼 지적. 문장을 그대로 짚어 줘서 고치는 모델이 다른 곳을 건드리지 않게 해요."""
+    found = caveat_report(body)
+    issues = []
+    if found["boilerplate"]:
+        listed = " / ".join(f"'{sentence[:60]}'" for _, sentence in found["boilerplate"][:6])
+        issues.append(f"한계, 단서 문장이 독자에게 쓸모없는 면책 문장이에요({len(found['boilerplate'])}개): {listed}. 지우세요. "
+                      "출처는 문장 주어('저자들은 ~라고 보고했어요')로 이미 드러나요")
+    total = len(found["caveats"])
+    if total > CAVEAT_LIMITS["total"]:
+        listed = " / ".join(f"'{sentence[:40]}'" for _, sentence in found["caveats"][:6])
+        issues.append(f"한계, 단서 문장이 {total}개예요(글 전체 2개까지): {listed}. 독자의 판단을 바꾸는 한계 하나만 남기고 나머지는 지우세요")
+    for _, text in found["caveat_headings"]:
+        issues.append(f"한계, 단서 문장만 다루는 소제목이 글 중간에 있어요: '## {text}'. 이 구역은 내용 설명으로 바꾸고, 남길 한계는 글 끝에 한 번만 쓰세요")
+    if len(found["contrast_openers"]) > CAVEAT_LIMITS["contrast_openers"]:
+        issues.append(f"'다만', '하지만'으로 시작하는 문장이 {len(found['contrast_openers'])}개예요(글 전체 2개까지). 앞 문장을 뒤집는 덧붙임 대신 한 문장으로 합치거나 지우세요")
+    return issues

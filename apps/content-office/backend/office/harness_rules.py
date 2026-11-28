@@ -24,10 +24,20 @@ _CHECK_GROUPS = (
     ("headings", ("소제목으로 읽기 흐름",)),
     ("citations", ("근거 ID를 원고에 연결", "근거 ID가 하나도 연결되지", "근거 ID를 별도 참고 목록", "존재하지 않는 근거 ID", "근거 ID 목록의 형식")),
     ("numbers", ("근거 묶음에 없는 숫자",)),
-    ("hedges", ("한계, 단서 문장이",)),
+    ("hedges", ("한계, 단서 문장", "'다만', '하지만'으로 시작하는 문장이")),
     ("scenes", ("숏폼은 3~7개", "내레이션이 너무 길어", "장면 제목이 한국어가 아니에요")),
     ("book_quotes", ("풀어 쓰기만 할 수 있어요", "두 문장까지만 인용", "저자를 확인해 출처에")),
 )
+
+
+# 고치기 뒤에도 남으면 '통과'로 두지 않고 '검토 대기'로 넘기는 규칙(2026-11-28). 경고로만 남기면 같은 문장이 그대로 나가요.
+MUST_FIX_RULES = ("hedges",)
+
+
+def unresolved_must_fix(validation: dict) -> list[str]:
+    """마지막 판에 남은 필수 수정 지적. 하네스가 이 목록이 비어 있지 않으면 검토 대기로 둔다."""
+    markers = [marker for name, group in _CHECK_GROUPS if name in MUST_FIX_RULES for marker in group]
+    return [issue for issue in validation.get("issues", []) if any(marker in issue for marker in markers)]
 
 
 def pure_prose_length(markdown: str) -> int:
