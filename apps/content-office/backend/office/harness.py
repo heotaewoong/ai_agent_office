@@ -321,15 +321,20 @@ def review_until_ready_v2(packet, provider, *, event=None, checks_fn=None, syste
     reviews = [_judge_review(judge)] if judge else []
     korean_ok = not korean_rules and (judge is None or judge["axes"]["reader_value_korean"])
     judge_passed = bool(judge and judge["passed"])
+    from .harness_rules import unresolved_must_fix
+    unresolved = [] if blocking else unresolved_must_fix(validation)
     # 되돌리기와 고치기 상한은 '가장 나은 판을 남기는' 규칙일 뿐 합격 판정이 아니다. 판정을 못 넘으면 검토 대기로 둔다.
-    pending = [] if blocking or judge_passed else (reviews[0]["critical_issues"] if reviews else ["판정을 받지 못했어요"])
+    # 판정을 넘어도 필수 수정 규칙(면책, 단서 문장)이 남아 있으면 검토 대기다(2026-11-28).
+    pending = [] if blocking else ([] if judge_passed else (reviews[0]["critical_issues"] if reviews else ["판정을 받지 못했어요"])) + unresolved
     packet["quality"] = {
-        "status": "blocked" if blocking else ("passed" if judge_passed else "needs_review"), "critical": bool(blocking),
+        "status": "blocked" if blocking else ("passed" if judge_passed and not unresolved else "needs_review"), "critical": bool(blocking),
         "review_pending": pending,
         "advisories": {"model_reviews_passed": judge_passed,
                        "review_issues": reviews[0]["critical_issues"] if reviews else [],
                        "rule_warnings": list(validation["warnings"]) if not blocking else [],
-                       "note": ("판정 기준을 못 넘어 검토 대기예요. 지적을 고친 뒤 다시 검수해야 승인할 수 있어요" if pending else
+                       "note": ("판정은 넘었지만 면책, 단서 문장이 남아 검토 대기예요. review_pending의 문장을 고친 뒤 다시 검수하세요"
+                                if pending and judge_passed else
+                                "판정 기준을 못 넘어 검토 대기예요. 지적을 고친 뒤 다시 검수해야 승인할 수 있어요" if pending else
                                 "승인을 막지 않는 확인 의견입니다. 사실과 숫자 지적은 승인 전에 원고에서 확인하세요")},
         "reviews": reviews, "history": history, "refine_count": refines, "rubric_version": f"{HARNESS_VERSION}:{rubric_sha[:12]}",
         "deterministic_checks": {key: validation[key] for key in ("passed", "issues", "blocking", "warnings")},
